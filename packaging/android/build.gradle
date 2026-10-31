@@ -7,13 +7,14 @@ plugins {
 def targetAbi = (project.findProperty('abi') ?: '').toString().trim()
 def customMinSdk = Integer.parseInt((project.findProperty('minSdk') ?: '28').toString().trim())
 def localKeystore = file('debug.keystore')
+def releaseKeystore = file('release.keystore')
 
 android {
     namespace 'dev.horizon.android'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'dev.horizon.android'
+        applicationId 'dev.horizonr.mobile'
         minSdk customMinSdk
         targetSdk 35
         versionCode 50
@@ -39,6 +40,17 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            if (releaseKeystore.exists()) {
+                storeFile releaseKeystore
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         debug {
             debuggable true
@@ -48,7 +60,7 @@ android {
         release {
             minifyEnabled false
             shrinkResources false
-            signingConfig signingConfigs.debug
+            signingConfig releaseKeystore.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }
 

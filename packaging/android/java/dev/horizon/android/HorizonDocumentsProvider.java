@@ -67,7 +67,7 @@ public final class HorizonDocumentsProvider extends DocumentsProvider {
     private String getHomePath() {
         Context ctx = getContext();
         File filesDir = ctx != null ? ctx.getFilesDir() : null;
-        return filesDir != null ? filesDir.getAbsolutePath() : "/data/user/0/dev.horizon.android/files";
+        return filesDir != null ? filesDir.getAbsolutePath() : "/data/user/0/dev.horizonr.mobile/files";
     }
 
     @Override

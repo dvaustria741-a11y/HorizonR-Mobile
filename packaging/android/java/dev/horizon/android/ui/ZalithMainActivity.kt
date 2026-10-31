@@ -336,7 +336,7 @@ class ZalithMainActivity : ComponentActivity() {
                             },
                             onCheckForUpdatesManual = {
                                 scope.launch {
-                                    Toast.makeText(context, "Checking github.com/Fadiba21/Horizonz-Launcher/releases...", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Checking github.com/dvaustria741-a11y/HorizonR-Mobile/releases...", Toast.LENGTH_SHORT).show()
                                     val found = withContext(Dispatchers.IO) {
                                         HorizonNativeBridge.checkGithubLatestReleaseUpdate()
                                     }

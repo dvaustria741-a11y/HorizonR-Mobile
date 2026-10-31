@@ -3653,8 +3653,8 @@ object HorizonNativeBridge {
     // GITHUB RELEASES UPDATE DETECTOR (Checked Once on Launcher Entry)
     // ========================================================================
 
-    const val GITHUB_FORK_REPO_SLUG = "Fadiba21/Horizonz-Launcher"
-    const val GITHUB_FORK_RELEASES_URL = "https://github.com/Fadiba21/Horizonz-Launcher/releases"
+    const val GITHUB_FORK_REPO_SLUG = "dvaustria741-a11y/HorizonR-Mobile"
+    const val GITHUB_FORK_RELEASES_URL = "https://github.com/dvaustria741-a11y/HorizonR-Mobile/releases"
 
     fun parseVersionNumbers(text: String): List<Int>? {
         val horizonzExplicit = Regex("""(?:HorizonZ[-_ ]*Launcher[-_ ]*v?|HorizonZ[-_ ]*v?)(\d+)\.(\d+)(?:\.(\d+))?""", RegexOption.IGNORE_CASE).find(text)
@@ -3678,7 +3678,7 @@ object HorizonNativeBridge {
     }
 
     /**
-     * Checks the new official `horizon-rust/horizon` fork repository (`Fadiba21/Horizonz-Launcher`)
+     * Checks the new official `horizon-rust/horizon` fork repository (`dvaustria741-a11y/HorizonR-Mobile`)
      * once on launcher startup for newer HorizonZ Android APK releases:
      * - Filters for HorizonZ Android releases (releases with `.apk` assets or `HorizonZ` tag/title)
      *   so upstream desktop tags from `horizon-rust/horizon` are ignored.

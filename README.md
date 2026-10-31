@@ -89,7 +89,7 @@ The engine workspace is not fully stored in this repository. The release workflo
 
 | Component | Archive v1.0.0 value |
 |---|---|
-| Application ID | `dev.horizon.android` |
+| Application ID | `dev.horizonr.mobile` |
 | `versionName` / `versionCode` | `1.0.0-HorizonZ` / `50` |
 | Minimum Android | API 28 (Android 9) |
 | Compile / target SDK | API 35 / API 35 |
