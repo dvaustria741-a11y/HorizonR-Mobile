@@ -3785,6 +3785,58 @@ object HorizonNativeBridge {
     // FILE IMPORT, STRUCTURED LOG READER, & GAME LAUNCH
     // ========================================================================
 
+    private fun queryDisplayName(context: Context, uri: Uri): String? = try {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    } catch (_: Exception) {
+        null
+    } ?: uri.lastPathSegment?.substringAfterLast('/')
+
+    /**
+     * Makes an imported zip loadable by the engine and keeps its own name.
+     * - Horizon's own packs (`horizon-shaders.toml` at the root) become `<name>.hshader`.
+     * - Iris/OptiFine packs need `shaders/` at the zip root (the engine only lists `.zip` and folders);
+     *   a zip with one wrapper folder around it (`Pack/shaders/...`) is re-zipped without that folder.
+     * Returns null (and deletes the file) when the zip is neither.
+     */
+    private fun normalizeImportedShaderPack(raw: File, displayName: String?): File? {
+        val base = (displayName ?: raw.name).substringBeforeLast('.', displayName ?: raw.name)
+            .replace(Regex("[^A-Za-z0-9._ -]"), "_").trim().ifEmpty { "shaderpack" }
+        val dir = raw.parentFile ?: return null
+        try {
+            val names = ZipFile(raw).use { z -> z.entries().asSequence().map { it.name.replace('\\', '/') }.toList() }
+            val native = names.any { it == "horizon-shaders.toml" }
+            val prefix: String? = when {
+                names.any { it.startsWith("shaders/") } -> ""
+                else -> names.firstOrNull { Regex("^[^/]+/shaders/.+").matches(it) }?.substringBefore('/')?.plus("/")
+            }
+            if (!native && prefix == null) { raw.delete(); return null }
+            val target = File(dir, base + if (native) ".hshader" else ".zip")
+            if (native || prefix == "") {
+                if (raw.absolutePath != target.absolutePath) { target.delete(); raw.copyTo(target, overwrite = true); raw.delete() }
+                return target
+            }
+            val tmp = File(dir, base + ".tmp")
+            ZipFile(raw).use { z ->
+                ZipOutputStream(FileOutputStream(tmp)).use { zos ->
+                    z.entries().asSequence().filter { !it.isDirectory && it.name.replace('\\', '/').startsWith(prefix!!) }.forEach { e ->
+                        zos.putNextEntry(ZipEntry(e.name.replace('\\', '/').removePrefix(prefix!!)))
+                        z.getInputStream(e).use { it.copyTo(zos) }
+                        zos.closeEntry()
+                    }
+                }
+            }
+            target.delete()
+            if (!tmp.renameTo(target)) return null
+            raw.delete()
+            return target
+        } catch (e: Exception) {
+            raw.delete()
+            return null
+        }
+    }
+
     fun importUriToDestination(context: Context, uri: Uri, subFolder: String, targetFileName: String, logEnabled: Boolean = true): File? {
         return try {
             val home = ensureHomeDirectories(context)
@@ -3798,6 +3850,15 @@ object HorizonNativeBridge {
                 FileOutputStream(outFile).use { output ->
                     input.copyTo(output)
                 }
+            }
+            if (finalSubFolder == "shaderpacks") {
+                val shaderFile = normalizeImportedShaderPack(outFile, queryDisplayName(context, uri))
+                if (shaderFile == null) {
+                    appendSystemLog("Import rejected: not a shader pack (needs a `shaders/` folder or horizon-shaders.toml)", logEnabled, context)
+                    return null
+                }
+                appendSystemLog("Imported shader pack to shaderpacks/${shaderFile.name} (${shaderFile.length() / 1024} KB)", logEnabled, context)
+                return shaderFile
             }
             if (isModTarget) {
                 val modId = sanitizeModId(finalFileName)

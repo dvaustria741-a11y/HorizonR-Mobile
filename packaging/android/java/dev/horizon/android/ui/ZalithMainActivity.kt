@@ -5388,7 +5388,7 @@ private fun CleanFilesViewport(
                             "mods" -> "Belum ada mod terpasang untuk profil ini (Klik 'Store' untuk mengunduh dari playhorizon.dev/mods)"
                             "saves" -> "Belum ada dunia (World Save) untuk versi 26.3"
                             "resourcepacks" -> "Belum ada Resource Pack untuk versi 26.3"
-                            "shaderpacks" -> "Belum ada Shader Pack (.hshader) untuk versi 26.3"
+                            "shaderpacks" -> "Belum ada Shader Pack (.zip / .hshader) untuk versi 26.3"
                             "screenshots" -> "Belum ada tangkapan layar (Screenshots)"
                             else -> "Tidak ada item di folder ini"
                         }
