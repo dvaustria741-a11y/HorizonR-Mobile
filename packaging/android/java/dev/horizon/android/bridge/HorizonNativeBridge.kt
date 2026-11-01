@@ -576,7 +576,7 @@ object HorizonNativeBridge {
         return try {
             val rawBmp = context.contentResolver.openInputStream(uri)?.use { input ->
                 BitmapFactory.decodeStream(input)
-            } ?: return SkinDetectionResult(false, null, account.slimSkinModel, "", "Gagal membaca gambar dari penyimpanan.")
+            } ?: return SkinDetectionResult(false, null, account.slimSkinModel, "", "Failed to read the image from storage.")
 
             val w = rawBmp.width
             val h = rawBmp.height
@@ -594,7 +594,7 @@ object HorizonNativeBridge {
                 finalBitmap = normalizeAndCleanSkin64x64(convertLegacy64x32To64x64(scaled32))
                 detectedSlim = detectSlimArmsFrom64x64(finalBitmap)
                 sourceLabel = "Legacy Skin 64×32 → 64×64"
-                detailMsg = "Skin Legacy (${w}×${h}) berhasil diimpor & dikonversi ke 64×64!"
+                detailMsg = "Legacy skin (${w}×${h}) imported and converted to 64×64!"
             } else if (w == h && w >= 64 && isLikelyUvSkin(rawBmp, isLegacy = false)) {
                 // Standard 64x64 or HD square Minecraft UV skin (including RGB JPEG skins like 413890.png!)
                 val scaled64 = if (w == 64 && h == 64) {
@@ -606,13 +606,13 @@ object HorizonNativeBridge {
                 detectedSlim = detectSlimArmsFrom64x64(finalBitmap)
                 val modelName = if (detectedSlim) "Slim (3px Alex)" else "Wide (4px Steve)"
                 sourceLabel = "Custom Skin (${w}×${h})"
-                detailMsg = "Skin Minecraft (${w}×${h}) berhasil diimpor! Model lengan: $modelName."
+                detailMsg = "Minecraft skin (${w}×${h}) imported! Arm model: $modelName."
             } else {
                 // Regular Photo / Portrait -> Smart Photo-to-Minecraft-Skin Generator!
                 finalBitmap = convertRegularPhotoToMinecraftSkin64x64(rawBmp, account.slimSkinModel)
                 detectedSlim = account.slimSkinModel
                 sourceLabel = "Photo-to-Skin (${w}×${h} → 64×64)"
-                detailMsg = "Foto (${w}×${h}) berhasil dideteksi & diubah menjadi Skin Minecraft 64×64!"
+                detailMsg = "Photo (${w}×${h}) detected and converted into a 64×64 Minecraft skin!"
             }
 
             FileOutputStream(outFile).use { fos ->
@@ -1659,7 +1659,7 @@ object HorizonNativeBridge {
 
         appendInstallLogFile(home, "[Cancelled] Download cancelled by user. Partial staging files deleted.")
         appendSystemLog("Cancelled asset download and deleted partial files.", logEnabled, context)
-        Toast.makeText(context, "Download dibatalkan & file sementara dihapus", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Download cancelled & temporary file deleted", Toast.LENGTH_SHORT).show()
     }
 
     fun smartRepairAssets(context: Context, logEnabled: Boolean = true) {
@@ -2411,7 +2411,7 @@ object HorizonNativeBridge {
             }
         }
         appendSystemLog("Uninstalled '${item.title}' from active profile.", logEnabled, context)
-        Toast.makeText(context, "${item.title} dihapus dari perangkat.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "${item.title} removed from your device.", Toast.LENGTH_SHORT).show()
         return deletedAny
     }
 
@@ -3357,7 +3357,7 @@ object HorizonNativeBridge {
                 if (storeDownloadCancelled.get()) {
                     partFile.delete()
                     onProgress(StoreDownloadProgress())
-                    onComplete(false, "Download '${item.title}' dibatalkan & file sementara dihapus.")
+                    onComplete(false, "Download of '${item.title}' cancelled & temporary file deleted.")
                     return@Thread
                 }
 
@@ -3452,12 +3452,12 @@ object HorizonNativeBridge {
                 recordInstalledStoreItem(context, profileSlot, item.id, item.version, canonicalFileName)
                 onProgress(StoreDownloadProgress())
                 appendSystemLog("Installed '${item.title}' v${item.version} ($canonicalFileName).", logEnabled, context)
-                onComplete(true, "Berhasil memasang ${item.title} (v${item.version})!")
+                onComplete(true, "Successfully installed ${item.title} (v${item.version})!")
             } catch (e: Exception) {
                 partFile?.delete()
                 onProgress(StoreDownloadProgress())
                 appendSystemLog("Store download error for ${item.title}: ${e.message}", logEnabled, context)
-                onComplete(false, "Gagal mengunduh ${item.title}: ${e.message}")
+                onComplete(false, "Failed to download ${item.title}: ${e.message}")
             }
         }, "HorizonZ-StoreDownloader").start()
     }
@@ -3620,10 +3620,10 @@ object HorizonNativeBridge {
                 }
             }
             appendSystemLog("Backed up world save '${saveFile.name}' to backups/${outZip.name}", logEnabled, context)
-            Toast.makeText(context, "Backup berhasil disimpan: backups/${outZip.name}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Backup saved: backups/${outZip.name}", Toast.LENGTH_SHORT).show()
             outZip
         } catch (e: Exception) {
-            Toast.makeText(context, "Gagal backup save: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Failed to back up save: ${e.message}", Toast.LENGTH_SHORT).show()
             null
         }
     }
@@ -3639,13 +3639,13 @@ object HorizonNativeBridge {
         }
         val dest = File(parent, finalName)
         if (dest.exists()) {
-            Toast.makeText(context, "Nama '$finalName' sudah digunakan.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "The name '$finalName' is already in use.", Toast.LENGTH_SHORT).show()
             return false
         }
         val ok = targetFile.renameTo(dest)
         if (ok) {
             appendSystemLog("Renamed '${targetFile.name}' -> '${dest.name}'", logEnabled, context)
-            Toast.makeText(context, "Berhasil diubah menjadi ${dest.name}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Renamed to ${dest.name}", Toast.LENGTH_SHORT).show()
         }
         return ok
     }

@@ -24,6 +24,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -48,7 +49,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -344,7 +348,7 @@ class ZalithMainActivity : ComponentActivity() {
                                         releaseUpdateInfo = found
                                         showUpdateBanner = true
                                     } else {
-                                        Toast.makeText(context, "HorizonZ v${HorizonNativeBridge.INSTALLED_LAUNCHER_VERSION} sudah versi terbaru!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "HorizonR v${HorizonNativeBridge.INSTALLED_LAUNCHER_VERSION} is already up to date!", Toast.LENGTH_SHORT).show()
                                         try {
                                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(HorizonNativeBridge.GITHUB_FORK_RELEASES_URL)))
                                         } catch (ignored: Exception) {
@@ -486,7 +490,7 @@ fun HorizonZBlackSplashOverlay() {
         intArrayOf(1,1,0,1,1,0,1,1), intArrayOf(1,1,0,0,1,1,1,1), intArrayOf(1,1,0,0,0,1,1,1),
         intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1)
     )
-    val word = remember { arrayOf(glyphH, glyphCreeperO, glyphR, glyphI, glyphZ, glyphO, glyphN, glyphZ) }
+    val word = remember { arrayOf(glyphH, glyphCreeperO, glyphR, glyphI, glyphZ, glyphO, glyphN, glyphR) }
 
     Box(
         modifier = Modifier
@@ -588,7 +592,7 @@ fun HorizonZBlackSplashOverlay() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Initializing HorizonZ Rust Engine (${(progress * 100).toInt()}%)",
+                text = "Initializing HorizonR Rust Engine (${(progress * 100).toInt()}%)",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFFD5DEE5)
@@ -1366,14 +1370,17 @@ fun ZalithCleanLauncherScreen(
                 .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.displayCutout))
                 .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
+            if (!isHibernated) {
+                HorizonAuroraBackground()
+            }
             Column(modifier = Modifier.fillMaxSize()) {
-                // Clean, Zero-Duplicate Top Bar:
+                // Top navigation bar (brand + tab pill + quick actions):
                 // Left: Back button (only when not on HOME) + Title
                 // Right: Folder + Log (no duplicate Profile, Settings, or Download buttons!)
-                ZalithReferenceTopBar(
+                HorizonTopNav(
                     selectedTab = selectedTab,
                     installStatus = installStatus,
-                    onNavigateHome = { selectedTab = ZalithNavTab.HOME },
+                    onSelectTab = { selectedTab = it },
                     onOpenDataFolder = { HorizonNativeBridge.openSystemFilesApp(context) },
                     onOpenLogs = { selectedTab = ZalithNavTab.LOGS }
                 )
@@ -1384,13 +1391,6 @@ fun ZalithCleanLauncherScreen(
                         .fillMaxWidth()
                         .padding(top = 4.dp, bottom = 4.dp)
                 ) {
-                    ZalithIconRail(
-                        selectedTab = selectedTab,
-                        onSelectTab = { selectedTab = it }
-                    )
-
-                    Spacer(Modifier.width(10.dp))
-
                     // Main Morphing Content Area:
                     // Smoothly expands/contracts its width in sync with `sidebarMorphWidth` and morphs
                     // between pages with scale + slide + fade!
@@ -1406,15 +1406,15 @@ fun ZalithCleanLauncherScreen(
                                     initialScale = 0.96f,
                                     animationSpec = tween(250, easing = FastOutSlowInEasing)
                                 ) +
-                                slideInVertically(
-                                    animationSpec = tween(250, easing = FastOutSlowInEasing),
-                                    initialOffsetY = { fullH -> if (forward) fullH / 14 else -fullH / 14 }
+                                slideInHorizontally(
+                                    animationSpec = tween(280, easing = FastOutSlowInEasing),
+                                    initialOffsetX = { fullW -> if (forward) fullW / 10 else -fullW / 10 }
                                 ))
                                 .togetherWith(
                                     fadeOut(animationSpec = tween(180, easing = FastOutLinearInEasing)) +
-                                        scaleOut(
-                                            targetScale = 0.97f,
-                                            animationSpec = tween(180, easing = FastOutLinearInEasing)
+                                        slideOutHorizontally(
+                                            animationSpec = tween(200, easing = FastOutLinearInEasing),
+                                            targetOffsetX = { fullW -> if (forward) -fullW / 14 else fullW / 14 }
                                         )
                                 )
                                 .using(sizeTransform = null)
@@ -1530,199 +1530,216 @@ fun ZalithCleanLauncherScreen(
     }
 }
 
+private data class HorizonNavItem(val tab: ZalithNavTab, val icon: ImageVector, val label: String)
+
+/** Soft accent-tinted gradient outline shared by all the glass cards. */
+@Composable
+private fun horizonGlassBorder(): BorderStroke = BorderStroke(
+    1.dp,
+    Brush.linearGradient(
+        listOf(
+            SkyBlueAccent.copy(alpha = 0.50f),
+            Color.White.copy(alpha = 0.05f),
+            SkyBlueAccent.copy(alpha = 0.20f)
+        )
+    )
+)
+
+/** Slowly drifting aurora blobs tinted by the active accent colour. Drawn behind everything. */
+@Composable
+private fun HorizonAuroraBackground() {
+    val accent = SkyBlueAccent
+    val transition = rememberInfiniteTransition(label = "Aurora")
+    val a by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(15000, easing = LinearEasing), RepeatMode.Reverse),
+        label = "AuroraA"
+    )
+    val b by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(21000, easing = LinearEasing), RepeatMode.Reverse),
+        label = "AuroraB"
+    )
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        val r = maxOf(w, h) * 0.55f
+        val c1 = Offset(w * (0.05f + 0.35f * a), h * (0.05f + 0.35f * b))
+        val c2 = Offset(w * (0.95f - 0.35f * b), h * (0.95f - 0.40f * a))
+        drawCircle(
+            brush = Brush.radialGradient(listOf(accent.copy(alpha = 0.24f), Color.Transparent), center = c1, radius = r),
+            radius = r,
+            center = c1
+        )
+        drawCircle(
+            brush = Brush.radialGradient(listOf(Color(0xFF7C4DFF).copy(alpha = 0.17f), Color.Transparent), center = c2, radius = r),
+            radius = r,
+            center = c2
+        )
+    }
+}
+
 /**
- * Clean Top Bar without duplicate buttons:
- * - Left: `<- Back` pill (only when not on Dashboard) + Title (`HorizonZ` or `HorizonZ — <Page>`)
- * - Right: `Folder` + `Log` (Profile is in Right Sidebar / Left Rail; Settings & Downloads are in Left Rail)
+ * Top navigation: brand on the left, a pill tab bar in the centre (the selected tab expands
+ * to show its label), quick actions on the right. Replaces the old left icon rail.
  */
 @Composable
-private fun ZalithReferenceTopBar(
+private fun HorizonTopNav(
     selectedTab: ZalithNavTab,
     installStatus: AssetInstallStatus,
-    onNavigateHome: () -> Unit,
+    onSelectTab: (ZalithNavTab) -> Unit,
     onOpenDataFolder: () -> Unit,
     onOpenLogs: () -> Unit
 ) {
+    val items = remember {
+        listOf(
+            HorizonNavItem(ZalithNavTab.HOME, Icons.Default.Home, "Home"),
+            HorizonNavItem(ZalithNavTab.VERSIONS, Icons.Default.Download, "Game"),
+            HorizonNavItem(ZalithNavTab.STORE, Icons.Default.Storefront, "Store"),
+            HorizonNavItem(ZalithNavTab.FILES, Icons.Default.Extension, "Mods"),
+            HorizonNavItem(ZalithNavTab.ACCOUNTS, Icons.Default.Checkroom, "Skins"),
+            HorizonNavItem(ZalithNavTab.SETTINGS, Icons.Default.Settings, "Settings")
+        )
+    }
+    val accent = SkyBlueAccent
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(38.dp)
-            .padding(horizontal = 4.dp),
+            .height(46.dp)
+            .padding(horizontal = 2.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
+        // Brand
         Row(
+            modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            MinecraftGrassCubeIcon(size = 26.dp)
+            Text(
+                text = "HorizonR",
+                style = TextStyle(
+                    brush = Brush.linearGradient(listOf(Color.White, accent, Color(0xFFB39DFF))),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            )
             AnimatedVisibility(
-                visible = selectedTab != ZalithNavTab.HOME,
+                visible = installStatus.running,
                 enter = fadeIn(tween(180)) + expandHorizontally(tween(200)),
                 exit = fadeOut(tween(150)) + shrinkHorizontally(tween(180))
             ) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = CardSlateBg,
-                    modifier = Modifier.animatedPressScale(onClick = onNavigateHome)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = SkyBlueAccent,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = "Back",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-
-            AnimatedContent(
-                targetState = selectedTab,
-                transitionSpec = {
-                    fadeIn(tween(180)).togetherWith(fadeOut(tween(140))).using(sizeTransform = null)
-                },
-                label = "TopBarTitleAnim"
-            ) { tab ->
-                Text(
-                    text = if (tab == ZalithNavTab.HOME) "HorizonZ" else "HorizonZ — ${tab.title}",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-
-            if (installStatus.running) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = SubRailCapsuleActive
-                ) {
+                Surface(shape = RoundedCornerShape(50), color = SubRailCapsuleActive) {
                     Text(
                         text = if (installStatus.paused) "Paused ${installStatus.percent}%"
                         else "${installStatus.percent}% • ${installStatus.speedText.ifBlank { "Downloading" }}",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = SkyBlueAccent,
+                        color = accent,
+                        maxLines = 1,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
             }
         }
 
+        // Centre tab pill
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = CardSlateBg.copy(alpha = 0.82f),
+            border = horizonGlassBorder()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                items.forEach { item ->
+                    val selected = item.tab == selectedTab
+                    val glow by animateFloatAsState(
+                        targetValue = if (selected) 1f else 0f,
+                        animationSpec = tween(260, easing = FastOutSlowInEasing),
+                        label = "NavGlow"
+                    )
+                    Row(
+                        modifier = Modifier
+                            .height(32.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        accent.copy(alpha = 0.40f * glow),
+                                        accent.copy(alpha = 0.14f * glow)
+                                    )
+                                )
+                            )
+                            .animatedPressScale { onSelectTab(item.tab) }
+                            .padding(horizontal = 10.dp)
+                            .animateContentSize(animationSpec = tween(260, easing = FastOutSlowInEasing)),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.tab.title,
+                            tint = if (selected) Color.White else MutedSubtitleText,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        if (selected) {
+                            Text(
+                                text = item.label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Quick actions
         Row(
+            modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
         ) {
             Surface(
-                shape = RoundedCornerShape(50),
-                color = CardSlateBg,
-                modifier = Modifier.animatedPressScale(onClick = onOpenDataFolder)
+                shape = CircleShape,
+                color = CardSlateBg.copy(alpha = 0.82f),
+                border = horizonGlassBorder(),
+                modifier = Modifier
+                    .size(34.dp)
+                    .animatedPressScale(onClick = onOpenDataFolder)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
                         imageVector = Icons.Default.Folder,
                         contentDescription = "Data Folder",
                         tint = Color(0xFFD5DEE5),
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(17.dp)
                     )
-                    Text("Folder", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.White)
                 }
             }
-
             Surface(
-                shape = RoundedCornerShape(50),
-                color = if (selectedTab == ZalithNavTab.LOGS) SubRailCapsuleActive else CardSlateBg,
-                modifier = Modifier.animatedPressScale(onClick = onOpenLogs)
+                shape = CircleShape,
+                color = if (selectedTab == ZalithNavTab.LOGS) SubRailCapsuleActive else CardSlateBg.copy(alpha = 0.82f),
+                border = horizonGlassBorder(),
+                modifier = Modifier
+                    .size(34.dp)
+                    .animatedPressScale(onClick = onOpenLogs)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
                         imageVector = Icons.Default.Terminal,
                         contentDescription = "Log",
-                        tint = SkyBlueAccent,
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Text("Log", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.White)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ZalithIconRail(
-    selectedTab: ZalithNavTab,
-    onSelectTab: (ZalithNavTab) -> Unit
-) {
-    val railTabs = remember {
-        listOf(
-            ZalithNavTab.HOME,
-            ZalithNavTab.VERSIONS,
-            ZalithNavTab.STORE,
-            ZalithNavTab.FILES,
-            ZalithNavTab.ACCOUNTS,
-            ZalithNavTab.SETTINGS
-        )
-    }
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = CardSlateBg,
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(52.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
-        ) {
-            railTabs.forEach { tab ->
-                val selected = tab == selectedTab
-                val icon = when (tab) {
-                    ZalithNavTab.HOME -> Icons.Default.Home
-                    ZalithNavTab.VERSIONS -> Icons.Default.Download
-                    ZalithNavTab.STORE -> Icons.Default.Storefront
-                    ZalithNavTab.FILES -> Icons.Default.Extension
-                    ZalithNavTab.ACCOUNTS -> Icons.Default.Checkroom
-                    ZalithNavTab.LOGS -> Icons.Default.Terminal
-                    ZalithNavTab.SETTINGS -> Icons.Default.Settings
-                }
-                val pillColor by animateColorAsState(
-                    targetValue = if (selected) SubRailCapsuleActive else Color.Transparent,
-                    animationSpec = tween(200),
-                    label = "RailPillColor"
-                )
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(pillColor)
-                        .animatedPressScale { onSelectTab(tab) }
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = tab.title,
-                        tint = if (selected) SkyBlueAccent else MutedSubtitleText,
-                        modifier = Modifier.size(19.dp)
+                        tint = accent,
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
@@ -1993,7 +2010,8 @@ private fun CleanHomeViewport(
 
     Surface(
         shape = RoundedCornerShape(22.dp),
-        color = CardSlateBg,
+        color = CardSlateBg.copy(alpha = 0.90f),
+        border = horizonGlassBorder(),
         modifier = Modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -2058,6 +2076,18 @@ private fun CleanHomeViewport(
                                 Color.Black.copy(alpha = if (isVideoMode) 0.04f else 0.08f),
                                 Color.Black.copy(alpha = if (isVideoMode) 0.58f else 0.68f)
                             )
+                        )
+                    )
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(SkyBlueAccent.copy(alpha = 0.20f), Color.Transparent),
+                            center = Offset(0f, Float.POSITIVE_INFINITY),
+                            radius = 1100f
                         )
                     )
             )
@@ -2285,7 +2315,8 @@ private fun CleanAccountsAndSkinsViewport(
                         // Left Card: Interactive 2D Full-Body Minecraft Character Preview
                         Surface(
                             shape = RoundedCornerShape(22.dp),
-                            color = CardSlateBg,
+                            color = CardSlateBg.copy(alpha = 0.90f),
+                            border = horizonGlassBorder(),
                             modifier = Modifier
                                 .width(196.dp)
                                 .fillMaxHeight()
@@ -2411,7 +2442,7 @@ private fun CleanAccountsAndSkinsViewport(
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                             Text(
-                                                text = "Import file Skin PNG/JPG (64×64 / 64×32) atau Foto Galeri untuk digunakan di in-game.",
+                                                text = "Import a skin file (PNG/JPG, 64×64 / 64×32) or a gallery photo to use in-game.",
                                                 fontSize = 11.sp,
                                                 color = MutedSubtitleText,
                                                 maxLines = 2
@@ -2432,7 +2463,7 @@ private fun CleanAccountsAndSkinsViewport(
                                             ) {
                                                 Icon(
                                                     Icons.Default.AddPhotoAlternate,
-                                                    contentDescription = "Pilih Foto / Skin",
+                                                    contentDescription = "Choose Photo / Skin",
                                                     tint = SkyBlueDarkText,
                                                     modifier = Modifier.size(16.dp)
                                                 )
@@ -2481,7 +2512,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "Model Lengan:",
+                                            text = "Arm Model:",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Medium,
                                             color = Color.White
@@ -2524,7 +2555,7 @@ private fun CleanAccountsAndSkinsViewport(
                                     verticalArrangement = Arrangement.spacedBy(7.dp)
                                 ) {
                                     Text(
-                                        text = "Koleksi Skin Siap Pakai (1-Tap In-Game)",
+                                        text = "Ready-to-Use Skins (1-Tap In-Game)",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -2547,8 +2578,8 @@ private fun CleanAccountsAndSkinsViewport(
                                                     val updatedList = accounts.map { if (it.id == activeAccount.id) updatedAcc else it }
                                                     onAccountsChange(updatedList)
                                                     onSkinUpdated()
-                                                    onUpdateBanner("Skin '${preset.title}' aktif & siap digunakan di in-game!")
-                                                    Toast.makeText(context, "Skin '${preset.title}' terpasang!", Toast.LENGTH_SHORT).show()
+                                                    onUpdateBanner("Skin '${preset.title}' is active and ready to use in-game!")
+                                                    Toast.makeText(context, "Skin '${preset.title}' applied!", Toast.LENGTH_SHORT).show()
                                                 }
                                         ) {
                                             Row(
@@ -2592,7 +2623,7 @@ private fun CleanAccountsAndSkinsViewport(
                                                     color = if (isCurrent) SkyBlueAccent else Color(0xFF344149)
                                                 ) {
                                                     Text(
-                                                        text = if (isCurrent) "Active" else "Pakai",
+                                                        text = if (isCurrent) "Active" else "Use",
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = if (isCurrent) SkyBlueDarkText else Color.White,
@@ -2612,7 +2643,8 @@ private fun CleanAccountsAndSkinsViewport(
                 AccountSubCategory.PROFILES -> {
                     Surface(
                         shape = RoundedCornerShape(22.dp),
-                        color = CardSlateBg,
+                        color = CardSlateBg.copy(alpha = 0.90f),
+                        border = horizonGlassBorder(),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         Column(
@@ -2897,7 +2929,8 @@ private fun CleanLogsViewport(
 
         Surface(
             shape = RoundedCornerShape(22.dp),
-            color = CardSlateBg,
+            color = CardSlateBg.copy(alpha = 0.90f),
+            border = horizonGlassBorder(),
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
@@ -2963,7 +2996,7 @@ private fun CleanLogsViewport(
                         color = SkyBlueAccent,
                         modifier = Modifier.animatedPressScale {
                             val raw = filteredEntries.joinToString("\n") { "[${it.timestamp}] [${it.sourceTag}/${it.severity.label}] ${it.message}" }
-                            HorizonNativeBridge.copyToClipboard(context, "HorizonZ Logs", raw)
+                            HorizonNativeBridge.copyToClipboard(context, "HorizonR Logs", raw)
                         }
                     ) {
                         Row(
@@ -3083,10 +3116,10 @@ private fun CleanVersionsViewport(
         AlertDialog(
             onDismissRequest = { showCancelConfirmDialog = false },
             icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFFFB74D)) },
-            title = { Text("Batalkan Download?", style = MaterialTheme.typography.titleMedium) },
+            title = { Text("Cancel Download?", style = MaterialTheme.typography.titleMedium) },
             text = {
                 Text(
-                    "Proses download aset yang sedang berjalan akan dihentikan dan file sementara yang sedang diunduh akan langsung dihapus.",
+                    "The running asset download will be stopped and the temporary file being downloaded will be deleted immediately.",
                     fontSize = 13.sp
                 )
             },
@@ -3098,7 +3131,7 @@ private fun CleanVersionsViewport(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
                 ) {
-                    Text("Ya, Batalkan & Hapus", color = Color.White, fontSize = 12.sp)
+                    Text("Yes, Cancel & Delete", color = Color.White, fontSize = 12.sp)
                 }
             },
             dismissButton = {
@@ -3111,7 +3144,8 @@ private fun CleanVersionsViewport(
 
     Surface(
         shape = RoundedCornerShape(22.dp),
-        color = CardSlateBg,
+        color = CardSlateBg.copy(alpha = 0.90f),
+        border = horizonGlassBorder(),
         modifier = Modifier.fillMaxSize()
     ) {
         Column(
@@ -3484,7 +3518,7 @@ private fun CleanStoreViewport(
                 logEnabled
             )
             refreshTrigger += 1
-            Toast.makeText(context, "Horizon Modpack (.hpack) berhasil diimpor!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Horizon Modpack (.hpack) imported successfully!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -3551,10 +3585,10 @@ private fun CleanStoreViewport(
         AlertDialog(
             onDismissRequest = { pendingIncompatibleItem = null },
             icon = { Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFFFB74D)) },
-            title = { Text("Peringatan Versi Minecraft", style = MaterialTheme.typography.titleMedium) },
+            title = { Text("Minecraft Version Warning", style = MaterialTheme.typography.titleMedium) },
             text = {
                 Text(
-                    "Item '${item.title}' tercatat untuk Minecraft versi ${item.versionBadge} (sedangkan engine saat ini adalah Minecraft 26.3).\n\nApakah Anda ingin tetap mengunduh dan memasangnya?",
+                    "Item '${item.title}' is listed for Minecraft ${item.versionBadge} (the current engine is Minecraft 26.3).\n\nDo you still want to download and install it?",
                     fontSize = 13.sp
                 )
             },
@@ -3582,10 +3616,10 @@ private fun CleanStoreViewport(
         AlertDialog(
             onDismissRequest = { showCancelStoreDialog = false },
             icon = { Icon(Icons.Default.Cancel, contentDescription = null, tint = Color(0xFFFF6E6E)) },
-            title = { Text("Batalkan Download Store?", style = MaterialTheme.typography.titleMedium) },
+            title = { Text("Cancel Store Download?", style = MaterialTheme.typography.titleMedium) },
             text = {
                 Text(
-                    "File '${storeProgress.activeTitle}' yang sedang diunduh akan dihentikan dan file sementara (.part) akan langsung dihapus.",
+                    "The file '${storeProgress.activeTitle}' currently downloading will be stopped and its temporary (.part) file will be deleted immediately.",
                     fontSize = 13.sp
                 )
             },
@@ -3598,7 +3632,7 @@ private fun CleanStoreViewport(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
                 ) {
-                    Text("Ya, Batalkan & Hapus", color = Color.White, fontSize = 12.sp)
+                    Text("Yes, Cancel & Delete", color = Color.White, fontSize = 12.sp)
                 }
             },
             dismissButton = {
@@ -4510,7 +4544,7 @@ private fun CleanStoreViewport(
                                                                             if (isThisExactVerInstalled) {
                                                                                 Toast.makeText(
                                                                                     context,
-                                                                                    "${detailProj.title} v${rel.versionNumber} sudah terpasang (tidak perlu instal ulang).",
+                                                                                    "${detailProj.title} v${rel.versionNumber} is already installed (no need to reinstall).",
                                                                                     Toast.LENGTH_SHORT
                                                                                 ).show()
                                                                             } else {
@@ -4703,7 +4737,7 @@ private fun CleanStoreViewport(
                                             StoreInstallState.INSTALLED -> {
                                                 Toast.makeText(
                                                     context,
-                                                    "${detailProj.title} (v${installedMap[detailProj.id] ?: detailProj.version}) sudah terpasang.",
+                                                    "${detailProj.title} (v${installedMap[detailProj.id] ?: detailProj.version}) is already installed.",
                                                     Toast.LENGTH_SHORT
                                                 ).show()
                                             }
@@ -5076,12 +5110,12 @@ private fun CleanFilesViewport(
         AlertDialog(
             onDismissRequest = { renameTargetFile = null },
             icon = { Icon(Icons.Default.Edit, contentDescription = null, tint = SkyBlueAccent) },
-            title = { Text("Ubah Nama ${target.name}", style = MaterialTheme.typography.titleMedium) },
+            title = { Text("Rename ${target.name}", style = MaterialTheme.typography.titleMedium) },
             text = {
                 OutlinedTextField(
                     value = renameInputText,
                     onValueChange = { renameInputText = it },
-                    label = { Text("Nama Baru", fontSize = 12.sp) },
+                    label = { Text("New Name", fontSize = 12.sp) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -5096,12 +5130,12 @@ private fun CleanFilesViewport(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent)
                 ) {
-                    Text("Simpan", color = SkyBlueDarkText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Save", color = SkyBlueDarkText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { renameTargetFile = null }) {
-                    Text("Batal", fontSize = 12.sp)
+                    Text("Cancel", fontSize = 12.sp)
                 }
             }
         )
@@ -5120,14 +5154,14 @@ private fun CleanFilesViewport(
             },
             title = {
                 Text(
-                    text = "Hapus ${delTarget.displayTitle}?",
+                    text = "Delete ${delTarget.displayTitle}?",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = "Apakah Anda yakin ingin menghapus '${delTarget.file.name}' dari kategori ${delTarget.folderLabel}?\n\nFile ini akan dihapus secara permanen dari perangkat dan statusnya di Store akan otomatis direset menjadi belum terpasang.",
+                    text = "Are you sure you want to delete '${delTarget.file.name}' from the ${delTarget.folderLabel} category?\n\nThis file will be permanently removed from your device and its Store status will automatically be reset to not installed.",
                     fontSize = 13.sp,
                     lineHeight = 18.sp
                 )
@@ -5147,7 +5181,7 @@ private fun CleanFilesViewport(
                         refreshCount += 1
                         Toast.makeText(
                             context,
-                            "${target.displayTitle} berhasil dihapus.",
+                            "${target.displayTitle} deleted successfully.",
                             Toast.LENGTH_SHORT
                         ).show()
                     },
@@ -5155,12 +5189,12 @@ private fun CleanFilesViewport(
                 ) {
                     Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(5.dp))
-                    Text("Ya, Hapus Permanen", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Yes, Delete Permanently", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDeleteTarget = null }) {
-                    Text("Batal", fontSize = 12.sp)
+                    Text("Cancel", fontSize = 12.sp)
                 }
             }
         )
@@ -5182,7 +5216,8 @@ private fun CleanFilesViewport(
         // Right Main Rounded Slate Container
         Surface(
             shape = RoundedCornerShape(22.dp),
-            color = CardSlateBg,
+            color = CardSlateBg.copy(alpha = 0.90f),
+            border = horizonGlassBorder(),
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
@@ -5361,7 +5396,7 @@ private fun CleanFilesViewport(
                             .size(20.dp)
                             .animatedPressScale {
                                 refreshCount += 1
-                                Toast.makeText(context, "Folder ${currentFolder} disinkronkan & diverifikasi!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Folder ${currentFolder} synced & verified!", Toast.LENGTH_SHORT).show()
                             }
                     )
                 }
@@ -5385,12 +5420,12 @@ private fun CleanFilesViewport(
                     val folderLabel = categories.firstOrNull { it.first == folder }?.second ?: folder
                     if (filteredList.isEmpty()) {
                         val emptyLabel = when (folder) {
-                            "mods" -> "Belum ada mod terpasang untuk profil ini (Klik 'Store' untuk mengunduh dari playhorizon.dev/mods)"
-                            "saves" -> "Belum ada dunia (World Save) untuk versi 26.3"
-                            "resourcepacks" -> "Belum ada Resource Pack untuk versi 26.3"
-                            "shaderpacks" -> "Belum ada Shader Pack (.zip / .hshader) untuk versi 26.3"
-                            "screenshots" -> "Belum ada tangkapan layar (Screenshots)"
-                            else -> "Tidak ada item di folder ini"
+                            "mods" -> "No mods installed for this profile yet (tap 'Store' to download from playhorizon.dev/mods)"
+                            "saves" -> "No worlds (World Saves) for version 26.3 yet"
+                            "resourcepacks" -> "No Resource Packs for version 26.3 yet"
+                            "shaderpacks" -> "No Shader Packs (.zip / .hshader) for version 26.3 yet"
+                            "screenshots" -> "No screenshots yet"
+                            else -> "No items in this folder"
                         }
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Surface(
@@ -5887,7 +5922,7 @@ private fun FileManagerRowCard(
                             modifier = Modifier.animatedPressScale { onRequestDelete(file, displayTitle) }
                         ) {
                             Text(
-                                text = "Hapus",
+                                text = "Delete",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFFF8A80),
@@ -6283,7 +6318,7 @@ private fun CleanSettingsViewport(
                             ) {
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(
-                                        text = "Check for Launcher Updates (HorizonZ v${HorizonNativeBridge.INSTALLED_LAUNCHER_VERSION})",
+                                        text = "Check for Launcher Updates (HorizonR v${HorizonNativeBridge.INSTALLED_LAUNCHER_VERSION})",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Color.White
@@ -6300,7 +6335,7 @@ private fun CleanSettingsViewport(
 
                         ZalithSettingDropdownCard(
                             title = "Theme Palette",
-                            description = "Choose the color scheme used across HorizonZ Launcher (applies immediately)",
+                            description = "Choose the color scheme used across HorizonR (applies immediately)",
                             selectedItem = config.themePalette,
                             options = ZalithThemePalette.entries,
                             itemLabel = { it.label },
@@ -6400,11 +6435,25 @@ private fun ZalithLaunchSidebar(
 ) {
     Surface(
         shape = RoundedCornerShape(22.dp),
-        color = CardSlateBg,
+        color = CardSlateBg.copy(alpha = 0.90f),
+        border = horizonGlassBorder(),
         modifier = Modifier
             .fillMaxHeight()
             .width(182.dp)
     ) {
+        val playTransition = rememberInfiniteTransition(label = "PlayPulse")
+        val playGlow by playTransition.animateFloat(
+            initialValue = 0.20f,
+            targetValue = 0.65f,
+            animationSpec = infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "PlayGlow"
+        )
+        val playShimmer by playTransition.animateFloat(
+            initialValue = -0.3f,
+            targetValue = 1.3f,
+            animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart),
+            label = "PlayShimmer"
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -6485,13 +6534,48 @@ private fun ZalithLaunchSidebar(
                     }
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (installStatus.running) SubRailCapsuleActive else SkyBlueAccent,
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(50.dp)
                         .animatedPressScale(onClick = onLaunchOrDownload)
+                        .drawBehind {
+                            if (!installStatus.running) {
+                                drawRoundRect(
+                                    color = SkyBlueAccent.copy(alpha = playGlow * 0.35f),
+                                    topLeft = Offset(-5.dp.toPx(), -3.dp.toPx()),
+                                    size = Size(size.width + 10.dp.toPx(), size.height + 6.dp.toPx()),
+                                    cornerRadius = CornerRadius(20.dp.toPx())
+                                )
+                            }
+                        }
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (installStatus.running) {
+                                Brush.horizontalGradient(listOf(SubRailCapsuleActive, SubRailCapsuleActive))
+                            } else {
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        SkyBlueAccent,
+                                        androidx.compose.ui.graphics.lerp(SkyBlueAccent, Color.White, 0.40f)
+                                    )
+                                )
+                            }
+                        )
+                        .drawWithContent {
+                            drawContent()
+                            if (installStatus.ready && !installStatus.running) {
+                                val x = size.width * playShimmer
+                                drawRect(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.32f), Color.Transparent),
+                                        startX = x - 70f,
+                                        endX = x + 70f
+                                    )
+                                )
+                            }
+                        }
                 ) {
                     Row(
                         modifier = Modifier.fillMaxSize(),
