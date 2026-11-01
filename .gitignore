@@ -35,3 +35,6 @@ bedrock-controls.zip
 !Update/.gitkeep
 !Update/README.md
 !Update/*.zip
+
+.curseforge_api.txt
+packaging/android/.curseforge_api.txt

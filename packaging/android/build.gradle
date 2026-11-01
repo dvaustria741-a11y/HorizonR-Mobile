@@ -8,6 +8,9 @@ def targetAbi = (project.findProperty('abi') ?: '').toString().trim()
 def customMinSdk = Integer.parseInt((project.findProperty('minSdk') ?: '28').toString().trim())
 def localKeystore = file('debug.keystore')
 def releaseKeystore = file('release.keystore')
+def curseForgeKeyFile = file('.curseforge_api.txt')
+def curseForgeKey = (System.getenv('CURSEFORGE_API_KEY') ?: project.findProperty('curseforge_api_key') ?: (curseForgeKeyFile.exists() ? curseForgeKeyFile.text : '')).toString().trim()
+def curseForgeKeyLiteral = curseForgeKey.replace('\\', '\\\\').replace('"', '\\"')
 
 android {
     namespace 'dev.horizon.android'
@@ -19,6 +22,7 @@ android {
         targetSdk 35
         versionCode 58
         versionName '1.8.0-HorizonZ'
+        buildConfigField 'String', 'CURSEFORGE_API_KEY', "\"${curseForgeKeyLiteral}\""
 
         ndk {
             if (targetAbi != '') {

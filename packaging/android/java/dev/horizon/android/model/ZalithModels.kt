@@ -25,6 +25,12 @@ enum class StoreCategory(
     SHADER_PACK("Shader Packs", "Horizon Mods — Shader Packs", "shader", "shaderpacks", "SHADER PACK")
 }
 
+enum class StoreSource(val label: String, val badge: String) {
+    HORIZON("Horizon", "HORIZON"),
+    MODRINTH("Modrinth", "MODRINTH"),
+    CURSEFORGE("CurseForge", "CURSEFORGE")
+}
+
 enum class StoreSortOption(val label: String) {
     MOST_DOWNLOADED("Most downloaded"),
     BEST_RATED("Best rated"),
@@ -58,7 +64,8 @@ data class StoreVersionRelease(
     val downloadUrl: String = "",
     val sizeBytes: Long = 0L,
     val sha256: String = "",
-    val signed: Boolean = true
+    val signed: Boolean = true,
+    val sha1: String = ""
 ) {
     val primaryMcVersion: String
         get() = mcVersions.firstOrNull() ?: "26.3"
@@ -97,7 +104,10 @@ data class StoreCatalogItem(
     val license: String = "MIT",
     val displayTags: List<String> = emptyList(),
     val requiredModIds: List<String> = emptyList(),
-    val allVersions: List<StoreVersionRelease> = emptyList()
+    val allVersions: List<StoreVersionRelease> = emptyList(),
+    val sha1: String = "",
+    val source: StoreSource = StoreSource.HORIZON,
+    val sourceProjectId: String = ""
 ) {
     val isCompatibleWith26_3: Boolean
         get() = supportedMcVersions.any {
@@ -127,7 +137,8 @@ data class StoreSearchPageResult(
     val items: List<StoreCatalogItem>,
     val currentPage: Int,
     val totalPages: Int,
-    val totalHits: Int
+    val totalHits: Int,
+    val message: String = ""
 )
 
 data class WorldSaveDetailInfo(

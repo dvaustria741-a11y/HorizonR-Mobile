@@ -4571,6 +4571,50 @@ private fun CleanVersionsViewport(
     }
 }
 
+@Composable
+private fun StoreSourceSelector(
+    selected: StoreSource,
+    onSelect: (StoreSource) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = CardSlateBg,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text("Source", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                StoreSource.entries.forEach { src ->
+                    val isSelected = src == selected
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) SkyBlueAccent else Color(0xFF1B2125),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onSelect(src) }
+                    ) {
+                        Text(
+                            text = src.label,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) SkyBlueDarkText else Color.White,
+                            maxLines = 1,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 7.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 /**
  * Store Viewport styled after `429665.jpg` & `429667.jpg`.
  */
@@ -4582,6 +4626,8 @@ private fun CleanStoreViewport(
 ) {
     val context = LocalContext.current
     var selectedCategory by remember(initialCategory) { mutableStateOf(initialCategory) }
+    var selectedSource by remember { mutableStateOf(StoreSource.HORIZON) }
+    var searchMessage by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var gameVersionQuery by remember { mutableStateOf("") }
     var sortOption by remember { mutableStateOf(StoreSortOption.MOST_DOWNLOADED) }
@@ -4627,6 +4673,7 @@ private fun CleanStoreViewport(
 
     LaunchedEffect(
         selectedCategory,
+        selectedSource,
         searchQuery,
         gameVersionQuery,
         sortOption,
@@ -4645,10 +4692,12 @@ private fun CleanStoreViewport(
                 gameVersionFilter = gameVersionQuery,
                 sortOption = sortOption,
                 statusFilter = statusFilter,
-                page = currentPage
+                page = currentPage,
+                source = selectedSource
             )
         }
         installedMap = HorizonNativeBridge.getInstalledStoreVersionsMap(context, profileSlot)
+        searchMessage = pageRes.message
         catalogItems = pageRes.items
         totalPages = pageRes.totalPages
         totalHits = pageRes.totalHits
@@ -4767,6 +4816,9 @@ private fun CleanStoreViewport(
             },
             onSelect = {
                 selectedCategory = it
+                if (it != StoreCategory.RESOURCE_PACK && selectedSource != StoreSource.HORIZON) {
+                    selectedSource = StoreSource.HORIZON
+                }
                 selectedProject = null
                 currentPage = 1
             }
@@ -4829,7 +4881,7 @@ private fun CleanStoreViewport(
                                         )
                                     }
                                     Text(
-                                        text = "${catalogItems.size} of $totalHits • playhorizon.dev/mods",
+                                        text = "${catalogItems.size} of $totalHits • ${if (selectedSource == StoreSource.HORIZON) "playhorizon.dev/mods" else selectedSource.label}",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MutedSubtitleText,
@@ -4987,7 +5039,10 @@ private fun CleanStoreViewport(
                                     color = CardSlateBg
                                 ) {
                                     Text(
-                                        text = "No projects found on playhorizon.dev/mods matching your filter.",
+                                        text = searchMessage.ifBlank {
+                                            if (selectedSource == StoreSource.HORIZON) "No projects found on playhorizon.dev/mods matching your filter."
+                                            else "No ${selectedSource.label} resource packs matched your filter."
+                                        },
                                         fontSize = 12.sp,
                                         color = MutedSubtitleText,
                                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
@@ -5084,7 +5139,7 @@ private fun CleanStoreViewport(
                                                         maxLines = 1
                                                     )
                                                     Text(
-                                                        text = "${item.version} · ${item.author}",
+                                                        text = listOf(item.version, item.author).filter { it.isNotBlank() }.joinToString(" · "),
                                                         fontSize = 10.sp,
                                                         fontFamily = FontFamily.Monospace,
                                                         color = MutedSubtitleText,
@@ -5213,9 +5268,21 @@ private fun CleanStoreViewport(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        StoreSourceSelector(
+                            selected = selectedSource,
+                            onSelect = { src ->
+                                selectedSource = src
+                                if (src != StoreSource.HORIZON) {
+                                    selectedCategory = StoreCategory.RESOURCE_PACK
+                                }
+                                selectedProject = null
+                                currentPage = 1
+                            }
+                        )
+
                         StoreRightSearchPill(
                             value = searchQuery,
-                            placeholder = "Search Horizon mods...",
+                            placeholder = if (selectedSource == StoreSource.HORIZON) "Search Horizon mods..." else "Search ${selectedSource.label} resource packs...",
                             onValueChange = {
                                 searchQuery = it
                                 currentPage = 1
@@ -5658,7 +5725,8 @@ private fun CleanStoreViewport(
                                                                                     supportedMcVersions = listOf(mcVer),
                                                                                     downloadUrl = rel.downloadUrl.ifBlank { detailProj.downloadUrl },
                                                                                     fileName = rel.fileName.ifBlank { detailProj.fileName },
-                                                                                    sizeBytes = if (rel.sizeBytes > 0) rel.sizeBytes else detailProj.sizeBytes
+                                                                                    sizeBytes = if (rel.sizeBytes > 0) rel.sizeBytes else detailProj.sizeBytes,
+                                                                                    sha1 = rel.sha1
                                                                                 )
                                                                                 if (mcVer.contains("26.3")) {
                                                                                     startItemDownload(dlItem)
@@ -5826,7 +5894,11 @@ private fun CleanStoreViewport(
                             )
 
                             Text(
-                                text = "v${detailProj.version} · By ${detailProj.author} · ${detailProj.license}",
+                                text = listOfNotNull(
+                                    if (detailProj.version.isNotBlank()) "v${detailProj.version}" else null,
+                                    "By ${detailProj.author}",
+                                    detailProj.license
+                                ).joinToString(" · "),
                                 fontSize = 10.sp,
                                 color = SkyBlueAccent,
                                 textAlign = TextAlign.Center
@@ -5886,9 +5958,9 @@ private fun CleanStoreViewport(
                                     Spacer(Modifier.width(5.dp))
                                     Text(
                                         text = when (detailInstallState) {
-                                            StoreInstallState.INSTALLED -> "✓ Installed (v${installedMap[detailProj.id] ?: detailProj.version})"
+                                            StoreInstallState.INSTALLED -> "✓ Installed (${if (detailProj.source == StoreSource.HORIZON) "v" else ""}${installedMap[detailProj.id] ?: detailProj.version})"
                                             StoreInstallState.UPDATE_AVAILABLE -> "↑ Update (${installedMap[detailProj.id] ?: "old"} → v${detailProj.version})"
-                                            StoreInstallState.NOT_INSTALLED -> "Install v${detailProj.version}"
+                                            StoreInstallState.NOT_INSTALLED -> if (detailProj.version.isBlank()) "Install latest" else "Install v${detailProj.version}"
                                         },
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,

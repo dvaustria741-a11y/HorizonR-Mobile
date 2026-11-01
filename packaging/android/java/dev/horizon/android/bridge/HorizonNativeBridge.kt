@@ -3189,6 +3189,7 @@ object HorizonNativeBridge {
         val home = ensureHomeDirectories(context)
         val profileHome = getProfileHome(home, profileSlot)
         val result = mutableMapOf<String, String>()
+        val fileRecords = mutableMapOf<String, String>()
 
         val regFile = File(profileHome, "zalith-store-installed.json").takeIf { it.exists() }
             ?: File(home, "zalith-store-installed.json")
@@ -3200,6 +3201,8 @@ object HorizonNativeBridge {
                     val k = keys.next()
                     if (!k.endsWith("__file")) {
                         result[k] = obj.optString(k, "")
+                    } else {
+                        fileRecords[k.removeSuffix("__file")] = obj.optString(k, "")
                     }
                 }
             }
@@ -3222,7 +3225,10 @@ object HorizonNativeBridge {
         val toRemove = mutableListOf<String>()
         for ((projId, _) in result) {
             val cleanProjId = sanitizeModId(projId)
-            val stillExists = existingFiles.any { f ->
+            val recordedFile = fileRecords[projId]
+            val stillExists = if (!recordedFile.isNullOrBlank() && (projId.startsWith("mr-") || projId.startsWith("cf-"))) {
+                existingFiles.any { f -> f.name.equals(recordedFile, ignoreCase = true) }
+            } else existingFiles.any { f ->
                 val fClean = sanitizeModId(f.name)
                 fClean == cleanProjId ||
                     f.name.startsWith(projId, ignoreCase = true) ||
@@ -3371,6 +3377,16 @@ object HorizonNativeBridge {
         val profileHome = getProfileHome(home, profileSlot)
         val cleanId = sanitizeModId(item.id)
         var deletedAny = false
+        if (item.source != StoreSource.HORIZON) {
+            val externalBases = listOf(home, profileHome).distinctBy { it.absolutePath }
+            externalBases.map { readRecordedStoreFile(it, item.id) }.filter { it.isNotBlank() }.distinct().forEach { name ->
+                runCatching { setContentItemEnabled(context, "resourcepacks", name, false, profileSlot, logEnabled) }
+                externalBases.forEach { base ->
+                    val packFile = File(File(base, "resourcepacks"), name)
+                    if (packFile.exists() && packFile.delete()) deletedAny = true
+                }
+            }
+        }
         listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
             listOf("horizon-mods", "mods", "horizon-native-mods", "resourcepacks", "shaderpacks", "horizon-packs").forEach { sub ->
                 val dir = File(base, sub)
@@ -4040,8 +4056,12 @@ object HorizonNativeBridge {
         gameVersionFilter: String = "",
         sortOption: StoreSortOption = StoreSortOption.MOST_DOWNLOADED,
         statusFilter: StoreStatusFilter = StoreStatusFilter.ALL,
-        page: Int = 1
+        page: Int = 1,
+        source: StoreSource = StoreSource.HORIZON
     ): StoreSearchPageResult {
+        if (source != StoreSource.HORIZON) {
+            return searchExternalResourcePacks(context, profileSlot, source, searchQuery, gameVersionFilter, sortOption, statusFilter, page)
+        }
         val allProjects = fetchLivePlayHorizonCatalog()
         val installedMap = getInstalledStoreVersionsMap(context, profileSlot)
         val q = searchQuery.trim()
@@ -4100,6 +4120,14 @@ object HorizonNativeBridge {
     }
 
     fun fetchProjectVersionReleases(item: StoreCatalogItem): List<StoreVersionRelease> {
+        if (item.source != StoreSource.HORIZON) {
+            return try {
+                ContentSources.versionsFor(item)
+            } catch (e: Exception) {
+                Log.w(TAG, "${item.source.label} version list failed for ${item.id}: ${e.message}")
+                emptyList()
+            }
+        }
         val baseList = if (item.allVersions.isNotEmpty()) {
             item.allVersions
         } else {
@@ -4273,6 +4301,11 @@ object HorizonNativeBridge {
     ) {
         storeDownloadPaused.set(false)
         storeDownloadCancelled.set(false)
+
+        if (item.source != StoreSource.HORIZON) {
+            installExternalStoreItem(context, item, profileSlot, logEnabled, onProgress, onComplete)
+            return
+        }
 
         Thread({
             val home = ensureHomeDirectories(context)
@@ -4512,6 +4545,225 @@ object HorizonNativeBridge {
                 onComplete(false, "Failed to download ${item.title}: ${e.message}")
             }
         }, "HorizonZ-StoreDownloader").start()
+    }
+
+    private fun searchExternalResourcePacks(
+        context: Context,
+        profileSlot: Int,
+        source: StoreSource,
+        searchQuery: String,
+        gameVersionFilter: String,
+        sortOption: StoreSortOption,
+        statusFilter: StoreStatusFilter,
+        page: Int
+    ): StoreSearchPageResult {
+        val raw = try {
+            when (source) {
+                StoreSource.MODRINTH -> ContentSources.searchModrinth(searchQuery, gameVersionFilter, sortOption, page)
+                StoreSource.CURSEFORGE -> ContentSources.searchCurseForge(searchQuery, gameVersionFilter, sortOption, page)
+                StoreSource.HORIZON -> StoreSearchPageResult(emptyList(), 1, 1, 0)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "${source.label} search failed: ${e.message}")
+            return StoreSearchPageResult(emptyList(), 1, 1, 0, "Could not reach ${source.label}: ${e.message ?: "network error"}")
+        }
+        if (statusFilter == StoreStatusFilter.ALL) return raw
+        val installedMap = getInstalledStoreVersionsMap(context, profileSlot)
+        val filtered = when (statusFilter) {
+            StoreStatusFilter.INSTALLED -> raw.items.filter { installedMap.containsKey(it.id) }
+            else -> emptyList()
+        }
+        return raw.copy(items = filtered, totalHits = filtered.size, totalPages = 1, currentPage = 1)
+    }
+
+    private fun readRecordedStoreFile(dir: File, projectId: String): String {
+        val regFile = File(dir, "zalith-store-installed.json")
+        if (!regFile.exists()) return ""
+        return runCatching { JSONObject(regFile.readText()).optString("${projectId}__file", "") }.getOrDefault("")
+    }
+
+    private fun removeRecordedExternalPack(
+        context: Context,
+        profileSlot: Int,
+        item: StoreCatalogItem,
+        keepName: String,
+        logEnabled: Boolean
+    ) {
+        val home = ensureHomeDirectories(context)
+        val profileHome = getProfileHome(home, profileSlot)
+        val bases = listOf(home, profileHome).distinctBy { it.absolutePath }
+        val oldNames = bases.map { readRecordedStoreFile(it, item.id) }
+            .filter { it.isNotBlank() && it != keepName }
+            .distinct()
+        oldNames.forEach { old ->
+            runCatching { setContentItemEnabled(context, "resourcepacks", old, false, profileSlot, logEnabled) }
+            bases.forEach { base ->
+                val f = File(File(base, "resourcepacks"), old)
+                if (f.exists()) f.delete()
+            }
+        }
+    }
+
+    /**
+     * Installs a Modrinth or CurseForge resource pack into `resourcepacks/`, verifies the published SHA-1,
+     * makes sure `pack.mcmeta` sits at the archive root, replaces any older version of the same project and
+     * enables the pack in `options.txt`. Unlike the Horizon registry path there is no placeholder fallback:
+     * any failure is reported and nothing is written.
+     */
+    private fun installExternalStoreItem(
+        context: Context,
+        item: StoreCatalogItem,
+        profileSlot: Int,
+        logEnabled: Boolean,
+        onProgress: (StoreDownloadProgress) -> Unit,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        Thread({
+            var partFile: File? = null
+            try {
+                val home = ensureHomeDirectories(context)
+                val profileHome = getProfileHome(home, profileSlot)
+                val sourceLabel = item.source.label
+
+                onProgress(
+                    StoreDownloadProgress(
+                        activeItemId = item.id,
+                        activeTitle = item.title,
+                        running = true,
+                        percent = 3,
+                        speedText = "Connecting...",
+                        statusText = "$sourceLabel • resolving file"
+                    )
+                )
+
+                val target = ContentSources.resolveInstallTarget(item)
+                val canonicalName = ContentSources.sanitizePackFileName(target.fileName)
+                val destDir = File(profileHome, "resourcepacks").apply { mkdirs() }
+                val part = File(destDir, "$canonicalName.part")
+                partFile = part
+                if (part.exists()) part.delete()
+                appendSystemLog("Downloading '${item.title}' from $sourceLabel: ${target.downloadUrl}", logEnabled, context)
+
+                val conn = (URL(target.downloadUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 10000
+                    readTimeout = 20000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "dvaustria741-a11y/HorizonR-Mobile/$INSTALLED_LAUNCHER_VERSION (resource pack downloader)")
+                }
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    conn.disconnect()
+                    val hint = if (item.source == StoreSource.CURSEFORGE && (code == 403 || code == 404)) {
+                        " The author may have disabled third-party downloads. Open ${item.pageUrl} to download it manually."
+                    } else ""
+                    throw ContentSourceException("$sourceLabel download failed (HTTP $code).$hint")
+                }
+
+                val digest = java.security.MessageDigest.getInstance("SHA-1")
+                val totalBytes = conn.contentLengthLong.takeIf { it > 0L } ?: target.sizeBytes.coerceAtLeast(1L)
+                var downloaded = 0L
+                val t0 = System.currentTimeMillis()
+
+                conn.inputStream.use { input ->
+                    FileOutputStream(part).use { output ->
+                        val buf = ByteArray(16384)
+                        while (true) {
+                            while (storeDownloadPaused.get() && !storeDownloadCancelled.get()) {
+                                onProgress(
+                                    StoreDownloadProgress(
+                                        activeItemId = item.id,
+                                        activeTitle = item.title,
+                                        running = true,
+                                        paused = true,
+                                        percent = ((downloaded * 100L) / totalBytes).toInt().coerceIn(0, 99),
+                                        speedText = "Paused",
+                                        statusText = "Paused (${downloaded / 1024} KB)"
+                                    )
+                                )
+                                Thread.sleep(200L)
+                            }
+                            if (storeDownloadCancelled.get()) break
+                            val read = input.read(buf)
+                            if (read <= 0) break
+                            output.write(buf, 0, read)
+                            digest.update(buf, 0, read)
+                            downloaded += read
+
+                            val elapsedSec = ((System.currentTimeMillis() - t0) / 1000.0).coerceAtLeast(0.05)
+                            val kbps = (downloaded / 1024.0) / elapsedSec
+                            val speedStr = if (kbps >= 1024.0) String.format(Locale.US, "%.2f MB/s", kbps / 1024.0)
+                            else String.format(Locale.US, "%.1f KB/s", kbps)
+                            onProgress(
+                                StoreDownloadProgress(
+                                    activeItemId = item.id,
+                                    activeTitle = item.title,
+                                    running = true,
+                                    paused = false,
+                                    percent = ((downloaded * 100L) / totalBytes).toInt().coerceIn(1, 95),
+                                    speedText = speedStr,
+                                    statusText = "${downloaded / 1024} / ${totalBytes / 1024} KB • $sourceLabel"
+                                )
+                            )
+                        }
+                    }
+                }
+                conn.disconnect()
+
+                if (storeDownloadCancelled.get()) {
+                    part.delete()
+                    onProgress(StoreDownloadProgress())
+                    onComplete(false, "Download of '${item.title}' cancelled & temporary file deleted.")
+                    return@Thread
+                }
+                if (downloaded <= 0L) throw ContentSourceException("The server returned an empty file")
+
+                val expectedSha1 = target.sha1.trim().lowercase(Locale.US)
+                if (expectedSha1.isNotEmpty()) {
+                    val actualSha1 = digest.digest().joinToString("") { b -> String.format(Locale.US, "%02x", b) }
+                    if (actualSha1 != expectedSha1) {
+                        throw ContentSourceException("Checksum mismatch, the download was corrupted. Please try again.")
+                    }
+                }
+
+                onProgress(
+                    StoreDownloadProgress(
+                        activeItemId = item.id,
+                        activeTitle = item.title,
+                        running = true,
+                        percent = 97,
+                        speedText = "",
+                        statusText = "Checking pack.mcmeta..."
+                    )
+                )
+                ContentSources.validateAndNormalizePackZip(part)?.let { throw ContentSourceException(it) }
+
+                removeRecordedExternalPack(context, profileSlot, item, canonicalName, logEnabled)
+
+                val finalFile = File(destDir, canonicalName)
+                if (finalFile.exists()) finalFile.delete()
+                if (!part.renameTo(finalFile)) {
+                    part.copyTo(finalFile, overwrite = true)
+                    part.delete()
+                }
+                listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
+                    val copyTarget = File(File(base, "resourcepacks").apply { mkdirs() }, canonicalName)
+                    if (copyTarget.absolutePath != finalFile.absolutePath) {
+                        finalFile.copyTo(copyTarget, overwrite = true)
+                    }
+                }
+                setContentItemEnabled(context, "resourcepacks", canonicalName, true, profileSlot, logEnabled)
+                recordInstalledStoreItem(context, profileSlot, item.id, target.version, canonicalName)
+                invalidateContentCaches()
+                onProgress(StoreDownloadProgress())
+                appendSystemLog("Installed '${item.title}' ($canonicalName) from $sourceLabel.", logEnabled, context)
+                onComplete(true, "Installed ${item.title} and enabled it in Resource Packs.")
+            } catch (e: Exception) {
+                partFile?.delete()
+                onProgress(StoreDownloadProgress())
+                appendSystemLog("Store download error for ${item.title}: ${e.message}", logEnabled, context)
+                onComplete(false, "Failed to install ${item.title}: ${e.message}")
+            }
+        }, "HorizonR-ExternalPackInstaller").start()
     }
 
     // ========================================================================
