@@ -4839,7 +4839,7 @@ private fun CleanStoreViewport(
             },
             onSelect = {
                 selectedCategory = it
-                if (it != StoreCategory.RESOURCE_PACK && selectedSource != StoreSource.HORIZON) {
+                if (it != StoreCategory.RESOURCE_PACK && it != StoreCategory.SHADER_PACK && selectedSource != StoreSource.HORIZON) {
                     selectedSource = StoreSource.HORIZON
                 }
                 selectedProject = null
@@ -5064,7 +5064,7 @@ private fun CleanStoreViewport(
                                     Text(
                                         text = searchMessage.ifBlank {
                                             if (selectedSource == StoreSource.HORIZON) "No projects found on playhorizon.dev/mods matching your filter."
-                                            else "No ${selectedSource.label} resource packs matched your filter."
+                                            else "No ${selectedSource.label} ${if (selectedCategory == StoreCategory.SHADER_PACK) "shader" else "resource"} packs matched your filter."
                                         },
                                         fontSize = 12.sp,
                                         color = MutedSubtitleText,
@@ -5295,7 +5295,7 @@ private fun CleanStoreViewport(
                             selected = selectedSource,
                             onSelect = { src ->
                                 selectedSource = src
-                                if (src != StoreSource.HORIZON) {
+                                if (src != StoreSource.HORIZON && selectedCategory != StoreCategory.SHADER_PACK) {
                                     selectedCategory = StoreCategory.RESOURCE_PACK
                                 }
                                 selectedProject = null
@@ -5305,7 +5305,7 @@ private fun CleanStoreViewport(
 
                         StoreRightSearchPill(
                             value = searchQuery,
-                            placeholder = if (selectedSource == StoreSource.HORIZON) "Search Horizon mods..." else "Search ${selectedSource.label} resource packs...",
+                            placeholder = if (selectedSource == StoreSource.HORIZON) "Search Horizon mods..." else "Search ${selectedSource.label} ${if (selectedCategory == StoreCategory.SHADER_PACK) "shader" else "resource"} packs...",
                             onValueChange = {
                                 searchQuery = it
                                 currentPage = 1

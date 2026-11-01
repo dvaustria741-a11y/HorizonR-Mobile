@@ -23,10 +23,11 @@ import java.util.zip.ZipOutputStream
 class ContentSourceException(message: String) : IOException(message)
 
 /**
- * Resource pack browsing for Modrinth and CurseForge, following the same API usage as ZalithLauncher 2:
+ * Resource pack and shader pack browsing for Modrinth and CurseForge, following the same API usage as ZalithLauncher 2:
  * Modrinth `/search` with `project_type:resourcepack` facets and `/project/{id}/version`, CurseForge
  * `/mods/search` with `classId=12` (texture packs) and `/mods/{id}/files`, picking the primary file per version,
  * and falling back to the forgecdn edge URL when CurseForge returns a null `downloadUrl`.
+ * Shader packs use the same calls with `project_type:shader` (Modrinth) and `classId=6552` (CurseForge).
  */
 object ContentSources {
     const val MODRINTH_API = "https://api.modrinth.com/v2"
@@ -34,6 +35,7 @@ object ContentSources {
 
     private const val CF_GAME_ID = 432
     private const val CF_CLASS_RESOURCE_PACKS = 12
+    private const val CF_CLASS_SHADERS = 6552
     private const val PAGE_SIZE = 20
     private const val USER_AGENT = "dvaustria741-a11y/HorizonR-Mobile/1.8 (Android resource pack browser)"
     const val PREFERRED_GAME_VERSION = "26.3"
@@ -43,6 +45,10 @@ object ContentSources {
     fun curseForgeKey(): String = BuildConfig.CURSEFORGE_API_KEY.trim()
 
     fun isCurseForgeConfigured(): Boolean = curseForgeKey().isNotEmpty()
+
+    private fun isShader(category: StoreCategory): Boolean = category == StoreCategory.SHADER_PACK
+
+    private fun kindLabel(category: StoreCategory): String = if (isShader(category)) "SHADER PACK" else "RESOURCE PACK"
 
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 
@@ -125,9 +131,11 @@ object ContentSources {
         query: String,
         gameVersion: String,
         sort: StoreSortOption,
-        page: Int
+        page: Int,
+        category: StoreCategory = StoreCategory.RESOURCE_PACK
     ): StoreSearchPageResult {
-        val facets = JSONArray().put(JSONArray().put("project_type:resourcepack"))
+        val projectType = if (isShader(category)) "shader" else "resourcepack"
+        val facets = JSONArray().put(JSONArray().put("project_type:$projectType"))
         if (gameVersion.isNotBlank()) {
             facets.put(JSONArray().put("versions:${gameVersion.trim()}"))
         }
@@ -163,9 +171,9 @@ object ContentSources {
                     downloadUrl = "",
                     fileName = "",
                     sizeBytes = 0L,
-                    category = StoreCategory.RESOURCE_PACK,
-                    kindBadge = "MODRINTH • RESOURCE PACK",
-                    pageUrl = "https://modrinth.com/resourcepack/$slug",
+                    category = if (isShader(category)) StoreCategory.SHADER_PACK else StoreCategory.RESOURCE_PACK,
+                    kindBadge = "MODRINTH • ${kindLabel(category)}",
+                    pageUrl = "https://modrinth.com/$projectType/$slug",
                     iconUrl = h.optString("icon_url", ""),
                     downloadsCount = h.optLong("downloads", 0L),
                     ratingScore = 0f,
@@ -184,7 +192,11 @@ object ContentSources {
         return StoreSearchPageResult(ordered, safePage, pagesFor(total), total)
     }
 
-    fun modrinthVersions(projectId: String, gameVersion: String = ""): List<StoreVersionRelease> {
+    fun modrinthVersions(
+        projectId: String,
+        gameVersion: String = "",
+        category: StoreCategory = StoreCategory.RESOURCE_PACK
+    ): List<StoreVersionRelease> {
         var url = "$MODRINTH_API/project/${enc(projectId)}/version?include_changelog=false"
         if (gameVersion.isNotBlank()) {
             url += "&game_versions=${enc(JSONArray().put(gameVersion.trim()).toString())}"
@@ -214,7 +226,7 @@ object ContentSources {
                     name = v.optString("name", number).ifBlank { number },
                     versionNumber = number,
                     mcVersions = cleanMcVersions(v.optJSONArray("game_versions").toStringList()),
-                    kindLabel = "RESOURCE PACK",
+                    kindLabel = kindLabel(category),
                     releaseType = v.optString("version_type", "release"),
                     downloadsCount = v.optLong("downloads", 0L),
                     datePublished = v.optString("date_published", "").take(10).ifBlank { "Recently" },
@@ -236,7 +248,8 @@ object ContentSources {
         query: String,
         gameVersion: String,
         sort: StoreSortOption,
-        page: Int
+        page: Int,
+        category: StoreCategory = StoreCategory.RESOURCE_PACK
     ): StoreSearchPageResult {
         if (!isCurseForgeConfigured()) {
             return StoreSearchPageResult(
@@ -252,7 +265,7 @@ object ContentSources {
         }
         val sortOrder = if (sort == StoreSortOption.NAME_AZ) "asc" else "desc"
         val safePage = page.coerceAtLeast(1)
-        val sb = StringBuilder("$CURSEFORGE_API/mods/search?gameId=$CF_GAME_ID&classId=$CF_CLASS_RESOURCE_PACKS")
+        val sb = StringBuilder("$CURSEFORGE_API/mods/search?gameId=$CF_GAME_ID&classId=${if (isShader(category)) CF_CLASS_SHADERS else CF_CLASS_RESOURCE_PACKS}")
         if (query.isNotBlank()) sb.append("&searchFilter=").append(enc(query.trim()))
         if (gameVersion.isNotBlank()) sb.append("&gameVersion=").append(enc(gameVersion.trim()))
         sb.append("&sortField=$sortField&sortOrder=$sortOrder")
@@ -273,7 +286,7 @@ object ContentSources {
             val icon = logo?.optString("thumbnailUrl", "")?.takeIf { it.isNotBlank() }
                 ?: logo?.optString("url", "").orEmpty()
             val websiteUrl = d.optJSONObject("links")?.optString("websiteUrl", "")?.takeIf { it.isNotBlank() }
-                ?: "https://www.curseforge.com/minecraft/texture-packs/$slug"
+                ?: "https://www.curseforge.com/minecraft/${if (isShader(category)) "shaders" else "texture-packs"}/$slug"
             val indexes = d.optJSONArray("latestFilesIndexes")
             val rawVersions = ArrayList<String>()
             if (indexes != null) {
@@ -296,8 +309,8 @@ object ContentSources {
                     downloadUrl = "",
                     fileName = "",
                     sizeBytes = 0L,
-                    category = StoreCategory.RESOURCE_PACK,
-                    kindBadge = "CURSEFORGE • RESOURCE PACK",
+                    category = if (isShader(category)) StoreCategory.SHADER_PACK else StoreCategory.RESOURCE_PACK,
+                    kindBadge = "CURSEFORGE • ${kindLabel(category)}",
                     pageUrl = websiteUrl,
                     iconUrl = icon,
                     downloadsCount = d.optLong("downloadCount", 0L),
@@ -325,7 +338,11 @@ object ContentSources {
         return "https://edge.forgecdn.net/files/${fileId / 1000}/${fileId % 1000}/$encodedName"
     }
 
-    fun curseForgeVersions(modId: String, gameVersion: String = ""): List<StoreVersionRelease> {
+    fun curseForgeVersions(
+        modId: String,
+        gameVersion: String = "",
+        category: StoreCategory = StoreCategory.RESOURCE_PACK
+    ): List<StoreVersionRelease> {
         if (!isCurseForgeConfigured()) {
             throw ContentSourceException("CurseForge API key is missing in this build")
         }
@@ -360,7 +377,7 @@ object ContentSources {
                     name = display,
                     versionNumber = display.trim(),
                     mcVersions = cleanMcVersions(f.optJSONArray("gameVersions").toStringList()),
-                    kindLabel = "RESOURCE PACK",
+                    kindLabel = kindLabel(category),
                     releaseType = when (f.optInt("releaseType", 1)) {
                         2 -> "beta"
                         3 -> "alpha"
@@ -384,8 +401,8 @@ object ContentSources {
 
     fun versionsFor(item: StoreCatalogItem, gameVersion: String = ""): List<StoreVersionRelease> {
         return when (item.source) {
-            StoreSource.MODRINTH -> modrinthVersions(item.sourceProjectId, gameVersion)
-            StoreSource.CURSEFORGE -> curseForgeVersions(item.sourceProjectId, gameVersion)
+            StoreSource.MODRINTH -> modrinthVersions(item.sourceProjectId, gameVersion, item.category)
+            StoreSource.CURSEFORGE -> curseForgeVersions(item.sourceProjectId, gameVersion, item.category)
             StoreSource.HORIZON -> emptyList()
         }
     }
@@ -417,14 +434,14 @@ object ContentSources {
      * Resource pack file names end up inside `resourcePacks:["file/<name>"]` in options.txt, which is split on
      * commas, so commas, quotes, brackets and path separators are replaced and the extension is forced to `.zip`.
      */
-    fun sanitizePackFileName(raw: String): String {
+    fun sanitizePackFileName(raw: String, fallback: String = "resourcepack"): String {
         var n = raw.trim().substringAfterLast('/').substringAfterLast('\\')
         n = n.replace(Regex("[^A-Za-z0-9._()+ \\-]"), "_")
         n = n.replace(Regex("\\s+"), " ").trim().trim('.')
         if (n.endsWith(".zip", ignoreCase = true)) n = n.dropLast(4)
         n = n.trim().trim('.')
         if (n.length > 96) n = n.take(96).trim()
-        if (n.isEmpty()) n = "resourcepack"
+        if (n.isEmpty()) n = fallback
         return "$n.zip"
     }
 
@@ -445,7 +462,34 @@ object ContentSources {
         if (nested.size != 1) {
             return "The archive has no pack.mcmeta, so it is not a Minecraft resource pack"
         }
-        val prefix = nested[0].removeSuffix("pack.mcmeta")
+        return repackWithoutPrefix(zip, nested[0].removeSuffix("pack.mcmeta"))
+    }
+
+    /**
+     * Shader packs (Iris / OptiFine layout) keep their GLSL under `shaders/` at the archive root. Archives zipped
+     * with one extra top-level folder (`Pack/shaders/...`) are rewritten so the loader finds `shaders/` at the root.
+     * Returns null when the archive is loadable, otherwise a human readable reason.
+     */
+    fun validateAndNormalizeShaderZip(zip: File): String? {
+        val names: List<String> = try {
+            ZipFile(zip).use { zf -> zf.entries().toList().map { it.name } }
+        } catch (e: Exception) {
+            return "The downloaded file is not a valid ZIP archive"
+        }
+        if (names.any { it.startsWith("shaders/", ignoreCase = true) }) return null
+        if (names.any { it.equals("horizon-shaders.toml", ignoreCase = true) }) return null
+
+        val folders = names.filter { it.count { c -> c == '/' } >= 2 }
+            .filter { it.substringAfter('/').startsWith("shaders/", ignoreCase = true) }
+            .map { it.substringBefore('/') + "/" }
+            .distinct()
+        if (folders.size != 1) {
+            return "The archive has no shaders folder, so it is not a shader pack"
+        }
+        return repackWithoutPrefix(zip, folders[0])
+    }
+
+    private fun repackWithoutPrefix(zip: File, prefix: String): String? {
         val tmp = File(zip.parentFile, zip.name + ".norm")
         try {
             ZipFile(zip).use { zf ->
@@ -464,11 +508,11 @@ object ContentSources {
             }
             if (!zip.delete() || !tmp.renameTo(zip)) {
                 tmp.delete()
-                return "Could not repack the resource pack archive"
+                return "Could not repack the archive"
             }
         } catch (e: Exception) {
             tmp.delete()
-            return "Could not repack the resource pack archive: ${e.message}"
+            return "Could not repack the archive: ${e.message}"
         }
         return null
     }

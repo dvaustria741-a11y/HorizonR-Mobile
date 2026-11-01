@@ -2708,6 +2708,20 @@ object HorizonNativeBridge {
         fallbackVersion: String = "1.0.0",
         fallbackSummary: String = "Horizon 26.3 WGSL Shader Pack"
     ) {
+        // Modrinth/CurseForge shader packs (Iris/OptiFine layout with a root `shaders/` folder) must never be
+        // rewritten into a placeholder Horizon WGSL pack, so they are left untouched.
+        if (targetFile.isFile && targetFile.length() > 22L) {
+            val isForeignShaderPack = try {
+                ZipFile(targetFile).use { zf ->
+                    val names = zf.entries().asSequence().map { it.name }.toList()
+                    names.any { it.startsWith("shaders/", ignoreCase = true) } &&
+                        names.none { it.equals("horizon-shaders.toml", ignoreCase = true) }
+                }
+            } catch (ignored: Exception) {
+                false
+            }
+            if (isForeignShaderPack) return
+        }
         val rawStem = fallbackId.removeSuffix(".hshader").removeSuffix(".zip")
         val cleanId = sanitizeModId(rawStem).removeSuffix("_shader").ifBlank { "golden_hour" }
         val extractedVer = Regex("-(\\d+\\.\\d+(?:\\.\\d+)?)").find(rawStem)?.groupValues?.get(1)
@@ -3380,9 +3394,10 @@ object HorizonNativeBridge {
         if (item.source != StoreSource.HORIZON) {
             val externalBases = listOf(home, profileHome).distinctBy { it.absolutePath }
             externalBases.map { readRecordedStoreFile(it, item.id) }.filter { it.isNotBlank() }.distinct().forEach { name ->
-                runCatching { setContentItemEnabled(context, "resourcepacks", name, false, profileSlot, logEnabled) }
+                val externalFolder = externalInstallFolder(item)
+                runCatching { setContentItemEnabled(context, externalFolder, name, false, profileSlot, logEnabled) }
                 externalBases.forEach { base ->
-                    val packFile = File(File(base, "resourcepacks"), name)
+                    val packFile = File(File(base, externalFolder), name)
                     if (packFile.exists() && packFile.delete()) deletedAny = true
                 }
             }
@@ -4060,7 +4075,8 @@ object HorizonNativeBridge {
         source: StoreSource = StoreSource.HORIZON
     ): StoreSearchPageResult {
         if (source != StoreSource.HORIZON) {
-            return searchExternalResourcePacks(context, profileSlot, source, searchQuery, gameVersionFilter, sortOption, statusFilter, page)
+            val externalCategory = if (category == StoreCategory.SHADER_PACK) StoreCategory.SHADER_PACK else StoreCategory.RESOURCE_PACK
+            return searchExternalResourcePacks(context, profileSlot, source, externalCategory, searchQuery, gameVersionFilter, sortOption, statusFilter, page)
         }
         val allProjects = fetchLivePlayHorizonCatalog()
         val installedMap = getInstalledStoreVersionsMap(context, profileSlot)
@@ -4551,6 +4567,7 @@ object HorizonNativeBridge {
         context: Context,
         profileSlot: Int,
         source: StoreSource,
+        category: StoreCategory,
         searchQuery: String,
         gameVersionFilter: String,
         sortOption: StoreSortOption,
@@ -4559,8 +4576,8 @@ object HorizonNativeBridge {
     ): StoreSearchPageResult {
         val raw = try {
             when (source) {
-                StoreSource.MODRINTH -> ContentSources.searchModrinth(searchQuery, gameVersionFilter, sortOption, page)
-                StoreSource.CURSEFORGE -> ContentSources.searchCurseForge(searchQuery, gameVersionFilter, sortOption, page)
+                StoreSource.MODRINTH -> ContentSources.searchModrinth(searchQuery, gameVersionFilter, sortOption, page, category)
+                StoreSource.CURSEFORGE -> ContentSources.searchCurseForge(searchQuery, gameVersionFilter, sortOption, page, category)
                 StoreSource.HORIZON -> StoreSearchPageResult(emptyList(), 1, 1, 0)
             }
         } catch (e: Exception) {
@@ -4582,6 +4599,9 @@ object HorizonNativeBridge {
         return runCatching { JSONObject(regFile.readText()).optString("${projectId}__file", "") }.getOrDefault("")
     }
 
+    private fun externalInstallFolder(item: StoreCatalogItem): String =
+        if (item.category == StoreCategory.SHADER_PACK) "shaderpacks" else "resourcepacks"
+
     private fun removeRecordedExternalPack(
         context: Context,
         profileSlot: Int,
@@ -4592,13 +4612,14 @@ object HorizonNativeBridge {
         val home = ensureHomeDirectories(context)
         val profileHome = getProfileHome(home, profileSlot)
         val bases = listOf(home, profileHome).distinctBy { it.absolutePath }
+        val folder = externalInstallFolder(item)
         val oldNames = bases.map { readRecordedStoreFile(it, item.id) }
             .filter { it.isNotBlank() && it != keepName }
             .distinct()
         oldNames.forEach { old ->
-            runCatching { setContentItemEnabled(context, "resourcepacks", old, false, profileSlot, logEnabled) }
+            runCatching { setContentItemEnabled(context, folder, old, false, profileSlot, logEnabled) }
             bases.forEach { base ->
-                val f = File(File(base, "resourcepacks"), old)
+                val f = File(File(base, folder), old)
                 if (f.exists()) f.delete()
             }
         }
@@ -4624,6 +4645,9 @@ object HorizonNativeBridge {
                 val home = ensureHomeDirectories(context)
                 val profileHome = getProfileHome(home, profileSlot)
                 val sourceLabel = item.source.label
+                val isShader = item.category == StoreCategory.SHADER_PACK
+                val folder = externalInstallFolder(item)
+                val kindName = if (isShader) "shader pack" else "resource pack"
 
                 onProgress(
                     StoreDownloadProgress(
@@ -4637,8 +4661,11 @@ object HorizonNativeBridge {
                 )
 
                 val target = ContentSources.resolveInstallTarget(item)
-                val canonicalName = ContentSources.sanitizePackFileName(target.fileName)
-                val destDir = File(profileHome, "resourcepacks").apply { mkdirs() }
+                val canonicalName = ContentSources.sanitizePackFileName(
+                    target.fileName,
+                    if (isShader) "shaderpack" else "resourcepack"
+                )
+                val destDir = File(profileHome, folder).apply { mkdirs() }
                 val part = File(destDir, "$canonicalName.part")
                 partFile = part
                 if (part.exists()) part.delete()
@@ -4648,7 +4675,7 @@ object HorizonNativeBridge {
                     connectTimeout = 10000
                     readTimeout = 20000
                     instanceFollowRedirects = true
-                    setRequestProperty("User-Agent", "dvaustria741-a11y/HorizonR-Mobile/$INSTALLED_LAUNCHER_VERSION (resource pack downloader)")
+                    setRequestProperty("User-Agent", "dvaustria741-a11y/HorizonR-Mobile/$INSTALLED_LAUNCHER_VERSION ($kindName downloader)")
                 }
                 val code = conn.responseCode
                 if (code !in 200..299) {
@@ -4732,10 +4759,12 @@ object HorizonNativeBridge {
                         running = true,
                         percent = 97,
                         speedText = "",
-                        statusText = "Checking pack.mcmeta..."
+                        statusText = if (isShader) "Checking shaders folder..." else "Checking pack.mcmeta..."
                     )
                 )
-                ContentSources.validateAndNormalizePackZip(part)?.let { throw ContentSourceException(it) }
+                val packProblem = if (isShader) ContentSources.validateAndNormalizeShaderZip(part)
+                else ContentSources.validateAndNormalizePackZip(part)
+                packProblem?.let { throw ContentSourceException(it) }
 
                 removeRecordedExternalPack(context, profileSlot, item, canonicalName, logEnabled)
 
@@ -4746,17 +4775,17 @@ object HorizonNativeBridge {
                     part.delete()
                 }
                 listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
-                    val copyTarget = File(File(base, "resourcepacks").apply { mkdirs() }, canonicalName)
+                    val copyTarget = File(File(base, folder).apply { mkdirs() }, canonicalName)
                     if (copyTarget.absolutePath != finalFile.absolutePath) {
                         finalFile.copyTo(copyTarget, overwrite = true)
                     }
                 }
-                setContentItemEnabled(context, "resourcepacks", canonicalName, true, profileSlot, logEnabled)
+                setContentItemEnabled(context, folder, canonicalName, true, profileSlot, logEnabled)
                 recordInstalledStoreItem(context, profileSlot, item.id, target.version, canonicalName)
                 invalidateContentCaches()
                 onProgress(StoreDownloadProgress())
                 appendSystemLog("Installed '${item.title}' ($canonicalName) from $sourceLabel.", logEnabled, context)
-                onComplete(true, "Installed ${item.title} and enabled it in Resource Packs.")
+                onComplete(true, "Installed ${item.title} and enabled it in ${if (isShader) "Shader Packs" else "Resource Packs"}.")
             } catch (e: Exception) {
                 partFile?.delete()
                 onProgress(StoreDownloadProgress())

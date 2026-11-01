@@ -87,13 +87,13 @@
 - 📱 **Upstream Android Runtime**: [Vasysik/horizon-android](https://github.com/Vasysik/horizon-android) (`v0.7.6`)
 - 🦀 **Core Rust Engine**: [horizon-rust/horizon](https://github.com/horizon-rust/horizon) (`Apache-2.0`)
 
-## Resource packs from Modrinth and CurseForge
+## Resource packs and shader packs from Modrinth and CurseForge
 
-The Store tab has a Source switch (Horizon, Modrinth, CurseForge). Modrinth and CurseForge list resource packs only, using the same API calls as ZalithLauncher 2:
+The Store tab has a Source switch (Horizon, Modrinth, CurseForge). Modrinth and CurseForge list resource packs and shader packs (pick the Resource Packs or Shader Packs category first), using the same API calls as ZalithLauncher 2:
 
-- Modrinth: `GET /v2/search` with a `project_type:resourcepack` facet, and `GET /v2/project/{id}/version` for the file list. No key needed.
-- CurseForge: `GET /v1/mods/search` with `gameId=432&classId=12`, and `GET /v1/mods/{id}/files`. Needs an API key from https://console.curseforge.com.
+- Modrinth: `GET /v2/search` with a `project_type:resourcepack` facet, and `GET /v2/project/{id}/version` for the file list (`project_type:shader` for shader packs). No key needed.
+- CurseForge: `GET /v1/mods/search` with `gameId=432&classId=12` (`classId=6552` for shader packs), and `GET /v1/mods/{id}/files`. Needs an API key from https://console.curseforge.com.
 
-Installing downloads the pack into `resourcepacks/`, checks the published SHA-1, makes sure `pack.mcmeta` is at the zip root, replaces any older version of the same project and turns the pack on in `options.txt`.
+Installing downloads the pack into `resourcepacks/` (or `shaderpacks/`), checks the published SHA-1, makes sure `pack.mcmeta` (or the `shaders/` folder for shader packs) is at the zip root, replaces any older version of the same project and turns the pack on in `options.txt`. Downloaded shader packs keep their original files and are not converted to Horizon WGSL packs.
 
 CurseForge key (never commit it): add a repository secret named `CURSEFORGE_API_KEY` for CI, or for a local build put the key in `packaging/android/.curseforge_api.txt` (gitignored) or pass `-Pcurseforge_api_key=...` to Gradle. Without a key the CurseForge source shows a notice and Modrinth keeps working.
