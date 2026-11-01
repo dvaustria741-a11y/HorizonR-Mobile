@@ -2894,6 +2894,119 @@ object HorizonNativeBridge {
         }.getOrDefault("")
     }
 
+    data class ShaderOptionDef(
+        val id: String,
+        val name: String,
+        val type: String,
+        val default: String,
+        val min: Double,
+        val max: Double,
+        val step: Double,
+        val values: List<String>,
+        val description: String
+    )
+
+    private fun readShaderManifestText(packFile: File): String? {
+        return runCatching {
+            if (packFile.isDirectory) {
+                File(packFile, "horizon-shaders.toml").takeIf { it.exists() }?.readText()
+            } else {
+                java.util.zip.ZipFile(packFile).use { zf ->
+                    val entry = zf.getEntry("horizon-shaders.toml") ?: return@use null
+                    zf.getInputStream(entry).bufferedReader(Charsets.UTF_8).readText()
+                }
+            }
+        }.getOrNull()
+    }
+
+    private fun stripTomlComment(raw: String): String {
+        var inQuote = false
+        val sb = StringBuilder()
+        for (ch in raw) {
+            if (ch == '"') inQuote = !inQuote
+            if (ch == '#' && !inQuote) break
+            sb.append(ch)
+        }
+        return sb.toString().trim()
+    }
+
+    fun readShaderPackOptions(packFile: File): List<ShaderOptionDef> {
+        val text = readShaderManifestText(packFile) ?: return emptyList()
+        val blocks = mutableListOf<MutableMap<String, String>>()
+        var current: MutableMap<String, String>? = null
+        for (rawLine in text.lines()) {
+            val line = stripTomlComment(rawLine)
+            if (line.isEmpty()) continue
+            if (line.startsWith("[")) {
+                current = if (line == "[[options]]") mutableMapOf<String, String>().also { blocks.add(it) } else null
+                continue
+            }
+            val eq = line.indexOf('=')
+            if (eq <= 0 || current == null) continue
+            current[line.substring(0, eq).trim()] = line.substring(eq + 1).trim()
+        }
+        fun unq(v: String?): String = v?.trim()?.removeSurrounding("\"") ?: ""
+        return blocks.mapNotNull { b ->
+            val id = unq(b["id"])
+            if (id.isEmpty()) return@mapNotNull null
+            val type = unq(b["type"]).ifEmpty { "float" }
+            val values = Regex("\"([^\"]*)\"").findAll(b["values"] ?: "").map { it.groupValues[1] }.toList()
+            ShaderOptionDef(
+                id = id,
+                name = unq(b["name"]).ifEmpty { id },
+                type = type,
+                default = unq(b["default"]).ifEmpty { if (type == "bool") "false" else if (type == "choice") values.firstOrNull().orEmpty() else "0" },
+                min = unq(b["min"]).toDoubleOrNull() ?: 0.0,
+                max = unq(b["max"]).toDoubleOrNull() ?: 1.0,
+                step = unq(b["step"]).toDoubleOrNull() ?: 0.0,
+                values = values,
+                description = unq(b["description"])
+            )
+        }
+    }
+
+    private fun shaderPackSettingsFiles(packFile: File): List<File> {
+        val parent = packFile.parentFile ?: return emptyList()
+        val full = File(parent, packFile.name + ".txt")
+        val stem = File(parent, packFile.nameWithoutExtension + ".txt")
+        return if (full.path == stem.path) listOf(full) else listOf(full, stem)
+    }
+
+    fun readShaderPackValues(packFile: File): Map<String, String> {
+        val src = shaderPackSettingsFiles(packFile).firstOrNull { it.exists() } ?: return emptyMap()
+        return runCatching {
+            src.readLines().mapNotNull { l ->
+                val i = l.indexOf('=')
+                if (i <= 0) null else l.substring(0, i).trim() to l.substring(i + 1).trim()
+            }.toMap()
+        }.getOrDefault(emptyMap())
+    }
+
+    fun formatShaderOptionValue(def: ShaderOptionDef, v: Double): String {
+        return when (def.type) {
+            "int" -> Math.round(v).toString()
+            else -> java.lang.String.format(java.util.Locale.US, "%.4f", v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
+        }
+    }
+
+    fun shaderValuesEqual(def: ShaderOptionDef, a: String, b: String): Boolean {
+        val x = a.toDoubleOrNull()
+        val y = b.toDoubleOrNull()
+        return if (x != null && y != null) Math.abs(x - y) < 1e-6 else a == b
+    }
+
+    fun writeShaderPackValues(packFile: File, defs: List<ShaderOptionDef>, values: Map<String, String>) {
+        val lines = defs.mapNotNull { d ->
+            val v = values[d.id] ?: return@mapNotNull null
+            if (shaderValuesEqual(d, v, d.default)) null else "${d.id}=$v"
+        }
+        shaderPackSettingsFiles(packFile).forEach { f ->
+            runCatching {
+                if (lines.isEmpty()) f.delete() else f.writeText(lines.joinToString("\n") + "\n")
+            }
+        }
+    }
+
     fun syncAndRepairModsStorage(context: Context, profileSlot: Int = 0) {
         val home = ensureHomeDirectories(context)
         val profileHome = getProfileHome(home, profileSlot)

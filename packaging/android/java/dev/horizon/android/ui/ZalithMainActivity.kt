@@ -6759,6 +6759,128 @@ private fun CleanFilesViewport(
 }
 
 @Composable
+private fun ShaderPackSettingsDialog(
+    packFile: File,
+    packTitle: String,
+    defs: List<HorizonNativeBridge.ShaderOptionDef>,
+    onDismiss: () -> Unit
+) {
+    val values = remember(packFile) {
+        mutableStateMapOf<String, String>().apply {
+            val saved = HorizonNativeBridge.readShaderPackValues(packFile)
+            defs.forEach { d -> put(d.id, saved[d.id] ?: d.default) }
+        }
+    }
+    val save = { HorizonNativeBridge.writeShaderPackValues(packFile, defs, values.toMap()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1F262B),
+        title = {
+            Column {
+                Text("Shader Pack Settings", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(packTitle, fontSize = 11.sp, color = Color(0xFFD5DEE5))
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                defs.forEach { d ->
+                    val current = values[d.id] ?: d.default
+                    val changed = !HorizonNativeBridge.shaderValuesEqual(d, current, d.default)
+                    val labelColor = if (changed) Color(0xFFFFD54F) else Color.White
+                    when (d.type) {
+                        "bool" -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(d.name, fontSize = 13.sp, color = labelColor)
+                                    if (d.description.isNotEmpty()) Text(d.description, fontSize = 10.sp, color = Color(0xFF9AA7B0))
+                                }
+                                Switch(
+                                    checked = current == "true",
+                                    onCheckedChange = {
+                                        values[d.id] = it.toString()
+                                        save()
+                                    }
+                                )
+                            }
+                        }
+                        "choice" -> {
+                            Column {
+                                Text(d.name, fontSize = 13.sp, color = labelColor)
+                                if (d.description.isNotEmpty()) Text(d.description, fontSize = 10.sp, color = Color(0xFF9AA7B0))
+                                Row(
+                                    modifier = Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    d.values.forEach { opt ->
+                                        FilterChip(
+                                            selected = current == opt,
+                                            onClick = {
+                                                values[d.id] = opt
+                                                save()
+                                            },
+                                            label = { Text(opt, fontSize = 11.sp) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        else -> {
+                            val lo = d.min.toFloat()
+                            val hi = d.max.toFloat().coerceAtLeast(lo + 0.0001f)
+                            var slider by remember(d.id) { mutableStateOf((current.toFloatOrNull() ?: d.default.toFloatOrNull() ?: lo).coerceIn(lo, hi)) }
+                            val shown = HorizonNativeBridge.formatShaderOptionValue(d, slider.toDouble())
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(d.name, fontSize = 13.sp, color = labelColor)
+                                    Text(shown, fontSize = 13.sp, color = labelColor)
+                                }
+                                if (d.description.isNotEmpty()) Text(d.description, fontSize = 10.sp, color = Color(0xFF9AA7B0))
+                                val steps = if (d.type == "int") (hi - lo).toInt() - 1
+                                    else if (d.step > 0.0) (((hi - lo) / d.step.toFloat()).toInt() - 1) else 0
+                                Slider(
+                                    value = slider,
+                                    onValueChange = { slider = it },
+                                    onValueChangeFinished = {
+                                        values[d.id] = HorizonNativeBridge.formatShaderOptionValue(d, slider.toDouble())
+                                        save()
+                                    },
+                                    valueRange = lo..hi,
+                                    steps = steps.coerceAtLeast(0)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                defs.forEach { d -> values[d.id] = d.default }
+                save()
+                onDismiss()
+            }) { Text("Reset", color = Color(0xFFFF8A80)) }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Done", color = SkyBlueAccent) }
+        }
+    )
+}
+
+@Composable
 private fun FileManagerRowCard(
     rowItem: ManagerRowUiItem,
     folderLabel: String,
@@ -6783,6 +6905,21 @@ private fun FileManagerRowCard(
     var showInfoPopover by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var expandedDetails by remember { mutableStateOf(false) }
+    var shaderOptionDefs by remember(file) { mutableStateOf<List<HorizonNativeBridge.ShaderOptionDef>>(emptyList()) }
+    var showShaderSettings by remember { mutableStateOf(false) }
+    LaunchedEffect(file, folder) {
+        if (folder == "shaderpacks") {
+            shaderOptionDefs = withContext(Dispatchers.IO) { HorizonNativeBridge.readShaderPackOptions(file) }
+        }
+    }
+    if (showShaderSettings && shaderOptionDefs.isNotEmpty()) {
+        ShaderPackSettingsDialog(
+            packFile = file,
+            packTitle = displayTitle,
+            defs = shaderOptionDefs,
+            onDismiss = { showShaderSettings = false }
+        )
+    }
 
     val isToggleable = folder in listOf("mods", "shaderpacks", "resourcepacks")
     val borderColor = if (isToggleable && isEnabled) SkyBlueAccent.copy(alpha = 0.38f) else Color.Transparent
@@ -7103,6 +7240,16 @@ private fun FileManagerRowCard(
                                             }
                                         )
                                     } else {
+                                        if (folder == "shaderpacks" && shaderOptionDefs.isNotEmpty()) {
+                                            DropdownMenuItem(
+                                                leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(17.dp)) },
+                                                text = { Text("Shader Pack Settings", fontSize = 12.sp, color = Color.White) },
+                                                onClick = {
+                                                    showMoreMenu = false
+                                                    showShaderSettings = true
+                                                }
+                                            )
+                                        }
                                         if (isToggleable) {
                                             DropdownMenuItem(
                                                 leadingIcon = {
@@ -7167,6 +7314,21 @@ private fun FileManagerRowCard(
                         color = SkyBlueAccent
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (folder == "shaderpacks" && shaderOptionDefs.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF283036),
+                                modifier = Modifier.clickable { showShaderSettings = true }
+                            ) {
+                                Text(
+                                    text = "Settings",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SkyBlueAccent,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                         if (isToggleable) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
