@@ -441,6 +441,32 @@ impl OptionKind {
         }
     }
 
+    /// The pipeline constant for a value the player chose, written as the options file has it
+    /// (`true`, `0.5`, `3`, or a choice's text); `None` when it isn't one this option takes.
+    pub fn constant_from(&self, text: &str) -> Option<f64> {
+        let text = text.trim();
+        match self {
+            OptionKind::Bool { .. } => match text {
+                "true" => Some(1.0),
+                "false" => Some(0.0),
+                _ => None,
+            },
+            OptionKind::Float { min, max, .. } => text
+                .parse::<f32>()
+                .ok()
+                .filter(|v| v.is_finite())
+                .map(|v| f64::from(v.clamp(*min, *max))),
+            OptionKind::Int { min, max, .. } => text
+                .parse::<i32>()
+                .ok()
+                .map(|v| f64::from(v.clamp(*min, *max))),
+            OptionKind::Choice { values, .. } => values
+                .iter()
+                .position(|v| v == text)
+                .map(|i| i as f64),
+        }
+    }
+
     /// The default as the pipeline constant wgpu takes.
     pub fn default_constant(&self) -> f64 {
         match *self {

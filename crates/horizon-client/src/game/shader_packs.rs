@@ -70,6 +70,11 @@ impl Game<'_> {
             let loaded = horizon_client::crash::contain(|| {
                 match Pack::open(&path) {
                     Ok(pack) => {
+                        // The values chosen in Shader Pack Settings.
+                        let pack = pack.with_overrides(horizon_shaders::read_overrides(
+                            &Self::shader_packs_dir(),
+                            name,
+                        ));
                         let macros = Macros::standard();
                         let text = pack.read_text("shaders.properties").unwrap_or_default();
                         let properties = Properties::parse(&text, &macros);

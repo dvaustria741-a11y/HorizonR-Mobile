@@ -1376,6 +1376,8 @@ pub enum Page {
     NativeMod(usize),
     /// Horizon's shader packs, either kind (`shader_pack_list`).
     ShaderPacks,
+    /// The picked shader pack's own options (`shader_pack_options`).
+    ShaderPackSettings,
     /// Horizon's graphics settings (`graphics_ui`).
     Graphics,
     GraphicsAdvanced,
@@ -1420,6 +1422,10 @@ enum Act {
     /// Pick `s.shader_packs[i]`, or turn it off when it is the pick.
     PickShaderPack(usize),
     OpenShaderPackFolder,
+    /// Open the picked pack's options page.
+    ShaderPackSettings,
+    /// Step option `.0` of `s.shader_pack_options` to its next value.
+    PackOption(usize),
     /// The installed mod's own settings page (capability `ui`), shown as a
     /// screen: `Event::ModSettings` has the game open it.
     ModSettings(usize),
@@ -1492,6 +1498,11 @@ pub enum Event {
     ListShaderPacks,
     /// A shader pack was picked or turned off: save and apply it.
     ShaderPack,
+    /// The Shader Pack Settings page opened: list the picked pack's options into
+    /// `shader_pack_options`.
+    ListShaderPackOptions,
+    /// Option `.0` of `shader_pack_options` changed: save the values and build the pack again.
+    ShaderPackOption(usize),
     OpenShaderPackFolder,
     /// Open the mod's own settings page (capability `ui`): the installed
     /// mod's index in `mods.installed`.
@@ -1859,6 +1870,7 @@ impl OptionsUi {
             Page::Mods => "horizon.pages.mods",
             Page::NativeMod(_) => "Mod Settings",
             Page::ShaderPacks => "horizon.pages.shader_packs",
+            Page::ShaderPackSettings => "horizon.pages.shader_pack_settings",
             Page::Graphics | Page::GraphicsAdvanced | Page::GraphicsHdr | Page::HdrCalibration => {
                 "options.videoTitle"
             }
@@ -2347,7 +2359,22 @@ impl OptionsUi {
                 if s.shader_packs.is_empty() {
                     return vec![Row::Header("horizon.shader_packs.empty")];
                 }
-                s.shader_packs
+                let picked = s.shader_packs.iter().any(|p| p.file == s.horizon.shader_pack);
+                let mut rows = Vec::new();
+                if picked {
+                    rows.push(Row::Buttons(
+                        button(
+                            0.0,
+                            0.0,
+                            310.0,
+                            tr("horizon.shader_packs.settings"),
+                            Act::ShaderPackSettings,
+                        ),
+                        None,
+                    ));
+                }
+                rows.extend(
+                    s.shader_packs
                     .iter()
                     .enumerate()
                     .map(|(i, pack)| {
@@ -2360,6 +2387,20 @@ impl OptionsUi {
                         let label = Text::literal(format!("{}{kind}: ", pack.title))
                             .append(on_off(s.horizon.shader_pack == pack.file));
                         Row::Buttons(button(0.0, 0.0, 310.0, label, Act::PickShaderPack(i)), None)
+                    }),
+                );
+                rows
+            }
+            Page::ShaderPackSettings => {
+                if s.shader_pack_options.is_empty() {
+                    return vec![Row::Header("horizon.shader_packs.no_options")];
+                }
+                s.shader_pack_options
+                    .iter()
+                    .enumerate()
+                    .map(|(i, item)| {
+                        let label = Text::literal(format!("{}: {}", item.label, item.value_text()));
+                        Row::Buttons(button(0.0, 0.0, 310.0, label, Act::PackOption(i)), None)
                     })
                     .collect()
             }
@@ -3526,6 +3567,16 @@ impl OptionsUi {
                             }
                         }
                         Act::OpenShaderPackFolder => events.push(Event::OpenShaderPackFolder),
+                        Act::ShaderPackSettings => {
+                            events.push(Event::ListShaderPackOptions);
+                            self.push(Page::ShaderPackSettings);
+                        }
+                        Act::PackOption(i) => {
+                            if let Some(item) = s.shader_pack_options.get_mut(i) {
+                                item.cycle(right);
+                                events.push(Event::ShaderPackOption(i));
+                            }
+                        }
                         Act::Credits => events.push(Event::Credits),
                         Act::CopyAgentDetails => events.push(Event::CopyAgentDetails),
                         #[cfg(target_os = "android")]

@@ -85,6 +85,26 @@ impl Game<'_> {
             .join("options.txt")
     }
     /// `shaderpacks/` beside `options.txt`.
+    /// The options of the picked shader pack, with the values saved for it.
+    pub(super) fn list_shader_pack_options(
+        settings: &horizon_client::settings::Settings,
+    ) -> Vec<horizon_client::shader_pack_options::Item> {
+        let dir = Self::shader_packs_dir();
+        let packs = horizon_client::shader_pack_list::scan(&dir);
+        packs
+            .iter()
+            .find(|p| p.file == settings.horizon.shader_pack)
+            .map(|p| horizon_client::shader_pack_options::load(&dir, p, &settings.language))
+            .unwrap_or_default()
+    }
+    /// Saves the values of `settings.shader_pack_options` for the picked pack.
+    pub(super) fn save_shader_pack_options(settings: &horizon_client::settings::Settings) {
+        let dir = Self::shader_packs_dir();
+        let packs = horizon_client::shader_pack_list::scan(&dir);
+        if let Some(pack) = packs.iter().find(|p| p.file == settings.horizon.shader_pack) {
+            horizon_client::shader_pack_options::save(&dir, pack, &settings.shader_pack_options);
+        }
+    }
     pub(super) fn shader_packs_dir() -> std::path::PathBuf {
         Self::options_path().with_file_name(horizon_client::shader_pack_list::DIR)
     }
@@ -368,6 +388,18 @@ impl Game<'_> {
                 }
                 // Saved; the next frame's `shader_pack_inputs` loads the pick.
                 Event::ShaderPack => self.settings.save(&Self::options_path()),
+                Event::ListShaderPackOptions => {
+                    self.settings.shader_pack_options = Self::list_shader_pack_options(&self.settings);
+                }
+                Event::ShaderPackOption(_) => {
+                    Self::save_shader_pack_options(&self.settings);
+                    // Build the pack again with the new values on the next frame.
+                    self.native_shaders.invalidate();
+                    self.pack_ids = None;
+                    if let Some(renderer) = &mut self.renderer {
+                        renderer.drop_shader_packs();
+                    }
+                }
                 Event::OpenShaderPackFolder => {
                     let dir = Self::shader_packs_dir();
                     let _ = std::fs::create_dir_all(&dir);

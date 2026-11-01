@@ -27,6 +27,7 @@ mod pack;
 mod post;
 mod preprocess;
 mod properties;
+mod settings;
 mod translate;
 
 pub use biomes::{category as biome_category, precipitation as biome_precipitation};
@@ -40,6 +41,10 @@ pub use lang::Lang;
 pub use macros::{MC_VERSION, Macros, RENDER_STAGES, render_stage};
 pub use options::switches_on;
 pub use pack::{Pack, PackError};
+pub use settings::{
+    ClassicOption, apply_overrides, options as classic_options, overrides_path, read_overrides,
+    write_overrides,
+};
 pub use post::{
     Blend, CELESTIAL_BLEND, Factor, GameInputs, Group, Post, PostProgram, TRANSLUCENT_BLEND,
     dimension_folder, load_post,

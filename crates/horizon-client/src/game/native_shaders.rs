@@ -28,6 +28,11 @@ pub(super) struct NativeShaders {
 }
 
 impl NativeShaders {
+    /// Builds the pack again at the next look (its option values changed).
+    pub fn invalidate(&mut self) {
+        self.stamp = None;
+        self.looked = None;
+    }
     pub fn picking(name: &str) -> Self {
         Self {
             picked: name.to_owned(),
@@ -57,11 +62,22 @@ impl Game<'_> {
         let result = Pack::read(path).map_err(|e| vec![e]).and_then(|pack| {
             let report = check(&pack)
                 .map_err(|p| p.iter().map(ToString::to_string).collect::<Vec<String>>())?;
+            // The values the player chose in Shader Pack Settings, over the pack's defaults.
+            let chosen = path
+                .file_name()
+                .map(|n| horizon_shaders::read_overrides(&Game::shader_packs_dir(), &n.to_string_lossy()))
+                .unwrap_or_default();
             let constants = pack
                 .manifest
                 .options
                 .iter()
-                .map(|o| (o.id.clone(), o.kind.default_constant()))
+                .map(|o| {
+                    let value = chosen
+                        .get(&o.id)
+                        .and_then(|v| o.kind.constant_from(v))
+                        .unwrap_or_else(|| o.kind.default_constant());
+                    (o.id.clone(), value)
+                })
                 .collect();
             let sprites = self.pack.render.sprite_layers.iter();
             let tags = pack

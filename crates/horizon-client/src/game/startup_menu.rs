@@ -497,6 +497,10 @@ impl Loading {
                         horizon_client::shader_pack_list::scan(&Game::shader_packs_dir());
                 }
                 Event::ShaderPack => self.save_menu_settings(),
+                Event::ListShaderPackOptions => {
+                    self.settings.shader_pack_options = Game::list_shader_pack_options(&self.settings);
+                }
+                Event::ShaderPackOption(_) => Game::save_shader_pack_options(&self.settings),
                 Event::OpenShaderPackFolder => {
                     let dir = Game::shader_packs_dir();
                     let _ = std::fs::create_dir_all(&dir);

@@ -16,6 +16,8 @@ const ROOT: &str = "shaders";
 pub struct Pack {
     name: String,
     files: Files,
+    /// Option values the player chose (`settings::apply_overrides`), applied to every source read.
+    overrides: BTreeMap<String, String>,
 }
 
 enum Files {
@@ -69,7 +71,11 @@ impl Pack {
         } else {
             Self::zip_files(fs::read(path)?)?
         };
-        Ok(Self { name, files })
+        Ok(Self {
+            name,
+            files,
+            overrides: BTreeMap::new(),
+        })
     }
 
     /// An archive held in memory; `name` is what [`Pack::name`] returns.
@@ -78,6 +84,7 @@ impl Pack {
         Ok(Self {
             name: name.to_owned(),
             files,
+            overrides: BTreeMap::new(),
         })
     }
 
@@ -103,6 +110,14 @@ impl Pack {
             return Err(PackError::NoShadersFolder);
         }
         Ok(Files::Zip { archive, entries })
+    }
+
+    /// The pack as the player set it up: its sources read with these option values (`NAME` to
+    /// `true`, `false` or a value) over the defaults the pack ships with.
+    #[must_use]
+    pub fn with_overrides(mut self, overrides: BTreeMap<String, String>) -> Self {
+        self.overrides = overrides;
+        self
     }
 
     /// The folder or file name the pack was opened from (`BSL.zip`).
@@ -131,7 +146,11 @@ impl Pack {
     pub fn read_text(&self, path: &str) -> Option<String> {
         let bytes = self.read(path)?;
         let text = String::from_utf8_lossy(&bytes);
-        Some(text.strip_prefix('\u{feff}').unwrap_or(&text).to_owned())
+        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+        if self.overrides.is_empty() || !crate::settings::is_source_name(path) {
+            return Some(text.to_owned());
+        }
+        Some(crate::settings::apply_overrides(text, &self.overrides))
     }
 
     pub fn exists(&self, path: &str) -> bool {

@@ -78,6 +78,7 @@ pub mod sculk;
 pub mod section_mask;
 pub mod settings;
 pub mod shader_pack_list;
+pub mod shader_pack_options;
 pub mod signs;
 pub mod skins;
 pub mod sound_engine;
