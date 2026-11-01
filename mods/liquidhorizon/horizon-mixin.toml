@@ -1,0 +1,191 @@
+[mod]
+id      = "liquid_horizon"
+version = "1.0.0"
+
+# Requires hook API 40 (hurt_enemy, inventory_tick, player_tick, mob events)
+[compatibility]
+hooks = 40
+
+# ── frame: HUD draw + ClickGUI overlay ──────────────────────────────────────
+[[injection]]
+id          = "frame"
+hook        = "frame"
+hook_version = 1
+kind        = "HEAD"
+helper      = "frame.rs"
+bindings    = [
+  { name = "game",    ty = "&mut crate::game::Game<'_>",  value = "&mut *self" },
+  { name = "elapsed", ty = "std::time::Duration",          value = "elapsed" },
+]
+
+# ── hud: module list + notifications ─────────────────────────────────────────
+[[injection]]
+id          = "hud"
+hook        = "hud"
+hook_version = 1
+kind        = "HEAD"
+helper      = "hud.rs"
+bindings    = [
+  { name = "game",    ty = "&mut crate::game::Game<'_>",        value = "&mut *self" },
+  { name = "batch",   ty = "&mut crate::hud::HudBatch",          value = "batch" },
+  { name = "corners", ty = "&mut crate::extras_hud::Corners",    value = "corners" },
+]
+
+# ── key: toggle modules / open GUI ───────────────────────────────────────────
+[[injection]]
+id          = "key"
+hook        = "key"
+hook_version = 1
+kind        = "HEAD"
+helper      = "key.rs"
+bindings    = [
+  { name = "game",    ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "key",     ty = "&str",                        value = "key" },
+  { name = "pressed", ty = "bool",                        value = "pressed" },
+]
+
+# ── player_tick: KillAura attack dispatch ────────────────────────────────────
+[[injection]]
+id          = "player_tick"
+hook        = "player_tick"
+hook_version = 1
+kind        = "HEAD"
+helper      = "player_tick.rs"
+bindings    = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+]
+
+# ── hurt_enemy: Crits / reach logging ────────────────────────────────────────
+[[injection]]
+id          = "hurt_enemy"
+hook        = "hurt_enemy"
+hook_version = 1
+kind        = "HEAD"
+helper      = "hurt_enemy.rs"
+bindings    = [
+  { name = "game",   ty = "&mut crate::game::Game<'_>",       value = "&mut *self" },
+  { name = "stack",  ty = "&crate::items::ItemStack",           value = "stack" },
+  { name = "entity", ty = "u32",                                value = "entity" },
+  { name = "kind",   ty = "&str",                               value = "kind" },
+]
+
+# ── attack_entity: AntiKnockback / Velocity intercept ───────────────────────
+[[injection]]
+id          = "attack_entity"
+hook        = "attack_entity"
+hook_version = 1
+kind        = "HEAD"
+helper      = "attack_entity.rs"
+bindings    = [
+  { name = "game",     ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "entity",   ty = "i32",                         value = "entity" },
+  { name = "kind",     ty = "&str",                         value = "kind" },
+  { name = "pos",      ty = "[f64; 3]",                     value = "pos" },
+  { name = "canceled", ty = "&mut bool",                    value = "canceled" },
+]
+
+# ── inventory_tick: AutoEat ───────────────────────────────────────────────────
+[[injection]]
+id          = "inventory_tick"
+hook        = "inventory_tick"
+hook_version = 1
+kind        = "HEAD"
+helper      = "inventory_tick.rs"
+bindings    = [
+  { name = "game",     ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "slot",     ty = "i32",                         value = "slot" },
+  { name = "selected", ty = "bool",                        value = "selected" },
+]
+
+# ── use_item: AutoBow / FastUse ───────────────────────────────────────────────
+[[injection]]
+id          = "use_item"
+hook        = "use_item"
+hook_version = 1
+kind        = "HEAD"
+helper      = "use_item.rs"
+bindings    = [
+  { name = "game",    ty = "&mut crate::game::Game<'_>",    value = "&mut *self" },
+  { name = "stack",   ty = "&crate::items::ItemStack",       value = "stack" },
+  { name = "claimed", ty = "&mut bool",                      value = "claimed" },
+]
+
+# ── command: client-side .lb commands ────────────────────────────────────────
+[[injection]]
+id          = "command"
+hook        = "command"
+hook_version = 1
+kind        = "HEAD"
+helper      = "command.rs"
+bindings    = [
+  { name = "game",    ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "command", ty = "&str",                        value = "command" },
+  { name = "ran",     ty = "&mut bool",                   value = "ran" },
+]
+
+# ── commands: register .lb for autocomplete ──────────────────────────────────
+[[injection]]
+id          = "commands_list"
+hook        = "commands"
+hook_version = 1
+kind        = "HEAD"
+helper      = "commands_list.rs"
+bindings    = [
+  { name = "game",     ty = "&mut crate::game::Game<'_>",     value = "&mut *self" },
+  { name = "commands", ty = "&mut Vec<&'static str>",          value = "commands" },
+]
+
+# ── mods: register in Options > Mods ─────────────────────────────────────────
+[[injection]]
+id          = "mods_list"
+hook        = "mods"
+hook_version = 1
+kind        = "HEAD"
+helper      = "mods_info.rs"
+bindings    = [
+  { name = "game", ty = "&mut crate::game::Game<'_>",                                   value = "&mut *self" },
+  { name = "mods", ty = "&mut Vec<crate::game::native_hooks::NativeMod>",                value = "mods" },
+]
+
+# ── settings / settings_click: in-game settings page ────────────────────────
+[[injection]]
+id          = "settings"
+hook        = "settings"
+hook_version = 1
+kind        = "HEAD"
+helper      = "settings.rs"
+bindings    = [
+  { name = "game",    ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "mod_id",  ty = "&str",                        value = "mod_id" },
+  { name = "buttons", ty = "&mut Vec<String>",            value = "buttons" },
+]
+
+[[injection]]
+id          = "settings_click"
+hook        = "settings_click"
+hook_version = 1
+kind        = "HEAD"
+helper      = "settings_click.rs"
+bindings    = [
+  { name = "game",   ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "mod_id", ty = "&str",                        value = "mod_id" },
+  { name = "button", ty = "usize",                       value = "button" },
+]
+
+# ── tooltip: item info overlay ────────────────────────────────────────────────
+[[injection]]
+id          = "tooltip"
+hook        = "tooltip"
+hook_version = 1
+kind        = "HEAD"
+helper      = "tooltip.rs"
+bindings    = [
+  { name = "game",  ty = "&crate::game::Game<'_>",      value = "&*self" },
+  { name = "stack", ty = "&crate::items::ItemStack",     value = "stack" },
+  { name = "lines", ty = "&mut Vec<(crate::text::Text, u32)>", value = "lines" },
+]
+
+# ── engine crate: owns all state + module logic ──────────────────────────────
+[[crate]]
+id   = "engine"
+path = "engine"
