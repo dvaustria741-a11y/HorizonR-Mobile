@@ -1,0 +1,9 @@
+[package]
+name        = "liquid_horizon_engine"
+version     = "1.0.0"
+edition     = "2021"
+
+[dependencies]
+# All must be in Horizon's Cargo.lock at these exact versions.
+serde      = { version = "1",       features = ["derive"] }
+serde_json = { version = "1" }
