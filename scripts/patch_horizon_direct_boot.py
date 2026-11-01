@@ -718,6 +718,41 @@ def patch_ingame_ai_agent_and_native_mods():
 patch_ingame_ai_agent_and_native_mods()
 
 # ==============================================================================
+# 4b. Auto-Jump rubber-banding on servers
+#     The engine builds the ServerboundPlayerInputPacket flags from the raw held
+#     keys BEFORE the tick, so the jump press that auto-jump adds during aiStep
+#     (`was_auto_jump`) never reaches the server. A server that predicts movement
+#     from the input flags sees a jump with no jump key and pulls the player back.
+#     Vanilla sends the keys after aiStep, so OR the jump bit in once the tick ran.
+# ==============================================================================
+def patch_auto_jump_server_input():
+    remote_rs = Path("crates/horizon-client/src/game/remote.rs")
+    if not remote_rs.is_file():
+        print("[HorizonZ Patch] Notice: remote.rs not found; skipping auto-jump input patch.")
+        return
+    text = remote_rs.read_text(encoding="utf-8")
+    if "HorizonR auto-jump input" in text:
+        return
+    anchor = "        self.remote_send_state(input);\n        Ok(())\n    }\n"
+    if text.count(anchor) != 1:
+        print("[HorizonZ Patch] Notice: auto-jump input anchor not found exactly once; skipping.")
+        return
+    replacement = (
+        "        // HorizonR auto-jump input: the auto-jump press made during this tick is part of the\n"
+        "        // keys vanilla sends to the server (PlayerInput is sent after aiStep).\n"
+        "        let input = if self.player.as_ref().is_some_and(|p| p.was_auto_jump) {\n"
+        "            input | (1 << 4)\n"
+        "        } else {\n"
+        "            input\n"
+        "        };\n"
+        + anchor
+    )
+    remote_rs.write_text(text.replace(anchor, replacement), encoding="utf-8")
+    print("[HorizonZ Patch] Applied auto-jump server input fix to remote.rs.")
+
+patch_auto_jump_server_input()
+
+# ==============================================================================
 # 5. Automatically run scripts/prestage_controls_and_wallpapers.py
 # ==============================================================================
 prestage_script = Path("scripts/prestage_controls_and_wallpapers.py")
