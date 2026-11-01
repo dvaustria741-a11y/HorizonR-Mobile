@@ -1918,11 +1918,7 @@ object HorizonNativeBridge {
                     true
                 }.getOrDefault(true)
             }
-            "shaderpacks" -> {
-                val optFile = File(profileHome, "options.txt").takeIf { it.exists() } ?: File(home, "options.txt")
-                if (!optFile.exists()) return false
-                optFile.readLines().any { it.trim() == "shaderPack:$fileName" }
-            }
+            "shaderpacks" -> readPickedShaderPack(home, profileHome) == fileName
             "resourcepacks" -> {
                 val optFile = File(profileHome, "options.txt").takeIf { it.exists() } ?: File(home, "options.txt")
                 if (!optFile.exists()) return false
@@ -2029,6 +2025,13 @@ object HorizonNativeBridge {
                             "pack" to targetVal,
                             "shaderPack" to targetVal
                         )
+                    )
+                    // The engine's own pick (`pickedShaderPack` in horizon-graphics.txt): the `shaderPack`
+                    // keys above are ignored by it, so this is what makes the pack actually turn on or off
+                    // and what the in-game Shader Packs screen shows and changes.
+                    updateKeyValTxtNonDestructively(
+                        File(dir, "horizon-graphics.txt"),
+                        linkedMapOf("pickedShaderPack" to targetVal)
                     )
                 }
                 "resourcepacks" -> {
@@ -2882,17 +2885,27 @@ object HorizonNativeBridge {
 
     fun getActiveShaderPackFileName(context: Context, profileSlot: Int = 0): String {
         val home = ensureHomeDirectories(context)
-        val profileHome = getProfileHome(home, profileSlot)
-        val optFile = File(profileHome, "options.txt").takeIf { it.exists() } ?: File(home, "options.txt")
-        if (!optFile.exists()) return ""
-        return runCatching {
-            optFile.readLines()
-                .firstOrNull { it.startsWith("shaderPack:") }
-                ?.substringAfter("shaderPack:")
-                ?.trim()
-                .orEmpty()
-        }.getOrDefault("")
+        return readPickedShaderPack(home, getProfileHome(home, profileSlot))
     }
+
+    /**
+     * The shader pack the engine has picked: `pickedShaderPack` in horizon-graphics.txt, which both the
+     * in-game Shader Packs screen and the Mods tab write. Only a game folder that never saved that key
+     * falls back to the old `shaderPack` line of options.txt.
+     */
+    private fun readPickedShaderPack(home: File, profileHome: File): String = runCatching {
+        val graphics = File(profileHome, "horizon-graphics.txt").takeIf { it.exists() }
+            ?: File(home, "horizon-graphics.txt").takeIf { it.exists() }
+        val picked = graphics?.readLines()?.firstOrNull { it.startsWith("pickedShaderPack:") }
+        if (picked != null) {
+            picked.substringAfter("pickedShaderPack:").trim()
+        } else {
+            val optFile = File(profileHome, "options.txt").takeIf { it.exists() } ?: File(home, "options.txt")
+            if (!optFile.exists()) "" else optFile.readLines()
+                .firstOrNull { it.startsWith("shaderPack:") }
+                ?.substringAfter("shaderPack:")?.trim().orEmpty()
+        }
+    }.getOrDefault("")
 
     fun syncAndRepairModsStorage(context: Context, profileSlot: Int = 0) {
         val home = ensureHomeDirectories(context)

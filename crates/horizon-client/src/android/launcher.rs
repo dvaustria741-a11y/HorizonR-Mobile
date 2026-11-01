@@ -58,35 +58,8 @@ fn sanitize_and_repair_horizon_mods(home: &std::path::Path) {
 }
 
 fn apply_horizonz_shader_and_agent_config(home: &std::path::Path) {
-    // 1. Propagate active shader pack from options.txt / horizon-shaders.txt to HORIZON_SHADER_PACK
-    let mut active_shader = String::new();
-    if let Ok(sh_txt) = std::fs::read_to_string(home.join("horizon-shaders.txt")) {
-        for line in sh_txt.lines() {
-            if let Some(p) = line.strip_prefix("pack:") {
-                let trimmed = p.trim();
-                if !trimmed.is_empty() {
-                    active_shader = trimmed.to_string();
-                }
-            }
-        }
-    }
-    if active_shader.is_empty() {
-        if let Ok(opt_txt) = std::fs::read_to_string(home.join("options.txt")) {
-            for line in opt_txt.lines() {
-                if let Some(p) = line.strip_prefix("shaderPack:") {
-                    let trimmed = p.trim();
-                    if !trimmed.is_empty() {
-                        active_shader = trimmed.to_string();
-                    }
-                }
-            }
-        }
-    }
-    if !active_shader.is_empty() {
-        unsafe {
-            std::env::set_var("HORIZON_SHADER_PACK", &active_shader);
-        }
-    }
+    // 1. The shader pack is the engine's own pick (pickedShaderPack in horizon-graphics.txt); the
+    // old shaderPack keys are not exported as HORIZON_SHADER_PACK, which would override the in-game pick.
 
     // 2. Propagate Gemini AI Agent control endpoint from horizon-agent.txt
     if let Ok(ag_txt) = std::fs::read_to_string(home.join("horizon-agent.txt")) {

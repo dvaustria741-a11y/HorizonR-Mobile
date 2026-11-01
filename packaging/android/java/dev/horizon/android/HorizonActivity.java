@@ -626,12 +626,10 @@ public final class HorizonActivity extends NativeActivity {
                 Os.setenv("HORIZON_EFFECTIVE_RAM_MB", String.valueOf(effectiveRamMb), true);
                 Os.setenv("WGPU_MEMORY_BUDGET_MB", String.valueOf(effectiveRamMb), true);
 
-                String shaderPack = intent.getStringExtra("HORIZON_SHADER_PACK");
-                if (shaderPack != null && !shaderPack.trim().isEmpty()) {
-                    Os.setenv("HORIZON_SHADER_PACK", shaderPack.trim(), true);
-                } else {
-                    try { Os.unsetenv("HORIZON_SHADER_PACK"); } catch (Exception ignored) {}
-                }
+                // The shader pack is the engine's own pick (pickedShaderPack in horizon-graphics.txt).
+                // HORIZON_SHADER_PACK would override it for the whole session, so the in-game
+                // Shader Packs screen could not turn a pack off: never leave it set.
+                try { Os.unsetenv("HORIZON_SHADER_PACK"); } catch (Exception ignored) {}
 
                 boolean aiAgentEnabled = intent.getBooleanExtra("HORIZON_AI_AGENT_ENABLED", false);
                 String aiProvider = intent.getStringExtra("HORIZON_AI_AGENT_PROVIDER");
