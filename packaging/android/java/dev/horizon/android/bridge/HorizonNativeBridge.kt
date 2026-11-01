@@ -266,7 +266,7 @@ object HorizonNativeBridge {
                         val vid = idRegex.find(block)?.groupValues?.get(1)?.trim().orEmpty()
                         val rawTitle = titleRegex.find(block)?.groupValues?.get(1)?.trim()
                             ?.replace("&amp;", "&")
-                            ?.replace("&quot;", """)
+                            ?.replace("&quot;", "\"")
                             ?.replace("&#39;", "'")
                             .orEmpty()
                         val pub = pubRegex.find(block)?.groupValues?.get(1)?.take(10).orEmpty()
