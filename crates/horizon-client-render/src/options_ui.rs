@@ -1447,6 +1447,8 @@ enum Act {
     ShaderPackSettings,
     /// Open screen `.0` of the picked pack's options.
     PackScreen(usize),
+    /// Set the values of the pack's next profile.
+    PackProfile,
     /// Step option `.0` of `s.shader_pack_options` to its next value.
     PackOption(usize),
     /// The installed mod's own settings page (capability `ui`), shown as a
@@ -2455,6 +2457,22 @@ impl OptionsUi {
                                     310.0,
                                     Text::literal(format!("{title}...")),
                                     Act::PackScreen(i),
+                                ),
+                                None,
+                            ))
+                        }
+                        crate::shader_pack_options::Entry::Profile => {
+                            let name = options
+                                .current_profile()
+                                .and_then(|i| options.profiles.get(i))
+                                .map_or("Custom", |p| p.title.as_str());
+                            Some(Row::Buttons(
+                                button(
+                                    0.0,
+                                    0.0,
+                                    310.0,
+                                    Text::literal(format!("Profile: {name}")),
+                                    Act::PackProfile,
                                 ),
                                 None,
                             ))
@@ -3633,6 +3651,10 @@ impl OptionsUi {
                             self.push(Page::ShaderPackSettings(0));
                         }
                         Act::PackScreen(k) => self.push(Page::ShaderPackSettings(k)),
+                        Act::PackProfile => {
+                            s.shader_pack_options.next_profile();
+                            events.push(Event::ShaderPackOption(0));
+                        }
                         Act::PackOption(i) => {
                             if let Some(item) = s.shader_pack_options.items.get_mut(i) {
                                 item.cycle(right);

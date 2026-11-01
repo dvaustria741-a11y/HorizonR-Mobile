@@ -42,7 +42,7 @@ pub use macros::{MC_VERSION, Macros, RENDER_STAGES, render_stage};
 pub use options::switches_on;
 pub use pack::{Pack, PackError};
 pub use settings::{
-    ClassicOption, Layout, LayoutEntry, ScreenDef, apply_overrides, layout as classic_layout,
+    ClassicOption, Layout, LayoutEntry, ProfileDef, ScreenDef, apply_overrides, layout as classic_layout,
     options as classic_options, overrides_path, read_overrides,
     write_overrides,
 };

@@ -35,6 +35,15 @@ pub enum Entry {
     /// A button to `Options.screens[i]`.
     Screen(usize),
     Space,
+    /// The button that picks one of the pack's profiles.
+    Profile,
+}
+
+/// A preset of the pack: option values to set, as (item, value) indexes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Profile {
+    pub title: String,
+    pub settings: Vec<(usize, usize)>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -49,6 +58,33 @@ pub struct Screen {
 pub struct Options {
     pub items: Vec<Item>,
     pub screens: Vec<Screen>,
+    pub profiles: Vec<Profile>,
+}
+
+impl Options {
+    /// The profile the values match, `None` for custom ones.
+    pub fn current_profile(&self) -> Option<usize> {
+        self.profiles.iter().position(|p| {
+            !p.settings.is_empty()
+                && p.settings
+                    .iter()
+                    .all(|&(i, v)| self.items.get(i).is_some_and(|item| item.current == v))
+        })
+    }
+
+    /// Sets the values of the next profile (the first when the values are custom).
+    pub fn next_profile(&mut self) {
+        let n = self.profiles.len();
+        if n == 0 {
+            return;
+        }
+        let next = self.current_profile().map_or(0, |i| (i + 1) % n);
+        for &(i, v) in &self.profiles[next].settings {
+            if let Some(item) = self.items.get_mut(i) {
+                item.current = v;
+            }
+        }
+    }
 }
 
 impl Item {
@@ -143,7 +179,32 @@ fn classic(dir: &Path, entry: &PackEntry, locale: &str) -> Options {
         })
         .collect();
     let screens = screens(&layout, &items);
-    Options { items, screens }
+    let profiles = profiles(&layout, &items);
+    Options {
+        items,
+        screens,
+        profiles,
+    }
+}
+
+/// The pack's profiles, over the options that exist.
+fn profiles(layout: &horizon_shaders::Layout, items: &[Item]) -> Vec<Profile> {
+    layout
+        .profiles
+        .iter()
+        .map(|p| Profile {
+            title: p.title.clone(),
+            settings: p
+                .settings
+                .iter()
+                .filter_map(|(name, value)| {
+                    let i = items.iter().position(|item| &item.id == name)?;
+                    let v = items[i].values.iter().position(|x| x == value)?;
+                    Some((i, v))
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 /// The screens of the page: the pack's own layout, or one screen with every option.
@@ -200,6 +261,10 @@ fn screens(layout: &horizon_shaders::Layout, items: &[Item]) -> Vec<Screen> {
                         entries.push(Entry::Screen(at));
                     }
                     LayoutEntry::Space => entries.push(Entry::Space),
+                    LayoutEntry::Profile if !layout.profiles.is_empty() => {
+                        entries.push(Entry::Profile);
+                    }
+                    LayoutEntry::Profile => {}
                     LayoutEntry::Rest => entries.extend(rest.iter().map(|&i| Entry::Option(i))),
                 }
             }
@@ -302,7 +367,11 @@ fn horizon(dir: &Path, entry: &PackEntry) -> Options {
         title: String::new(),
         entries: (0..items.len()).map(Entry::Option).collect(),
     }];
-    Options { items, screens }
+    Options {
+        items,
+        screens,
+        profiles: Vec::new(),
+    }
 }
 
 /// The options of `entry`, with the values saved for it.
@@ -419,5 +488,32 @@ mod tests {
         i.set_position(0.4);
         assert_eq!(i.current, 1);
         assert!((i.position() - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn profiles_cycle_and_custom_values_match_none() {
+        let mut o = Options {
+            items: vec![item("A"), item("B")],
+            screens: Vec::new(),
+            profiles: vec![
+                Profile {
+                    title: "LOW".into(),
+                    settings: vec![(0, 0), (1, 0)],
+                },
+                Profile {
+                    title: "HIGH".into(),
+                    settings: vec![(0, 2), (1, 2)],
+                },
+            ],
+        };
+        assert_eq!(o.current_profile(), Some(0));
+        o.next_profile();
+        assert_eq!(o.current_profile(), Some(1));
+        o.next_profile();
+        assert_eq!(o.current_profile(), Some(0));
+        o.items[1].current = 1;
+        assert_eq!(o.current_profile(), None);
+        o.next_profile();
+        assert_eq!(o.current_profile(), Some(0));
     }
 }

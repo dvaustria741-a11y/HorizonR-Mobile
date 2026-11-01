@@ -145,6 +145,8 @@ pub enum LayoutEntry {
     Space,
     /// `*`: every option no screen lists.
     Rest,
+    /// `<profile>`: the button that picks one of the pack's profiles.
+    Profile,
 }
 
 /// A screen the pack lays out: the main one (`id` empty) or one `[NAME]` links to.
@@ -156,11 +158,23 @@ pub struct ScreenDef {
     pub entries: Vec<LayoutEntry>,
 }
 
+/// A preset the pack ships (`profile.NAME=`): the option values it sets, with the profiles it
+/// builds on already applied.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProfileDef {
+    pub id: String,
+    /// The pack's `profile.NAME` name for it, else the id.
+    pub title: String,
+    /// Option name and the value it takes (`true` / `false` for a switch).
+    pub settings: Vec<(String, String)>,
+}
+
 /// How a pack arranges its options: the screens it defines and the options it wants as sliders.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Layout {
     pub screens: Vec<ScreenDef>,
     pub sliders: BTreeSet<String>,
+    pub profiles: Vec<ProfileDef>,
 }
 
 impl Layout {
@@ -174,7 +188,14 @@ impl Layout {
                 LayoutEntry::Option(n) => Some(n.as_str()),
                 _ => None,
             });
-        listed.chain(self.sliders.iter().map(String::as_str))
+        let profiled = self
+            .profiles
+            .iter()
+            .flat_map(|p| &p.settings)
+            .map(|(n, _)| n.as_str());
+        listed
+            .chain(self.sliders.iter().map(String::as_str))
+            .chain(profiled)
     }
 }
 
@@ -192,12 +213,13 @@ pub fn layout(pack: &Pack, locale: &str) -> Layout {
             .map(|t| match t {
                 "<empty>" => LayoutEntry::Space,
                 "*" => LayoutEntry::Rest,
+                "<profile>" => LayoutEntry::Profile,
                 t if t.starts_with('[') && t.ends_with(']') && t.len() > 2 => {
                     LayoutEntry::Screen(t[1..t.len() - 1].to_owned())
                 }
                 t => LayoutEntry::Option(t.to_owned()),
             })
-            // `<profile>` and `<comment>` lines are not options.
+            // Other `<...>` lines (`<comment>`) are not options.
             .filter(|e| !matches!(e, LayoutEntry::Option(n) if n.starts_with('<')))
             .collect()
     };
@@ -230,7 +252,54 @@ pub fn layout(pack: &Pack, locale: &str) -> Layout {
     if let Some(sliders) = properties.get("sliders") {
         out.sliders = sliders.split_whitespace().map(str::to_owned).collect();
     }
+    let defined: Vec<(&str, &str)> = properties
+        .entries
+        .iter()
+        .filter_map(|e| Some((e.key.strip_prefix("profile.")?, e.value.as_str())))
+        .filter(|(id, _)| !id.is_empty() && !id.ends_with(".comment"))
+        .collect();
+    for (id, _) in &defined {
+        let title = lang
+            .get(&format!("profile.{id}"))
+            .map(strip_formatting)
+            .filter(|t| !t.trim().is_empty())
+            .unwrap_or_else(|| (*id).to_owned());
+        out.profiles.push(ProfileDef {
+            id: (*id).to_owned(),
+            title,
+            settings: profile_settings(id, &defined, 0),
+        });
+    }
     out
+}
+
+/// What profile `id` sets: those it builds on first (`profile.OTHER`), then its own values.
+fn profile_settings(id: &str, defined: &[(&str, &str)], depth: usize) -> Vec<(String, String)> {
+    let mut settings: Vec<(String, String)> = Vec::new();
+    let Some((_, value)) = defined.iter().find(|(i, _)| *i == id) else {
+        return settings;
+    };
+    for token in value.split_whitespace() {
+        if let Some(parent) = token.strip_prefix("profile.") {
+            if depth < 8 {
+                for (name, v) in profile_settings(parent, defined, depth + 1) {
+                    settings.retain(|(n, _)| *n != name);
+                    settings.push((name, v));
+                }
+            }
+            continue;
+        }
+        let (name, v) = match token.split_once('=') {
+            Some((n, v)) => (n, v.to_owned()),
+            None => match token.strip_prefix('!') {
+                Some(n) => (n, "false".to_owned()),
+                None => (token, "true".to_owned()),
+            },
+        };
+        settings.retain(|(n, _)| n != name);
+        settings.push((name.to_owned(), v));
+    }
+    settings
 }
 
 /// One option of a pack the player can change.
@@ -474,7 +543,8 @@ mod tests {
                 (
                     "shaders/shaders.properties",
                     "screen=AO <empty> [LIGHT] <profile> *\nscreen.LIGHT=BRIGHT LEVEL\n\
-                     screen.LIGHT.columns=1\nsliders=LEVEL\n",
+                     screen.LIGHT.columns=1\nsliders=LEVEL\nprofile.LOW=AO=false LEVEL=1\n\
+                     profile.HIGH=profile.LOW AO !BLOOM\n",
                 ),
                 ("shaders/lang/en_us.lang", "screen.LIGHT=Lighting\n"),
             ]),
@@ -488,7 +558,17 @@ mod tests {
                 LayoutEntry::Option("AO".into()),
                 LayoutEntry::Space,
                 LayoutEntry::Screen("LIGHT".into()),
+                LayoutEntry::Profile,
                 LayoutEntry::Rest
+            ]
+        );
+        assert_eq!(l.profiles.len(), 2);
+        assert_eq!(
+            l.profiles[1].settings,
+            [
+                ("LEVEL".to_owned(), "1".to_owned()),
+                ("AO".to_owned(), "true".to_owned()),
+                ("BLOOM".to_owned(), "false".to_owned())
             ]
         );
         assert_eq!(
