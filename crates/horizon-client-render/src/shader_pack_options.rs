@@ -51,17 +51,28 @@ pub struct Screen {
     /// Empty for the main screen, which the page titles itself.
     pub title: String,
     pub entries: Vec<Entry>,
+    /// Options side by side: 1 or 2 (0, as a default value, is 2).
+    pub columns: usize,
 }
 
 /// The picked pack's options and how its screens arrange them; screen 0 is the main one.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Options {
+    /// The pack's file name in `shaderpacks`.
+    pub pack: String,
     pub items: Vec<Item>,
     pub screens: Vec<Screen>,
     pub profiles: Vec<Profile>,
 }
 
 impl Options {
+    /// Puts every option back to what the pack ships with.
+    pub fn reset(&mut self) {
+        for item in &mut self.items {
+            item.current = item.default;
+        }
+    }
+
     /// The profile the values match, `None` for custom ones.
     pub fn current_profile(&self) -> Option<usize> {
         self.profiles.iter().position(|p| {
@@ -181,6 +192,7 @@ fn classic(dir: &Path, entry: &PackEntry, locale: &str) -> Options {
     let screens = screens(&layout, &items);
     let profiles = profiles(&layout, &items);
     Options {
+        pack: entry.file.clone(),
         items,
         screens,
         profiles,
@@ -221,6 +233,7 @@ fn screens(layout: &horizon_shaders::Layout, items: &[Item]) -> Vec<Screen> {
         return vec![Screen {
             title: String::new(),
             entries: all(),
+            columns: 2,
         }];
     }
     // Options no screen lists, which a `*` shows.
@@ -272,6 +285,7 @@ fn screens(layout: &horizon_shaders::Layout, items: &[Item]) -> Vec<Screen> {
         screens.push(Screen {
             title: def(&id).map_or_else(|| id.clone(), |d| d.title.clone()),
             entries,
+            columns: def(&id).map_or(2, |d| d.columns),
         });
         k += 1;
     }
@@ -366,8 +380,10 @@ fn horizon(dir: &Path, entry: &PackEntry) -> Options {
     let screens = vec![Screen {
         title: String::new(),
         entries: (0..items.len()).map(Entry::Option).collect(),
+        columns: 2,
     }];
     Options {
+        pack: entry.file.clone(),
         items,
         screens,
         profiles: Vec::new(),
@@ -443,6 +459,7 @@ mod tests {
                 ScreenDef {
                     id: String::new(),
                     title: String::new(),
+                    columns: 2,
                     entries: vec![
                         LayoutEntry::Option("B".into()),
                         LayoutEntry::Space,
@@ -453,6 +470,7 @@ mod tests {
                 ScreenDef {
                     id: "MORE".into(),
                     title: "More".into(),
+                    columns: 2,
                     entries: vec![LayoutEntry::Option("A".into())],
                 },
             ],
@@ -493,6 +511,7 @@ mod tests {
     #[test]
     fn profiles_cycle_and_custom_values_match_none() {
         let mut o = Options {
+            pack: String::new(),
             items: vec![item("A"), item("B")],
             screens: Vec::new(),
             profiles: vec![

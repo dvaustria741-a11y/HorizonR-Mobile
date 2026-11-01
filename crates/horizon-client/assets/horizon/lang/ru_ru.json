@@ -59,6 +59,7 @@
   "horizon.mods.open_folder": "Открыть папку модов",
   "horizon.shader_packs.empty": "Шейдерпаков нет: положите их в папку shaderpacks",
   "horizon.shader_packs.settings": "Настройки шейдерпака…",
+  "horizon.shader_packs.reset": "Сбросить",
   "horizon.shader_packs.no_options": "У этого шейдерпака нет настроек",
   "horizon.shader_packs.kind_horizon": " (Horizon)",
   "horizon.agent.copy_details": "Скопировать данные подключения",

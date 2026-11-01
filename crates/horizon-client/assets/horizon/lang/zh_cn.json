@@ -60,6 +60,7 @@
   "horizon.mods.open_folder": "打开模组文件夹",
   "horizon.shader_packs.empty": "没有光影包：请将其放入 shaderpacks 文件夹",
   "horizon.shader_packs.settings": "光影包设置…",
+  "horizon.shader_packs.reset": "重置",
   "horizon.shader_packs.no_options": "此光影包没有可更改的选项",
   "horizon.shader_packs.kind_horizon": "（Horizon）",
   "horizon.agent.copy_details": "复制连接详情",

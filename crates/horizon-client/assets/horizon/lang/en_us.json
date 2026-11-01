@@ -62,6 +62,7 @@
   "horizon.mods.open_folder": "Open Mod Folder",
   "horizon.shader_packs.empty": "No shader packs: put them in the shaderpacks folder",
   "horizon.shader_packs.settings": "Shader Pack Settings...",
+  "horizon.shader_packs.reset": "Reset",
   "horizon.shader_packs.no_options": "This pack has no options you can change",
   "horizon.shader_packs.kind_horizon": " (Horizon)",
   "horizon.agent.copy_details": "Copy Connection Details",

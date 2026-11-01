@@ -156,6 +156,8 @@ pub struct ScreenDef {
     /// The pack's `screen.NAME` name for it, else the id.
     pub title: String,
     pub entries: Vec<LayoutEntry>,
+    /// `screen.columns` / `screen.NAME.columns`: options side by side (1 or 2; the default is 2).
+    pub columns: usize,
 }
 
 /// A preset the pack ships (`profile.NAME=`): the option values it sets, with the profiles it
@@ -223,19 +225,26 @@ pub fn layout(pack: &Pack, locale: &str) -> Layout {
             .filter(|e| !matches!(e, LayoutEntry::Option(n) if n.starts_with('<')))
             .collect()
     };
+    let columns = |key: &str| {
+        properties
+            .get(key)
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .map_or(2, |n| n.clamp(1, 2))
+    };
     let mut out = Layout::default();
     if let Some(main) = properties.get("screen") {
         out.screens.push(ScreenDef {
             id: String::new(),
             title: String::new(),
             entries: entries(main),
+            columns: columns("screen.columns"),
         });
     }
     for entry in &properties.entries {
         let Some(id) = entry.key.strip_prefix("screen.") else {
             continue;
         };
-        if id.is_empty() || id.ends_with(".columns") {
+        if id.is_empty() || id == "columns" || id.ends_with(".columns") {
             continue;
         }
         let title = lang
@@ -247,6 +256,7 @@ pub fn layout(pack: &Pack, locale: &str) -> Layout {
             id: id.to_owned(),
             title,
             entries: entries(&entry.value),
+            columns: columns(&format!("screen.{id}.columns")),
         });
     }
     if let Some(sliders) = properties.get("sliders") {

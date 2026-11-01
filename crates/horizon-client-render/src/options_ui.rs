@@ -1449,6 +1449,8 @@ enum Act {
     PackScreen(usize),
     /// Set the values of the pack's next profile.
     PackProfile,
+    /// Every option of the picked pack back to its default.
+    PackReset,
     /// Step option `.0` of `s.shader_pack_options` to its next value.
     PackOption(usize),
     /// The installed mod's own settings page (capability `ui`), shown as a
@@ -2431,34 +2433,53 @@ impl OptionsUi {
                 let Some(screen) = options.screens.get(k).filter(|c| !c.entries.is_empty()) else {
                     return vec![Row::Header("horizon.shader_packs.no_options")];
                 };
-                screen
+                let columns = if screen.columns == 1 { 1 } else { 2 };
+                let width = if columns == 1 { 310.0 } else { 150.0 };
+                let blank = || Widget {
+                    x: 0.0,
+                    y: 0.0,
+                    w: width,
+                    h: 20.0,
+                    kind: WKind::Text {
+                        text: Text::empty(),
+                        color: 0,
+                        centered: false,
+                    },
+                    list: false,
+                };
+                let cells: Vec<Widget> = screen
                     .entries
                     .iter()
                     .filter_map(|entry| match *entry {
                         crate::shader_pack_options::Entry::Option(i) => {
                             let item = options.items.get(i)?;
                             Some(if item.slider {
-                                Row::Big(Opt::PackOption(i))
+                                Widget {
+                                    x: 0.0,
+                                    y: 0.0,
+                                    w: width,
+                                    h: 20.0,
+                                    kind: WKind::Slider {
+                                        label: Opt::PackOption(i).label(s),
+                                        value: item.position(),
+                                        opt: Opt::PackOption(i),
+                                    },
+                                    list: false,
+                                }
                             } else {
                                 let label =
                                     Text::literal(format!("{}: {}", item.label, item.value_text()));
-                                Row::Buttons(
-                                    button(0.0, 0.0, 310.0, label, Act::PackOption(i)),
-                                    None,
-                                )
+                                button(0.0, 0.0, width, label, Act::PackOption(i))
                             })
                         }
                         crate::shader_pack_options::Entry::Screen(i) => {
                             let title = options.screens.get(i)?.title.clone();
-                            Some(Row::Buttons(
-                                button(
-                                    0.0,
-                                    0.0,
-                                    310.0,
-                                    Text::literal(format!("{title}...")),
-                                    Act::PackScreen(i),
-                                ),
-                                None,
+                            Some(button(
+                                0.0,
+                                0.0,
+                                width,
+                                Text::literal(format!("{title} >")),
+                                Act::PackScreen(i),
                             ))
                         }
                         crate::shader_pack_options::Entry::Profile => {
@@ -2466,22 +2487,27 @@ impl OptionsUi {
                                 .current_profile()
                                 .and_then(|i| options.profiles.get(i))
                                 .map_or("Custom", |p| p.title.as_str());
-                            Some(Row::Buttons(
-                                button(
-                                    0.0,
-                                    0.0,
-                                    310.0,
-                                    Text::literal(format!("Profile: {name}")),
-                                    Act::PackProfile,
-                                ),
-                                None,
+                            Some(button(
+                                0.0,
+                                0.0,
+                                width,
+                                Text::literal(format!("Profile: {name}")),
+                                Act::PackProfile,
                             ))
                         }
-                        crate::shader_pack_options::Entry::Space => {
-                            Some(Row::Note(String::new()))
-                        }
+                        crate::shader_pack_options::Entry::Space => Some(blank()),
                     })
-                    .collect()
+                    .collect();
+                let mut rows = Vec::new();
+                if k == 0 && !options.pack.is_empty() {
+                    rows.push(Row::Note(options.pack.clone()));
+                }
+                let mut cells = cells.into_iter();
+                while let Some(first) = cells.next() {
+                    let second = if columns == 2 { cells.next() } else { None };
+                    rows.push(Row::Buttons(first, second));
+                }
+                rows
             }
             _ => {
                 let _ = s;
@@ -3053,6 +3079,9 @@ impl OptionsUi {
                 let folder = match page {
                     Page::Mods => Some(("horizon.mods.open_folder", Act::OpenModFolder)),
                     Page::ShaderPacks => Some(("pack.openFolder", Act::OpenShaderPackFolder)),
+                    Page::ShaderPackSettings(_) => {
+                        Some(("horizon.shader_packs.reset", Act::PackReset))
+                    }
                     _ => None,
                 };
                 if let Some((label, act)) = folder {
@@ -3651,6 +3680,10 @@ impl OptionsUi {
                             self.push(Page::ShaderPackSettings(0));
                         }
                         Act::PackScreen(k) => self.push(Page::ShaderPackSettings(k)),
+                        Act::PackReset => {
+                            s.shader_pack_options.reset();
+                            events.push(Event::ShaderPackOption(0));
+                        }
                         Act::PackProfile => {
                             s.shader_pack_options.next_profile();
                             events.push(Event::ShaderPackOption(0));
