@@ -723,3 +723,23 @@ patch_ingame_ai_agent_and_native_mods()
 prestage_script = Path("scripts/prestage_controls_and_wallpapers.py")
 if prestage_script.exists():
     subprocess.run([sys.executable, str(prestage_script)], check=False)
+
+# ==============================================================================
+# 6. Remove the engine's "Horizon / Rust based minecraft client" boot screen
+#    `ui_theme::draw_boot` keeps its pure black fill (the HORIZONZ launch splash covers it) but no longer
+#    draws the wordmark, tagline or console lines while the pack screens load.
+# ==============================================================================
+def patch_remove_engine_boot_screen():
+    ui_theme_rs = Path("crates/horizon-client/src/ui_theme.rs")
+    if not ui_theme_rs.is_file():
+        return
+    txt = ui_theme_rs.read_text(encoding="utf-8")
+    old_calls = "    wordmark(atlas, batch);\n    draw_boot_log(atlas, batch, logs);\n}"
+    new_calls = "    // HorizonZ: no wordmark / tagline / console on the boot screen, just black.\n    let _ = logs;\n}"
+    if old_calls in txt:
+        txt = txt.replace(old_calls, new_calls, 1)
+        txt = txt.replace("fn wordmark(atlas: &HudAtlas, batch: &mut HudBatch) {", "#[allow(dead_code)]\nfn wordmark(atlas: &HudAtlas, batch: &mut HudBatch) {", 1)
+        ui_theme_rs.write_text(txt, encoding="utf-8")
+        print("[HorizonZ Patch] Removed the Horizon wordmark boot screen from ui_theme::draw_boot!")
+
+patch_remove_engine_boot_screen()

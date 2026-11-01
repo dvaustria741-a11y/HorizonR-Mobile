@@ -73,10 +73,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import dev.horizon.android.HorizonSplashRenderer
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -455,161 +459,36 @@ fun Modifier.animatedPressScale(
 }
 
 /**
- * Pure Black Minecraft Java Edition Style Loading Splash Screen ("HORIZONZ")
- * Displayed immediately when pressing PLAY and seamlessly continued by HorizonActivity's native overlay!
+ * HORIZONZ launch splash. Drawn by the same `HorizonSplashRenderer` as the in-game overlay and stamps its
+ * start time into `zalith-splash-start.txt`, so `HorizonActivity` continues the identical animation.
  */
 @Composable
 fun HorizonZBlackSplashOverlay() {
-    var progress by remember { mutableFloatStateOf(0.16f) }
+    val context = LocalContext.current
+    val renderer = remember { HorizonSplashRenderer(context) }
+    val startMs = remember { System.currentTimeMillis() }
+    var nowMs by remember { mutableLongStateOf(startMs) }
     LaunchedEffect(Unit) {
-        while (progress < 0.92f) {
-            delay(28L)
-            progress = (progress + 0.022f).coerceAtMost(0.92f)
+        withContext(Dispatchers.IO) {
+            runCatching { File(context.filesDir, "zalith-splash-start.txt").writeText(startMs.toString()) }
+        }
+        while (true) {
+            withFrameMillis { nowMs = System.currentTimeMillis() }
         }
     }
 
-    val glyphH = arrayOf(
-        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1),
-        intArrayOf(1,1,1,1,1,1,1,1), intArrayOf(1,1,1,1,1,1,1,1), intArrayOf(1,1,0,0,0,0,1,1),
-        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1)
-    )
-    // Iconic 8x8 Minecraft Creeper Face as the letter 'O'!
-    val glyphCreeperO = arrayOf(
-        intArrayOf(1,1,3,1,1,3,1,1), intArrayOf(1,3,1,1,3,1,1,1), intArrayOf(1,2,2,1,1,2,2,1),
-        intArrayOf(1,2,2,1,1,2,2,1), intArrayOf(1,1,1,2,2,1,1,1), intArrayOf(1,1,2,2,2,2,1,1),
-        intArrayOf(1,1,2,2,2,2,1,1), intArrayOf(1,1,2,1,1,2,1,1)
-    )
-    val glyphR = arrayOf(
-        intArrayOf(1,1,1,1,1,1,1,0), intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1),
-        intArrayOf(1,1,1,1,1,1,1,0), intArrayOf(1,1,1,1,1,0,0,0), intArrayOf(1,1,0,0,1,1,0,0),
-        intArrayOf(1,1,0,0,0,1,1,0), intArrayOf(1,1,0,0,0,0,1,1)
-    )
-    val glyphI = arrayOf(
-        intArrayOf(1,1,1,1,1,1,1,1), intArrayOf(0,0,0,1,1,0,0,0), intArrayOf(0,0,0,1,1,0,0,0),
-        intArrayOf(0,0,0,1,1,0,0,0), intArrayOf(0,0,0,1,1,0,0,0), intArrayOf(0,0,0,1,1,0,0,0),
-        intArrayOf(0,0,0,1,1,0,0,0), intArrayOf(1,1,1,1,1,1,1,1)
-    )
-    val glyphZ = arrayOf(
-        intArrayOf(1,1,1,1,1,1,1,1), intArrayOf(0,0,0,0,0,1,1,1), intArrayOf(0,0,0,0,1,1,1,0),
-        intArrayOf(0,0,0,1,1,1,0,0), intArrayOf(0,0,1,1,1,0,0,0), intArrayOf(0,1,1,1,0,0,0,0),
-        intArrayOf(1,1,1,0,0,0,0,0), intArrayOf(1,1,1,1,1,1,1,1)
-    )
-    val glyphO = arrayOf(
-        intArrayOf(0,1,1,1,1,1,1,0), intArrayOf(1,1,1,0,0,1,1,1), intArrayOf(1,1,0,0,0,0,1,1),
-        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1),
-        intArrayOf(1,1,1,0,0,1,1,1), intArrayOf(0,1,1,1,1,1,1,0)
-    )
-    val glyphN = arrayOf(
-        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,1,0,0,0,1,1), intArrayOf(1,1,1,1,0,0,1,1),
-        intArrayOf(1,1,0,1,1,0,1,1), intArrayOf(1,1,0,0,1,1,1,1), intArrayOf(1,1,0,0,0,1,1,1),
-        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1)
-    )
-    val word = remember { arrayOf(glyphH, glyphCreeperO, glyphR, glyphI, glyphZ, glyphO, glyphN, glyphR) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val letterCols = 8
-            val letterRows = 8
-            val gapCols = 1
-            val totalCols = word.size * letterCols + (word.size - 1) * gapCols
-            val pxSize = (w * 0.50f / totalCols).coerceIn(4f, 6.2.dp.toPx())
-            val logoW = totalCols * pxSize
-            val logoH = letterRows * pxSize
-            val startX = (w - logoW) / 2f
-            val startY = (h * 0.41f) - (logoH / 2f)
-            val depthOff = (pxSize * 0.48f).coerceAtLeast(2f)
-
-            // Pass 1: 3D Blocky Bottom Extrusion Shadow
-            for (l in word.indices) {
-                val glyph = word[l]
-                val lx = startX + l * (letterCols + gapCols) * pxSize
-                val shadowColor = when (l) {
-                    1 -> Color(0xFF1B4D14)
-                    word.lastIndex -> Color(0xFF1D4E63)
-                    else -> Color(0xFF2A3238)
-                }
-                for (r in 0 until letterRows) {
-                    for (c in 0 until letterCols) {
-                        if (glyph[r][c] != 0) {
-                            drawRect(
-                                color = shadowColor,
-                                topLeft = Offset(lx + c * pxSize + depthOff * 0.6f, startY + r * pxSize + depthOff),
-                                size = Size(pxSize + 0.5f, pxSize + 0.5f)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Pass 2: Foreground Block Letters + Creeper Face 'O'
-            for (l in word.indices) {
-                val glyph = word[l]
-                val lx = startX + l * (letterCols + gapCols) * pxSize
-                for (r in 0 until letterRows) {
-                    for (c in 0 until letterCols) {
-                        val cell = glyph[r][c]
-                        if (cell == 0) continue
-                        val blockColor = when {
-                            l == 1 -> when (cell) {
-                                2 -> Color(0xFF111712)
-                                3 -> Color(0xFF72E052)
-                                else -> if (r == 0) Color(0xFF6CE04E) else Color(0xFF49AC30)
-                            }
-                            l == word.lastIndex -> if (r == 0) Color(0xFFC2F0FF) else SkyBlueAccent
-                            else -> if (r == 0) Color.White else if (r >= 6) Color(0xFFD0D8DE) else Color(0xFFF2F6F8)
-                        }
-                        drawRect(
-                            color = blockColor,
-                            topLeft = Offset(lx + c * pxSize, startY + r * pxSize),
-                            size = Size(pxSize + 0.5f, pxSize + 0.5f)
-                        )
-                    }
-                }
-            }
-
-            // Classic Minecraft Java Progress Bar
-            val barW = (w * 0.54f).coerceAtMost(400.dp.toPx())
-            val barH = 14.dp.toPx()
-            val barLeft = (w - barW) / 2f
-            val barTop = h * 0.72f
-            val strokeW = 1.8.dp.toPx()
-            val pad = 2.8.dp.toPx()
-
-            drawRect(
-                color = Color.White,
-                topLeft = Offset(barLeft, barTop),
-                size = Size(barW, barH),
-                style = Stroke(width = strokeW)
-            )
-            val fillW = ((barW - pad * 2f) * progress).coerceAtLeast(0f)
-            if (fillW > 0f) {
-                drawRect(
-                    color = Color.White,
-                    topLeft = Offset(barLeft + pad, barTop + pad),
-                    size = Size(fillW, barH - pad * 2f)
-                )
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 34.dp),
-            verticalArrangement = Arrangement.Bottom,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Initializing HorizonR Rust Engine (${(progress * 100).toInt()}%)",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFD5DEE5)
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val t = (nowMs - startMs) / 1000f
+        val progress = 0.5f * (1f - exp(-t / 1.2f))
+        drawIntoCanvas { canvas ->
+            renderer.draw(
+                canvas.nativeCanvas,
+                size.width,
+                size.height,
+                t,
+                progress,
+                "Initializing HorizonZ Rust Engine...",
+                1f
             )
         }
     }
