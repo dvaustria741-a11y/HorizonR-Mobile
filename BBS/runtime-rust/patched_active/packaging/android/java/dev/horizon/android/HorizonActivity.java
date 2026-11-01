@@ -221,7 +221,7 @@ public final class HorizonActivity extends NativeActivity {
         final boolean autonomousActions = intent.getBooleanExtra("HORIZON_AI_AGENT_AUTONOMOUS", true);
         final String taskPrompt = intent.getStringExtra("HORIZON_AI_AGENT_TASK") != null
             ? intent.getStringExtra("HORIZON_AI_AGENT_TASK")
-            : "Bantu player di dalam game Minecraft 26.3.";
+            : "Help the player in Minecraft 26.3.";
 
         Thread agentThread = new Thread(() -> {
             String localApiKey = readLocalGeminiKey(homeDir);
@@ -266,7 +266,7 @@ public final class HorizonActivity extends NativeActivity {
                         greetedInWorld = true;
                         JSONObject chatGreet = new JSONObject();
                         chatGreet.put("op", "chat");
-                        chatGreet.put("message", "[HorizonZ Gemini AI] Terhubung ke Google AI Studio (" + modelId + "). Ketik @ai <pesan> di chat untuk meminta bantuan!");
+                        chatGreet.put("message", "[HorizonZ Gemini AI] Connected to Google AI Studio (" + modelId + "). Type @ai <message> in chat to ask for help!");
                         sendControlCommand(host, port, token, chatGreet.toString());
                     }
 
@@ -603,6 +603,13 @@ public final class HorizonActivity extends NativeActivity {
                 String playerName = intent.getStringExtra("HORIZON_PLAYER_NAME");
                 if (playerName != null && !playerName.isEmpty()) {
                     Os.setenv("HORIZON_PLAYER_NAME", playerName, true);
+                }
+
+                String quickPlayServer = intent.getStringExtra("HORIZON_QUICK_PLAY_SERVER");
+                if (quickPlayServer != null && !quickPlayServer.isEmpty()) {
+                    Os.setenv("HORIZON_QUICK_PLAY_SERVER", quickPlayServer, true);
+                } else {
+                    try { Os.unsetenv("HORIZON_QUICK_PLAY_SERVER"); } catch (Exception ignored) {}
                 }
 
                 String renderBackend = intent.getStringExtra("HORIZON_WGPU_BACKEND");

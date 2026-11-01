@@ -1,172 +1,222 @@
 #!/usr/bin/env python3
-"""
-HorizonZ-Launcher Android Build Tool (compatible with Vasysik/horizon-android `tools/android_build.py`).
-"""
+"""Build an optimized Rust APK with Android's stock NativeActivity and Rust system-IME adapter.
 
+Requires Android SDK, NDK, Rust Android target, and a JDK (for APK signing).
+Generated APKs and the throwaway signing key stay in .local/android.
+"""
 import argparse
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import zipfile
-from pathlib import Path
+import json
+import hashlib
 
-ABI_TO_TRIPLE = {
-    "arm64-v8a": ("aarch64-linux-android", "aarch64-linux-android"),
-    "armeabi-v7a": ("armv7-linux-androideabi", "armv7a-linux-androideabi"),
-    "x86_64": ("x86_64-linux-android", "x86_64-linux-android"),
-    "x86": ("i686-linux-android", "i686-linux-android"),
-}
-
-ROOT_DIR = Path(__file__).resolve().parent.parent
-LOCAL_ANDROID_DIR = ROOT_DIR / ".local" / "android"
-GRADLE_JNI_DIR = LOCAL_ANDROID_DIR / "gradle-jni"
-GRADLE_ASSETS_DIR = LOCAL_ANDROID_DIR / "gradle-assets"
-ANDROID_PKG_DIR = ROOT_DIR / "packaging" / "android"
+ROOT = Path(__file__).resolve().parents[1]
+TARGETS = {'x86_64': 'x86_64-linux-android', 'arm64-v8a': 'aarch64-linux-android',
+           'armeabi-v7a': 'armv7-linux-androideabi', 'x86': 'i686-linux-android'}
 
 
-def find_ndk(explicit_ndk: str | None) -> Path:
-    if explicit_ndk:
-        return Path(explicit_ndk)
-    for env_key in ("ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "NDK_HOME"):
-        val = os.environ.get(env_key)
-        if val and Path(val).exists():
-            return Path(val)
-    sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
-    if sdk:
-        ndk_root = Path(sdk) / "ndk"
-        if ndk_root.exists():
-            versions = sorted(ndk_root.iterdir())
-            if versions:
-                return versions[-1]
-    raise RuntimeError("Android NDK not found. Pass --ndk or set ANDROID_NDK_HOME.")
+def latest(directory):
+    return max(directory.iterdir(), key=lambda p: tuple(int(v) for v in p.name.split('.')))
 
 
-def ensure_debug_keystore():
-    ks_path = ANDROID_PKG_DIR / "debug.keystore"
-    if not ks_path.exists():
-        subprocess.run(
-            [
-                "keytool",
-                "-genkeypair",
-                "-v",
-                "-keystore",
-                str(ks_path),
-                "-storepass",
-                "android",
-                "-alias",
-                "androiddebugkey",
-                "-keypass",
-                "android",
-                "-keyalg",
-                "RSA",
-                "-keysize",
-                "2048",
-                "-validity",
-                "10000",
-                "-dname",
-                "CN=Android Debug,O=Android,C=US",
-            ],
-            check=True,
-        )
+def run(command, **kwargs):
+    print(' '.join(map(str, command)), flush=True)
+    subprocess.run(list(map(str, command)), check=True, **kwargs)
 
 
-def prepare_assets(public_mode: bool):
-    GRADLE_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
-    for doc_name in ("LICENSE.txt", "THIRD_PARTY_NOTICES.md"):
-        src = ROOT_DIR / doc_name
-        if src.exists():
-            shutil.copy2(src, GRADLE_ASSETS_DIR / doc_name)
-
-    controls_src = ANDROID_PKG_DIR / "bedrock-controls.json"
-    if controls_src.exists():
-        shutil.copy2(controls_src, GRADLE_ASSETS_DIR / "bedrock-controls.json")
-
-    engine_zip = GRADLE_ASSETS_DIR / "engine-data.zip"
-    if not engine_zip.exists():
-        with zipfile.ZipFile(engine_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr(
-                "horizon-engine-meta.json",
-                '{"engine":"horizon-rust","minecraft_version":"26.3","android_port":"0.7.4","public_mode":'
-                + ("true" if public_mode else "false")
-                + "}\n",
-            )
+def save_crash_symbols(library, stripped, abi, objcopy, revision):
+    """Keep matching symbols locally; never enlarge or attach them to the APK."""
+    digest = hashlib.sha256(stripped.read_bytes()).hexdigest()
+    notes = subprocess.check_output([str(objcopy.with_name('llvm-readelf' + objcopy.suffix)), '--notes', str(stripped)], text=True)
+    build_id = notes.split('Build ID:', 1)[1].split()[0] if 'Build ID:' in notes else None
+    key = build_id or digest
+    output = ROOT / '.local/android/native-symbols' / abi
+    output.mkdir(parents=True, exist_ok=True)
+    symbols = output / (key + '.debug')
+    if not symbols.is_file():
+        run([objcopy, '--only-keep-debug', library, symbols])
+    (output / (key + '.json')).write_text(json.dumps({
+        'schema': 1, 'abi': abi, 'source_commit': revision, 'build_id': build_id,
+        'packaged_library_sha256': digest, 'symbols': symbols.name,
+    }, indent=2) + '\n', encoding='utf-8')
+    print(f'Private crash symbols: {symbols}', flush=True)
 
 
-def build_rust_for_abi(abi: str, ndk_path: Path, min_sdk: int, profile: str, check_only: bool, public_mode: bool):
-    rust_triple, clang_prefix = ABI_TO_TRIPLE[abi]
-    host_tag = "linux-x86_64"
-    toolchain_bin = ndk_path / "toolchains" / "llvm" / "prebuilt" / host_tag / "bin"
-    cc = toolchain_bin / f"{clang_prefix}{min_sdk}-clang"
-    cxx = toolchain_bin / f"{clang_prefix}{min_sdk}-clang++"
-    ar = toolchain_bin / "llvm-ar"
-    strip = toolchain_bin / "llvm-strip"
-
-    env = os.environ.copy()
-    if public_mode:
-        env["HORIZON_ANDROID_PUBLIC"] = "1"
-
-    env_triple = rust_triple.upper().replace("-", "_")
-    env[f"CC_{rust_triple.replace('-', '_')}"] = str(cc)
-    env[f"CXX_{rust_triple.replace('-', '_')}"] = str(cxx)
-    env[f"AR_{rust_triple.replace('-', '_')}"] = str(ar)
-    env[f"CARGO_TARGET_{env_triple}_LINKER"] = str(cc)
-
-    cmd = ["cargo", "check" if check_only else "build", "-p", "horizon-android", "--target", rust_triple]
-    if profile == "release":
-        cmd.append("--release")
-    if abi == "armeabi-v7a":
-        cmd.extend(["--no-default-features", "--features", "audio"])
-
-    print(f"[HorizonZ] Running: {' '.join(cmd)}")
-    subprocess.run(cmd, cwd=ROOT_DIR, env=env, check=True)
-
-    if not check_only:
-        target_subdir = "release" if profile == "release" else "debug"
-        built_so = ROOT_DIR / "target" / rust_triple / target_subdir / "libhorizon_android.so"
-        dest_dir = GRADLE_JNI_DIR / abi
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_so = dest_dir / "libhorizon_android.so"
-        shutil.copy2(built_so, dest_so)
-        if strip.exists():
-            subprocess.run([str(strip), "--strip-unneeded", str(dest_so)], check=False)
+def generated_engine_file(name):
+    path = Path(name)
+    if len(path.parts) == 1:
+        return name in {
+            'attributes.json', 'block-behaviours.json', 'cached-collision.nbt',
+            'command-registries.json', 'commands.json', 'creative-inventory.json',
+            'damage-catalog.json', 'entity-models.json', 'entity-types.json',
+            'facts.json', 'gameplay-facts.json', 'horizon-resources.json', 'items.json',
+            'landing-definitions.json', 'mob-data.json', 'model-states.json',
+            'movement-properties.nbt', 'occlusion.nbt', 'player-float-ids.json',
+            'registries.json', 'render-definitions.json'}
+    return (name in {'biome-parameters/nether.json', 'biome-parameters/overworld.json',
+                    'worldgen/biome_parameters/nether.json', 'worldgen/biome_parameters/overworld.json'}
+            or (path.parts[:2] == ('worldgen', 'blocks') and path.name in {
+                'block-properties.nbt', 'cached-collision.nbt', 'cached-support.nbt',
+                'survival-rules.json', 'survival-extra-definitions.json', 'placement-definitions.json',
+                'structure-blocks.json'}
+                and len(path.parts) == 3)
+            or name == 'worldgen/block_flags.json')
 
 
-def build_gradle_apk(abi: str, min_sdk: int, profile: str):
-    ensure_debug_keystore()
-    gradle_cmd = ["gradle", "assembleRelease" if profile == "release" else "assembleDebug"]
-    if abi:
-        gradle_cmd.append(f"-Pabi={abi}")
-    gradle_cmd.append(f"-PminSdk={min_sdk}")
-    print(f"[HorizonZ] Running Gradle in {ANDROID_PKG_DIR}: {' '.join(gradle_cmd)}")
-    subprocess.run(gradle_cmd, cwd=ANDROID_PKG_DIR, check=True)
+def engine_data(public=False):
+    version = json.loads((ROOT / 'research-lock.json').read_text())['minecraft']['version']
+    resources = ROOT / '.local/horizon-client' / version
+    if not (resources / 'horizon-resources.json').is_file():
+        raise FileNotFoundError('Developer build needs prepared engine tables; run tools/android_prepare.py once')
+    if public and not (resources / 'worldgen/blocks/structure-blocks.json').is_file():
+        raise FileNotFoundError('Public build needs generated structure transforms; run tools/android_prepare.py again')
+    files = [p for p in resources.iterdir() if p.is_file() and p.suffix in ('.json', '.nbt') and p.name != 'asset-index.json']
+    for name in ['worldgen', 'biome-parameters']:
+        files.extend(p for p in (resources / name).rglob('*') if p.is_file())
+    files.sort()
+    if public:
+        files = [p for p in files if generated_engine_file(p.relative_to(resources).as_posix())]
+    fingerprint = hashlib.sha256(''.join(f'{p.relative_to(resources)}:{p.stat().st_size}:{p.stat().st_mtime_ns}\n' for p in files).encode()).hexdigest()
+    output = ROOT / '.local/android' / ('engine-data-generated.zip' if public else 'engine-data.zip')
+    stamp = output.with_suffix('.fingerprint')
+    if not output.exists() or not stamp.exists() or stamp.read_text() != fingerprint:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(output.with_suffix('.partial'), 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
+            for file in files:
+                archive.write(file, file.relative_to(resources).as_posix())
+        output.with_suffix('.partial').replace(output)
+        stamp.write_text(fingerprint)
+    return output
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build HorizonZ-Launcher Android APK")
-    parser.add_argument("--abi", default="arm64-v8a", choices=list(ABI_TO_TRIPLE.keys()) + ["all"])
-    parser.add_argument("--profile", default="release", choices=["dev", "release"])
-    parser.add_argument("--ndk", default=None)
-    parser.add_argument("--legacy", action="store_true", help="Use minSdk 27 instead of 28")
-    parser.add_argument("--public", action="store_true", help="Set HORIZON_ANDROID_PUBLIC=1")
-    parser.add_argument("--check", action="store_true", help="Run cargo check instead of full APK packaging")
-    parser.add_argument("--skip-rust", action="store_true", help="Skip Rust compilation if libhorizon_android.so is already staged")
-    parser.add_argument("--rust-only", action="store_true", help="Only compile Rust cdylib")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--abi', choices=TARGETS, default='arm64-v8a')
+    parser.add_argument('--sdk', type=Path, default=os.environ.get('ANDROID_HOME') or Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'Android/Sdk')
+    parser.add_argument('--java-home', type=Path, default=os.environ.get('JAVA_HOME') or 'C:/Program Files/Android/Android Studio/jbr')
+    parser.add_argument('--skip-rust', action='store_true')
+    parser.add_argument('--rust-only', action='store_true', help='Build the Rust host without touching shared APK staging')
+    parser.add_argument('--release-candidate', action='store_true', help='Build a non-debuggable candidate and audit privacy; this does not authorize redistribution of bundled game resources')
+    parser.add_argument('--public', action='store_true', help='Distribution APK: generated tables only; original resources download from Mojang')
+    parser.add_argument('--profile', choices=['release', 'fast', 'dev'], help='Public/candidate builds default to release (ThinLTO); local builds default to optimized fast')
+    parser.add_argument('--gradle', type=Path, help='Gradle 8.14 executable (otherwise discover the cached distribution)')
+    parser.add_argument('--check', action='store_true', help='Only type-check the Android target')
+    parser.add_argument('--clippy', action='store_true', help='Run Android Clippy with warnings denied')
+    parser.add_argument('--bootstrap', type=Path, help=argparse.SUPPRESS)  # Old scripts: no longer used.
     args = parser.parse_args()
-
-    min_sdk = 27 if args.legacy else 28
-    abis = list(ABI_TO_TRIPLE.keys()) if args.abi == "all" else [args.abi]
-
-    prepare_assets(args.public)
-
+    if args.profile is None:
+        args.profile = 'release' if args.public or args.release_candidate else 'fast'
+    if args.public:
+        args.release_candidate = True
+        if args.skip_rust:
+            parser.error('--public cannot reuse a native library from a different build mode')
+    if args.release_candidate and args.profile == 'dev':
+        parser.error('--release-candidate requires an optimized release or fast profile')
+    suffix = '.exe' if os.name == 'nt' else ''
+    tools = latest(args.sdk / 'build-tools')
+    ndk = latest(args.sdk / 'ndk') / 'toolchains/llvm/prebuilt' / ('windows-x86_64' if os.name == 'nt' else 'linux-x86_64')
+    target = TARGETS[args.abi]
+    # NDK spells the ARMv7 compiler triple differently from Rust. Android 8.1
+    # is the legacy build's floor; the modern builds keep their existing floor.
+    compiler_target = 'armv7a-linux-androideabi' if args.abi == 'armeabi-v7a' else target
+    legacy = args.abi in ('armeabi-v7a', 'x86')
+    min_sdk = 27 if legacy else 28
+    features = ['--no-default-features', '--features', 'audio'] if legacy else []
+    manifests = [(['-p', 'horizon-android'], features)]
+    environment = dict(os.environ)
+    environment['PATH'] = os.pathsep.join([str(ndk / 'bin'), str(args.java_home / 'bin'), environment['PATH']])
+    environment['JAVA_HOME'] = str(args.java_home)
+    target_dir = Path(environment.get('CARGO_TARGET_DIR', ROOT / 'target')).resolve()
+    environment['CARGO_TARGET_DIR'] = str(target_dir)
+    triple = target.replace('-', '_')
+    clang = ndk / 'bin' / (compiler_target + str(min_sdk) + '-clang' + ('.cmd' if os.name == 'nt' else ''))
+    environment[f'CC_{triple}'] = str(clang)
+    environment[f'CXX_{triple}'] = str(ndk / 'bin' / (compiler_target + str(min_sdk) + '-clang++' + ('.cmd' if os.name == 'nt' else '')))
+    environment[f'AR_{triple}'] = str(ndk / 'bin' / ('llvm-ar' + suffix))
+    environment[f'CARGO_TARGET_{triple.upper()}_LINKER'] = str(clang)
+    environment['CARGO_PROFILE_DEV_DEBUG'] = '0'
+    environment['HORIZON_ANDROID_PUBLIC'] = '1' if args.public else '0'
+    try:
+        environment['HORIZON_ANDROID_BUILD_COMMIT'] = subprocess.check_output(
+            ['git', 'rev-parse', '--short=12', 'HEAD'], cwd=ROOT,
+            stderr=subprocess.DEVNULL, text=True).strip()
+        environment['HORIZON_ANDROID_BUILD_DIRTY'] = str(bool(subprocess.check_output(
+            ['git', 'status', '--porcelain', '--untracked-files=no'], cwd=ROOT,
+            stderr=subprocess.DEVNULL, text=True).strip())).lower()
+    except (OSError, subprocess.CalledProcessError):
+        environment['HORIZON_ANDROID_BUILD_COMMIT'] = 'source-export'
+        environment['HORIZON_ANDROID_BUILD_DIRTY'] = 'unknown'
+    if args.release_candidate:
+        flags = environment.get('CARGO_ENCODED_RUSTFLAGS', '').split('\x1f') if environment.get('CARGO_ENCODED_RUSTFLAGS') else environment.get('RUSTFLAGS', '').split()
+        for original, replacement in [(Path.home(), '/build'), (ROOT, '/horizon')]:
+            for prefix in dict.fromkeys([str(original), original.as_posix()]):
+                flags.append(f'--remap-path-prefix={prefix}={replacement}')
+        environment['CARGO_ENCODED_RUSTFLAGS'] = '\x1f'.join(flags)
+    if args.check or args.clippy:
+        for selection, host_features in manifests:
+            command = ['cargo', 'clippy' if args.clippy else 'check', *selection, '--target', target, *host_features]
+            if args.clippy:
+                command += ['--no-deps', '--', '-D', 'warnings']
+            run(command, cwd=ROOT, env=environment)
+        return
     if not args.skip_rust:
-        ndk_path = find_ndk(args.ndk)
-        for abi in abis:
-            build_rust_for_abi(abi, ndk_path, min_sdk, args.profile, args.check, args.public)
+        for selection, host_features in manifests:
+            run(['cargo', 'build', *selection, '--target', target, '--profile', args.profile, *host_features], cwd=ROOT, env=environment)
+    if args.rust_only:
+        return
+    output = ROOT / '.local/android/apk' / args.abi
+    output.mkdir(parents=True, exist_ok=True)
+    staging = ROOT / '.local/android/gradle-jni' / args.abi
+    staging.mkdir(parents=True, exist_ok=True)
+    (staging / 'libhorizon_android_native.so').unlink(missing_ok=True)
+    for name in ('libhorizon_android.so',):
+        library = target_dir / target / ('debug' if args.profile == 'dev' else args.profile) / name
+        if not library.is_file():
+            raise FileNotFoundError(library)
+        shutil.copyfile(library, staging / name)
+        run([ndk / 'bin' / ('llvm-strip' + suffix), '--strip-unneeded', staging / name])
+        if args.profile == 'release':
+            save_crash_symbols(library, staging / name, args.abi,
+                               ndk / 'bin' / ('llvm-objcopy' + suffix),
+                               environment.get('HORIZON_ANDROID_BUILD_COMMIT', 'unknown'))
+    assets = ROOT / '.local/android/gradle-assets'
+    assets.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / 'LICENSE', assets / 'LICENSE.txt')
+    shutil.copyfile(ROOT / 'THIRD_PARTY_NOTICES.md', assets / 'THIRD_PARTY_NOTICES.md')
+    shutil.copyfile(engine_data(args.public), assets / 'engine-data.zip')
+    controls = ROOT / '.local/android/bedrock-controls.zip'
+    if not args.public and not controls.is_file():
+        import sys
+        run([sys.executable, ROOT / 'tools/android_bedrock_controls.py'], cwd=ROOT)
+    if args.public:
+        (assets / 'bedrock-controls.zip').unlink(missing_ok=True)
+    else:
+        shutil.copyfile(controls, assets / 'bedrock-controls.zip')
+    key = ROOT / '.local/android/debug.keystore'
+    if not key.exists():
+        run([args.java_home / 'bin' / ('keytool' + suffix), '-genkeypair', '-keystore', key, '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey', '-keyalg', 'RSA', '-validity', '3650', '-dname', 'CN=Horizon Android Development'])
+    gradle = args.gradle
+    if gradle is None:
+        candidates = list((Path.home() / '.gradle/wrapper/dists/gradle-8.14-all').glob('*/gradle-8.14/bin/gradle' + ('.bat' if os.name == 'nt' else '')))
+        if not candidates:
+            raise FileNotFoundError('Install Gradle 8.14 or pass --gradle PATH')
+        gradle = candidates[0]
+    environment['ANDROID_HOME'] = str(args.sdk)
+    variant = 'release' if args.release_candidate else 'debug'
+    run([gradle, '--no-daemon', '-p', ROOT / 'packaging/android', '-Pabi=' + args.abi, '-PminSdk=' + str(min_sdk), 'assemble' + variant.title()], cwd=ROOT, env=environment)
+    apk = output / ('horizon-android-public.apk' if args.public else 'horizon-android-release.apk' if args.release_candidate else 'horizon-android.apk')
+    shutil.copyfile(ROOT / f'.local/android/gradle-build/outputs/apk/{variant}/HorizonAndroid-{variant}.apk', apk)
+    # Invoke the signing JAR directly so Windows does not need a batch-file shell.
+    signer = [args.java_home / 'bin' / ('java' + suffix), '-jar', tools / 'lib/apksigner.jar']
+    run([*signer, 'verify', '--verbose', apk])
+    if args.release_candidate:
+        import sys
+        run([sys.executable, ROOT / 'tools/check_android_release.py', apk, '--aapt2', tools / ('aapt2' + suffix), *(['--public'] if args.public else [])], cwd=ROOT)
+    print(f'APK: {apk}', flush=True)
 
-    if not args.check and not args.rust_only:
-        target_abi_prop = "" if args.abi == "all" else args.abi
-        build_gradle_apk(target_abi_prop, min_sdk, args.profile)
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

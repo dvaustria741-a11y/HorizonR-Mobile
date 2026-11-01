@@ -3,14 +3,25 @@
   "upstream_branch": "android",
   "updated_files_in_last_sync": [
     "crates/horizon-android/Cargo.toml",
-    "crates/horizon-android/src/lib.rs",
+    "crates/horizon-client/src/android/launcher.rs",
+    "crates/horizon-client/src/android/launcher_pages.rs",
+    "crates/horizon-client/src/android_main.rs",
+    "crates/horizon-client/src/android_resources.rs",
+    "crates/horizon-client/src/official_install.rs",
+    "crates/horizon-port-pack/src/classify.rs",
+    "docs/modpacks/atm10-mods.csv",
     "packaging/android/bedrock-controls.json"
   ],
   "upstream_hashes": {
-    "crates/horizon-android/Cargo.toml": "a5a0aaa3eea4e2f9faba10c7e33db1549b4a0ab07896fc2f60def1536954dbc6",
+    "crates/horizon-android/Cargo.toml": "40e99cd81369d5e26cd79fbfddf3a23112088a980a6a1b03d6161da45f238e71",
     "crates/horizon-android/src/lib.rs": "f8b36bf80c810911ddeb70075e9f8e7969469599cc15a35bde046d13d4901733",
-    "packaging/android/bedrock-controls.json": "c7302b2d98bf2e989c367ba8da6807c6981099e0c73b83ad42ad54fb9d2926a3"
-  },
-  "upstream_release_tag": "v0.7.6",
-  "horizonz_version": "1.8"
+    "packaging/android/bedrock-controls.json": "2837537bbc81a6cfb1a20a209ef4309a7b442b7eb057a53198550b944b282949",
+    "crates/horizon-client/src/android/launcher.rs": "112c622a7dab7f953c3a74c14b1ea142e7812422c4586ee72f7deb191e606c59",
+    "crates/horizon-client/src/android/launcher_pages.rs": "cd08eb69967e7c2bb456540c85ddec6771b5f45814268975a2a1ad2b36f30d0c",
+    "crates/horizon-client/src/android_main.rs": "8f705130a1dd9048d585e9d5ad6e9abd1ade394e90b84162bb087a2943f2a5b4",
+    "crates/horizon-client/src/android_resources.rs": "20c6e86a1d54f504c95635ec11d8ea08e33843c58264442246c7b39546e8345c",
+    "crates/horizon-client/src/official_install.rs": "cc74080238904df12700c8c3a4781ec6a6114a9b149c93d5fe17191d11b8dc72",
+    "crates/horizon-port-pack/src/classify.rs": "77404774d6e07cd1b29a9b83be1e275d88635c881f4e6eb564df4a02caefc418",
+    "docs/modpacks/atm10-mods.csv": "32bcbdf79ea67a915fbe112763428552f3deb0a56a3ba27930b9dbff0b29e50e"
+  }
 }

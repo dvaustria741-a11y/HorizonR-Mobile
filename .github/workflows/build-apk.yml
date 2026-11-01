@@ -124,28 +124,13 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
-      - name: Clone Latest Vasysik/horizon-android Engine & Apply HorizonZ 1.8 Patches
+      - name: Apply HorizonR patches to the vendored engine (crates/ in this repo)
         run: |
-          rm -rf /tmp/horizon-upstream
-          git clone --depth 1 --branch android https://github.com/Vasysik/horizon-android.git /tmp/horizon-upstream
-          rsync -a --delete --exclude='packaging/android' --exclude='scripts' --exclude='Update' --exclude='BBS' --exclude='docs/screenshots' --exclude='README.md' --exclude='.local' --exclude='.git' --exclude='.github' /tmp/horizon-upstream/ ./
-          if [ -d "/tmp/horizon-upstream/docs" ]; then
-            mkdir -p docs
-            cp -rf /tmp/horizon-upstream/docs/* docs/ 2>/dev/null || true
-          fi
-          if [ -d "/tmp/horizon-upstream/scripts" ]; then
-            mkdir -p scripts
-            cp -rn /tmp/horizon-upstream/scripts/* scripts/ 2>/dev/null || true
-          fi
-          if [ -f "/tmp/horizon-upstream/packaging/android/bedrock-controls.json" ]; then
-            cp -f "/tmp/horizon-upstream/packaging/android/bedrock-controls.json" packaging/android/bedrock-controls.json
-          fi
-          if [ -f "BBS/sync_and_merge_bbs.py" ]; then
-            python3 BBS/sync_and_merge_bbs.py /tmp/horizon-upstream
-          else
-            python3 scripts/patch_horizon_direct_boot.py
-          fi
-          rm -rf /tmp/horizon-upstream
+          # The Vasysik/horizon-android engine is vendored in this repo (crates/, Cargo.toml, third_party/...),
+          # so edits to crates/ are what get built. No upstream clone/rsync happens any more.
+          # The patch script is idempotent (verified): it re-checks include assets, the AI agent bits,
+          # the optional native mods stage and the auto-jump server input fix.
+          python3 scripts/patch_horizon_direct_boot.py
           rm -f packaging/android/assets/bedrock-controls.json
 
           rustup target add "${{ matrix.rust_target }}"

@@ -934,7 +934,7 @@ object HorizonNativeBridge {
         val newFile = File(libraryDir, newFileName)
         if (newFile.absolutePath != oldFile.absolutePath) {
             if (newFile.exists()) {
-                Toast.makeText(context, "Nama skin '$newFileName' sudah dipakai.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Skin name '$newFileName' is already in use.", Toast.LENGTH_SHORT).show()
                 return null
             }
             if (!oldFile.renameTo(newFile)) return null
@@ -970,7 +970,7 @@ object HorizonNativeBridge {
         return try {
             val rawBmp = context.contentResolver.openInputStream(uri)?.use { input ->
                 BitmapFactory.decodeStream(input)
-            } ?: return SkinDetectionResult(false, null, account.slimSkinModel, "", "Gagal membaca gambar dari penyimpanan.")
+            } ?: return SkinDetectionResult(false, null, account.slimSkinModel, "", "Failed to read the image from storage.")
 
             val w = rawBmp.width
             val h = rawBmp.height
@@ -1021,7 +1021,7 @@ object HorizonNativeBridge {
             saveSkinLibraryMetadata(context, updatedLibrary)
 
             val modelName = if (detectedSlim) "Slim (3px Alex)" else "Wide (4px Steve)"
-            val detailMsg = "Skin '$savedFileName' ($typeTag • $modelName) berhasil diimpor & disimpan ke Pilih Skin!"
+            val detailMsg = "Skin '$savedFileName' ($typeTag • $modelName) imported & saved to the Skin Library!"
 
             syncActiveSkinToGameEngine(context, outFile, detectedSlim, config.profile, config.enableSystemLog)
             SkinDetectionResult(
@@ -1034,7 +1034,7 @@ object HorizonNativeBridge {
             )
         } catch (e: Exception) {
             appendSystemLog("Skin detection error: ${e.message}", config.enableSystemLog, context)
-            SkinDetectionResult(false, null, account.slimSkinModel, "", "Error mendeteksi skin: ${e.message}")
+            SkinDetectionResult(false, null, account.slimSkinModel, "", "Skin detection error: ${e.message}")
         }
     }
 
@@ -1537,7 +1537,7 @@ object HorizonNativeBridge {
                     aiAgentAutonomousActions = obj.optBoolean("aiAgentAutonomousActions", true),
                     aiAgentTaskPrompt = obj.optString(
                         "aiAgentTaskPrompt",
-                        "Bantu player di dalam game Minecraft 26.3, jawab chat/instruksi, dan jalankan aksi kontrol jika diminta."
+                        "Help the player in Minecraft 26.3, answer chat/instructions, and run control actions when asked."
                     )
                 )
             } catch (e: Exception) {
@@ -2141,7 +2141,7 @@ object HorizonNativeBridge {
         Thread({
             val progressFile = File(home, "zalith-install-progress.json")
             val root26 = File(home, ".local/horizon-client/26.3").apply { mkdirs() }
-            appendInstallLogFile(home, "[Managed Downloader] Memulai sinkronisasi aset resmi Minecraft 26.3...")
+            appendInstallLogFile(home, "[Managed Downloader] Starting official Minecraft 26.3 asset sync...")
 
             // Stage 1: Mojang Manifest & Engine bundle
             progressFile.writeText(
@@ -2154,7 +2154,7 @@ object HorizonNativeBridge {
                     put("total", 100)
                     put("speed", "1.2 MB/s")
                     put("currentUrl", "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
-                    put("detail", "Memeriksa manifest Mojang 26.3")
+                    put("detail", "Checking Mojang 26.3 manifest")
                     put("error", "")
                 }.toString()
             )
@@ -2174,7 +2174,7 @@ object HorizonNativeBridge {
                         put("total", 100)
                         put("speed", "Local")
                         put("currentUrl", "local://engine-data.zip")
-                        put("detail", "Mengekstrak kontrol sentuh & tabel worldgen")
+                        put("detail", "Extracting touch controls & worldgen tables")
                         put("error", "")
                     }.toString()
                 )
@@ -2192,7 +2192,7 @@ object HorizonNativeBridge {
                         }
                     }
                 }
-                appendInstallLogFile(home, "[Extract] Kontrol sentuh & tabel worldgen berhasil dipasang.")
+                appendInstallLogFile(home, "[Extract] Touch controls & worldgen tables installed.")
             }
 
             // Stage 3: Write required markers & verify
@@ -2206,7 +2206,7 @@ object HorizonNativeBridge {
                     put("total", 100)
                     put("speed", "Verified")
                     put("currentUrl", "https://resources.download.minecraft.net/")
-                    put("detail", "Verifikasi indeks aset 26.3")
+                    put("detail", "Verifying 26.3 asset index")
                     put("error", "")
                 }.toString()
             )
@@ -2230,7 +2230,7 @@ object HorizonNativeBridge {
                     put("error", "")
                 }.toString()
             )
-            appendInstallLogFile(home, "[Selesai] 100% — Seluruh aset Minecraft 26.3, kontrol sentuh, dan tabel worldgen siap dimainkan!")
+            appendInstallLogFile(home, "[Done] 100% — All Minecraft 26.3 assets, touch controls, and worldgen tables are ready to play!")
             appendSystemLog("Minecraft 26.3 official asset download complete & verified.", logEnabled, context)
         }, "HorizonZ-ManagedDownloader").start()
         return true
@@ -2269,7 +2269,7 @@ object HorizonNativeBridge {
 
         appendInstallLogFile(home, "[Cancelled] Download cancelled by user. Partial staging files deleted.")
         appendSystemLog("Cancelled asset download and deleted partial files.", logEnabled, context)
-        Toast.makeText(context, "Download dibatalkan & file sementara dihapus", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Download cancelled & temporary file deleted", Toast.LENGTH_SHORT).show()
     }
 
     fun getInstalledAssetsDiskSizeFormatted(context: Context): String {
@@ -2316,7 +2316,7 @@ object HorizonNativeBridge {
             }
         }
         File(home, ".local/horizon-client/26.3").mkdirs()
-        appendInstallLogFile(home, "[Reset] Seluruh aset Minecraft 26.3 telah dihapus total oleh pengguna.")
+        appendInstallLogFile(home, "[Reset] All Minecraft 26.3 assets have been completely deleted by the user.")
         appendSystemLog("Deleted all Minecraft 26.3 assets and reset install state.", logEnabled, context)
         return deletedAny
     }
@@ -2378,9 +2378,9 @@ object HorizonNativeBridge {
                 appendInstallLogFile(home, "[Smart Repair] Verification complete! 0 Mojang files needed re-downloading.")
                 appendSystemLog("Smart Repair complete — all existing assets verified!", logEnabled, context)
                 val msg = if (repairedFromBundle > 0) {
-                    "Repair selesai! $repairedFromBundle file engine/kontrol berhasil dipulihkan dan seluruh aset Minecraft 26.3 terverifikasi lengkap."
+                    "Repair complete! $repairedFromBundle engine/control files restored and all Minecraft 26.3 assets verified."
                 } else {
-                    " Verifikasi selesai! Seluruh file Minecraft 26.3, tabel worldgen, audio, dan 60 ikon kontrol sentuh dalam kondisi lengkap & utuh (0 file rusak)."
+                    "Verification complete! All Minecraft 26.3 files, worldgen tables, audio, and 60 touch control icons are complete & intact (0 damaged files)."
                 }
                 if (onRepairFinished != null) {
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -2394,7 +2394,7 @@ object HorizonNativeBridge {
                 )
                 File(root26, "android-downloads-v2.json").delete()
                 startMinecraft26Download(context, logEnabled)
-                val msg = "Ditemukan file aset utama Mojang yang belum lengkap (Index: $hasAssetIndex, Resources: $hasResources, Audio: $hasAudio). Mengunduh file yang kurang secara otomatis..."
+                val msg = "Incomplete core Mojang asset files found (Index: $hasAssetIndex, Resources: $hasResources, Audio: $hasAudio). Automatically downloading the missing files..."
                 if (onRepairFinished != null) {
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         onRepairFinished(false, msg)
@@ -2708,6 +2708,20 @@ object HorizonNativeBridge {
         fallbackVersion: String = "1.0.0",
         fallbackSummary: String = "Horizon 26.3 WGSL Shader Pack"
     ) {
+        // Modrinth/CurseForge shader packs (Iris/OptiFine layout with a root `shaders/` folder) must never be
+        // rewritten into a placeholder Horizon WGSL pack, so they are left untouched.
+        if (targetFile.isFile && targetFile.length() > 22L) {
+            val isForeignShaderPack = try {
+                ZipFile(targetFile).use { zf ->
+                    val names = zf.entries().asSequence().map { it.name }.toList()
+                    names.any { it.startsWith("shaders/", ignoreCase = true) } &&
+                        names.none { it.equals("horizon-shaders.toml", ignoreCase = true) }
+                }
+            } catch (ignored: Exception) {
+                false
+            }
+            if (isForeignShaderPack) return
+        }
         val rawStem = fallbackId.removeSuffix(".hshader").removeSuffix(".zip")
         val cleanId = sanitizeModId(rawStem).removeSuffix("_shader").ifBlank { "golden_hour" }
         val extractedVer = Regex("-(\\d+\\.\\d+(?:\\.\\d+)?)").find(rawStem)?.groupValues?.get(1)
@@ -3189,6 +3203,7 @@ object HorizonNativeBridge {
         val home = ensureHomeDirectories(context)
         val profileHome = getProfileHome(home, profileSlot)
         val result = mutableMapOf<String, String>()
+        val fileRecords = mutableMapOf<String, String>()
 
         val regFile = File(profileHome, "zalith-store-installed.json").takeIf { it.exists() }
             ?: File(home, "zalith-store-installed.json")
@@ -3200,6 +3215,8 @@ object HorizonNativeBridge {
                     val k = keys.next()
                     if (!k.endsWith("__file")) {
                         result[k] = obj.optString(k, "")
+                    } else {
+                        fileRecords[k.removeSuffix("__file")] = obj.optString(k, "")
                     }
                 }
             }
@@ -3222,7 +3239,10 @@ object HorizonNativeBridge {
         val toRemove = mutableListOf<String>()
         for ((projId, _) in result) {
             val cleanProjId = sanitizeModId(projId)
-            val stillExists = existingFiles.any { f ->
+            val recordedFile = fileRecords[projId]
+            val stillExists = if (!recordedFile.isNullOrBlank() && (projId.startsWith("mr-") || projId.startsWith("cf-"))) {
+                existingFiles.any { f -> f.name.equals(recordedFile, ignoreCase = true) }
+            } else existingFiles.any { f ->
                 val fClean = sanitizeModId(f.name)
                 fClean == cleanProjId ||
                     f.name.startsWith(projId, ignoreCase = true) ||
@@ -3371,6 +3391,17 @@ object HorizonNativeBridge {
         val profileHome = getProfileHome(home, profileSlot)
         val cleanId = sanitizeModId(item.id)
         var deletedAny = false
+        if (item.source != StoreSource.HORIZON) {
+            val externalBases = listOf(home, profileHome).distinctBy { it.absolutePath }
+            externalBases.map { readRecordedStoreFile(it, item.id) }.filter { it.isNotBlank() }.distinct().forEach { name ->
+                val externalFolder = externalInstallFolder(item)
+                runCatching { setContentItemEnabled(context, externalFolder, name, false, profileSlot, logEnabled) }
+                externalBases.forEach { base ->
+                    val packFile = File(File(base, externalFolder), name)
+                    if (packFile.exists() && packFile.delete()) deletedAny = true
+                }
+            }
+        }
         listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
             listOf("horizon-mods", "mods", "horizon-native-mods", "resourcepacks", "shaderpacks", "horizon-packs").forEach { sub ->
                 val dir = File(base, sub)
@@ -3410,7 +3441,7 @@ object HorizonNativeBridge {
         }
         invalidateContentCaches()
         appendSystemLog("Uninstalled '${item.title}' from active profile.", logEnabled, context)
-        Toast.makeText(context, "${item.title} dihapus dari perangkat.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "${item.title} removed from your device.", Toast.LENGTH_SHORT).show()
         return deletedAny
     }
 
@@ -4040,8 +4071,13 @@ object HorizonNativeBridge {
         gameVersionFilter: String = "",
         sortOption: StoreSortOption = StoreSortOption.MOST_DOWNLOADED,
         statusFilter: StoreStatusFilter = StoreStatusFilter.ALL,
-        page: Int = 1
+        page: Int = 1,
+        source: StoreSource = StoreSource.HORIZON
     ): StoreSearchPageResult {
+        if (source != StoreSource.HORIZON) {
+            val externalCategory = if (category == StoreCategory.SHADER_PACK) StoreCategory.SHADER_PACK else StoreCategory.RESOURCE_PACK
+            return searchExternalResourcePacks(context, profileSlot, source, externalCategory, searchQuery, gameVersionFilter, sortOption, statusFilter, page)
+        }
         val allProjects = fetchLivePlayHorizonCatalog()
         val installedMap = getInstalledStoreVersionsMap(context, profileSlot)
         val q = searchQuery.trim()
@@ -4100,6 +4136,14 @@ object HorizonNativeBridge {
     }
 
     fun fetchProjectVersionReleases(item: StoreCatalogItem): List<StoreVersionRelease> {
+        if (item.source != StoreSource.HORIZON) {
+            return try {
+                ContentSources.versionsFor(item)
+            } catch (e: Exception) {
+                Log.w(TAG, "${item.source.label} version list failed for ${item.id}: ${e.message}")
+                emptyList()
+            }
+        }
         val baseList = if (item.allVersions.isNotEmpty()) {
             item.allVersions
         } else {
@@ -4274,6 +4318,11 @@ object HorizonNativeBridge {
         storeDownloadPaused.set(false)
         storeDownloadCancelled.set(false)
 
+        if (item.source != StoreSource.HORIZON) {
+            installExternalStoreItem(context, item, profileSlot, logEnabled, onProgress, onComplete)
+            return
+        }
+
         Thread({
             val home = ensureHomeDirectories(context)
             val profileHome = getProfileHome(home, profileSlot)
@@ -4393,7 +4442,7 @@ object HorizonNativeBridge {
                 if (storeDownloadCancelled.get()) {
                     partFile.delete()
                     onProgress(StoreDownloadProgress())
-                    onComplete(false, "Download '${item.title}' dibatalkan & file sementara dihapus.")
+                    onComplete(false, "Download of '${item.title}' cancelled & temporary file deleted.")
                     return@Thread
                 }
 
@@ -4504,14 +4553,246 @@ object HorizonNativeBridge {
                 invalidateContentCaches()
                 onProgress(StoreDownloadProgress())
                 appendSystemLog("Installed '${item.title}' v${item.version} ($canonicalFileName).", logEnabled, context)
-                onComplete(true, "Berhasil memasang ${item.title} (v${item.version})!")
+                onComplete(true, "Successfully installed ${item.title} (v${item.version})!")
             } catch (e: Exception) {
                 partFile?.delete()
                 onProgress(StoreDownloadProgress())
                 appendSystemLog("Store download error for ${item.title}: ${e.message}", logEnabled, context)
-                onComplete(false, "Gagal mengunduh ${item.title}: ${e.message}")
+                onComplete(false, "Failed to download ${item.title}: ${e.message}")
             }
         }, "HorizonZ-StoreDownloader").start()
+    }
+
+    private fun searchExternalResourcePacks(
+        context: Context,
+        profileSlot: Int,
+        source: StoreSource,
+        category: StoreCategory,
+        searchQuery: String,
+        gameVersionFilter: String,
+        sortOption: StoreSortOption,
+        statusFilter: StoreStatusFilter,
+        page: Int
+    ): StoreSearchPageResult {
+        val raw = try {
+            when (source) {
+                StoreSource.MODRINTH -> ContentSources.searchModrinth(searchQuery, gameVersionFilter, sortOption, page, category)
+                StoreSource.CURSEFORGE -> ContentSources.searchCurseForge(searchQuery, gameVersionFilter, sortOption, page, category)
+                StoreSource.HORIZON -> StoreSearchPageResult(emptyList(), 1, 1, 0)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "${source.label} search failed: ${e.message}")
+            return StoreSearchPageResult(emptyList(), 1, 1, 0, "Could not reach ${source.label}: ${e.message ?: "network error"}")
+        }
+        if (statusFilter == StoreStatusFilter.ALL) return raw
+        val installedMap = getInstalledStoreVersionsMap(context, profileSlot)
+        val filtered = when (statusFilter) {
+            StoreStatusFilter.INSTALLED -> raw.items.filter { installedMap.containsKey(it.id) }
+            else -> emptyList()
+        }
+        return raw.copy(items = filtered, totalHits = filtered.size, totalPages = 1, currentPage = 1)
+    }
+
+    private fun readRecordedStoreFile(dir: File, projectId: String): String {
+        val regFile = File(dir, "zalith-store-installed.json")
+        if (!regFile.exists()) return ""
+        return runCatching { JSONObject(regFile.readText()).optString("${projectId}__file", "") }.getOrDefault("")
+    }
+
+    private fun externalInstallFolder(item: StoreCatalogItem): String =
+        if (item.category == StoreCategory.SHADER_PACK) "shaderpacks" else "resourcepacks"
+
+    private fun removeRecordedExternalPack(
+        context: Context,
+        profileSlot: Int,
+        item: StoreCatalogItem,
+        keepName: String,
+        logEnabled: Boolean
+    ) {
+        val home = ensureHomeDirectories(context)
+        val profileHome = getProfileHome(home, profileSlot)
+        val bases = listOf(home, profileHome).distinctBy { it.absolutePath }
+        val folder = externalInstallFolder(item)
+        val oldNames = bases.map { readRecordedStoreFile(it, item.id) }
+            .filter { it.isNotBlank() && it != keepName }
+            .distinct()
+        oldNames.forEach { old ->
+            runCatching { setContentItemEnabled(context, folder, old, false, profileSlot, logEnabled) }
+            bases.forEach { base ->
+                val f = File(File(base, folder), old)
+                if (f.exists()) f.delete()
+            }
+        }
+    }
+
+    /**
+     * Installs a Modrinth or CurseForge resource pack into `resourcepacks/`, verifies the published SHA-1,
+     * makes sure `pack.mcmeta` sits at the archive root, replaces any older version of the same project and
+     * enables the pack in `options.txt`. Unlike the Horizon registry path there is no placeholder fallback:
+     * any failure is reported and nothing is written.
+     */
+    private fun installExternalStoreItem(
+        context: Context,
+        item: StoreCatalogItem,
+        profileSlot: Int,
+        logEnabled: Boolean,
+        onProgress: (StoreDownloadProgress) -> Unit,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        Thread({
+            var partFile: File? = null
+            try {
+                val home = ensureHomeDirectories(context)
+                val profileHome = getProfileHome(home, profileSlot)
+                val sourceLabel = item.source.label
+                val isShader = item.category == StoreCategory.SHADER_PACK
+                val folder = externalInstallFolder(item)
+                val kindName = if (isShader) "shader pack" else "resource pack"
+
+                onProgress(
+                    StoreDownloadProgress(
+                        activeItemId = item.id,
+                        activeTitle = item.title,
+                        running = true,
+                        percent = 3,
+                        speedText = "Connecting...",
+                        statusText = "$sourceLabel • resolving file"
+                    )
+                )
+
+                val target = ContentSources.resolveInstallTarget(item)
+                val canonicalName = ContentSources.sanitizePackFileName(
+                    target.fileName,
+                    if (isShader) "shaderpack" else "resourcepack"
+                )
+                val destDir = File(profileHome, folder).apply { mkdirs() }
+                val part = File(destDir, "$canonicalName.part")
+                partFile = part
+                if (part.exists()) part.delete()
+                appendSystemLog("Downloading '${item.title}' from $sourceLabel: ${target.downloadUrl}", logEnabled, context)
+
+                val conn = (URL(target.downloadUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 10000
+                    readTimeout = 20000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "dvaustria741-a11y/HorizonR-Mobile/$INSTALLED_LAUNCHER_VERSION ($kindName downloader)")
+                }
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    conn.disconnect()
+                    val hint = if (item.source == StoreSource.CURSEFORGE && (code == 403 || code == 404)) {
+                        " The author may have disabled third-party downloads. Open ${item.pageUrl} to download it manually."
+                    } else ""
+                    throw ContentSourceException("$sourceLabel download failed (HTTP $code).$hint")
+                }
+
+                val digest = java.security.MessageDigest.getInstance("SHA-1")
+                val totalBytes = conn.contentLengthLong.takeIf { it > 0L } ?: target.sizeBytes.coerceAtLeast(1L)
+                var downloaded = 0L
+                val t0 = System.currentTimeMillis()
+
+                conn.inputStream.use { input ->
+                    FileOutputStream(part).use { output ->
+                        val buf = ByteArray(16384)
+                        while (true) {
+                            while (storeDownloadPaused.get() && !storeDownloadCancelled.get()) {
+                                onProgress(
+                                    StoreDownloadProgress(
+                                        activeItemId = item.id,
+                                        activeTitle = item.title,
+                                        running = true,
+                                        paused = true,
+                                        percent = ((downloaded * 100L) / totalBytes).toInt().coerceIn(0, 99),
+                                        speedText = "Paused",
+                                        statusText = "Paused (${downloaded / 1024} KB)"
+                                    )
+                                )
+                                Thread.sleep(200L)
+                            }
+                            if (storeDownloadCancelled.get()) break
+                            val read = input.read(buf)
+                            if (read <= 0) break
+                            output.write(buf, 0, read)
+                            digest.update(buf, 0, read)
+                            downloaded += read
+
+                            val elapsedSec = ((System.currentTimeMillis() - t0) / 1000.0).coerceAtLeast(0.05)
+                            val kbps = (downloaded / 1024.0) / elapsedSec
+                            val speedStr = if (kbps >= 1024.0) String.format(Locale.US, "%.2f MB/s", kbps / 1024.0)
+                            else String.format(Locale.US, "%.1f KB/s", kbps)
+                            onProgress(
+                                StoreDownloadProgress(
+                                    activeItemId = item.id,
+                                    activeTitle = item.title,
+                                    running = true,
+                                    paused = false,
+                                    percent = ((downloaded * 100L) / totalBytes).toInt().coerceIn(1, 95),
+                                    speedText = speedStr,
+                                    statusText = "${downloaded / 1024} / ${totalBytes / 1024} KB • $sourceLabel"
+                                )
+                            )
+                        }
+                    }
+                }
+                conn.disconnect()
+
+                if (storeDownloadCancelled.get()) {
+                    part.delete()
+                    onProgress(StoreDownloadProgress())
+                    onComplete(false, "Download of '${item.title}' cancelled & temporary file deleted.")
+                    return@Thread
+                }
+                if (downloaded <= 0L) throw ContentSourceException("The server returned an empty file")
+
+                val expectedSha1 = target.sha1.trim().lowercase(Locale.US)
+                if (expectedSha1.isNotEmpty()) {
+                    val actualSha1 = digest.digest().joinToString("") { b -> String.format(Locale.US, "%02x", b) }
+                    if (actualSha1 != expectedSha1) {
+                        throw ContentSourceException("Checksum mismatch, the download was corrupted. Please try again.")
+                    }
+                }
+
+                onProgress(
+                    StoreDownloadProgress(
+                        activeItemId = item.id,
+                        activeTitle = item.title,
+                        running = true,
+                        percent = 97,
+                        speedText = "",
+                        statusText = if (isShader) "Checking shaders folder..." else "Checking pack.mcmeta..."
+                    )
+                )
+                val packProblem = if (isShader) ContentSources.validateAndNormalizeShaderZip(part)
+                else ContentSources.validateAndNormalizePackZip(part)
+                packProblem?.let { throw ContentSourceException(it) }
+
+                removeRecordedExternalPack(context, profileSlot, item, canonicalName, logEnabled)
+
+                val finalFile = File(destDir, canonicalName)
+                if (finalFile.exists()) finalFile.delete()
+                if (!part.renameTo(finalFile)) {
+                    part.copyTo(finalFile, overwrite = true)
+                    part.delete()
+                }
+                listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
+                    val copyTarget = File(File(base, folder).apply { mkdirs() }, canonicalName)
+                    if (copyTarget.absolutePath != finalFile.absolutePath) {
+                        finalFile.copyTo(copyTarget, overwrite = true)
+                    }
+                }
+                setContentItemEnabled(context, folder, canonicalName, true, profileSlot, logEnabled)
+                recordInstalledStoreItem(context, profileSlot, item.id, target.version, canonicalName)
+                invalidateContentCaches()
+                onProgress(StoreDownloadProgress())
+                appendSystemLog("Installed '${item.title}' ($canonicalName) from $sourceLabel.", logEnabled, context)
+                onComplete(true, "Installed ${item.title} and enabled it in ${if (isShader) "Shader Packs" else "Resource Packs"}.")
+            } catch (e: Exception) {
+                partFile?.delete()
+                onProgress(StoreDownloadProgress())
+                appendSystemLog("Store download error for ${item.title}: ${e.message}", logEnabled, context)
+                onComplete(false, "Failed to install ${item.title}: ${e.message}")
+            }
+        }, "HorizonR-ExternalPackInstaller").start()
     }
 
     // ========================================================================
@@ -4672,10 +4953,10 @@ object HorizonNativeBridge {
                 }
             }
             appendSystemLog("Backed up world save '${saveFile.name}' to backups/${outZip.name}", logEnabled, context)
-            Toast.makeText(context, "Backup berhasil disimpan: backups/${outZip.name}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Backup saved: backups/${outZip.name}", Toast.LENGTH_SHORT).show()
             outZip
         } catch (e: Exception) {
-            Toast.makeText(context, "Gagal backup save: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Failed to back up save: ${e.message}", Toast.LENGTH_SHORT).show()
             null
         }
     }
@@ -4691,13 +4972,13 @@ object HorizonNativeBridge {
         }
         val dest = File(parent, finalName)
         if (dest.exists()) {
-            Toast.makeText(context, "Nama '$finalName' sudah digunakan.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "The name '$finalName' is already in use.", Toast.LENGTH_SHORT).show()
             return false
         }
         val ok = targetFile.renameTo(dest)
         if (ok) {
             appendSystemLog("Renamed '${targetFile.name}' -> '${dest.name}'", logEnabled, context)
-            Toast.makeText(context, "Berhasil diubah menjadi ${dest.name}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Renamed to ${dest.name}", Toast.LENGTH_SHORT).show()
         }
         return ok
     }
@@ -4706,9 +4987,9 @@ object HorizonNativeBridge {
     // GITHUB RELEASES UPDATE DETECTOR (Checked Once on Launcher Entry)
     // ========================================================================
 
-    const val GITHUB_FORK_REPO_SLUG = "Fadiba21/HorizonZ-Launcher-Android"
-    const val GITHUB_FORK_LEGACY_SLUG = "Fadiba21/Horizonz-Launcher"
-    const val GITHUB_FORK_RELEASES_URL = "https://github.com/Fadiba21/HorizonZ-Launcher-Android/releases"
+    const val GITHUB_FORK_REPO_SLUG = "dvaustria741-a11y/HorizonR-Mobile"
+    const val GITHUB_FORK_LEGACY_SLUG = "dvaustria741-a11y/HorizonR-Mobile"
+    const val GITHUB_FORK_RELEASES_URL = "https://github.com/dvaustria741-a11y/HorizonR-Mobile/releases"
 
     fun parseVersionNumbers(text: String): List<Int>? {
         val horizonzExplicit = Regex("(?:HorizonZ[-_ ]*Launcher[-_ ]*v?|HorizonZ[-_ ]*v?)(\\d+)\\.(\\d+)(?:\\.(\\d+))?", RegexOption.IGNORE_CASE).find(text)
@@ -4732,7 +5013,7 @@ object HorizonNativeBridge {
     }
 
     /**
-     * Checks the new official `horizon-rust/horizon` fork repository (`Fadiba21/Horizonz-Launcher`)
+     * Checks the new official `horizon-rust/horizon` fork repository (`dvaustria741-a11y/HorizonR-Mobile`)
      * once on launcher startup for newer HorizonZ Android APK releases:
      * - Filters for HorizonZ Android releases (releases with `.apk` assets or `HorizonZ` tag/title)
      *   so upstream desktop tags from `horizon-rust/horizon` are ignored.
@@ -4841,6 +5122,58 @@ object HorizonNativeBridge {
     // FILE IMPORT, STRUCTURED LOG READER, & GAME LAUNCH
     // ========================================================================
 
+    private fun queryDisplayName(context: Context, uri: Uri): String? = try {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    } catch (_: Exception) {
+        null
+    } ?: uri.lastPathSegment?.substringAfterLast('/')
+
+    /**
+     * Makes an imported zip loadable by the engine and keeps its own name.
+     * - Horizon's own packs (`horizon-shaders.toml` at the root) become `<name>.hshader`.
+     * - Iris/OptiFine packs need `shaders/` at the zip root (the engine only lists `.zip` and folders);
+     *   a zip with one wrapper folder around it (`Pack/shaders/...`) is re-zipped without that folder.
+     * Returns null (and deletes the file) when the zip is neither.
+     */
+    private fun normalizeImportedShaderPack(raw: File, displayName: String?): File? {
+        val base = (displayName ?: raw.name).substringBeforeLast('.', displayName ?: raw.name)
+            .replace(Regex("[^A-Za-z0-9._ -]"), "_").trim().ifEmpty { "shaderpack" }
+        val dir = raw.parentFile ?: return null
+        try {
+            val names = ZipFile(raw).use { z -> z.entries().asSequence().map { it.name.replace('\\', '/') }.toList() }
+            val native = names.any { it == "horizon-shaders.toml" }
+            val prefix: String? = when {
+                names.any { it.startsWith("shaders/") } -> ""
+                else -> names.firstOrNull { Regex("^[^/]+/shaders/.+").matches(it) }?.substringBefore('/')?.plus("/")
+            }
+            if (!native && prefix == null) { raw.delete(); return null }
+            val target = File(dir, base + if (native) ".hshader" else ".zip")
+            if (native || prefix == "") {
+                if (raw.absolutePath != target.absolutePath) { target.delete(); raw.copyTo(target, overwrite = true); raw.delete() }
+                return target
+            }
+            val tmp = File(dir, base + ".tmp")
+            ZipFile(raw).use { z ->
+                ZipOutputStream(FileOutputStream(tmp)).use { zos ->
+                    z.entries().asSequence().filter { !it.isDirectory && it.name.replace('\\', '/').startsWith(prefix!!) }.forEach { e ->
+                        zos.putNextEntry(ZipEntry(e.name.replace('\\', '/').removePrefix(prefix!!)))
+                        z.getInputStream(e).use { it.copyTo(zos) }
+                        zos.closeEntry()
+                    }
+                }
+            }
+            target.delete()
+            if (!tmp.renameTo(target)) return null
+            raw.delete()
+            return target
+        } catch (e: Exception) {
+            raw.delete()
+            return null
+        }
+    }
+
     fun importUriToDestination(context: Context, uri: Uri, subFolder: String, targetFileName: String, logEnabled: Boolean = true): File? {
         return try {
             val home = ensureHomeDirectories(context)
@@ -4854,6 +5187,15 @@ object HorizonNativeBridge {
                 FileOutputStream(outFile).use { output ->
                     input.copyTo(output)
                 }
+            }
+            if (finalSubFolder == "shaderpacks") {
+                val shaderFile = normalizeImportedShaderPack(outFile, queryDisplayName(context, uri))
+                if (shaderFile == null) {
+                    appendSystemLog("Import rejected: not a shader pack (needs a `shaders/` folder or horizon-shaders.toml)", logEnabled, context)
+                    return null
+                }
+                appendSystemLog("Imported shader pack to shaderpacks/${shaderFile.name} (${shaderFile.length() / 1024} KB)", logEnabled, context)
+                return shaderFile
             }
             if (isModTarget) {
                 val modId = sanitizeModId(finalFileName)
@@ -5139,15 +5481,15 @@ object HorizonNativeBridge {
         context: Context,
         apiKeyOverride: String = "",
         modelId: String = "gemini-4-argon",
-        prompt: String = "Kamu adalah AI Agent di dalam Minecraft 26.3 (HorizonZ Launcher). Balas singkat 1 kalimat bahasa Indonesia bahwa koneksi Gemini AI Studio siap membantu player!"
+        prompt: String = "You are an AI Agent inside Minecraft 26.3 (HorizonZ Launcher). Reply in one short English sentence saying the Gemini AI Studio connection is ready to help the player!"
     ): Pair<Boolean, String> {
         val key = apiKeyOverride.trim().ifBlank { loadGeminiApiKeyLocal(context) }
         if (key.isBlank()) {
-            return false to "API Key Google AI Studio masih kosong. Silakan tempel API Key terlebih dahulu."
+            return false to "The Google AI Studio API Key is empty. Please paste your API Key first."
         }
         val requestedModel = modelId.removePrefix("models/").trim().ifBlank { "gemini-4-argon" }
         val candidates = resolveGeminiCandidateEndpoints(requestedModel)
-        var lastErrMsg = "Tidak dapat menghubungi endpoint Google AI Studio"
+        var lastErrMsg = "Unable to reach the Google AI Studio endpoint"
 
         for (candidateModel in candidates) {
             try {
@@ -5185,7 +5527,7 @@ object HorizonNativeBridge {
                         ?.trim()
                         .orEmpty()
                     val routeLabel = if (candidateModel == requestedModel) requestedModel else "$requestedModel (via $candidateModel)"
-                    return true to "Terhubung ke Google AI Studio [$routeLabel]:\n\"${reply.ifBlank { "OK (200)" }}\""
+                    return true to "Connected to Google AI Studio [$routeLabel]:\n\"${reply.ifBlank { "OK (200)" }}\""
                 } else {
                     val errTxt = runCatching { conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty() }.getOrDefault("")
                     lastErrMsg = runCatching {
@@ -5200,7 +5542,7 @@ object HorizonNativeBridge {
                 lastErrMsg = e.message ?: "Network error"
             }
         }
-        return false to "Gagal menghubungi Gemini API ($requestedModel): $lastErrMsg"
+        return false to "Failed to reach the Gemini API ($requestedModel): $lastErrMsg"
     }
 
     fun startHorizonGameActivity(
@@ -5218,6 +5560,20 @@ object HorizonNativeBridge {
         val totalRamMb = getDeviceTotalRamMb(context)
         val activeShaderPack = getActiveShaderPackFileName(context, config.profile)
         val hasGeminiKey = loadGeminiApiKeyLocal(context).isNotBlank()
+        // Quick Play: the engine auto-joins whatever "server" the launcher config (catalog.rs) holds,
+        // exactly like the Quick-Join field in Settings. Write the picked server there for this launch,
+        // and fall back to the saved Quick-Join value on normal launches so an override never sticks.
+        val quickPlayServer = HorizonServerStore.pendingQuickPlayServer
+            ?.also { HorizonServerStore.pendingQuickPlayServer = null }
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+        runCatching {
+            syncNativeHorizonAccountAndCatalog(
+                ensureHomeDirectories(context),
+                activeAccount,
+                config.copy(defaultServer = quickPlayServer ?: config.defaultServer)
+            )
+        }.onFailure { Log.w(TAG, "quick play config sync failed: ${it.message}") }
         val intent = Intent(context, HorizonActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             putExtra("HORIZON_ANDROID_PUBLIC", config.publicOnDeviceAssetDownload)
@@ -5229,6 +5585,7 @@ object HorizonNativeBridge {
             putExtra("HORIZON_RAM_ALLOCATION_MB", config.ramAllocationMb)
             putExtra("HORIZON_DEVICE_TOTAL_RAM_MB", totalRamMb)
             putExtra("HORIZON_SHADER_PACK", activeShaderPack)
+            quickPlayServer?.let { putExtra("HORIZON_QUICK_PLAY_SERVER", it) }
             putExtra("HORIZON_AI_AGENT_ENABLED", config.aiAgentEnabled)
             putExtra("HORIZON_AI_AGENT_PROVIDER", config.aiAgentProvider.serdeKey)
             putExtra("HORIZON_GEMINI_MODEL", config.geminiModel)

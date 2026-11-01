@@ -27,6 +27,158 @@ use winit::{
     window::{Window, WindowId},
 };
 
+static GAME_LAUNCHED_ONCE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn sanitize_and_repair_horizon_mods(home: &std::path::Path) {
+    let mods_dir = home.join("horizon-mods");
+    let _ = std::fs::create_dir_all(&mods_dir);
+    let Ok(entries) = std::fs::read_dir(&mods_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(fname) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !fname.ends_with(".hmod") {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let has_zip_magic = bytes.len() > 22 && bytes[0..4] == [0x50u8, 0x4Bu8, 0x03u8, 0x04u8];
+        let has_manifest_name = bytes.windows(16).any(|w| w == b"horizon-mod.toml");
+        if !has_zip_magic || !has_manifest_name {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
+fn apply_horizonz_shader_and_agent_config(home: &std::path::Path) {
+    // 1. Propagate active shader pack from options.txt / horizon-shaders.txt to HORIZON_SHADER_PACK
+    let mut active_shader = String::new();
+    if let Ok(sh_txt) = std::fs::read_to_string(home.join("horizon-shaders.txt")) {
+        for line in sh_txt.lines() {
+            if let Some(p) = line.strip_prefix("pack:") {
+                let trimmed = p.trim();
+                if !trimmed.is_empty() {
+                    active_shader = trimmed.to_string();
+                }
+            }
+        }
+    }
+    if active_shader.is_empty() {
+        if let Ok(opt_txt) = std::fs::read_to_string(home.join("options.txt")) {
+            for line in opt_txt.lines() {
+                if let Some(p) = line.strip_prefix("shaderPack:") {
+                    let trimmed = p.trim();
+                    if !trimmed.is_empty() {
+                        active_shader = trimmed.to_string();
+                    }
+                }
+            }
+        }
+    }
+    if !active_shader.is_empty() {
+        unsafe {
+            std::env::set_var("HORIZON_SHADER_PACK", &active_shader);
+        }
+    }
+
+    // 2. Propagate Gemini AI Agent control endpoint from horizon-agent.txt
+    if let Ok(ag_txt) = std::fs::read_to_string(home.join("horizon-agent.txt")) {
+        let mut ag_enabled = false;
+        for line in ag_txt.lines() {
+            if let Some(v) = line.strip_prefix("enabled:") {
+                ag_enabled = v.trim().eq_ignore_ascii_case("true");
+            }
+        }
+        if ag_enabled {
+            let ctrl_path = home.join("horizon-control.json");
+            unsafe {
+                std::env::set_var("HORIZON_AI_AGENT_ENABLED", "1");
+                std::env::set_var("HORIZON_CONTROL", ctrl_path.to_string_lossy().as_ref());
+            }
+        }
+    }
+}
+
+fn apply_horizonz_ram_allocation(home: &std::path::Path) {
+    let mem_file = home.join("horizon-memory.txt");
+    let mut ram_mb: u64 = 0;
+    let mut unlimited = true;
+    if let Ok(txt) = std::fs::read_to_string(&mem_file) {
+        for line in txt.lines() {
+            if let Some(v) = line.strip_prefix("ramAllocationMb:") {
+                ram_mb = v.trim().parse::<u64>().unwrap_or(0);
+            } else if let Some(u) = line.strip_prefix("unlimited:") {
+                unlimited = u.trim().eq_ignore_ascii_case("true");
+            }
+        }
+    }
+    if let Ok(env_mb) = std::env::var("HORIZON_RAM_ALLOCATION_MB") {
+        if let Ok(parsed) = env_mb.trim().parse::<u64>() {
+            ram_mb = parsed;
+            unlimited = parsed == 0;
+        }
+    }
+    if unlimited || ram_mb == 0 {
+        unsafe {
+            std::env::set_var("HORIZON_RAM_UNLIMITED", "1");
+        }
+    } else {
+        let clamped_mb = ram_mb.clamp(1024, 32768);
+        let budget_bytes = clamped_mb.saturating_mul(1024 * 1024);
+        unsafe {
+            std::env::set_var("HORIZON_RAM_UNLIMITED", "0");
+            std::env::set_var("HORIZON_MEMORY_BUDGET_BYTES", budget_bytes.to_string());
+            std::env::set_var("WGPU_MEMORY_BUDGET_MB", clamped_mb.to_string());
+        }
+    }
+}
+
+fn apply_horizonz_custom_skin(home: &std::path::Path) {
+    let custom_skin = home.join("custom_skin_active.png");
+    if !custom_skin.is_file() {
+        return;
+    }
+    let Ok(skin_bytes) = std::fs::read(&custom_skin) else {
+        return;
+    };
+    if skin_bytes.len() < 64 {
+        return;
+    }
+    let entity_dir = home
+        .join(".local/horizon-client")
+        .join(horizon_core::VANILLA_VERSION)
+        .join("assets/minecraft/textures/entity");
+    let backup_dir = home
+        .join(".local/horizon-client")
+        .join(horizon_core::VANILLA_VERSION)
+        .join("vanilla_skins_backup");
+    let names = ["steve.png", "alex.png", "ari.png", "efe.png", "kai.png", "makena.png", "noor.png", "sunny.png", "zuri.png"];
+    for sub in ["player/wide", "player/slim"] {
+        let target_dir = entity_dir.join(sub);
+        let _ = std::fs::create_dir_all(&target_dir);
+        let bak_sub = backup_dir.join(sub);
+        let _ = std::fs::create_dir_all(&bak_sub);
+        for name in names {
+            let target_file = target_dir.join(name);
+            let bak_file = bak_sub.join(name);
+            if target_file.is_file() && !bak_file.exists() {
+                let _ = std::fs::copy(&target_file, &bak_file);
+            }
+            let _ = std::fs::write(&target_file, &skin_bytes);
+        }
+    }
+    for legacy in ["steve.png", "alex.png"] {
+        let _ = std::fs::write(entity_dir.join(legacy), &skin_bytes);
+    }
+}
+
 pub(super) struct Launcher {
     home: PathBuf,
     controller_edges: horizon_client::gamepad::Edges,
@@ -151,10 +303,8 @@ impl Launcher {
         if let Ok(message) = std::fs::read_to_string(self.home.join("android-error.txt")) {
             self.error = Some(message);
         }
-        if let Err(error) = self.open(events) {
-            self.fail(error);
-            events.exit();
-        }
+        let _ = std::fs::write(self.home.join("zalith-game-exited.flag"), "1");
+        events.exit();
     }
     pub(super) fn configure_screen(&self) {
         crate::native_ime::configure_screen(
@@ -396,11 +546,35 @@ impl ApplicationHandler for Launcher {
     fn resumed(&mut self, events: &ActiveEventLoop) {
         self.configure_screen();
         if let Some(game) = &mut self.game {
+            let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "100|Main Menu Ready");
             return game.resumed(events);
         }
+        if GAME_LAUNCHED_ONCE.load(std::sync::atomic::Ordering::SeqCst) {
+            let _ = std::fs::write(self.home.join("zalith-game-exited.flag"), "1");
+            events.exit();
+            return;
+        }
+        let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "38|Verifying Horizon Mods & Profile Catalog...");
+        apply_horizonz_ram_allocation(&self.home);
+        apply_horizonz_shader_and_agent_config(&self.home);
+        sanitize_and_repair_horizon_mods(&self.home);
+        self.catalog.refresh(&self.home);
+        let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "55|Creating Vulkan / WGPU Surface...");
         if let Err(error) = self.open(events) {
             self.fail(error);
             events.exit();
+            return;
+        }
+        if self.game.is_none() && self.worker.is_none() {
+            if !GAME_LAUNCHED_ONCE.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "78|Loading Minecraft 26.3 Resources & Custom Skin...");
+                apply_horizonz_custom_skin(&self.home);
+                if let Err(error) = self.action(events) {
+                    self.fail(error);
+                } else {
+                    let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "100|Main Menu Ready");
+                }
+            }
         }
     }
     fn suspended(&mut self, events: &ActiveEventLoop) {

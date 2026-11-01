@@ -193,6 +193,9 @@ impl Launcher {
     }
 
     pub(super) fn draw_pages(&mut self) -> Result<()> {
+        if std::env::var_os("HORIZON_SHOW_INTERNAL_UI").is_none() {
+            return Ok(());
+        }
         let (Some(r), Some(gui)) = (&mut self.renderer, &self.gui) else {
             return Ok(());
         };
