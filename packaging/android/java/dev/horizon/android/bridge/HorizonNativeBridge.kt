@@ -2894,226 +2894,6 @@ object HorizonNativeBridge {
         }.getOrDefault("")
     }
 
-    data class ShaderOptionDef(
-        val id: String,
-        val name: String,
-        val type: String,
-        val default: String,
-        val min: Double,
-        val max: Double,
-        val step: Double,
-        val values: List<String>,
-        val description: String,
-        val slider: Boolean = false,
-        val valueLabels: Map<String, String> = emptyMap()
-    )
-
-    private fun readShaderManifestText(packFile: File): String? {
-        return runCatching {
-            if (packFile.isDirectory) {
-                File(packFile, "horizon-shaders.toml").takeIf { it.exists() }?.readText()
-            } else {
-                java.util.zip.ZipFile(packFile).use { zf ->
-                    val entry = zf.getEntry("horizon-shaders.toml") ?: return@use null
-                    zf.getInputStream(entry).bufferedReader(Charsets.UTF_8).readText()
-                }
-            }
-        }.getOrNull()
-    }
-
-    private fun stripTomlComment(raw: String): String {
-        var inQuote = false
-        val sb = StringBuilder()
-        for (ch in raw) {
-            if (ch == '"') inQuote = !inQuote
-            if (ch == '#' && !inQuote) break
-            sb.append(ch)
-        }
-        return sb.toString().trim()
-    }
-
-    fun readShaderPackOptions(packFile: File): List<ShaderOptionDef> {
-        val text = readShaderManifestText(packFile) ?: return readOptifineShaderOptions(packFile)
-        val blocks = mutableListOf<MutableMap<String, String>>()
-        var current: MutableMap<String, String>? = null
-        for (rawLine in text.lines()) {
-            val line = stripTomlComment(rawLine)
-            if (line.isEmpty()) continue
-            if (line.startsWith("[")) {
-                current = if (line == "[[options]]") mutableMapOf<String, String>().also { blocks.add(it) } else null
-                continue
-            }
-            val eq = line.indexOf('=')
-            if (eq <= 0 || current == null) continue
-            current[line.substring(0, eq).trim()] = line.substring(eq + 1).trim()
-        }
-        fun unq(v: String?): String = v?.trim()?.removeSurrounding("\"") ?: ""
-        return blocks.mapNotNull { b ->
-            val id = unq(b["id"])
-            if (id.isEmpty()) return@mapNotNull null
-            val type = unq(b["type"]).ifEmpty { "float" }
-            val values = Regex("\"([^\"]*)\"").findAll(b["values"] ?: "").map { it.groupValues[1] }.toList()
-            ShaderOptionDef(
-                id = id,
-                name = unq(b["name"]).ifEmpty { id },
-                type = type,
-                default = unq(b["default"]).ifEmpty { if (type == "bool") "false" else if (type == "choice") values.firstOrNull().orEmpty() else "0" },
-                min = unq(b["min"]).toDoubleOrNull() ?: 0.0,
-                max = unq(b["max"]).toDoubleOrNull() ?: 1.0,
-                step = unq(b["step"]).toDoubleOrNull() ?: 0.0,
-                values = values,
-                description = unq(b["description"])
-            )
-        }
-    }
-
-    private val optifineSourceRegex = Regex("(^|/)shaders/.+\\.(fsh|vsh|gsh|csh|glsl|inc|h|frag|vert|vs|fs)$", RegexOption.IGNORE_CASE)
-    private val optifineLangRegex = Regex("(^|/)shaders/lang/en_us\\.lang$", RegexOption.IGNORE_CASE)
-    private val optifinePropsRegex = Regex("(^|/)shaders/shaders\\.properties$", RegexOption.IGNORE_CASE)
-    private val ofBoolRegex = Regex("^\\s*(//)?\\s*#\\s*define\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(//.*)?$")
-    private val ofValueDefineRegex = Regex("^\\s*#\\s*define\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(\\S+)\\s*//\\s*\\[([^\\]]*)\\]")
-    private val ofConstRegex = Regex("^\\s*const\\s+(?:int|float|bool)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*([^;\\s]+)\\s*;\\s*//\\s*\\[([^\\]]*)\\]")
-    private val ofGuardSuffixes = listOf("_H", "_GLSL", "_INC", "_INCLUDED", "_FSH", "_VSH", "_GSH", "_INCLUDE", "_HEADER")
-
-    private fun readPackTextEntries(packFile: File, accept: (String) -> Boolean): List<Pair<String, String>> {
-        val out = mutableListOf<Pair<String, String>>()
-        runCatching {
-            if (packFile.isDirectory) {
-                val root = packFile
-                root.walkTopDown().filter { it.isFile && it.length() <= 524288 }.forEach { f ->
-                    val rel = f.relativeTo(root).path.replace('\\', '/')
-                    if (accept(rel)) out.add(rel to f.readText())
-                }
-            } else {
-                java.util.zip.ZipFile(packFile).use { zf ->
-                    val en = zf.entries()
-                    while (en.hasMoreElements()) {
-                        val e = en.nextElement()
-                        if (e.isDirectory || e.size > 524288 || !accept(e.name)) continue
-                        out.add(e.name to zf.getInputStream(e).bufferedReader(Charsets.UTF_8).readText())
-                    }
-                }
-            }
-        }
-        return out
-    }
-
-    private fun readOptifineShaderOptions(packFile: File): List<ShaderOptionDef> {
-        val entries = readPackTextEntries(packFile) {
-            optifineSourceRegex.containsMatchIn(it) || optifineLangRegex.containsMatchIn(it) || optifinePropsRegex.containsMatchIn(it)
-        }
-        if (entries.isEmpty()) return emptyList()
-
-        val lang = mutableMapOf<String, String>()
-        entries.firstOrNull { optifineLangRegex.containsMatchIn(it.first) }?.second?.lines()?.forEach { l ->
-            val i = l.indexOf('=')
-            if (i > 0 && !l.trimStart().startsWith("#")) lang[l.substring(0, i).trim()] = l.substring(i + 1).trim().replace(Regex("\u00A7."), "")
-        }
-
-        val sliderNames = mutableSetOf<String>()
-        entries.firstOrNull { optifinePropsRegex.containsMatchIn(it.first) }?.second?.let { props ->
-            val joined = props.replace(Regex("\\\\\\r?\\n\\s*"), " ")
-            joined.lines().forEach { l ->
-                if (l.trimStart().startsWith("sliders") && l.contains('=')) {
-                    l.substringAfter('=').trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.forEach { sliderNames.add(it) }
-                }
-            }
-        }
-
-        val defs = LinkedHashMap<String, ShaderOptionDef>()
-        fun label(id: String) = lang["option.$id"]?.takeIf { it.isNotBlank() } ?: id
-        fun comment(id: String) = lang["option.$id.comment"].orEmpty()
-
-        entries.filter { optifineSourceRegex.containsMatchIn(it.first) }.sortedBy { it.first }.forEach { (_, src) ->
-            var prev = ""
-            for (line in src.lines()) {
-                val trimmed = line.trim()
-                if (trimmed.isEmpty()) continue
-                val vm = ofValueDefineRegex.find(line)
-                val cm = if (vm == null) ofConstRegex.find(line) else null
-                val m = vm ?: cm
-                if (m != null) {
-                    val id = m.groupValues[1]
-                    if (id !in defs) {
-                        val def = m.groupValues[2].trim('"')
-                        val vals = m.groupValues[3].trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.toMutableList()
-                        if (def !in vals) vals.add(0, def)
-                        if (vals.size >= 2) {
-                            val labels = vals.mapNotNull { v -> lang["value.$id.$v"]?.takeIf { it.isNotBlank() }?.let { v to it } }.toMap()
-                            defs[id] = ShaderOptionDef(
-                                id = id, name = label(id), type = "choice", default = def,
-                                min = 0.0, max = 1.0, step = 0.0, values = vals,
-                                description = comment(id),
-                                slider = id in sliderNames && vals.all { it.toDoubleOrNull() != null },
-                                valueLabels = labels
-                            )
-                        }
-                    }
-                } else {
-                    val bm = ofBoolRegex.find(line)
-                    if (bm != null) {
-                        val id = bm.groupValues[2]
-                        val commented = bm.groupValues[1].isNotEmpty()
-                        val isGuard = !commented && (prev == "#ifndef $id" || prev.replace(Regex("\\s+"), " ") == "#ifndef $id" ||
-                            prev.replace(Regex("\\s+"), "") == "#if!defined($id)" || ofGuardSuffixes.any { id.endsWith(it) })
-                        if (!isGuard && id !in defs && id != "") {
-                            defs[id] = ShaderOptionDef(
-                                id = id, name = label(id), type = "bool",
-                                default = if (commented) "false" else "true",
-                                min = 0.0, max = 1.0, step = 0.0, values = emptyList(),
-                                description = comment(id)
-                            )
-                        }
-                    }
-                }
-                prev = trimmed
-            }
-        }
-        return defs.values.toList()
-    }
-
-    private fun shaderPackSettingsFiles(packFile: File): List<File> {
-        val parent = packFile.parentFile ?: return emptyList()
-        val full = File(parent, packFile.name + ".txt")
-        val stem = File(parent, packFile.nameWithoutExtension + ".txt")
-        return if (full.path == stem.path) listOf(full) else listOf(full, stem)
-    }
-
-    fun readShaderPackValues(packFile: File): Map<String, String> {
-        val src = shaderPackSettingsFiles(packFile).firstOrNull { it.exists() } ?: return emptyMap()
-        return runCatching {
-            src.readLines().mapNotNull { l ->
-                val i = l.indexOf('=')
-                if (i <= 0) null else l.substring(0, i).trim() to l.substring(i + 1).trim()
-            }.toMap()
-        }.getOrDefault(emptyMap())
-    }
-
-    fun formatShaderOptionValue(def: ShaderOptionDef, v: Double): String {
-        return when (def.type) {
-            "int" -> Math.round(v).toString()
-            else -> java.lang.String.format(java.util.Locale.US, "%.4f", v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
-        }
-    }
-
-    fun shaderValuesEqual(def: ShaderOptionDef, a: String, b: String): Boolean {
-        val x = a.toDoubleOrNull()
-        val y = b.toDoubleOrNull()
-        return if (x != null && y != null) Math.abs(x - y) < 1e-6 else a == b
-    }
-
-    fun writeShaderPackValues(packFile: File, defs: List<ShaderOptionDef>, values: Map<String, String>) {
-        val lines = defs.mapNotNull { d ->
-            val v = values[d.id] ?: return@mapNotNull null
-            if (shaderValuesEqual(d, v, d.default)) null else "${d.id}=$v"
-        }
-        shaderPackSettingsFiles(packFile).forEach { f ->
-            runCatching {
-                if (lines.isEmpty()) f.delete() else f.writeText(lines.joinToString("\n") + "\n")
-            }
-        }
-    }
-
     fun syncAndRepairModsStorage(context: Context, profileSlot: Int = 0) {
         val home = ensureHomeDirectories(context)
         val profileHome = getProfileHome(home, profileSlot)
@@ -5780,6 +5560,20 @@ object HorizonNativeBridge {
         val totalRamMb = getDeviceTotalRamMb(context)
         val activeShaderPack = getActiveShaderPackFileName(context, config.profile)
         val hasGeminiKey = loadGeminiApiKeyLocal(context).isNotBlank()
+        // Quick Play: the engine auto-joins whatever "server" the launcher config (catalog.rs) holds,
+        // exactly like the Quick-Join field in Settings. Write the picked server there for this launch,
+        // and fall back to the saved Quick-Join value on normal launches so an override never sticks.
+        val quickPlayServer = HorizonServerStore.pendingQuickPlayServer
+            ?.also { HorizonServerStore.pendingQuickPlayServer = null }
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+        runCatching {
+            syncNativeHorizonAccountAndCatalog(
+                ensureHomeDirectories(context),
+                activeAccount,
+                config.copy(defaultServer = quickPlayServer ?: config.defaultServer)
+            )
+        }.onFailure { Log.w(TAG, "quick play config sync failed: ${it.message}") }
         val intent = Intent(context, HorizonActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             putExtra("HORIZON_ANDROID_PUBLIC", config.publicOnDeviceAssetDownload)
@@ -5791,7 +5585,7 @@ object HorizonNativeBridge {
             putExtra("HORIZON_RAM_ALLOCATION_MB", config.ramAllocationMb)
             putExtra("HORIZON_DEVICE_TOTAL_RAM_MB", totalRamMb)
             putExtra("HORIZON_SHADER_PACK", activeShaderPack)
-            HorizonServerStore.pendingQuickPlayServer?.also { HorizonServerStore.pendingQuickPlayServer = null }?.takeIf { it.isNotBlank() }?.let { putExtra("HORIZON_QUICK_PLAY_SERVER", it) }
+            quickPlayServer?.let { putExtra("HORIZON_QUICK_PLAY_SERVER", it) }
             putExtra("HORIZON_AI_AGENT_ENABLED", config.aiAgentEnabled)
             putExtra("HORIZON_AI_AGENT_PROVIDER", config.aiAgentProvider.serdeKey)
             putExtra("HORIZON_GEMINI_MODEL", config.geminiModel)

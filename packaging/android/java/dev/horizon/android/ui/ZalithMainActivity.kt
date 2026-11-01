@@ -73,14 +73,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import dev.horizon.android.HorizonSplashRenderer
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -459,36 +455,161 @@ fun Modifier.animatedPressScale(
 }
 
 /**
- * HORIZONZ launch splash. Drawn by the same `HorizonSplashRenderer` as the in-game overlay and stamps its
- * start time into `zalith-splash-start.txt`, so `HorizonActivity` continues the identical animation.
+ * Pure Black Minecraft Java Edition Style Loading Splash Screen ("HORIZONZ")
+ * Displayed immediately when pressing PLAY and seamlessly continued by HorizonActivity's native overlay!
  */
 @Composable
 fun HorizonZBlackSplashOverlay() {
-    val context = LocalContext.current
-    val renderer = remember { HorizonSplashRenderer(context) }
-    val startMs = remember { System.currentTimeMillis() }
-    var nowMs by remember { mutableLongStateOf(startMs) }
+    var progress by remember { mutableFloatStateOf(0.16f) }
     LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            runCatching { File(context.filesDir, "zalith-splash-start.txt").writeText(startMs.toString()) }
-        }
-        while (true) {
-            withFrameMillis { nowMs = System.currentTimeMillis() }
+        while (progress < 0.92f) {
+            delay(28L)
+            progress = (progress + 0.022f).coerceAtMost(0.92f)
         }
     }
 
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val t = (nowMs - startMs) / 1000f
-        val progress = 0.5f * (1f - exp(-t / 1.2f))
-        drawIntoCanvas { canvas ->
-            renderer.draw(
-                canvas.nativeCanvas,
-                size.width,
-                size.height,
-                t,
-                progress,
-                "Initializing HorizonZ Rust Engine...",
-                1f
+    val glyphH = arrayOf(
+        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1),
+        intArrayOf(1,1,1,1,1,1,1,1), intArrayOf(1,1,1,1,1,1,1,1), intArrayOf(1,1,0,0,0,0,1,1),
+        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1)
+    )
+    // Iconic 8x8 Minecraft Creeper Face as the letter 'O'!
+    val glyphCreeperO = arrayOf(
+        intArrayOf(1,1,3,1,1,3,1,1), intArrayOf(1,3,1,1,3,1,1,1), intArrayOf(1,2,2,1,1,2,2,1),
+        intArrayOf(1,2,2,1,1,2,2,1), intArrayOf(1,1,1,2,2,1,1,1), intArrayOf(1,1,2,2,2,2,1,1),
+        intArrayOf(1,1,2,2,2,2,1,1), intArrayOf(1,1,2,1,1,2,1,1)
+    )
+    val glyphR = arrayOf(
+        intArrayOf(1,1,1,1,1,1,1,0), intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1),
+        intArrayOf(1,1,1,1,1,1,1,0), intArrayOf(1,1,1,1,1,0,0,0), intArrayOf(1,1,0,0,1,1,0,0),
+        intArrayOf(1,1,0,0,0,1,1,0), intArrayOf(1,1,0,0,0,0,1,1)
+    )
+    val glyphI = arrayOf(
+        intArrayOf(1,1,1,1,1,1,1,1), intArrayOf(0,0,0,1,1,0,0,0), intArrayOf(0,0,0,1,1,0,0,0),
+        intArrayOf(0,0,0,1,1,0,0,0), intArrayOf(0,0,0,1,1,0,0,0), intArrayOf(0,0,0,1,1,0,0,0),
+        intArrayOf(0,0,0,1,1,0,0,0), intArrayOf(1,1,1,1,1,1,1,1)
+    )
+    val glyphZ = arrayOf(
+        intArrayOf(1,1,1,1,1,1,1,1), intArrayOf(0,0,0,0,0,1,1,1), intArrayOf(0,0,0,0,1,1,1,0),
+        intArrayOf(0,0,0,1,1,1,0,0), intArrayOf(0,0,1,1,1,0,0,0), intArrayOf(0,1,1,1,0,0,0,0),
+        intArrayOf(1,1,1,0,0,0,0,0), intArrayOf(1,1,1,1,1,1,1,1)
+    )
+    val glyphO = arrayOf(
+        intArrayOf(0,1,1,1,1,1,1,0), intArrayOf(1,1,1,0,0,1,1,1), intArrayOf(1,1,0,0,0,0,1,1),
+        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1),
+        intArrayOf(1,1,1,0,0,1,1,1), intArrayOf(0,1,1,1,1,1,1,0)
+    )
+    val glyphN = arrayOf(
+        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,1,0,0,0,1,1), intArrayOf(1,1,1,1,0,0,1,1),
+        intArrayOf(1,1,0,1,1,0,1,1), intArrayOf(1,1,0,0,1,1,1,1), intArrayOf(1,1,0,0,0,1,1,1),
+        intArrayOf(1,1,0,0,0,0,1,1), intArrayOf(1,1,0,0,0,0,1,1)
+    )
+    val word = remember { arrayOf(glyphH, glyphCreeperO, glyphR, glyphI, glyphZ, glyphO, glyphN, glyphR) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val letterCols = 8
+            val letterRows = 8
+            val gapCols = 1
+            val totalCols = word.size * letterCols + (word.size - 1) * gapCols
+            val pxSize = (w * 0.50f / totalCols).coerceIn(4f, 6.2.dp.toPx())
+            val logoW = totalCols * pxSize
+            val logoH = letterRows * pxSize
+            val startX = (w - logoW) / 2f
+            val startY = (h * 0.41f) - (logoH / 2f)
+            val depthOff = (pxSize * 0.48f).coerceAtLeast(2f)
+
+            // Pass 1: 3D Blocky Bottom Extrusion Shadow
+            for (l in word.indices) {
+                val glyph = word[l]
+                val lx = startX + l * (letterCols + gapCols) * pxSize
+                val shadowColor = when (l) {
+                    1 -> Color(0xFF1B4D14)
+                    word.lastIndex -> Color(0xFF1D4E63)
+                    else -> Color(0xFF2A3238)
+                }
+                for (r in 0 until letterRows) {
+                    for (c in 0 until letterCols) {
+                        if (glyph[r][c] != 0) {
+                            drawRect(
+                                color = shadowColor,
+                                topLeft = Offset(lx + c * pxSize + depthOff * 0.6f, startY + r * pxSize + depthOff),
+                                size = Size(pxSize + 0.5f, pxSize + 0.5f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Pass 2: Foreground Block Letters + Creeper Face 'O'
+            for (l in word.indices) {
+                val glyph = word[l]
+                val lx = startX + l * (letterCols + gapCols) * pxSize
+                for (r in 0 until letterRows) {
+                    for (c in 0 until letterCols) {
+                        val cell = glyph[r][c]
+                        if (cell == 0) continue
+                        val blockColor = when {
+                            l == 1 -> when (cell) {
+                                2 -> Color(0xFF111712)
+                                3 -> Color(0xFF72E052)
+                                else -> if (r == 0) Color(0xFF6CE04E) else Color(0xFF49AC30)
+                            }
+                            l == word.lastIndex -> if (r == 0) Color(0xFFC2F0FF) else SkyBlueAccent
+                            else -> if (r == 0) Color.White else if (r >= 6) Color(0xFFD0D8DE) else Color(0xFFF2F6F8)
+                        }
+                        drawRect(
+                            color = blockColor,
+                            topLeft = Offset(lx + c * pxSize, startY + r * pxSize),
+                            size = Size(pxSize + 0.5f, pxSize + 0.5f)
+                        )
+                    }
+                }
+            }
+
+            // Classic Minecraft Java Progress Bar
+            val barW = (w * 0.54f).coerceAtMost(400.dp.toPx())
+            val barH = 14.dp.toPx()
+            val barLeft = (w - barW) / 2f
+            val barTop = h * 0.72f
+            val strokeW = 1.8.dp.toPx()
+            val pad = 2.8.dp.toPx()
+
+            drawRect(
+                color = Color.White,
+                topLeft = Offset(barLeft, barTop),
+                size = Size(barW, barH),
+                style = Stroke(width = strokeW)
+            )
+            val fillW = ((barW - pad * 2f) * progress).coerceAtLeast(0f)
+            if (fillW > 0f) {
+                drawRect(
+                    color = Color.White,
+                    topLeft = Offset(barLeft + pad, barTop + pad),
+                    size = Size(fillW, barH - pad * 2f)
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 34.dp),
+            verticalArrangement = Arrangement.Bottom,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Initializing HorizonR Rust Engine (${(progress * 100).toInt()}%)",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFD5DEE5)
             )
         }
     }
@@ -6911,165 +7032,6 @@ private fun CleanFilesViewport(
 }
 
 @Composable
-private fun ShaderPackSettingsDialog(
-    packFile: File,
-    packTitle: String,
-    defs: List<HorizonNativeBridge.ShaderOptionDef>,
-    onDismiss: () -> Unit
-) {
-    val values = remember(packFile) {
-        mutableStateMapOf<String, String>().apply {
-            val saved = HorizonNativeBridge.readShaderPackValues(packFile)
-            defs.forEach { d -> put(d.id, saved[d.id] ?: d.default) }
-        }
-    }
-    val save = { HorizonNativeBridge.writeShaderPackValues(packFile, defs, values.toMap()) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1F262B),
-        title = {
-            Column {
-                Text("Shader Pack Settings", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Text(packTitle, fontSize = 11.sp, color = Color(0xFFD5DEE5))
-            }
-        },
-        text = {
-            var query by remember { mutableStateOf("") }
-            val shownDefs = remember(query, defs) {
-                if (query.isBlank()) defs else defs.filter { it.name.contains(query, true) || it.id.contains(query, true) }
-            }
-            Column {
-                if (defs.size > 12) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        singleLine = true,
-                        placeholder = { Text("Search options", fontSize = 12.sp) },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                    )
-                }
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 340.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    items(shownDefs, key = { it.id }) { d ->
-                    val current = values[d.id] ?: d.default
-                    val changed = !HorizonNativeBridge.shaderValuesEqual(d, current, d.default)
-                    val labelColor = if (changed) Color(0xFFFFD54F) else Color.White
-                    when {
-                        d.type == "bool" -> {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(d.name, fontSize = 13.sp, color = labelColor)
-                                    if (d.description.isNotEmpty()) Text(d.description, fontSize = 10.sp, color = Color(0xFF9AA7B0))
-                                }
-                                Switch(
-                                    checked = current == "true",
-                                    onCheckedChange = {
-                                        values[d.id] = it.toString()
-                                        save()
-                                    }
-                                )
-                            }
-                        }
-                        d.type == "choice" && d.slider -> {
-                            val idx = d.values.indexOf(current).coerceAtLeast(0)
-                            var pos by remember(d.id) { mutableStateOf(idx.toFloat()) }
-                            val shownLabel = d.values[pos.toInt().coerceIn(0, d.values.lastIndex)]
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(d.name, fontSize = 13.sp, color = labelColor)
-                                    Text(d.valueLabels[shownLabel] ?: shownLabel, fontSize = 13.sp, color = labelColor)
-                                }
-                                if (d.description.isNotEmpty()) Text(d.description, fontSize = 10.sp, color = Color(0xFF9AA7B0))
-                                Slider(
-                                    value = pos,
-                                    onValueChange = { pos = it },
-                                    onValueChangeFinished = {
-                                        values[d.id] = d.values[pos.toInt().coerceIn(0, d.values.lastIndex)]
-                                        save()
-                                    },
-                                    valueRange = 0f..d.values.lastIndex.toFloat(),
-                                    steps = (d.values.size - 2).coerceAtLeast(0)
-                                )
-                            }
-                        }
-                        d.type == "choice" -> {
-                            Column {
-                                Text(d.name, fontSize = 13.sp, color = labelColor)
-                                if (d.description.isNotEmpty()) Text(d.description, fontSize = 10.sp, color = Color(0xFF9AA7B0))
-                                Row(
-                                    modifier = Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    d.values.forEach { opt ->
-                                        FilterChip(
-                                            selected = current == opt,
-                                            onClick = {
-                                                values[d.id] = opt
-                                                save()
-                                            },
-                                            label = { Text(d.valueLabels[opt] ?: opt, fontSize = 11.sp) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        else -> {
-                            val lo = d.min.toFloat()
-                            val hi = d.max.toFloat().coerceAtLeast(lo + 0.0001f)
-                            var slider by remember(d.id) { mutableStateOf((current.toFloatOrNull() ?: d.default.toFloatOrNull() ?: lo).coerceIn(lo, hi)) }
-                            val shown = HorizonNativeBridge.formatShaderOptionValue(d, slider.toDouble())
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(d.name, fontSize = 13.sp, color = labelColor)
-                                    Text(shown, fontSize = 13.sp, color = labelColor)
-                                }
-                                if (d.description.isNotEmpty()) Text(d.description, fontSize = 10.sp, color = Color(0xFF9AA7B0))
-                                val steps = if (d.type == "int") (hi - lo).toInt() - 1
-                                    else if (d.step > 0.0) (((hi - lo) / d.step.toFloat()).toInt() - 1) else 0
-                                Slider(
-                                    value = slider,
-                                    onValueChange = { slider = it },
-                                    onValueChangeFinished = {
-                                        values[d.id] = HorizonNativeBridge.formatShaderOptionValue(d, slider.toDouble())
-                                        save()
-                                    },
-                                    valueRange = lo..hi,
-                                    steps = steps.coerceAtLeast(0)
-                                )
-                            }
-                        }
-                    }
-                    }
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = {
-                defs.forEach { d -> values[d.id] = d.default }
-                save()
-                onDismiss()
-            }) { Text("Reset", color = Color(0xFFFF8A80)) }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Done", color = SkyBlueAccent) }
-        }
-    )
-}
-
-@Composable
 private fun FileManagerRowCard(
     rowItem: ManagerRowUiItem,
     folderLabel: String,
@@ -7094,21 +7056,6 @@ private fun FileManagerRowCard(
     var showInfoPopover by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var expandedDetails by remember { mutableStateOf(false) }
-    var shaderOptionDefs by remember(file) { mutableStateOf<List<HorizonNativeBridge.ShaderOptionDef>>(emptyList()) }
-    var showShaderSettings by remember { mutableStateOf(false) }
-    LaunchedEffect(file, folder) {
-        if (folder == "shaderpacks") {
-            shaderOptionDefs = withContext(Dispatchers.IO) { HorizonNativeBridge.readShaderPackOptions(file) }
-        }
-    }
-    if (showShaderSettings && shaderOptionDefs.isNotEmpty()) {
-        ShaderPackSettingsDialog(
-            packFile = file,
-            packTitle = displayTitle,
-            defs = shaderOptionDefs,
-            onDismiss = { showShaderSettings = false }
-        )
-    }
 
     val isToggleable = folder in listOf("mods", "shaderpacks", "resourcepacks")
     val borderColor = if (isToggleable && isEnabled) SkyBlueAccent.copy(alpha = 0.38f) else Color.Transparent
@@ -7429,16 +7376,6 @@ private fun FileManagerRowCard(
                                             }
                                         )
                                     } else {
-                                        if (folder == "shaderpacks" && shaderOptionDefs.isNotEmpty()) {
-                                            DropdownMenuItem(
-                                                leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(17.dp)) },
-                                                text = { Text("Shader Pack Settings", fontSize = 12.sp, color = Color.White) },
-                                                onClick = {
-                                                    showMoreMenu = false
-                                                    showShaderSettings = true
-                                                }
-                                            )
-                                        }
                                         if (isToggleable) {
                                             DropdownMenuItem(
                                                 leadingIcon = {
@@ -7503,21 +7440,6 @@ private fun FileManagerRowCard(
                         color = SkyBlueAccent
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (folder == "shaderpacks" && shaderOptionDefs.isNotEmpty()) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF283036),
-                                modifier = Modifier.clickable { showShaderSettings = true }
-                            ) {
-                                Text(
-                                    text = "Settings",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SkyBlueAccent,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
                         if (isToggleable) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),

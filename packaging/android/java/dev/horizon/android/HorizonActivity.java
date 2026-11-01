@@ -702,26 +702,110 @@ public final class HorizonActivity extends NativeActivity {
     }
 
     /**
-     * Launch splash overlay drawn by the shared {@link HorizonSplashRenderer} (the launcher draws the same
-     * frames, continuing the clock stored in `zalith-splash-start.txt`, so the hand-off is seamless).
-     * Stays visible on its own Dialog Window surface above NativeActivity until the Rust engine
-     * signals `100|Main Menu Ready` AND the swapchain has presented the Main Menu frame!
+     * Pure Black Minecraft Java Edition Style Loading Splash Overlay:
+     * - Compact, standard-proportioned 8x8 blocky Minecraft logo "HORIZONZ" where the first 'O'
+     *   is an iconic 8x8 Minecraft Creeper Face block!
+     * - Stays visible on its own Dialog Window surface above NativeActivity until the Rust engine
+     *   signals `100|Main Menu Ready` AND the swapchain has presented the Main Menu frame!
      */
     private static final class HorizonSplashOverlayView extends View {
         private final File bootFile;
         private final Runnable onDismissCallback;
         private final Handler handler = new Handler(Looper.getMainLooper());
-        private final HorizonSplashRenderer renderer;
-        private final long animStartWallMs;
+        private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint pixelPaint = new Paint();
+        private final Paint barBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint barFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint subTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF tmpRect = new RectF();
 
-        private float displayedProgress;
-        private float targetProgress;
+        private float displayedProgress = 0.22f;
+        private float targetProgress = 0.28f;
         private String stageLabel = "Initializing HorizonZ Rust Engine...";
         private boolean engineReady = false;
         private long createdTimeMs = System.currentTimeMillis();
         private long engineReadyFirstSeenMs = 0L;
         private float overlayAlpha = 1.0f;
         private boolean active = true;
+
+        // Compact 8x8 Chunky Minecraft Title Block Glyphs (1 = foreground block, 2 = Creeper face feature)
+        private static final int[][] GLYPH_H = {
+            {1,1,0,0,0,0,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,1,1,1,1,1,1},
+            {1,1,1,1,1,1,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,0,0,0,0,1,1}
+        };
+        // Iconic 8x8 Minecraft Creeper Face integrated as the letter 'O'!
+        // 1 = Creeper Green Block, 2 = Creeper Black Eyes/Mouth, 3 = Lighter Creeper Pixel Highlight
+        private static final int[][] GLYPH_CREEPER_O = {
+            {1,1,3,1,1,3,1,1},
+            {1,3,1,1,3,1,1,1},
+            {1,2,2,1,1,2,2,1},
+            {1,2,2,1,1,2,2,1},
+            {1,1,1,2,2,1,1,1},
+            {1,1,2,2,2,2,1,1},
+            {1,1,2,2,2,2,1,1},
+            {1,1,2,1,1,2,1,1}
+        };
+        private static final int[][] GLYPH_R = {
+            {1,1,1,1,1,1,1,0},
+            {1,1,0,0,0,0,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,1,1,1,1,1,0},
+            {1,1,1,1,1,0,0,0},
+            {1,1,0,0,1,1,0,0},
+            {1,1,0,0,0,1,1,0},
+            {1,1,0,0,0,0,1,1}
+        };
+        private static final int[][] GLYPH_I = {
+            {1,1,1,1,1,1,1,1},
+            {0,0,0,1,1,0,0,0},
+            {0,0,0,1,1,0,0,0},
+            {0,0,0,1,1,0,0,0},
+            {0,0,0,1,1,0,0,0},
+            {0,0,0,1,1,0,0,0},
+            {0,0,0,1,1,0,0,0},
+            {1,1,1,1,1,1,1,1}
+        };
+        private static final int[][] GLYPH_Z = {
+            {1,1,1,1,1,1,1,1},
+            {0,0,0,0,0,1,1,1},
+            {0,0,0,0,1,1,1,0},
+            {0,0,0,1,1,1,0,0},
+            {0,0,1,1,1,0,0,0},
+            {0,1,1,1,0,0,0,0},
+            {1,1,1,0,0,0,0,0},
+            {1,1,1,1,1,1,1,1}
+        };
+        private static final int[][] GLYPH_O = {
+            {0,1,1,1,1,1,1,0},
+            {1,1,1,0,0,1,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,1,0,0,1,1,1},
+            {0,1,1,1,1,1,1,0}
+        };
+        private static final int[][] GLYPH_N = {
+            {1,1,0,0,0,0,1,1},
+            {1,1,1,0,0,0,1,1},
+            {1,1,1,1,0,0,1,1},
+            {1,1,0,1,1,0,1,1},
+            {1,1,0,0,1,1,1,1},
+            {1,1,0,0,0,1,1,1},
+            {1,1,0,0,0,0,1,1},
+            {1,1,0,0,0,0,1,1}
+        };
+
+        private static final int[][][] WORD_HORIZONZ = {
+            GLYPH_H, GLYPH_CREEPER_O, GLYPH_R, GLYPH_I, GLYPH_Z, GLYPH_O, GLYPH_N, GLYPH_Z
+        };
 
         private final Runnable frameLoop = new Runnable() {
             @Override
@@ -740,32 +824,24 @@ public final class HorizonActivity extends NativeActivity {
             super(context);
             this.bootFile = new File(homeDir, "zalith-game-boot.txt");
             this.onDismissCallback = onDismissCallback;
-            this.renderer = new HorizonSplashRenderer(context);
 
-            // Continue the launcher's animation clock when it left one behind; otherwise start mid-intro.
-            long now = System.currentTimeMillis();
-            long start = now - 2600L;
-            try {
-                File startFile = new File(homeDir, "zalith-splash-start.txt");
-                if (startFile.exists()) {
-                    long written;
-                    try (BufferedReader sbr = new BufferedReader(
-                        new InputStreamReader(new FileInputStream(startFile), StandardCharsets.UTF_8)
-                    )) {
-                        written = Long.parseLong(sbr.readLine().trim());
-                    }
-                    long age = now - written;
-                    if (age >= 0L && age < 20000L) {
-                        start = written;
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-            this.animStartWallMs = start;
-            float t0 = (now - start) / 1000.0f;
-            float p0 = 0.5f * (1.0f - (float) Math.exp(-t0 / 1.2f));
-            this.displayedProgress = p0;
-            this.targetProgress = Math.max(0.28f, p0);
+            bgPaint.setColor(Color.BLACK);
+            bgPaint.setStyle(Paint.Style.FILL);
+            pixelPaint.setStyle(Paint.Style.FILL);
+
+            barBorderPaint.setColor(Color.WHITE);
+            barBorderPaint.setStyle(Paint.Style.STROKE);
+
+            barFillPaint.setColor(Color.WHITE);
+            barFillPaint.setStyle(Paint.Style.FILL);
+
+            textPaint.setColor(Color.parseColor("#D5DEE5"));
+            textPaint.setTextAlign(Paint.Align.CENTER);
+            textPaint.setFakeBoldText(true);
+
+            subTextPaint.setColor(Color.parseColor("#9EA8B0"));
+            subTextPaint.setTextAlign(Paint.Align.CENTER);
+            subTextPaint.setFakeBoldText(true);
 
             handler.post(frameLoop);
         }
@@ -851,8 +927,137 @@ public final class HorizonActivity extends NativeActivity {
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            float t = (System.currentTimeMillis() - animStartWallMs) / 1000.0f;
-            renderer.draw(canvas, getWidth(), getHeight(), t, displayedProgress, stageLabel, overlayAlpha);
+            int w = getWidth();
+            int h = getHeight();
+            if (w <= 0 || h <= 0) return;
+
+            int alphaInt = Math.max(0, Math.min(255, (int) (overlayAlpha * 255.0f)));
+            bgPaint.setAlpha(alphaInt);
+            canvas.drawRect(0, 0, w, h, bgPaint);
+
+            float density = getResources().getDisplayMetrics().density;
+            int letterCols = 8;
+            int letterRows = 8;
+            int gapCols = 1;
+            int totalCols = WORD_HORIZONZ.length * letterCols + (WORD_HORIZONZ.length - 1) * gapCols;
+
+            // Compact, standard Minecraft title proportions (never stretched vertically!)
+            float pxSize = Math.max(4f, Math.min(w * 0.50f / totalCols, 6.2f * density));
+            float logoWidth = totalCols * pxSize;
+            float logoHeight = letterRows * pxSize;
+            float startX = (w - logoWidth) / 2f;
+            float startY = (h * 0.41f) - (logoHeight / 2f);
+            float depthOff = Math.max(2f, pxSize * 0.48f);
+
+            // Pass 1: 3D Blocky Bottom/Side Extrusion Shadow for all letters
+            for (int l = 0; l < WORD_HORIZONZ.length; l++) {
+                int[][] glyph = WORD_HORIZONZ[l];
+                float lx = startX + l * (letterCols + gapCols) * pxSize;
+                int shadowColor = (l == 1) ? Color.parseColor("#1B4D14")
+                    : (l == WORD_HORIZONZ.length - 1) ? Color.parseColor("#1D4E63")
+                    : Color.parseColor("#2A3238");
+                pixelPaint.setColor(shadowColor);
+                pixelPaint.setAlpha(alphaInt);
+
+                for (int r = 0; r < letterRows; r++) {
+                    for (int c = 0; c < letterCols; c++) {
+                        if (glyph[r][c] != 0) {
+                            float px = lx + c * pxSize;
+                            float py = startY + r * pxSize;
+                            canvas.drawRect(
+                                px + depthOff * 0.6f,
+                                py + depthOff,
+                                px + pxSize + depthOff * 0.6f + 0.5f,
+                                py + pxSize + depthOff + 0.5f,
+                                pixelPaint
+                            );
+                        }
+                    }
+                }
+            }
+
+            // Pass 2: Crisp Foreground Pixel Blocks (with Creeper Face on O and Top Bevel Highlight)
+            for (int l = 0; l < WORD_HORIZONZ.length; l++) {
+                int[][] glyph = WORD_HORIZONZ[l];
+                float lx = startX + l * (letterCols + gapCols) * pxSize;
+
+                for (int r = 0; r < letterRows; r++) {
+                    for (int c = 0; c < letterCols; c++) {
+                        int cell = glyph[r][c];
+                        if (cell == 0) continue;
+                        int blockColor;
+                        if (l == 1) {
+                            // Creeper Face 'O' letter!
+                            if (cell == 2) {
+                                blockColor = Color.parseColor("#111712"); // Creeper black eyes & mouth
+                            } else if (cell == 3) {
+                                blockColor = Color.parseColor("#72E052"); // Bright Creeper green pixel
+                            } else {
+                                blockColor = (r == 0) ? Color.parseColor("#6CE04E") : Color.parseColor("#49AC30");
+                            }
+                        } else if (l == WORD_HORIZONZ.length - 1) {
+                            // Final 'Z' in Sky-Blue accent with bright top edge
+                            blockColor = (r == 0) ? Color.parseColor("#C2F0FF") : Color.parseColor("#8BE0FF");
+                        } else {
+                            // Standard Minecraft Title White/Stone with bright top edge & subtle lower shade
+                            blockColor = (r == 0) ? Color.WHITE
+                                : (r >= 6) ? Color.parseColor("#D0D8DE")
+                                : Color.parseColor("#F2F6F8");
+                        }
+                        pixelPaint.setColor(blockColor);
+                        pixelPaint.setAlpha(alphaInt);
+                        float px = lx + c * pxSize;
+                        float py = startY + r * pxSize;
+                        canvas.drawRect(px, py, px + pxSize + 0.5f, py + pxSize + 0.5f, pixelPaint);
+                    }
+                }
+            }
+
+            // Subtitle under HORIZONZ logo
+            subTextPaint.setTextSize(10.5f * density);
+            subTextPaint.setAlpha((int) (alphaInt * 0.85f));
+            canvas.drawText(
+                "MINECRAFT 26.3  •  RUST EDITION",
+                w / 2f,
+                startY + logoHeight + depthOff + (18f * density),
+                subTextPaint
+            );
+
+            // Classic Minecraft Java Edition Progress Bar
+            float barWidth = Math.min(w * 0.54f, 400f * density);
+            float barHeight = 14f * density;
+            float barLeft = (w - barWidth) / 2f;
+            float barTop = h * 0.72f;
+            float borderStroke = Math.max(2f, 1.8f * density);
+            float innerPad = Math.max(3f, 2.8f * density);
+
+            barBorderPaint.setStrokeWidth(borderStroke);
+            barBorderPaint.setAlpha(alphaInt);
+            tmpRect.set(barLeft, barTop, barLeft + barWidth, barTop + barHeight);
+            canvas.drawRect(tmpRect, barBorderPaint);
+
+            float maxFillWidth = (barWidth - innerPad * 2f);
+            float fillWidth = Math.max(0f, Math.min(maxFillWidth, maxFillWidth * displayedProgress));
+            if (fillWidth > 0f) {
+                barFillPaint.setAlpha(alphaInt);
+                tmpRect.set(
+                    barLeft + innerPad,
+                    barTop + innerPad,
+                    barLeft + innerPad + fillWidth,
+                    barTop + barHeight - innerPad
+                );
+                canvas.drawRect(tmpRect, barFillPaint);
+            }
+
+            int pctInt = Math.max(1, Math.min(100, Math.round(displayedProgress * 100f)));
+            textPaint.setTextSize(11f * density);
+            textPaint.setAlpha((int) (alphaInt * 0.85f));
+            canvas.drawText(
+                stageLabel + " (" + pctInt + "%)",
+                w / 2f,
+                barTop + barHeight + (18f * density),
+                textPaint
+            );
         }
     }
 }
