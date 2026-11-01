@@ -2652,6 +2652,27 @@ object HorizonNativeBridge {
             displayTags = listOf("NATIVE MOD", "Inventory", "QoL", "26.3")
         ),
         StoreCatalogItem(
+            id = "sodium_lite",
+            slug = "sodium_lite",
+            title = "Sodium Lite",
+            summary = "Sodium-style performance profile: entity culling plus per-frame chunk upload budgets, applied to horizon-graphics.txt while switched on.",
+            author = "dvaustria741-a11y",
+            version = "0.1.0",
+            supportedMcVersions = listOf("26.3"),
+            downloadUrl = "horizon-builtin://mod/sodium_lite",
+            fileName = "sodium_lite.hmod",
+            sizeBytes = 2048L,
+            category = StoreCategory.NATIVE_MOD,
+            kindBadge = "NATIVE MOD",
+            pageUrl = "https://github.com/dvaustria741-a11y/HorizonR-Mobile/tree/main/scripts/sodium_lite",
+            sourceCodeUrl = "https://github.com/dvaustria741-a11y/HorizonR-Mobile/tree/main/scripts/sodium_lite",
+            downloadsCount = 0L,
+            ratingScore = 0.0f,
+            ratingCount = 0,
+            isSignedOrOfficial = false,
+            displayTags = listOf("NATIVE MOD", "Performance", "Culling", "26.3")
+        ),
+        StoreCatalogItem(
             id = "itemnew",
             slug = "itemnew",
             title = "Item New",
