@@ -6783,19 +6783,30 @@ private fun ShaderPackSettingsDialog(
             }
         },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                defs.forEach { d ->
+            var query by remember { mutableStateOf("") }
+            val shownDefs = remember(query, defs) {
+                if (query.isBlank()) defs else defs.filter { it.name.contains(query, true) || it.id.contains(query, true) }
+            }
+            Column {
+                if (defs.size > 12) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        singleLine = true,
+                        placeholder = { Text("Search options", fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    )
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 340.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(shownDefs, key = { it.id }) { d ->
                     val current = values[d.id] ?: d.default
                     val changed = !HorizonNativeBridge.shaderValuesEqual(d, current, d.default)
                     val labelColor = if (changed) Color(0xFFFFD54F) else Color.White
-                    when (d.type) {
-                        "bool" -> {
+                    when {
+                        d.type == "bool" -> {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -6814,7 +6825,32 @@ private fun ShaderPackSettingsDialog(
                                 )
                             }
                         }
-                        "choice" -> {
+                        d.type == "choice" && d.slider -> {
+                            val idx = d.values.indexOf(current).coerceAtLeast(0)
+                            var pos by remember(d.id) { mutableStateOf(idx.toFloat()) }
+                            val shownLabel = d.values[pos.toInt().coerceIn(0, d.values.lastIndex)]
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(d.name, fontSize = 13.sp, color = labelColor)
+                                    Text(d.valueLabels[shownLabel] ?: shownLabel, fontSize = 13.sp, color = labelColor)
+                                }
+                                if (d.description.isNotEmpty()) Text(d.description, fontSize = 10.sp, color = Color(0xFF9AA7B0))
+                                Slider(
+                                    value = pos,
+                                    onValueChange = { pos = it },
+                                    onValueChangeFinished = {
+                                        values[d.id] = d.values[pos.toInt().coerceIn(0, d.values.lastIndex)]
+                                        save()
+                                    },
+                                    valueRange = 0f..d.values.lastIndex.toFloat(),
+                                    steps = (d.values.size - 2).coerceAtLeast(0)
+                                )
+                            }
+                        }
+                        d.type == "choice" -> {
                             Column {
                                 Text(d.name, fontSize = 13.sp, color = labelColor)
                                 if (d.description.isNotEmpty()) Text(d.description, fontSize = 10.sp, color = Color(0xFF9AA7B0))
@@ -6829,7 +6865,7 @@ private fun ShaderPackSettingsDialog(
                                                 values[d.id] = opt
                                                 save()
                                             },
-                                            label = { Text(opt, fontSize = 11.sp) }
+                                            label = { Text(d.valueLabels[opt] ?: opt, fontSize = 11.sp) }
                                         )
                                     }
                                 }
@@ -6863,6 +6899,7 @@ private fun ShaderPackSettingsDialog(
                                 )
                             }
                         }
+                    }
                     }
                 }
             }

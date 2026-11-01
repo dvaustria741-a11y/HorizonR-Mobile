@@ -2903,7 +2903,9 @@ object HorizonNativeBridge {
         val max: Double,
         val step: Double,
         val values: List<String>,
-        val description: String
+        val description: String,
+        val slider: Boolean = false,
+        val valueLabels: Map<String, String> = emptyMap()
     )
 
     private fun readShaderManifestText(packFile: File): String? {
@@ -2931,7 +2933,7 @@ object HorizonNativeBridge {
     }
 
     fun readShaderPackOptions(packFile: File): List<ShaderOptionDef> {
-        val text = readShaderManifestText(packFile) ?: return emptyList()
+        val text = readShaderManifestText(packFile) ?: return readOptifineShaderOptions(packFile)
         val blocks = mutableListOf<MutableMap<String, String>>()
         var current: MutableMap<String, String>? = null
         for (rawLine in text.lines()) {
@@ -2963,6 +2965,111 @@ object HorizonNativeBridge {
                 description = unq(b["description"])
             )
         }
+    }
+
+    private val optifineSourceRegex = Regex("(^|/)shaders/.+\\.(fsh|vsh|gsh|csh|glsl|inc|h|frag|vert|vs|fs)$", RegexOption.IGNORE_CASE)
+    private val optifineLangRegex = Regex("(^|/)shaders/lang/en_us\\.lang$", RegexOption.IGNORE_CASE)
+    private val optifinePropsRegex = Regex("(^|/)shaders/shaders\\.properties$", RegexOption.IGNORE_CASE)
+    private val ofBoolRegex = Regex("^\\s*(//)?\\s*#\\s*define\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(//.*)?$")
+    private val ofValueDefineRegex = Regex("^\\s*#\\s*define\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(\\S+)\\s*//\\s*\\[([^\\]]*)\\]")
+    private val ofConstRegex = Regex("^\\s*const\\s+(?:int|float|bool)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*([^;\\s]+)\\s*;\\s*//\\s*\\[([^\\]]*)\\]")
+    private val ofGuardSuffixes = listOf("_H", "_GLSL", "_INC", "_INCLUDED", "_FSH", "_VSH", "_GSH", "_INCLUDE", "_HEADER")
+
+    private fun readPackTextEntries(packFile: File, accept: (String) -> Boolean): List<Pair<String, String>> {
+        val out = mutableListOf<Pair<String, String>>()
+        runCatching {
+            if (packFile.isDirectory) {
+                val root = packFile
+                root.walkTopDown().filter { it.isFile && it.length() <= 524288 }.forEach { f ->
+                    val rel = f.relativeTo(root).path.replace('\\', '/')
+                    if (accept(rel)) out.add(rel to f.readText())
+                }
+            } else {
+                java.util.zip.ZipFile(packFile).use { zf ->
+                    val en = zf.entries()
+                    while (en.hasMoreElements()) {
+                        val e = en.nextElement()
+                        if (e.isDirectory || e.size > 524288 || !accept(e.name)) continue
+                        out.add(e.name to zf.getInputStream(e).bufferedReader(Charsets.UTF_8).readText())
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    private fun readOptifineShaderOptions(packFile: File): List<ShaderOptionDef> {
+        val entries = readPackTextEntries(packFile) {
+            optifineSourceRegex.containsMatchIn(it) || optifineLangRegex.containsMatchIn(it) || optifinePropsRegex.containsMatchIn(it)
+        }
+        if (entries.isEmpty()) return emptyList()
+
+        val lang = mutableMapOf<String, String>()
+        entries.firstOrNull { optifineLangRegex.containsMatchIn(it.first) }?.second?.lines()?.forEach { l ->
+            val i = l.indexOf('=')
+            if (i > 0 && !l.trimStart().startsWith("#")) lang[l.substring(0, i).trim()] = l.substring(i + 1).trim().replace(Regex("\u00A7."), "")
+        }
+
+        val sliderNames = mutableSetOf<String>()
+        entries.firstOrNull { optifinePropsRegex.containsMatchIn(it.first) }?.second?.let { props ->
+            val joined = props.replace(Regex("\\\\\\r?\\n\\s*"), " ")
+            joined.lines().forEach { l ->
+                if (l.trimStart().startsWith("sliders") && l.contains('=')) {
+                    l.substringAfter('=').trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.forEach { sliderNames.add(it) }
+                }
+            }
+        }
+
+        val defs = LinkedHashMap<String, ShaderOptionDef>()
+        fun label(id: String) = lang["option.$id"]?.takeIf { it.isNotBlank() } ?: id
+        fun comment(id: String) = lang["option.$id.comment"].orEmpty()
+
+        entries.filter { optifineSourceRegex.containsMatchIn(it.first) }.sortedBy { it.first }.forEach { (_, src) ->
+            var prev = ""
+            for (line in src.lines()) {
+                val trimmed = line.trim()
+                if (trimmed.isEmpty()) continue
+                val vm = ofValueDefineRegex.find(line)
+                val cm = if (vm == null) ofConstRegex.find(line) else null
+                val m = vm ?: cm
+                if (m != null) {
+                    val id = m.groupValues[1]
+                    if (id !in defs) {
+                        val def = m.groupValues[2].trim('"')
+                        val vals = m.groupValues[3].trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.toMutableList()
+                        if (def !in vals) vals.add(0, def)
+                        if (vals.size >= 2) {
+                            val labels = vals.mapNotNull { v -> lang["value.$id.$v"]?.takeIf { it.isNotBlank() }?.let { v to it } }.toMap()
+                            defs[id] = ShaderOptionDef(
+                                id = id, name = label(id), type = "choice", default = def,
+                                min = 0.0, max = 1.0, step = 0.0, values = vals,
+                                description = comment(id),
+                                slider = id in sliderNames && vals.all { it.toDoubleOrNull() != null },
+                                valueLabels = labels
+                            )
+                        }
+                    }
+                } else {
+                    val bm = ofBoolRegex.find(line)
+                    if (bm != null) {
+                        val id = bm.groupValues[2]
+                        val commented = bm.groupValues[1].isNotEmpty()
+                        val isGuard = !commented && (prev == "#ifndef $id" || prev.replace(Regex("\\s+"), " ") == "#ifndef $id" ||
+                            prev.replace(Regex("\\s+"), "") == "#if!defined($id)" || ofGuardSuffixes.any { id.endsWith(it) })
+                        if (!isGuard && id !in defs && id != "") {
+                            defs[id] = ShaderOptionDef(
+                                id = id, name = label(id), type = "bool",
+                                default = if (commented) "false" else "true",
+                                min = 0.0, max = 1.0, step = 0.0, values = emptyList(),
+                                description = comment(id)
+                            )
+                        }
+                    }
+                }
+                prev = trimmed
+            }
+        }
+        return defs.values.toList()
     }
 
     private fun shaderPackSettingsFiles(packFile: File): List<File> {
