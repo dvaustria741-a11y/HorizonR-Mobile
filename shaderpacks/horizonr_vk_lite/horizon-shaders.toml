@@ -1,9 +1,9 @@
 schema = 1
-id = "horizonr_gl_lite"
-name = "HorizonR GL Lite"
+id = "horizonr_vk_lite"
+name = "HorizonR Vulkan Lite"
 version = "1.0.0"
 api = "0.1"
-description = "Lightweight colour grade for OpenGL ES: one post pass, no extra texture reads, no depth or material stage."
+description = "Lightweight colour grade for the Vulkan renderer: one post pass, no extra texture reads, no depth or material stage."
 authors = ["HorizonR"]
 license = "MIT"
 
