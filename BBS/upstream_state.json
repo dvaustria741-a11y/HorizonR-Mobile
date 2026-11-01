@@ -1,0 +1,16 @@
+{
+  "upstream_repo": "https://github.com/Vasysik/horizon-android",
+  "upstream_branch": "android",
+  "updated_files_in_last_sync": [
+    "crates/horizon-android/Cargo.toml",
+    "crates/horizon-android/src/lib.rs",
+    "packaging/android/bedrock-controls.json"
+  ],
+  "upstream_hashes": {
+    "crates/horizon-android/Cargo.toml": "a5a0aaa3eea4e2f9faba10c7e33db1549b4a0ab07896fc2f60def1536954dbc6",
+    "crates/horizon-android/src/lib.rs": "f8b36bf80c810911ddeb70075e9f8e7969469599cc15a35bde046d13d4901733",
+    "packaging/android/bedrock-controls.json": "c7302b2d98bf2e989c367ba8da6807c6981099e0c73b83ad42ad54fb9d2926a3"
+  },
+  "upstream_release_tag": "v0.7.6",
+  "horizonz_version": "1.8"
+}

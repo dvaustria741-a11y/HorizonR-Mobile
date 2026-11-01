@@ -1,0 +1,40 @@
+{
+  "upstream_repo": "https://github.com/Vasysik/horizon-android.git",
+  "upstream_branch": "android",
+  "version": "1.4.0-HorizonZ",
+  "tracked_runtime_files": [
+    "crates/horizon-android/Cargo.toml",
+    "crates/horizon-android/src/lib.rs",
+    "crates/horizon-client/src/android/mod.rs",
+    "crates/horizon-client/src/android/launcher.rs",
+    "crates/horizon-client/src/android/launcher_pages.rs",
+    "crates/horizon-client/src/android_main.rs",
+    "crates/horizon-client/src/android_resources.rs",
+    "crates/horizon-client/src/official_install.rs",
+    "crates/horizon-port-pack/src/classify.rs",
+    "docs/modpacks/atm10-mods.csv",
+    "packaging/android/bedrock-controls.json"
+  ],
+  "custom_patch_rules": [
+    {
+      "id": "bypass_internal_egui_pages",
+      "target_file": "crates/horizon-client/src/android/launcher_pages.rs",
+      "description": "Bypass internal Horizon Android egui launcher_pages unless HORIZON_SHOW_INTERNAL_UI is set, keeping all code reachable."
+    },
+    {
+      "id": "direct_boot_and_skin_mod_sync",
+      "target_file": "crates/horizon-client/src/android/launcher.rs",
+      "description": "Auto-boot directly into Minecraft 26.3 on resumed(), sanitize .hmod files, inject custom_skin_active.png into 9 default player skin slots, and write real-time milestones to zalith-game-boot.txt."
+    },
+    {
+      "id": "bedrock_controls_cdn_fallback",
+      "target_file": "crates/horizon-client/src/android_resources.rs",
+      "description": "Use jsDelivr CDN mirror + valid 1x1 PNG fallback so touch control verification never stalls at 27% (17/60)."
+    },
+    {
+      "id": "jni_official_installer_bridge",
+      "target_file": "crates/horizon-client/src/android_main.rs",
+      "description": "Export JNI functions nativeIsGameInstalled, nativeStartOfficialInstall, and nativeGetInstallProgress with pause/resume/cancel & speed logging."
+    }
+  ]
+}

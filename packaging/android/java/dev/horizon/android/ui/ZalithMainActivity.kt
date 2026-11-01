@@ -11,7 +11,10 @@ import android.annotation.SuppressLint
 import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -30,6 +33,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -58,11 +62,18 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -209,6 +220,7 @@ private fun SyncDynamicLauncherPalette(palette: ZalithThemePalette, useDynamicCo
 enum class SettingsSubCategory(val label: String, val icon: ImageVector) {
     RENDERER("Renderer", Icons.Default.DisplaySettings),
     GAME("Game", Icons.Default.RocketLaunch),
+    AI_AGENT("AI Agent", Icons.Default.AutoAwesome),
     CONTROLS("Controls", Icons.Default.Games),
     GAMEPAD("Gamepad", Icons.Default.SportsEsports),
     LAUNCHER("Launcher", Icons.Default.ViewInAr)
@@ -230,6 +242,7 @@ class ZalithMainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         HorizonNativeBridge.ensureHomeDirectories(this)
         HorizonNativeBridge.syncAndRepairModsStorage(this, 0)
+        HorizonNativeBridge.syncAndRepairShadersStorage(this, 0)
 
         if (Build.VERSION.SDK_INT >= 33) {
             try {
@@ -287,7 +300,7 @@ class ZalithMainActivity : ComponentActivity() {
                             // has actually taken over the foreground!
                             if (isLauncherHibernated || isLaunchingSplash) {
                                 isGameProcessSleeping = true
-                                HorizonNativeBridge.trimMemoryCaches()
+                                HorizonNativeBridge.releaseMemoryForGameLaunch(context)
                             }
                         }
                         else -> {}
@@ -856,6 +869,241 @@ fun MinecraftSkinFullBodyCanvas(
     }
 }
 
+private data class Skin3DQuad(
+    val x0: Float, val y0: Float,
+    val x1: Float, val y1: Float,
+    val x2: Float, val y2: Float,
+    val x3: Float, val y3: Float,
+    val zDepth: Float,
+    val colorArgb: Int
+)
+
+@Composable
+fun MinecraftSkin3DPreviewCanvas(
+    skinBitmap: Bitmap,
+    slimArms: Boolean,
+    autoRotate: Boolean,
+    walkAnimation: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val pixels = remember(skinBitmap) {
+        val scaled = if (skinBitmap.width == 64 && skinBitmap.height == 64) {
+            skinBitmap
+        } else {
+            Bitmap.createScaledBitmap(skinBitmap, 64, 64, false)
+        }
+        val arr = IntArray(64 * 64)
+        scaled.getPixels(arr, 0, 64, 0, 0, 64, 64)
+        arr
+    }
+
+    var yawDeg by remember { mutableFloatStateOf(-28f) }
+    var pitchDeg by remember { mutableFloatStateOf(12f) }
+    var walkTick by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(autoRotate, walkAnimation) {
+        while (autoRotate || walkAnimation) {
+            delay(16L)
+            if (autoRotate) {
+                yawDeg = (yawDeg + 1.15f) % 360f
+            }
+            if (walkAnimation) {
+                walkTick = (walkTick + 0.11f) % (Math.PI.toFloat() * 2f)
+            }
+        }
+    }
+
+    val reusablePath = remember { Path() }
+
+    Canvas(
+        modifier = modifier.pointerInput(Unit) {
+            detectDragGestures { change, dragAmount ->
+                change.consume()
+                yawDeg = (yawDeg + dragAmount.x * 0.65f) % 360f
+                pitchDeg = (pitchDeg + dragAmount.y * 0.38f).coerceIn(-40f, 40f)
+            }
+        }
+    ) {
+        val w = size.width
+        val h = size.height
+        val scale = minOf(w / 24f, h / 38f)
+        val centerX = w * 0.5f
+        val centerY = h * 0.5f
+
+        drawOval(
+            color = Color.Black.copy(alpha = 0.45f),
+            topLeft = Offset(centerX - 6.5f * scale, centerY + 14.2f * scale),
+            size = Size(13f * scale, 3.2f * scale)
+        )
+
+        val yawRad = Math.toRadians(yawDeg.toDouble()).toFloat()
+        val pitchRad = Math.toRadians(pitchDeg.toDouble()).toFloat()
+        val cosY = cos(yawRad)
+        val sinY = sin(yawRad)
+        val cosP = cos(pitchRad)
+        val sinP = sin(pitchRad)
+
+        val quads = ArrayList<Skin3DQuad>(1600)
+
+        fun shadeColor(argb: Int, factor: Float): Int {
+            val a = (argb ushr 24) and 0xFF
+            val r = (((argb ushr 16) and 0xFF) * factor).roundToInt().coerceIn(0, 255)
+            val g = (((argb ushr 8) and 0xFF) * factor).roundToInt().coerceIn(0, 255)
+            val b = ((argb and 0xFF) * factor).roundToInt().coerceIn(0, 255)
+            return (a shl 24) or (r shl 16) or (g shl 8) or b
+        }
+
+        fun transformPoint(
+            lx: Float, ly: Float, lz: Float,
+            pivX: Float, pivY: Float, pivZ: Float,
+            rotXRad: Float
+        ): FloatArray {
+            val cosR = cos(rotXRad)
+            val sinR = sin(rotXRad)
+            val ry = ly * cosR - lz * sinR
+            val rz = ly * sinR + lz * cosR
+            val wx = pivX + lx
+            val wy = pivY + ry
+            val wz = pivZ + rz
+
+            val x1 = wx * cosY + wz * sinY
+            val z1 = -wx * sinY + wz * cosY
+            val y2 = wy * cosP - z1 * sinP
+            val z2 = wy * sinP + z1 * cosP
+
+            val fov = 68f
+            val persp = fov / (fov - z2).coerceAtLeast(20f)
+            val sx = centerX + x1 * scale * persp
+            val sy = centerY + y2 * scale * persp
+            return floatArrayOf(sx, sy, z2)
+        }
+
+        fun emitFaceGrid(
+            p00: FloatArray, p10: FloatArray, p11: FloatArray, p01: FloatArray,
+            uStart: Int, vStart: Int, uWidth: Int, vHeight: Int,
+            shade: Float, isOverlay: Boolean
+        ) {
+            val ux = p10[0] - p00[0]
+            val uy = p10[1] - p00[1]
+            val vx = p01[0] - p00[0]
+            val vy = p01[1] - p00[1]
+            if (ux * vy - uy * vx <= 0f && !isOverlay) return
+
+            val invW = 1f / uWidth.toFloat()
+            val invH = 1f / vHeight.toFloat()
+            val zBias = if (isOverlay) 0.18f else 0f
+
+            for (gy in 0 until vHeight) {
+                val ty0 = gy * invH
+                val ty1 = (gy + 1) * invH
+                val vTex = (vStart + gy).coerceIn(0, 63)
+                for (gx in 0 until uWidth) {
+                    val uTex = (uStart + gx).coerceIn(0, 63)
+                    val rawArgb = pixels[vTex * 64 + uTex]
+                    val alpha = (rawArgb ushr 24) and 0xFF
+                    if (alpha < 24) continue
+                    val finalArgb = shadeColor(rawArgb or (0xFF shl 24), shade)
+
+                    val tx0 = gx * invW
+                    val tx1 = (gx + 1) * invW
+
+                    fun bilerpX(tx: Float, ty: Float): Float {
+                        val top = p00[0] + (p10[0] - p00[0]) * tx
+                        val bot = p01[0] + (p11[0] - p01[0]) * tx
+                        return top + (bot - top) * ty
+                    }
+                    fun bilerpY(tx: Float, ty: Float): Float {
+                        val top = p00[1] + (p10[1] - p00[1]) * tx
+                        val bot = p01[1] + (p11[1] - p01[1]) * tx
+                        return top + (bot - top) * ty
+                    }
+                    fun bilerpZ(tx: Float, ty: Float): Float {
+                        val top = p00[2] + (p10[2] - p00[2]) * tx
+                        val bot = p01[2] + (p11[2] - p01[2]) * tx
+                        return top + (bot - top) * ty
+                    }
+
+                    val x0 = bilerpX(tx0, ty0)
+                    val y0 = bilerpY(tx0, ty0)
+                    val x1 = bilerpX(tx1, ty0)
+                    val y1 = bilerpY(tx1, ty0)
+                    val x2 = bilerpX(tx1, ty1)
+                    val y2 = bilerpY(tx1, ty1)
+                    val x3 = bilerpX(tx0, ty1)
+                    val y3 = bilerpY(tx0, ty1)
+                    val zAvg = bilerpZ((tx0 + tx1) * 0.5f, (ty0 + ty1) * 0.5f) + zBias
+
+                    quads.add(Skin3DQuad(x0, y0, x1, y1, x2, y2, x3, y3, zAvg, finalArgb))
+                }
+            }
+        }
+
+        fun emitBox(
+            pivX: Float, pivY: Float, pivZ: Float,
+            xMin: Float, yMin: Float, zMin: Float,
+            xMax: Float, yMax: Float, zMax: Float,
+            rotXRad: Float,
+            uOrigin: Int, vOrigin: Int,
+            texW: Int, texH: Int, texD: Int,
+            isOverlay: Boolean
+        ) {
+            val ftl = transformPoint(xMin, yMin, zMax, pivX, pivY, pivZ, rotXRad)
+            val ftr = transformPoint(xMax, yMin, zMax, pivX, pivY, pivZ, rotXRad)
+            val fbr = transformPoint(xMax, yMax, zMax, pivX, pivY, pivZ, rotXRad)
+            val fbl = transformPoint(xMin, yMax, zMax, pivX, pivY, pivZ, rotXRad)
+
+            val btl = transformPoint(xMin, yMin, zMin, pivX, pivY, pivZ, rotXRad)
+            val btr = transformPoint(xMax, yMin, zMin, pivX, pivY, pivZ, rotXRad)
+            val bbr = transformPoint(xMax, yMax, zMin, pivX, pivY, pivZ, rotXRad)
+            val bbl = transformPoint(xMin, yMax, zMin, pivX, pivY, pivZ, rotXRad)
+
+            emitFaceGrid(ftl, ftr, fbr, fbl, uOrigin + texD, vOrigin + texD, texW, texH, 1.0f, isOverlay)
+            emitFaceGrid(btr, btl, bbl, bbr, uOrigin + texD * 2 + texW, vOrigin + texD, texW, texH, 0.74f, isOverlay)
+            emitFaceGrid(btl, ftl, fbl, bbl, uOrigin, vOrigin + texD, texD, texH, 0.84f, isOverlay)
+            emitFaceGrid(ftr, btr, bbr, fbr, uOrigin + texD + texW, vOrigin + texD, texD, texH, 0.82f, isOverlay)
+            emitFaceGrid(btl, btr, ftr, ftl, uOrigin + texD, vOrigin, texW, texD, 1.06f, isOverlay)
+            emitFaceGrid(fbl, fbr, bbr, bbl, uOrigin + texD + texW, vOrigin, texW, texD, 0.62f, isOverlay)
+        }
+
+        val swingAngle = if (walkAnimation) sin(walkTick) * 0.42f else 0.14f
+        val armW = if (slimArms) 3 else 4
+        val armWf = armW.toFloat()
+
+        emitBox(0f, -8f, 0f, -4f, -8f, -4f, 4f, 0f, 4f, 0f, 0, 0, 8, 8, 8, false)
+        emitBox(0f, -8f, 0f, -4.35f, -8.35f, -4.35f, 4.35f, 0.35f, 4.35f, 0f, 32, 0, 8, 8, 8, true)
+
+        emitBox(0f, -8f, 0f, -4f, 0f, -2f, 4f, 12f, 2f, 0f, 16, 16, 8, 12, 4, false)
+        emitBox(0f, -8f, 0f, -4.25f, -0.25f, -2.25f, 4.25f, 12.25f, 2.25f, 0f, 16, 32, 8, 12, 4, true)
+
+        val rArmPivX = -4f - armWf * 0.5f
+        emitBox(rArmPivX, -6f, 0f, -armWf * 0.5f, -2f, -2f, armWf * 0.5f, 10f, 2f, swingAngle, 40, 16, armW, 12, 4, false)
+        emitBox(rArmPivX, -6f, 0f, -armWf * 0.5f - 0.25f, -2.25f, -2.25f, armWf * 0.5f + 0.25f, 10.25f, 2.25f, swingAngle, 40, 32, armW, 12, 4, true)
+
+        val lArmPivX = 4f + armWf * 0.5f
+        emitBox(lArmPivX, -6f, 0f, -armWf * 0.5f, -2f, -2f, armWf * 0.5f, 10f, 2f, -swingAngle, 32, 48, armW, 12, 4, false)
+        emitBox(lArmPivX, -6f, 0f, -armWf * 0.5f - 0.25f, -2.25f, -2.25f, armWf * 0.5f + 0.25f, 10.25f, 2.25f, -swingAngle, 48, 48, armW, 12, 4, true)
+
+        emitBox(-2f, 4f, 0f, -2f, 0f, -2f, 2f, 12f, 2f, -swingAngle * 0.85f, 0, 16, 4, 12, 4, false)
+        emitBox(-2f, 4f, 0f, -2.25f, -0.25f, -2.25f, 2.25f, 12.25f, 2.25f, -swingAngle * 0.85f, 0, 32, 4, 12, 4, true)
+
+        emitBox(2f, 4f, 0f, -2f, 0f, -2f, 2f, 12f, 2f, swingAngle * 0.85f, 16, 48, 4, 12, 4, false)
+        emitBox(2f, 4f, 0f, -2.25f, -0.25f, -2.25f, 2.25f, 12.25f, 2.25f, swingAngle * 0.85f, 0, 48, 4, 12, 4, true)
+
+        quads.sortBy { it.zDepth }
+
+        for (i in 0 until quads.size) {
+            val q = quads[i]
+            reusablePath.reset()
+            reusablePath.moveTo(q.x0, q.y0)
+            reusablePath.lineTo(q.x1, q.y1)
+            reusablePath.lineTo(q.x2, q.y2)
+            reusablePath.lineTo(q.x3, q.y3)
+            reusablePath.close()
+            drawPath(path = reusablePath, color = Color(q.colorArgb))
+        }
+    }
+}
+
 /**
  * Zalith-style Settings Dropdown Card (`429668.jpg` style):
  * Full-width dark slate rounded card with Title, Description subtitle, `Selected: <value>`, and right dropdown arrow.
@@ -1181,6 +1429,9 @@ fun LavenderTagBadge(text: String) {
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             color = LavenderBadgeText,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
         )
     }
@@ -1291,6 +1542,7 @@ fun ZalithCleanLauncherScreen(
     var installStatus by remember { mutableStateOf<AssetInstallStatus>(HorizonNativeBridge.pollInstallProgress(context, config.enableSystemLog)) }
     var skinDetectionBanner by remember { mutableStateOf<String?>(null) }
     var skinReloadCounter by remember { mutableIntStateOf(0) }
+    var pendingCustomSkinName by remember { mutableStateOf("") }
 
     // Cache the active account's 64x64 skin bitmap for instant rendering on Dashboard & Skin Studio
     val activeSkinBitmap = remember(activeAccount.id, activeAccount.skinPath, activeAccount.slimSkinModel, skinReloadCounter) {
@@ -1300,7 +1552,8 @@ fun ZalithCleanLauncherScreen(
     // Hoisted skinPicker at root screen level so it is NEVER disposed when Google Photos / File Picker opens!
     val skinPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            val res = HorizonNativeBridge.detectAndImportSkinFromUri(context, uri, activeAccount, config)
+            val res = HorizonNativeBridge.detectAndImportSkinFromUri(context, uri, activeAccount, config, pendingCustomSkinName)
+            pendingCustomSkinName = ""
             if (res.success && res.skinFile != null) {
                 val updatedList = accounts.map { acc ->
                     if (acc.id == activeAccount.id) {
@@ -1472,6 +1725,9 @@ fun ZalithCleanLauncherScreen(
                                     activeSkinBitmap = activeSkinBitmap,
                                     config = config,
                                     detectionBanner = skinDetectionBanner,
+                                    customSkinNameInput = pendingCustomSkinName,
+                                    onCustomSkinNameChange = { pendingCustomSkinName = it },
+                                    skinReloadCounter = skinReloadCounter,
                                     onLaunchSkinPicker = { skinPicker.launch("image/*") },
                                     onUpdateBanner = { skinDetectionBanner = it },
                                     onSkinUpdated = { skinReloadCounter += 1 },
@@ -1752,117 +2008,287 @@ private fun HorizonTopNav(
  * - 18 Authentic HD 16:9 Minecraft Wallpapers cycling every 5 seconds with smooth crossfade.
  * - Zero duplicate navigation buttons on top-right (only a single clean `Wallpaper` button).
  */
+private class HorizonZVideoJsBridge(
+    private val mainHandler: android.os.Handler,
+    private val onVideoEndedCallback: () -> Unit
+) {
+    private val triggered = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun resetTrigger() {
+        triggered.set(false)
+    }
+
+    @JavascriptInterface
+    fun onEnded() {
+        if (triggered.compareAndSet(false, true)) {
+            mainHandler.post { onVideoEndedCallback() }
+        }
+    }
+
+    @JavascriptInterface
+    fun onError() {
+        if (triggered.compareAndSet(false, true)) {
+            mainHandler.post { onVideoEndedCallback() }
+        }
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun MinecraftTrailerVideoWallpaperPlayer(
     videoId: String,
+    directStreamUrl: String,
+    trailerTitle: String,
     isMuted: Boolean,
     isPaused: Boolean,
     onVideoEndedOrError: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val htmlContent = remember(videoId) {
-        """
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <style>
-          html, body {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            background-color: #000000; overflow: hidden;
-          }
-          #player-wrap {
-            position: absolute; top: -6%; left: -6%; width: 112%; height: 112%;
-            pointer-events: none;
-          }
-          iframe {
-            width: 100%; height: 100%; border: 0;
-          }
-        </style>
-        </head>
-        <body>
-          <div id="player-wrap"><div id="player"></div></div>
-          <script src="https://www.youtube.com/iframe_api"></script>
-          <script>
-            var player;
-            var initialMuted = ${if (isMuted) "true" else "false"};
-            function onYouTubeIframeAPIReady() {
-              player = new YT.Player('player', {
-                width: '100%',
-                height: '100%',
-                videoId: '$videoId',
-                playerVars: {
-                  'autoplay': 1,
-                  'controls': 0,
-                  'rel': 0,
-                  'showinfo': 0,
-                  'modestbranding': 1,
-                  'iv_load_policy': 3,
-                  'fs': 0,
-                  'playsinline': 1,
-                  'vq': 'hd720'
-                },
-                events: {
-                  'onReady': function(event) {
-                    event.target.setPlaybackQuality('hd720');
-                    if (initialMuted) {
-                      event.target.mute();
-                    } else {
-                      event.target.unMute();
-                      event.target.setVolume(100);
-                    }
-                    event.target.playVideo();
-                  },
-                  'onStateChange': function(event) {
-                    if (event.data === YT.PlayerState.PLAYING) {
-                      event.target.setPlaybackQuality('hd720');
-                    } else if (event.data === YT.PlayerState.ENDED) {
-                      window.location.href = 'horizonz://trailer-ended';
-                    }
-                  },
-                  'onError': function(event) {
-                    window.location.href = 'horizonz://trailer-error';
-                  }
-                }
-              });
-            }
-            function setHorizonMuted(muteFlag) {
-              initialMuted = muteFlag;
-              if (player && player.mute && player.unMute) {
-                if (muteFlag) {
-                  player.mute();
-                } else {
-                  player.unMute();
-                  if (player.setVolume) player.setVolume(100);
-                }
-              }
-            }
-            function setHorizonPaused(pauseFlag) {
-              if (player && player.pauseVideo && player.playVideo) {
-                if (pauseFlag) {
-                  player.pauseVideo();
-                } else {
-                  player.playVideo();
-                }
-              }
-            }
-          </script>
-        </body>
-        </html>
-        """.trimIndent()
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    val currentOnEnded by rememberUpdatedState(onVideoEndedOrError)
+    val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val jsBridge = remember {
+        HorizonZVideoJsBridge(mainHandler) { currentOnEnded() }
     }
 
-    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    val buildUnifiedPlayerHtml = remember {
+        { vid: String, initialStreamUrl: String, muted: Boolean ->
+            val mBool = if (muted) "true" else "false"
+            val safeStream = initialStreamUrl.replace("'", "\'")
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <meta name="referrer" content="origin">
+            <style>
+              * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+              html, body { width: 100vw; height: 100vh; background: #000; overflow: hidden; }
+              #stage { position: fixed; inset: 0; width: 100vw; height: 100vh; background: #000; overflow: hidden; }
+              #ytframe {
+                position: absolute;
+                top: -12%;
+                left: -12%;
+                width: 124vw;
+                height: 124vh;
+                border: 0;
+                background: #000;
+                pointer-events: none;
+                z-index: 1;
+              }
+              #directVid {
+                position: absolute;
+                top: -4%;
+                left: -4%;
+                width: 108vw;
+                height: 108vh;
+                object-fit: cover;
+                background: #000;
+                pointer-events: none;
+                z-index: 2;
+                display: none;
+              }
+            </style>
+            </head>
+            <body>
+              <div id="stage">
+                <iframe
+                  id="ytframe"
+                  src="https://www.youtube-nocookie.com/embed/$vid?enablejsapi=1&autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&cc_load_policy=0&cc_lang_pref=none&fs=0&playsinline=1&vq=hd720&origin=https://www.minecraft.net"
+                  allow="autoplay; encrypted-media; picture-in-picture"
+                  referrerpolicy="origin">
+                </iframe>
+                <video id="directVid" playsinline webkit-playsinline autoplay muted preload="auto"></video>
+              </div>
+              <script>
+                window.__hzMuted = $mBool;
+                window.__hzPaused = false;
+                window.__hzDirectActive = false;
+                window.__hzEndedSent = false;
+
+                function notifyEnded() {
+                  if (window.__hzEndedSent) return;
+                  window.__hzEndedSent = true;
+                  try {
+                    if (window.HorizonZBridge && window.HorizonZBridge.onEnded) {
+                      window.HorizonZBridge.onEnded();
+                      return;
+                    }
+                  } catch (e) {}
+                  window.location.href = 'https://www.minecraft.net/__hz_ended';
+                }
+
+                function ytCmd(func, args) {
+                  try {
+                    var f = document.getElementById('ytframe');
+                    if (f && f.contentWindow) {
+                      f.contentWindow.postMessage(JSON.stringify({
+                        event: 'command',
+                        func: func,
+                        args: args || []
+                      }), '*');
+                    }
+                  } catch (e) {}
+                }
+
+                function syncAudioState() {
+                  var dv = document.getElementById('directVid');
+                  if (window.__hzDirectActive && dv) {
+                    dv.muted = !!window.__hzMuted;
+                    if (!window.__hzMuted) dv.volume = 1.0;
+                    ytCmd('mute', []);
+                    ytCmd('pauseVideo', []);
+                  } else {
+                    if (window.__hzMuted) {
+                      ytCmd('mute', []);
+                    } else {
+                      ytCmd('unMute', []);
+                      ytCmd('setVolume', [100]);
+                    }
+                  }
+                }
+
+                window.__hzSetMuted = function(m) {
+                  window.__hzMuted = !!m;
+                  syncAudioState();
+                };
+
+                window.__hzSetPaused = function(p) {
+                  window.__hzPaused = !!p;
+                  var dv = document.getElementById('directVid');
+                  if (window.__hzPaused) {
+                    if (dv && !dv.paused) dv.pause();
+                    ytCmd('pauseVideo', []);
+                  } else {
+                    if (window.__hzDirectActive && dv) {
+                      dv.play().catch(function(){});
+                    } else {
+                      ytCmd('playVideo', []);
+                      syncAudioState();
+                    }
+                  }
+                };
+
+                window.__hzAttachDirectStream = function(streamUrl) {
+                  if (!streamUrl || streamUrl.indexOf('http') !== 0 || window.__hzDirectActive) return;
+                  var dv = document.getElementById('directVid');
+                  if (!dv) return;
+                  dv.src = streamUrl;
+                  dv.muted = true;
+                  dv.onplaying = function() {
+                    window.__hzDirectActive = true;
+                    dv.style.display = 'block';
+                    dv.muted = !!window.__hzMuted;
+                    if (!window.__hzMuted) dv.volume = 1.0;
+                    ytCmd('pauseVideo', []);
+                  };
+                  dv.ontimeupdate = function() {
+                    if (dv.currentTime >= 298) {
+                      notifyEnded();
+                    }
+                  };
+                  dv.onended = function() {
+                    notifyEnded();
+                  };
+                  dv.onerror = function() {
+                    window.__hzDirectActive = false;
+                    dv.style.display = 'none';
+                    ytCmd('playVideo', []);
+                    syncAudioState();
+                  };
+                  var p = dv.play();
+                  if (p && p.catch) {
+                    p.catch(function() {
+                      dv.muted = true;
+                      dv.play().catch(function() {
+                        window.__hzDirectActive = false;
+                        dv.style.display = 'none';
+                      });
+                    });
+                  }
+                };
+
+                window.addEventListener('message', function(ev) {
+                  try {
+                    var data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
+                    if (!data) return;
+                    if (data.event === 'onReady') {
+                      ytCmd('unloadModule', ['captions']);
+                      ytCmd('unloadModule', ['cc']);
+                      ytCmd('setPlaybackQualityRange', ['hd720', 'hd720']);
+                      if (!window.__hzPaused && !window.__hzDirectActive) {
+                        ytCmd('playVideo', []);
+                        syncAudioState();
+                      }
+                    } else if (data.event === 'infoDelivery' && data.info) {
+                      if (data.info.playerState === 1) {
+                        ytCmd('unloadModule', ['captions']);
+                        ytCmd('unloadModule', ['cc']);
+                        ytCmd('setPlaybackQualityRange', ['hd720', 'hd720']);
+                        syncAudioState();
+                      } else if (data.info.playerState === 0) {
+                        notifyEnded();
+                      }
+                      if (typeof data.info.currentTime === 'number' && data.info.currentTime >= 298) {
+                        notifyEnded();
+                      }
+                    } else if (data.event === 'onError') {
+                      if (!window.__hzDirectActive) {
+                        notifyEnded();
+                      }
+                    }
+                  } catch (e) {}
+                });
+
+                var f = document.getElementById('ytframe');
+                f.addEventListener('load', function() {
+                  try {
+                    f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+                  } catch (e) {}
+                  setTimeout(function() {
+                    ytCmd('unloadModule', ['captions']);
+                    ytCmd('unloadModule', ['cc']);
+                    ytCmd('setPlaybackQualityRange', ['hd720', 'hd720']);
+                    if (!window.__hzDirectActive && !window.__hzPaused) {
+                      ytCmd('playVideo', []);
+                      syncAudioState();
+                    }
+                  }, 350);
+                });
+
+                setInterval(function() {
+                  try {
+                    if (f && f.contentWindow) {
+                      f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+                    }
+                    if (!window.__hzDirectActive && !window.__hzPaused) {
+                      ytCmd('unloadModule', ['captions']);
+                      ytCmd('unloadModule', ['cc']);
+                      syncAudioState();
+                    }
+                  } catch (e) {}
+                }, 1200);
+
+                if ('$safeStream'.indexOf('http') === 0) {
+                  window.__hzAttachDirectStream('$safeStream');
+                }
+              </script>
+            </body>
+            </html>
+            """.trimIndent()
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
             webViewRef?.let { wv ->
                 runCatching {
-                    wv.evaluateJavascript("if(window.setHorizonPaused) setHorizonPaused(true);", null)
+                    wv.stopLoading()
+                    wv.loadUrl("about:blank")
                     wv.onPause()
                     wv.pauseTimers()
-                    wv.stopLoading()
+                    wv.removeAllViews()
                     wv.destroy()
                 }
             }
@@ -1870,9 +2296,20 @@ private fun MinecraftTrailerVideoWallpaperPlayer(
         }
     }
 
+    LaunchedEffect(directStreamUrl, webViewRef) {
+        if (directStreamUrl.startsWith("http")) {
+            val safe = directStreamUrl.replace("'", "\'")
+            webViewRef?.evaluateJavascript(
+                "if (window.__hzAttachDirectStream) window.__hzAttachDirectStream('$safe');",
+                null
+            )
+        }
+    }
+
     LaunchedEffect(isMuted, webViewRef) {
+        val mStr = if (isMuted) "true" else "false"
         webViewRef?.evaluateJavascript(
-            "if(window.setHorizonMuted) setHorizonMuted(${if (isMuted) "true" else "false"});",
+            "if (window.__hzSetMuted) window.__hzSetMuted($mStr);",
             null
         )
     }
@@ -1880,12 +2317,13 @@ private fun MinecraftTrailerVideoWallpaperPlayer(
     LaunchedEffect(isPaused, webViewRef) {
         webViewRef?.let { wv ->
             if (isPaused) {
-                wv.evaluateJavascript("if(window.setHorizonPaused) setHorizonPaused(true);", null)
+                wv.evaluateJavascript("if (window.__hzSetPaused) window.__hzSetPaused(true);", null)
                 wv.onPause()
+                wv.pauseTimers()
             } else {
                 wv.onResume()
                 wv.resumeTimers()
-                wv.evaluateJavascript("if(window.setHorizonPaused) setHorizonPaused(false);", null)
+                wv.evaluateJavascript("if (window.__hzSetPaused) window.__hzSetPaused(false);", null)
             }
         }
     }
@@ -1901,34 +2339,72 @@ private fun MinecraftTrailerVideoWallpaperPlayer(
                 setBackgroundColor(android.graphics.Color.BLACK)
                 isClickable = false
                 isFocusable = false
+                runCatching {
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                }
                 settings.apply {
                     javaScriptEnabled = true
                     mediaPlaybackRequiresUserGesture = false
                     domStorageEnabled = true
+                    databaseEnabled = true
+                    allowFileAccess = true
                     loadsImagesAutomatically = true
+                    useWideViewPort = true
+                    loadWithOverviewMode = true
                     cacheMode = WebSettings.LOAD_DEFAULT
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+                    userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36"
                 }
+                addJavascriptInterface(jsBridge, "HorizonZBridge")
                 webChromeClient = WebChromeClient()
                 webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                        if (url != null && (url.startsWith("horizonz://trailer-ended") || url.startsWith("horizonz://trailer-error"))) {
-                            onVideoEndedOrError()
+                    private fun handleInterceptUrl(url: String?): Boolean {
+                        if (url == null) return false
+                        if (url.contains("__hz_ended") || url.startsWith("horizonz://")) {
+                            jsBridge.onEnded()
                             return true
                         }
                         return false
                     }
+
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        val reqUrl = request?.url?.toString()
+                        if (handleInterceptUrl(reqUrl)) return true
+                        if (request != null && request.isForMainFrame && reqUrl != null && !reqUrl.startsWith("https://www.minecraft.net")) {
+                            return true
+                        }
+                        return false
+                    }
+
+                    @Deprecated("Deprecated in Java")
+                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                        return handleInterceptUrl(url)
+                    }
                 }
+                jsBridge.resetTrigger()
                 tag = videoId
-                loadDataWithBaseURL("https://www.youtube.com", htmlContent, "text/html", "utf-8", null)
+                loadDataWithBaseURL(
+                    "https://www.minecraft.net/",
+                    buildUnifiedPlayerHtml(videoId, directStreamUrl, isMuted),
+                    "text/html",
+                    "utf-8",
+                    null
+                )
                 webViewRef = this
             }
         },
         update = { wv ->
             if (wv.tag != videoId) {
                 wv.tag = videoId
-                wv.loadDataWithBaseURL("https://www.youtube.com", htmlContent, "text/html", "utf-8", null)
+                jsBridge.resetTrigger()
+                wv.loadDataWithBaseURL(
+                    "https://www.minecraft.net/",
+                    buildUnifiedPlayerHtml(videoId, directStreamUrl, isMuted),
+                    "text/html",
+                    "utf-8",
+                    null
+                )
             }
         }
     )
@@ -1953,8 +2429,26 @@ private fun CleanHomeViewport(
     var wallpaperIndex by remember { mutableIntStateOf((0 until totalCount.coerceAtLeast(1)).random()) }
 
     val isVideoMode = config.useYoutubeTrailerWallpaper || config.backgroundMode == HorizonBackgroundMode.YOUTUBE_TRAILER
-    var trailerList by remember { mutableStateOf(HorizonNativeBridge.OFFICIAL_MINECRAFT_TRAILERS_FALLBACK) }
-    var currentTrailerIndex by remember { mutableIntStateOf(0) }
+    var trailerList by remember {
+        mutableStateOf(HorizonNativeBridge.OFFICIAL_MINECRAFT_TRAILERS_FALLBACK.shuffled())
+    }
+    var currentTrailerIndex by remember {
+        mutableIntStateOf((HorizonNativeBridge.OFFICIAL_MINECRAFT_TRAILERS_FALLBACK.indices).random())
+    }
+    var activeDirectStreamUrl by remember { mutableStateOf("") }
+
+    val pickRandomNextTrailer = remember {
+        { curIdx: Int, size: Int ->
+            if (size <= 1) 0
+            else {
+                var candidate = (0 until size).random()
+                if (candidate == curIdx) {
+                    candidate = (curIdx + 1) % size
+                }
+                candidate
+            }
+        }
+    }
 
     LaunchedEffect(isVideoMode) {
         if (isVideoMode) {
@@ -1962,14 +2456,24 @@ private fun CleanHomeViewport(
                 HorizonNativeBridge.fetchLatestMinecraftYoutubeTrailers()
             }
             if (fetched.isNotEmpty()) {
-                trailerList = fetched
-                currentTrailerIndex = 0
+                trailerList = fetched.shuffled()
+                currentTrailerIndex = (fetched.indices).random()
             }
         }
     }
 
     val activeTrailer = trailerList.getOrElse(currentTrailerIndex % trailerList.size.coerceAtLeast(1)) {
         HorizonNativeBridge.OFFICIAL_MINECRAFT_TRAILERS_FALLBACK.first()
+    }
+
+    LaunchedEffect(isVideoMode, activeTrailer.videoId) {
+        if (isVideoMode) {
+            activeDirectStreamUrl = ""
+            val resolved = withContext(Dispatchers.IO) {
+                HorizonNativeBridge.resolveDirectTrailerStreamUrl(activeTrailer.videoId)
+            }
+            activeDirectStreamUrl = resolved
+        }
     }
 
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -1989,7 +2493,6 @@ private fun CleanHomeViewport(
         }
     }
 
-    // Only rotate static wallpapers when Video Mode is OFF and Launcher is NOT hibernated!
     LaunchedEffect(totalCount, isHibernated, isVideoMode) {
         while (!isHibernated && !isVideoMode) {
             delay(5000L)
@@ -1997,8 +2500,8 @@ private fun CleanHomeViewport(
         }
     }
 
-    LaunchedEffect(isHibernated) {
-        while (!isHibernated) {
+    LaunchedEffect(isHibernated, isVideoMode) {
+        while (!isHibernated && !isVideoMode) {
             delay(5000L)
             var next = (MINECRAFT_SPLASH_QUOTES.indices).random()
             if (next == quoteIndex) {
@@ -2008,6 +2511,17 @@ private fun CleanHomeViewport(
         }
     }
 
+    val titleScale by animateFloatAsState(
+        targetValue = if (isVideoMode) 0.84f else 1.0f,
+        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
+        label = "MinecraftTitleScaleAnim"
+    )
+    val titleOffsetY by animateDpAsState(
+        targetValue = if (isVideoMode) 12.dp else 0.dp,
+        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
+        label = "MinecraftTitleOffsetAnim"
+    )
+
     Surface(
         shape = RoundedCornerShape(22.dp),
         color = CardSlateBg.copy(alpha = 0.90f),
@@ -2015,54 +2529,66 @@ private fun CleanHomeViewport(
         modifier = Modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (isVideoMode && !isHibernated) {
-                // Static wallpaper is turned OFF while official Minecraft YouTube Trailer (720p) is playing!
-                MinecraftTrailerVideoWallpaperPlayer(
-                    videoId = activeTrailer.videoId,
-                    isMuted = config.muteTrailerVideo,
-                    isPaused = isHibernated,
-                    onVideoEndedOrError = {
-                        currentTrailerIndex = (currentTrailerIndex + 1) % trailerList.size.coerceAtLeast(1)
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else if (!isHibernated) {
-                AnimatedContent(
-                    targetState = wallpaperIndex % totalCount.coerceAtLeast(1),
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(900)).togetherWith(fadeOut(animationSpec = tween(900))).using(sizeTransform = null)
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    label = "MinecraftWallpaperCarousel"
-                ) { idx ->
-                    if (idx >= DASHBOARD_WALLPAPERS.size && (idx - DASHBOARD_WALLPAPERS.size) < customWallpapers.size) {
-                        val customFile = customWallpapers[idx - DASHBOARD_WALLPAPERS.size]
-                        val bmp = remember(customFile.absolutePath) {
-                            runCatching { BitmapFactory.decodeFile(customFile.absolutePath)?.asImageBitmap() }.getOrNull()
-                        }
-                        if (bmp != null) {
-                            Image(
-                                bitmap = bmp,
-                                contentDescription = "Custom Minecraft Wallpaper",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+            AnimatedContent(
+                targetState = isVideoMode,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(520, easing = FastOutSlowInEasing))
+                        .togetherWith(fadeOut(animationSpec = tween(420)))
+                        .using(sizeTransform = null)
+                },
+                modifier = Modifier.fillMaxSize(),
+                label = "WallpaperVsVideoModeTransition"
+            ) { videoActive ->
+                if (videoActive && !isHibernated) {
+                    MinecraftTrailerVideoWallpaperPlayer(
+                        videoId = activeTrailer.videoId,
+                        directStreamUrl = activeDirectStreamUrl,
+                        trailerTitle = activeTrailer.title,
+                        isMuted = config.muteTrailerVideo,
+                        isPaused = isHibernated,
+                        onVideoEndedOrError = {
+                            currentTrailerIndex = pickRandomNextTrailer(currentTrailerIndex, trailerList.size.coerceAtLeast(1))
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else if (!isHibernated) {
+                    AnimatedContent(
+                        targetState = wallpaperIndex % totalCount.coerceAtLeast(1),
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(900)).togetherWith(fadeOut(animationSpec = tween(900))).using(sizeTransform = null)
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        label = "MinecraftWallpaperCarousel"
+                    ) { idx ->
+                        if (idx >= DASHBOARD_WALLPAPERS.size && (idx - DASHBOARD_WALLPAPERS.size) < customWallpapers.size) {
+                            val customFile = customWallpapers[idx - DASHBOARD_WALLPAPERS.size]
+                            val bmp = remember(customFile.absolutePath) {
+                                runCatching { BitmapFactory.decodeFile(customFile.absolutePath)?.asImageBitmap() }.getOrNull()
+                            }
+                            if (bmp != null) {
+                                Image(
+                                    bitmap = bmp,
+                                    contentDescription = "Custom Minecraft Wallpaper",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Image(
+                                    painter = painterResource(id = DASHBOARD_WALLPAPERS[0]),
+                                    contentDescription = "Minecraft Wallpaper",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         } else {
+                            val resId = DASHBOARD_WALLPAPERS[idx % DASHBOARD_WALLPAPERS.size]
                             Image(
-                                painter = painterResource(id = DASHBOARD_WALLPAPERS[0]),
+                                painter = painterResource(id = resId),
                                 contentDescription = "Minecraft Wallpaper",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
-                    } else {
-                        val resId = DASHBOARD_WALLPAPERS[idx % DASHBOARD_WALLPAPERS.size]
-                        Image(
-                            painter = painterResource(id = resId),
-                            contentDescription = "Minecraft Wallpaper",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
                     }
                 }
             }
@@ -2074,7 +2600,7 @@ private fun CleanHomeViewport(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Black.copy(alpha = if (isVideoMode) 0.04f else 0.08f),
-                                Color.Black.copy(alpha = if (isVideoMode) 0.58f else 0.68f)
+                                Color.Black.copy(alpha = if (isVideoMode) 0.56f else 0.68f)
                             )
                         )
                     )
@@ -2115,6 +2641,13 @@ private fun CleanHomeViewport(
                             currentTrailerIndex = (currentTrailerIndex + 1) % trailerList.size.coerceAtLeast(1)
                         }
                     )
+                    DashboardQuickIconPill(
+                        icon = Icons.Default.Shuffle,
+                        label = "Random Trailer",
+                        onClick = {
+                            currentTrailerIndex = pickRandomNextTrailer(currentTrailerIndex, trailerList.size.coerceAtLeast(1))
+                        }
+                    )
                 } else {
                     DashboardQuickIconPill(
                         icon = Icons.Default.Wallpaper,
@@ -2143,38 +2676,16 @@ private fun CleanHomeViewport(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (isVideoMode) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = Color(0xFF141C22).copy(alpha = 0.82f),
-                        modifier = Modifier.border(1.dp, SkyBlueAccent.copy(alpha = 0.45f), RoundedCornerShape(50))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SmartDisplay,
-                                contentDescription = null,
-                                tint = Color(0xFFFF5252),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = "Minecraft Official Trailer (720p): ${activeTrailer.title}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
                 Row(
+                    modifier = Modifier
+                        .offset(y = titleOffsetY)
+                        .graphicsLayer {
+                            scaleX = titleScale
+                            scaleY = titleScale
+                            transformOrigin = TransformOrigin(0f, 1f)
+                        },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -2194,32 +2705,42 @@ private fun CleanHomeViewport(
                     }
                 }
 
-                AnimatedContent(
-                    targetState = MINECRAFT_SPLASH_QUOTES[quoteIndex],
-                    transitionSpec = {
-                        (slideInVertically(tween(340)) { h -> h / 2 } + fadeIn(tween(340)))
-                            .togetherWith(
-                                slideOutVertically(tween(260)) { h -> -h / 2 } + fadeOut(tween(240))
-                            )
-                            .using(sizeTransform = null)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth(0.92f)
-                        .animatedPressScale {
-                            quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size
-                            if (!isVideoMode) {
-                                wallpaperIndex = (wallpaperIndex + 1) % totalCount.coerceAtLeast(1)
-                            }
+                AnimatedVisibility(
+                    visible = !isVideoMode,
+                    enter = fadeIn(tween(420, easing = FastOutSlowInEasing)) +
+                        expandVertically(tween(420, easing = FastOutSlowInEasing)) +
+                        slideInVertically(tween(420, easing = FastOutSlowInEasing)) { h -> h / 2 },
+                    exit = fadeOut(tween(280)) +
+                        shrinkVertically(tween(340, easing = FastOutSlowInEasing)) +
+                        slideOutVertically(tween(280)) { h -> h / 2 }
+                ) {
+                    AnimatedContent(
+                        targetState = MINECRAFT_SPLASH_QUOTES[quoteIndex],
+                        transitionSpec = {
+                            (slideInVertically(tween(340)) { h -> h / 2 } + fadeIn(tween(340)))
+                                .togetherWith(
+                                    slideOutVertically(tween(260)) { h -> -h / 2 } + fadeOut(tween(240))
+                                )
+                                .using(sizeTransform = null)
                         },
-                    label = "MinecraftSplashQuote"
-                ) { quote ->
-                    Text(
-                        text = "“$quote”",
-                        fontSize = 13.sp,
-                        fontStyle = FontStyle.Italic,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFFFE082)
-                    )
+                        modifier = Modifier
+                            .fillMaxWidth(0.92f)
+                            .animatedPressScale {
+                                if (!isVideoMode) {
+                                    quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size
+                                    wallpaperIndex = (wallpaperIndex + 1) % totalCount.coerceAtLeast(1)
+                                }
+                            },
+                        label = "MinecraftSplashQuote"
+                    ) { quote ->
+                        Text(
+                            text = "“$quote”",
+                            fontSize = 13.sp,
+                            fontStyle = FontStyle.Italic,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFFFE082)
+                        )
+                    }
                 }
             }
         }
@@ -2270,6 +2791,9 @@ private fun CleanAccountsAndSkinsViewport(
     activeSkinBitmap: Bitmap,
     config: HorizonConfigState,
     detectionBanner: String?,
+    customSkinNameInput: String,
+    onCustomSkinNameChange: (String) -> Unit,
+    skinReloadCounter: Int,
     onLaunchSkinPicker: () -> Unit,
     onUpdateBanner: (String?) -> Unit,
     onSkinUpdated: () -> Unit,
@@ -2277,9 +2801,76 @@ private fun CleanAccountsAndSkinsViewport(
 ) {
     val context = LocalContext.current
     var selectedSubTab by remember { mutableStateOf(AccountSubCategory.SKIN_STUDIO) }
-    var showBackView by remember { mutableStateOf(false) }
+    var is3DPreview by remember { mutableStateOf(true) }
+    var autoRotate3D by remember { mutableStateOf(true) }
+    var walkAnim3D by remember { mutableStateOf(true) }
+    var showBackView2D by remember { mutableStateOf(false) }
     var newAccountName by remember { mutableStateOf("") }
     var selectedAccountType by remember { mutableStateOf(AccountType.OFFLINE) }
+
+    var savedSkinLibrary by remember { mutableStateOf<List<SavedCustomSkinItem>>(emptyList()) }
+    var renameSkinTarget by remember { mutableStateOf<SavedCustomSkinItem?>(null) }
+    var renameSkinInput by remember { mutableStateOf("") }
+
+    LaunchedEffect(skinReloadCounter, activeAccount.skinPath) {
+        savedSkinLibrary = withContext(Dispatchers.IO) {
+            HorizonNativeBridge.loadSavedSkinLibrary(context)
+        }
+    }
+
+    renameSkinTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { renameSkinTarget = null },
+            containerColor = Color(0xFF1F262B),
+            title = {
+                Text("Rename Skin", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Rename the skin file (leave blank for default.png, default1.png, etc.):",
+                        fontSize = 12.sp,
+                        color = MutedSubtitleText
+                    )
+                    OutlinedTextField(
+                        value = renameSkinInput,
+                        onValueChange = { renameSkinInput = it },
+                        singleLine = true,
+                        label = { Text("Skin Name (.png)", fontSize = 11.sp) }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val updated = HorizonNativeBridge.renameSavedCustomSkin(context, target, renameSkinInput)
+                        if (updated != null) {
+                            savedSkinLibrary = HorizonNativeBridge.loadSavedSkinLibrary(context)
+                            if (activeAccount.skinPath == target.filePath) {
+                                val updatedAccounts = accounts.map { acc ->
+                                    if (acc.id == activeAccount.id) {
+                                        acc.copy(skinPath = updated.filePath, skinSourceLabel = updated.fileName)
+                                    } else acc
+                                }
+                                onAccountsChange(updatedAccounts)
+                            }
+                            onSkinUpdated()
+                            onUpdateBanner("Skin renamed to '${updated.fileName}'!")
+                        }
+                        renameSkinTarget = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent)
+                ) {
+                    Text("Save", color = SkyBlueDarkText, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameSkinTarget = null }) {
+                    Text("Cancel", color = Color.White)
+                }
+            }
+        )
+    }
 
     Row(
         modifier = Modifier.fillMaxSize(),
@@ -2312,13 +2903,12 @@ private fun CleanAccountsAndSkinsViewport(
                         modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Left Card: Interactive 2D Full-Body Minecraft Character Preview
                         Surface(
                             shape = RoundedCornerShape(22.dp),
                             color = CardSlateBg.copy(alpha = 0.90f),
                             border = horizonGlassBorder(),
                             modifier = Modifier
-                                .width(196.dp)
+                                .width(206.dp)
                                 .fillMaxHeight()
                         ) {
                             Column(
@@ -2363,14 +2953,14 @@ private fun CleanAccountsAndSkinsViewport(
 
                                     Surface(
                                         shape = RoundedCornerShape(50),
-                                        color = SubRailCapsuleActive,
-                                        modifier = Modifier.animatedPressScale { showBackView = !showBackView }
+                                        color = SkyBlueAccent,
+                                        modifier = Modifier.animatedPressScale { is3DPreview = !is3DPreview }
                                     ) {
                                         Text(
-                                            text = if (showBackView) "Back" else "Front",
+                                            text = if (is3DPreview) "3D Preview" else "2D View",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = SkyBlueAccent,
+                                            color = SkyBlueDarkText,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
                                     }
@@ -2386,31 +2976,99 @@ private fun CleanAccountsAndSkinsViewport(
                                             Brush.verticalGradient(
                                                 listOf(Color(0xFF171E24), Color(0xFF101519))
                                             )
-                                        )
-                                        .animatedPressScale { showBackView = !showBackView },
+                                        ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    MinecraftSkinFullBodyCanvas(
-                                        skinBitmap = activeSkinBitmap,
-                                        slimArms = activeAccount.slimSkinModel,
-                                        showBack = showBackView,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(8.dp)
-                                    )
+                                    AnimatedContent(
+                                        targetState = is3DPreview,
+                                        transitionSpec = {
+                                            fadeIn(tween(260)).togetherWith(fadeOut(tween(200))).using(sizeTransform = null)
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                        label = "Skin3Dvs2DTransition"
+                                    ) { mode3d ->
+                                        if (mode3d) {
+                                            MinecraftSkin3DPreviewCanvas(
+                                                skinBitmap = activeSkinBitmap,
+                                                slimArms = activeAccount.slimSkinModel,
+                                                autoRotate = autoRotate3D,
+                                                walkAnimation = walkAnim3D,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(6.dp)
+                                            )
+                                        } else {
+                                            MinecraftSkinFullBodyCanvas(
+                                                skinBitmap = activeSkinBitmap,
+                                                slimArms = activeAccount.slimSkinModel,
+                                                showBack = showBackView2D,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(8.dp)
+                                                    .clickable { showBackView2D = !showBackView2D }
+                                            )
+                                        }
+                                    }
                                 }
 
-                                Text(
-                                    text = activeAccount.skinSourceLabel,
-                                    fontSize = 10.sp,
-                                    color = MutedSubtitleText,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (is3DPreview) {
+                                        Surface(
+                                            shape = RoundedCornerShape(50),
+                                            color = if (autoRotate3D) SubRailCapsuleActive else CardRowBg,
+                                            modifier = Modifier.animatedPressScale { autoRotate3D = !autoRotate3D }
+                                        ) {
+                                            Text(
+                                                text = if (autoRotate3D) "Spin: ON" else "Spin: OFF",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (autoRotate3D) SkyBlueAccent else MutedSubtitleText,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                        Surface(
+                                            shape = RoundedCornerShape(50),
+                                            color = if (walkAnim3D) SubRailCapsuleActive else CardRowBg,
+                                            modifier = Modifier.animatedPressScale { walkAnim3D = !walkAnim3D }
+                                        ) {
+                                            Text(
+                                                text = if (walkAnim3D) "Walk: ON" else "Walk: OFF",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (walkAnim3D) SkyBlueAccent else MutedSubtitleText,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Surface(
+                                            shape = RoundedCornerShape(50),
+                                            color = SubRailCapsuleActive,
+                                            modifier = Modifier.animatedPressScale { showBackView2D = !showBackView2D }
+                                        ) {
+                                            Text(
+                                                text = if (showBackView2D) "Tampak Belakang" else "Tampak Depan",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = SkyBlueAccent,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = activeAccount.skinSourceLabel,
+                                        fontSize = 9.sp,
+                                        color = MutedSubtitleText,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
 
-                        // Right Column: Compact, Unclipped Skin Importer + Arm Model Selector + Preset List
                         Column(
                             modifier = Modifier
                                 .weight(1f)
@@ -2434,7 +3092,7 @@ private fun CleanAccountsAndSkinsViewport(
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Custom Skin & Photo Importer",
+                                                text = "Import Skin & Save to Skin Library",
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White,
@@ -2478,6 +3136,62 @@ private fun CleanAccountsAndSkinsViewport(
                                         }
                                     }
 
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color(0xFF1A2024),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(38.dp)
+                                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = null,
+                                                tint = SkyBlueAccent,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Box(
+                                                modifier = Modifier.weight(1f),
+                                                contentAlignment = Alignment.CenterStart
+                                            ) {
+                                                if (customSkinNameInput.isEmpty()) {
+                                                    Text(
+                                                        text = "Skin name (optional — blank = default.png, default1.png, default2.png...)",
+                                                        fontSize = 11.sp,
+                                                        color = MutedSubtitleText,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                BasicTextField(
+                                                    value = customSkinNameInput,
+                                                    onValueChange = onCustomSkinNameChange,
+                                                    singleLine = true,
+                                                    textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
+                                                    cursorBrush = SolidColor(SkyBlueAccent),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                            if (customSkinNameInput.isNotEmpty()) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Clear",
+                                                    tint = MutedSubtitleText,
+                                                    modifier = Modifier
+                                                        .size(14.dp)
+                                                        .clickable { onCustomSkinNameChange("") }
+                                                )
+                                            }
+                                        }
+                                    }
+
                                     detectionBanner?.let { bannerMsg ->
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
@@ -2505,7 +3219,6 @@ private fun CleanAccountsAndSkinsViewport(
                                         }
                                     }
 
-                                    // Arm Model Selector (Wide 4px Steve vs Slim 3px Alex)
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2544,7 +3257,6 @@ private fun CleanAccountsAndSkinsViewport(
                                 }
                             }
 
-                            // Built-in Preset Skins Card (including the User's Gothic Monochrome Skin!)
                             Surface(
                                 shape = RoundedCornerShape(18.dp),
                                 color = CardSlateBg,
@@ -2554,12 +3266,125 @@ private fun CleanAccountsAndSkinsViewport(
                                     modifier = Modifier.padding(14.dp),
                                     verticalArrangement = Arrangement.spacedBy(7.dp)
                                 ) {
-                                    Text(
-                                        text = "Ready-to-Use Skins (1-Tap In-Game)",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Skin Library (Saved & Ready-to-Use Presets)",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        LavenderTagBadge(text = "${savedSkinLibrary.size} Imported")
+                                    }
+
+                                    if (savedSkinLibrary.isNotEmpty()) {
+                                        savedSkinLibrary.forEach { savedItem ->
+                                            val itemBmp = remember(savedItem.filePath, savedItem.addedAt) {
+                                                BitmapFactory.decodeFile(savedItem.filePath)
+                                                    ?: HorizonNativeBridge.generatePresetSkinBitmap(BuiltInSkinPreset.CLASSIC_STEVE, context)
+                                            }
+                                            val isCurrent = activeAccount.skinPath == savedItem.filePath ||
+                                                activeAccount.skinSourceLabel == savedItem.fileName
+                                            Surface(
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = if (isCurrent) SubRailCapsuleActive else CardRowBg,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .animatedPressScale {
+                                                        val updatedAcc = HorizonNativeBridge.applySavedCustomSkin(
+                                                            context,
+                                                            savedItem,
+                                                            activeAccount,
+                                                            config
+                                                        )
+                                                        val updatedList = accounts.map { if (it.id == activeAccount.id) updatedAcc else it }
+                                                        onAccountsChange(updatedList)
+                                                        onSkinUpdated()
+                                                        onUpdateBanner("Skin '${savedItem.fileName}' is active & ready to use in-game!")
+                                                    }
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        MinecraftSkinHeadAvatar(
+                                                            skinBitmap = itemBmp,
+                                                            size = 32.dp,
+                                                            cornerRadius = 7.dp
+                                                        )
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = savedItem.fileName,
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = Color.White,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                            Text(
+                                                                text = "${savedItem.sourceLabel} • ${if (savedItem.slimModel) "Slim (3px)" else "Wide (4px)"}",
+                                                                fontSize = 10.sp,
+                                                                color = SkyBlueAccent,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    }
+
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Edit,
+                                                            contentDescription = "Rename Skin",
+                                                            tint = Color(0xFFD5DEE5),
+                                                            modifier = Modifier
+                                                                .size(17.dp)
+                                                                .clickable {
+                                                                    renameSkinInput = savedItem.fileName.removeSuffix(".png")
+                                                                    renameSkinTarget = savedItem
+                                                                }
+                                                        )
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Delete,
+                                                            contentDescription = "Delete Skin",
+                                                            tint = Color(0xFFFF8A80),
+                                                            modifier = Modifier
+                                                                .size(17.dp)
+                                                                .clickable {
+                                                                    HorizonNativeBridge.deleteSavedCustomSkin(context, savedItem)
+                                                                    savedSkinLibrary = HorizonNativeBridge.loadSavedSkinLibrary(context)
+                                                                }
+                                                        )
+                                                        Surface(
+                                                            shape = RoundedCornerShape(9.dp),
+                                                            color = if (isCurrent) SkyBlueAccent else Color(0xFF344149)
+                                                        ) {
+                                                            Text(
+                                                                text = if (isCurrent) "Active" else "Use",
+                                                                fontSize = 11.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = if (isCurrent) SkyBlueDarkText else Color.White,
+                                                                maxLines = 1,
+                                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     BuiltInSkinPreset.entries.forEach { preset ->
                                         val presetBmp = remember(preset) { HorizonNativeBridge.generatePresetSkinBitmap(preset, context) }
                                         val isCurrent = activeAccount.skinSourceLabel == "Preset: ${preset.title}"
@@ -3098,8 +3923,21 @@ private fun CleanVersionsViewport(
     onCancelDownload: () -> Unit,
     onSmartRepairAssets: () -> Unit
 ) {
-    var logExpanded by remember { mutableStateOf(true) }
+    var logExpanded by remember { mutableStateOf(false) }
     var showCancelConfirmDialog by remember { mutableStateOf(false) }
+    var showRepairConfirmDialog by remember { mutableStateOf(false) }
+    var showDeleteAllConfirmDialog by remember { mutableStateOf(false) }
+    var isRepairRunning by remember { mutableStateOf(false) }
+    var repairResultPopupMessage by remember { mutableStateOf<String?>(null) }
+    var deleteResultPopupMessage by remember { mutableStateOf<String?>(null) }
+    var sizeRefreshTick by remember { mutableIntStateOf(0) }
+    var installedSizeText by remember { mutableStateOf("Checking...") }
+
+    LaunchedEffect(installStatus.ready, installStatus.running, sizeRefreshTick) {
+        installedSizeText = withContext(Dispatchers.IO) {
+            HorizonNativeBridge.getInstalledAssetsDiskSizeFormatted(context)
+        }
+    }
 
     val chevronRotation by animateFloatAsState(
         targetValue = if (logExpanded) 180f else 0f,
@@ -3115,6 +3953,7 @@ private fun CleanVersionsViewport(
     if (showCancelConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showCancelConfirmDialog = false },
+            containerColor = Color(0xFF1F262B),
             icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFFFB74D)) },
             title = { Text("Cancel Download?", style = MaterialTheme.typography.titleMedium) },
             text = {
@@ -3128,6 +3967,7 @@ private fun CleanVersionsViewport(
                     onClick = {
                         showCancelConfirmDialog = false
                         onCancelDownload()
+                        sizeRefreshTick += 1
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
                 ) {
@@ -3136,7 +3976,132 @@ private fun CleanVersionsViewport(
             },
             dismissButton = {
                 TextButton(onClick = { showCancelConfirmDialog = false }) {
-                    Text("Lanjutkan Download", fontSize = 12.sp)
+                    Text("Lanjutkan", fontSize = 12.sp, color = SkyBlueAccent)
+                }
+            }
+        )
+    }
+
+    if (showRepairConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showRepairConfirmDialog = false },
+            containerColor = Color(0xFF1F262B),
+            icon = { Icon(Icons.Default.Build, contentDescription = null, tint = SkyBlueAccent) },
+            title = { Text("Smart Repair Minecraft 26.3 Assets", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
+            text = {
+                Text(
+                    "The system will check the completeness of engine files, 26.3 worldgen tables, audio, and 60 touch control icons.\n\nDamaged or missing files will be restored automatically without deleting your world data (Saves) or Mods.",
+                    fontSize = 13.sp,
+                    color = Color(0xFFD5DEE5),
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRepairConfirmDialog = false
+                        isRepairRunning = true
+                        HorizonNativeBridge.smartRepairAssets(context, true) { _, resultMsg ->
+                            isRepairRunning = false
+                            sizeRefreshTick += 1
+                            repairResultPopupMessage = resultMsg
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent)
+                ) {
+                    Text("Start Repair Now", color = SkyBlueDarkText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRepairConfirmDialog = false }) {
+                    Text("Cancel", fontSize = 12.sp, color = MutedSubtitleText)
+                }
+            }
+        )
+    }
+
+    repairResultPopupMessage?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { repairResultPopupMessage = null },
+            containerColor = Color(0xFF1F262B),
+            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF81C784)) },
+            title = { Text("Smart Repair Results", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
+            text = {
+                Text(
+                    text = msg,
+                    fontSize = 13.sp,
+                    color = Color(0xFFD5DEE5),
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { repairResultPopupMessage = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent)
+                ) {
+                    Text("OK, Got It", color = SkyBlueDarkText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+        )
+    }
+
+    if (showDeleteAllConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllConfirmDialog = false },
+            containerColor = Color(0xFF1F262B),
+            icon = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = Color(0xFFFF8A80)) },
+            title = { Text("Delete All Minecraft Assets?", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
+            text = {
+                Text(
+                    "All Minecraft 26.3 asset files (.local/horizon-client/26.3) will be completely deleted from device storage ($installedSizeText).\n\nYou will need to re-download the assets to enter the game again. Saves & Mods data stays safe.",
+                    fontSize = 13.sp,
+                    color = Color(0xFFD5DEE5),
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteAllConfirmDialog = false
+                        HorizonNativeBridge.deleteAllMinecraftAssets(context, true)
+                        sizeRefreshTick += 1
+                        deleteResultPopupMessage = "All Minecraft 26.3 assets were fully removed from the device. Asset status is now reset to 0 MB (Not Installed)."
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                ) {
+                    Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Yes, Delete Everything", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllConfirmDialog = false }) {
+                    Text("Cancel", fontSize = 12.sp, color = MutedSubtitleText)
+                }
+            }
+        )
+    }
+
+    deleteResultPopupMessage?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { deleteResultPopupMessage = null },
+            containerColor = Color(0xFF1F262B),
+            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SkyBlueAccent) },
+            title = { Text("Assets Completely Deleted", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
+            text = {
+                Text(
+                    text = msg,
+                    fontSize = 13.sp,
+                    color = Color(0xFFD5DEE5),
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { deleteResultPopupMessage = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent)
+                ) {
+                    Text("Done", color = SkyBlueDarkText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         )
@@ -3153,32 +4118,27 @@ private fun CleanVersionsViewport(
                 .fillMaxSize()
                 .padding(14.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
+            // Header Row: Simple Title & Subtitle (Status pill removed per user request!)
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text("Game & Assets Manager", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                if (!installStatus.running) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = SubRailCapsuleActive,
-                        modifier = Modifier.animatedPressScale(onClick = onSmartRepairAssets)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(Icons.Default.Build, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(14.dp))
-                            Text("Smart Repair (Check Missing/Corrupt)", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
+                Text(
+                    text = "Game & Assets Minecraft",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = "Manage the official asset install, run automatic repair, or delete all assets",
+                    fontSize = 11.sp,
+                    color = MutedSubtitleText
+                )
             }
 
+            // Main Clean Version & Assets Card
             Surface(
                 shape = RoundedCornerShape(18.dp),
                 color = CardRowBg,
@@ -3186,168 +4146,152 @@ private fun CleanVersionsViewport(
             ) {
                 Column(
                     modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Row 1: Icon + Version Name + 3 Simple Summary Pills (Zero Overlap)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
+                        MinecraftGrassCubeIcon(size = 44.dp)
+                        Column(
                             modifier = Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            MinecraftGrassCubeIcon(size = 42.dp)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(
-                                        text = "Minecraft 26.3",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
-                                        color = Color.White
-                                    )
-                                    LavenderTagBadge(text = "Rust Native")
-                                }
-                                Spacer(Modifier.height(2.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
                                 Text(
-                                    text = if (installStatus.ready) "All game files, worldgen tables, and 60 touch controls installed"
-                                    else if (installStatus.running) installStatus.stage
-                                    else "Download official game & assets (Pause / Resume / Background supported)",
+                                    text = "Minecraft 26.3",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 15.sp,
+                                    color = Color.White
+                                )
+                                LavenderTagBadge(text = "Rust Engine")
+                                LavenderTagBadge(text = "v0.7.6 Base")
+                            }
+                            Text(
+                                text = when {
+                                    installStatus.ready -> "Assets fully installed • Ready to jump into the game"
+                                    installStatus.running -> "${installStatus.stage} ${if (installStatus.speedText.isNotBlank()) "• ${installStatus.speedText}" else ""}"
+                                    else -> "Download the official Mojang asset pack to start playing Minecraft 26.3"
+                                },
+                                fontSize = 11.sp,
+                                color = if (installStatus.ready) Color(0xFF81C784) else MutedSubtitleText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    // Row 2: 3 Equal Simple Info Cards (Engine, Controls, Storage Size)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF1B2126),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text("Asset Status", fontSize = 10.sp, color = MutedSubtitleText)
+                                Text(
+                                    text = if (installStatus.ready) "Lengkap (100%)" else "${installStatus.percent}% Terunduh",
                                     fontSize = 12.sp,
-                                    color = if (installStatus.ready) Color(0xFF81C784) else MutedSubtitleText
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (installStatus.ready) Color(0xFF81C784) else Color.White,
+                                    maxLines = 1
                                 )
                             }
                         }
 
-                        Spacer(Modifier.width(8.dp))
-
-                        if (installStatus.running) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = SkyBlueAccent,
-                                    modifier = Modifier.animatedPressScale {
-                                        if (installStatus.paused) onResumeDownload() else onPauseDownload()
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (installStatus.paused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                                            contentDescription = null,
-                                            tint = SkyBlueDarkText,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Text(
-                                            text = if (installStatus.paused) "Resume" else "Pause",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = SkyBlueDarkText
-                                        )
-                                    }
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = Color(0xFF3A2326),
-                                    modifier = Modifier.animatedPressScale { showCancelConfirmDialog = true }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Icon(Icons.Default.Cancel, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(16.dp))
-                                        Text("Cancel", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFFF8A80))
-                                    }
-                                }
-                            }
-                        } else {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = SkyBlueAccent,
-                                modifier = Modifier.animatedPressScale(
-                                    onClick = if (installStatus.ready) onSmartRepairAssets else onStartDownload
-                                )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF1B2126),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (installStatus.ready) Icons.Default.Verified else Icons.Default.Download,
-                                        contentDescription = null,
-                                        tint = SkyBlueDarkText,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = if (installStatus.ready) "Verify" else "Download",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SkyBlueDarkText
-                                    )
-                                }
+                                Text("Komponen", fontSize = 10.sp, color = MutedSubtitleText)
+                                Text(
+                                    text = "Worldgen + 60 Touch",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SkyBlueAccent,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF1B2126),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text("Asset Size", fontSize = 10.sp, color = MutedSubtitleText)
+                                Text(
+                                    text = installedSizeText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 1
+                                )
                             }
                         }
                     }
 
-                    if (installStatus.running || installStatus.done > 0L || installStatus.error.isNotEmpty()) {
+                    // Row 3: Progress Bar (shown cleanly when downloading or when progress > 0)
+                    if (installStatus.running || installStatus.done > 0L || isRepairRunning) {
                         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = installStatus.stage,
+                                    text = if (isRepairRunning) "Memverifikasi & Memperbaiki File..." else installStatus.stage,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (installStatus.paused) Color(0xFFFFB74D) else SkyBlueAccent
+                                    color = if (installStatus.paused) Color(0xFFFFB74D) else SkyBlueAccent,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
-                                val rightLabel = buildString {
-                                    if (installStatus.speedText.isNotBlank()) {
-                                        append(installStatus.speedText)
-                                        append(" • ")
-                                    }
-                                    if (installStatus.detail.isNotBlank()) {
-                                        append(installStatus.detail)
-                                        append(" ")
-                                    } else if (installStatus.total > 1L) {
-                                        append("${installStatus.done} / ${installStatus.total} ")
-                                    }
-                                    append("(${installStatus.percent}%)")
-                                }
+                                Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = rightLabel,
+                                    text = buildString {
+                                        if (installStatus.speedText.isNotBlank()) {
+                                            append(installStatus.speedText)
+                                            append(" • ")
+                                        }
+                                        append("${installStatus.percent}%")
+                                    },
                                     fontSize = 11.sp,
-                                    color = MutedSubtitleText
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
                                 )
                             }
                             LinearProgressIndicator(
-                                progress = { animatedProgress },
-                                color = SkyBlueAccent,
+                                progress = { if (isRepairRunning) 1f else animatedProgress },
+                                color = if (installStatus.ready) Color(0xFF81C784) else SkyBlueAccent,
                                 trackColor = Color(0xFF33424B),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(7.dp)
                                     .clip(RoundedCornerShape(50))
                             )
-                            if (installStatus.currentUrl.isNotBlank()) {
-                                Text(
-                                    text = "Link: ${installStatus.currentUrl}",
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MutedSubtitleText,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
                         }
                     }
 
@@ -3359,16 +4303,177 @@ private fun CleanVersionsViewport(
                         ) {
                             Text(
                                 text = installStatus.error,
-                                fontSize = 12.sp,
-                                color = Color(0xFFFF6E6E),
+                                fontSize = 11.sp,
+                                color = Color(0xFFFF8A80),
                                 modifier = Modifier.padding(10.dp)
                             )
                         }
                     }
 
+                    // Row 4: Clean Action Buttons Bar (Download/Pause, Repair Pop-Up, Hapus Total Pop-Up)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (installStatus.running) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = SkyBlueAccent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .animatedPressScale {
+                                        if (installStatus.paused) onResumeDownload() else onPauseDownload()
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (installStatus.paused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                        contentDescription = null,
+                                        tint = SkyBlueDarkText,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = if (installStatus.paused) "Lanjutkan Download" else "Jeda (Pause)",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SkyBlueDarkText,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF3A2326),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .animatedPressScale { showCancelConfirmDialog = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Cancel, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Cancel Download",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF8A80),
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        } else {
+                            // 1. Download / Re-Download Button
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = SkyBlueAccent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .animatedPressScale {
+                                        if (installStatus.ready) {
+                                            showRepairConfirmDialog = true
+                                        } else {
+                                            onStartDownload()
+                                        }
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (installStatus.ready) Icons.Default.Verified else Icons.Default.Download,
+                                        contentDescription = null,
+                                        tint = SkyBlueDarkText,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = if (installStatus.ready) "Verify Assets" else "Download Assets",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SkyBlueDarkText,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+
+                            // 2. Smart Repair Button (Opens Repair Confirmation & Result Pop-Up!)
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = SubRailCapsuleActive,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .animatedPressScale { showRepairConfirmDialog = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Build,
+                                        contentDescription = null,
+                                        tint = SkyBlueAccent,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Repair Assets",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+
+                            // 3. Hapus Total Semua Aset Button (Opens Delete All Confirmation Pop-Up!)
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF3A2326),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .animatedPressScale { showDeleteAllConfirmDialog = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Delete,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF8A80),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Delete All Assets",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF8A80),
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Row 5: Compact Collapsible Download & Repair Log
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF1A2024),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF181E22),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
@@ -3385,46 +4490,43 @@ private fun CleanVersionsViewport(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Icon(
-                                        Icons.Default.Subject,
+                                        Icons.Default.Terminal,
                                         contentDescription = null,
-                                        modifier = Modifier.size(15.dp),
+                                        modifier = Modifier.size(14.dp),
                                         tint = SkyBlueAccent
                                     )
                                     Text(
-                                        text = "Download Process Log (URL & Speed)",
-                                        fontSize = 12.sp,
+                                        text = "Asset Activity Log Details",
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color.White
+                                        color = Color(0xFFD5DEE5)
                                     )
                                 }
 
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    TextButton(
-                                        onClick = {
+                                    Text(
+                                        text = "Copy Log",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SkyBlueAccent,
+                                        modifier = Modifier.clickable {
                                             val textToCopy = if (installStatus.logs.isNotEmpty()) {
                                                 installStatus.logs.joinToString("\n")
                                             } else {
                                                 "Stage: ${installStatus.stage} (${installStatus.percent}%)"
                                             }
                                             HorizonNativeBridge.copyToClipboard(context, "Download Log", textToCopy)
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(26.dp)
-                                    ) {
-                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = SkyBlueAccent, modifier = Modifier.size(13.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("Copy", fontSize = 11.sp, color = SkyBlueAccent)
-                                    }
-
+                                        }
+                                    )
                                     Icon(
                                         Icons.Default.ExpandMore,
-                                        contentDescription = if (logExpanded) "Minimize" else "Expand",
+                                        contentDescription = null,
                                         tint = Color.White,
                                         modifier = Modifier
-                                            .size(20.dp)
+                                            .size(18.dp)
                                             .rotate(chevronRotation)
                                     )
                                 }
@@ -3436,18 +4538,18 @@ private fun CleanVersionsViewport(
                                 exit = shrinkVertically(tween(180)) + fadeOut(tween(150))
                             ) {
                                 val logContent = if (installStatus.logs.isNotEmpty()) {
-                                    installStatus.logs.joinToString("\n")
+                                    installStatus.logs.takeLast(25).joinToString("\n")
                                 } else if (installStatus.ready) {
                                     "[OK] Minecraft 26.3 assets, worldgen tables, and 60/60 touch controls verified."
                                 } else {
-                                    "Tap 'Download' or 'INSTALL' to begin. Supports Pause, Resume, Cancel & Background Notification."
+                                    "Press 'Download Assets' to download or 'Repair Assets' to check files."
                                 }
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .heightIn(min = 75.dp, max = 155.dp)
+                                        .heightIn(min = 60.dp, max = 130.dp)
                                         .padding(start = 10.dp, end = 10.dp, bottom = 10.dp)
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(8.dp))
                                         .background(Color(0xFF0E1215))
                                         .padding(8.dp)
                                         .verticalScroll(rememberScrollState())
@@ -3455,7 +4557,7 @@ private fun CleanVersionsViewport(
                                     Text(
                                         text = logContent,
                                         fontFamily = FontFamily.Monospace,
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         color = Color(0xFFA5D6A7)
                                     )
                                 }
@@ -4533,8 +5635,10 @@ private fun CleanStoreViewport(
                                                         ) {
                                                             releases.forEach { rel ->
                                                                 val isDownloadingThis = storeProgress.running && storeProgress.activeItemId == detailProj.id
-                                                                val installedVerForProj = installedMap[detailProj.id] ?: installedMap[HorizonNativeBridge.sanitizeModId(detailProj.id)]
-                                                                val isThisExactVerInstalled = installedVerForProj != null && (installedVerForProj == rel.versionNumber || detailInstallState == StoreInstallState.INSTALLED && projectVersions.size == 1)
+                                                                val installedVerForProj = installedMap[detailProj.id]
+                                                                    ?: installedMap[detailProj.slug]
+                                                                    ?: installedMap[HorizonNativeBridge.sanitizeModId(detailProj.id)]
+                                                                val isThisExactVerInstalled = installedVerForProj != null && installedVerForProj == rel.versionNumber
                                                                 Surface(
                                                                     shape = RoundedCornerShape(12.dp),
                                                                     color = Color(0xFF1B2125),
@@ -4646,13 +5750,13 @@ private fun CleanStoreViewport(
                         }
                     }
 
-                    // Right Project Summary Card
+                    // Right Project Summary Card (fixed layout so Favorite pill never wraps vertically!)
                     val isFav = detailProj.id in favoriteIds
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = CardSlateBg,
                         modifier = Modifier
-                            .width(220.dp)
+                            .width(236.dp)
                             .fillMaxHeight()
                     ) {
                         Column(
@@ -4668,17 +5772,21 @@ private fun CleanStoreViewport(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                LavenderTagBadge(text = detailProj.kindBadge)
+                                Box(modifier = Modifier.weight(1f, fill = false)) {
+                                    LavenderTagBadge(text = detailProj.category.badgeLabel)
+                                }
+
+                                Spacer(Modifier.width(6.dp))
 
                                 Surface(
                                     shape = RoundedCornerShape(50),
-                                    color = CardRowBg,
+                                    color = if (isFav) Color(0xFF3A2329) else CardRowBg,
                                     modifier = Modifier.animatedPressScale {
                                         favoriteIds = HorizonNativeBridge.toggleProjectFavorite(context, detailProj.id)
                                     }
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
@@ -4688,7 +5796,14 @@ private fun CleanStoreViewport(
                                             tint = if (isFav) Color(0xFFFF6E6E) else Color.White,
                                             modifier = Modifier.size(13.dp)
                                         )
-                                        Text("Favorite", fontSize = 10.sp, color = Color.White)
+                                        Text(
+                                            text = if (isFav) "Favorited" else "Favorite",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isFav) Color(0xFFFFB4B4) else Color.White,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
                                     }
                                 }
                             }
@@ -4982,6 +6097,23 @@ private fun StoreOrFileItemIconBadge(
     }
 }
 
+private data class ManagerRowUiItem(
+    val key: String,
+    val file: File,
+    val folder: String,
+    val displayTitle: String,
+    val subtitleText: String,
+    val detailSummary: String,
+    val isEnabled: Boolean,
+    val lastModified: Long,
+    val modDetail: ModPackageDetailInfo?,
+    val saveDetail: WorldSaveDetailInfo?,
+    val packDetail: ResourcePackDetailInfo?,
+    val iconImage: ImageBitmap?,
+    val storeCatalogMatch: StoreCatalogItem? = null,
+    val hasStoreUpdate: Boolean = false
+)
+
 enum class FilesSortMode(val label: String) {
     BY_NAME("Sort by Name"),
     BY_FILE_NAME("Sort by File Name"),
@@ -5039,9 +6171,8 @@ private fun CleanFilesViewport(
     )
 
     var rawList by remember { mutableStateOf<List<File>>(emptyList()) }
-    var filteredList by remember { mutableStateOf<List<File>>(emptyList()) }
+    var filteredList by remember { mutableStateOf<List<ManagerRowUiItem>>(emptyList()) }
 
-    // Perform all directory scanning, `.hmod` repair, and metadata pre-warming on Dispatchers.IO (zero UI lag!)
     LaunchedEffect(currentFolder, refreshCount, profileSlot) {
         val loaded = withContext(Dispatchers.IO) {
             if (currentFolder == "mods") {
@@ -5051,13 +6182,9 @@ private fun CleanFilesViewport(
                     ?.filter { it.isFile && !it.name.endsWith(".part") && !it.name.endsWith(".tmp") && it.name.endsWith(".hmod", true) }
                     ?.distinctBy { HorizonNativeBridge.sanitizeModId(it.name) }
                     .orEmpty()
-                    .also { list -> list.forEach { HorizonNativeBridge.inspectModPackage(it) } }
             } else {
                 val dirFile = File(home, currentFolder).apply { mkdirs() }
-                dirFile.listFiles()?.filter { !it.name.endsWith(".part") && !it.name.endsWith(".tmp") }.orEmpty().also { list ->
-                    if (currentFolder == "saves") list.forEach { HorizonNativeBridge.inspectWorldSave(it) }
-                    else if (currentFolder in listOf("resourcepacks", "shaderpacks")) list.forEach { HorizonNativeBridge.inspectResourcePack(it) }
-                }
+                dirFile.listFiles()?.filter { !it.name.endsWith(".part") && !it.name.endsWith(".tmp") }.orEmpty()
             }
         }
         rawList = loaded
@@ -5065,22 +6192,72 @@ private fun CleanFilesViewport(
 
     LaunchedEffect(rawList, searchQuery, filterEnabledOnly, currentFolder, sortMode, refreshCount) {
         val computed = withContext(Dispatchers.IO) {
-            val base = rawList.filter { file ->
-                val modInfo = if (currentFolder == "mods") HorizonNativeBridge.inspectModPackage(file) else null
+            val isToggleableFolder = currentFolder in listOf("mods", "shaderpacks", "resourcepacks")
+            val prebuilt = rawList.mapNotNull { file ->
+                val modDetail = if (currentFolder == "mods") HorizonNativeBridge.inspectModPackage(file) else null
+                val saveDetail = if (currentFolder == "saves") HorizonNativeBridge.inspectWorldSave(file) else null
+                val packDetail = if (currentFolder in listOf("resourcepacks", "shaderpacks")) HorizonNativeBridge.inspectResourcePack(file) else null
+                val enabled = if (isToggleableFolder) {
+                    HorizonNativeBridge.isContentItemEnabled(context, currentFolder, file.name, profileSlot)
+                } else true
+
+                val displayTitle = when {
+                    modDetail != null -> modDetail.displayName
+                    saveDetail != null -> saveDetail.displayName
+                    packDetail != null -> packDetail.title
+                    else -> file.nameWithoutExtension.replace("-", " ").replace("_", " ")
+                }
+                val subtitleText = when {
+                    modDetail != null -> "${modDetail.description} • by ${modDetail.author} (${modDetail.fileName})"
+                    saveDetail != null -> "Last played: ${saveDetail.lastPlayedFormatted}"
+                    packDetail != null -> packDetail.description
+                    else -> "File Name: ${file.name}"
+                }
+
                 val matchesQuery = searchQuery.isBlank() ||
                     file.name.contains(searchQuery, ignoreCase = true) ||
-                    (modInfo != null && (modInfo.displayName.contains(searchQuery, ignoreCase = true) || modInfo.description.contains(searchQuery, ignoreCase = true)))
-                val matchesEnabled = if (!filterEnabledOnly || currentFolder in listOf("saves", "screenshots")) true
-                else HorizonNativeBridge.isContentItemEnabled(context, currentFolder, file.name, profileSlot)
-                matchesQuery && matchesEnabled
+                    displayTitle.contains(searchQuery, ignoreCase = true) ||
+                    subtitleText.contains(searchQuery, ignoreCase = true)
+                val matchesEnabled = !filterEnabledOnly || !isToggleableFolder || enabled
+
+                if (!matchesQuery || !matchesEnabled) {
+                    null
+                } else {
+                    val iconBmp = HorizonNativeBridge.loadLocalContentIconBitmap(file)?.asImageBitmap()
+                    val detailSummary = when {
+                        modDetail != null -> "ID: ${modDetail.modId} • API ${modDetail.apiLine} • Side: ${modDetail.side} • Size: ${modDetail.fileSizeFormatted}"
+                        packDetail != null -> "${packDetail.packType} • Format v${packDetail.formatVersion} • Size: ${packDetail.fileSizeFormatted}"
+                        saveDetail != null -> "${saveDetail.difficulty} • ${saveDetail.playTimeFormatted} • Seed: ${saveDetail.worldSeed}"
+                        else -> "File: ${file.name} (${file.length() / 1024} KB)"
+                    }
+                    val catMatch = HorizonNativeBridge.findCatalogItemForLocalFile(file, currentFolder)
+                    val curVer = modDetail?.version ?: HorizonNativeBridge.getInstalledStoreVersionsMap(context, profileSlot)[HorizonNativeBridge.sanitizeModId(file.name)] ?: "1.0.0"
+                    val curTuple = HorizonNativeBridge.parseVersionNumbers(curVer)
+                    val latestTuple = catMatch?.let { HorizonNativeBridge.parseVersionNumbers(it.version) }
+                    val updateAvailable = catMatch != null && curTuple != null && latestTuple != null &&
+                        HorizonNativeBridge.compareVersionLists(latestTuple, curTuple) > 0
+                    ManagerRowUiItem(
+                        key = "${file.absolutePath}:${file.lastModified()}:$curVer",
+                        file = file,
+                        folder = currentFolder,
+                        displayTitle = displayTitle,
+                        subtitleText = subtitleText,
+                        detailSummary = detailSummary,
+                        isEnabled = enabled,
+                        lastModified = file.lastModified(),
+                        modDetail = modDetail,
+                        saveDetail = saveDetail,
+                        packDetail = packDetail,
+                        iconImage = iconBmp,
+                        storeCatalogMatch = catMatch,
+                        hasStoreUpdate = updateAvailable
+                    )
+                }
             }
             when (sortMode) {
-                FilesSortMode.BY_NAME -> base.sortedBy {
-                    if (currentFolder == "mods") HorizonNativeBridge.inspectModPackage(it).displayName.lowercase(Locale.US)
-                    else it.nameWithoutExtension.lowercase(Locale.US)
-                }
-                FilesSortMode.BY_FILE_NAME -> base.sortedBy { it.name.lowercase(Locale.US) }
-                FilesSortMode.BY_LAST_MODIFIED -> base.sortedByDescending { it.lastModified() }
+                FilesSortMode.BY_NAME -> prebuilt.sortedBy { it.displayTitle.lowercase(Locale.US) }
+                FilesSortMode.BY_FILE_NAME -> prebuilt.sortedBy { it.file.name.lowercase(Locale.US) }
+                FilesSortMode.BY_LAST_MODIFIED -> prebuilt.sortedByDescending { it.lastModified }
             }
         }
         filteredList = computed
@@ -5451,14 +6628,16 @@ private fun CleanFilesViewport(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(filteredList, key = { it.absolutePath }) { file ->
+                            items(
+                                items = filteredList,
+                                key = { it.key },
+                                contentType = { it.folder }
+                            ) { rowItem ->
                                 FileManagerRowCard(
-                                    file = file,
-                                    folder = folder,
+                                    rowItem = rowItem,
                                     folderLabel = folderLabel,
                                     profileSlot = profileSlot,
                                     logEnabled = logEnabled,
-                                    refreshCount = refreshCount,
                                     onTriggerRefresh = { refreshCount += 1 },
                                     onRequestRename = { target ->
                                         renameInputText = target.nameWithoutExtension
@@ -5485,78 +6664,41 @@ private fun CleanFilesViewport(
 
 @Composable
 private fun FileManagerRowCard(
-    file: File,
-    folder: String,
+    rowItem: ManagerRowUiItem,
     folderLabel: String,
     profileSlot: Int,
     logEnabled: Boolean,
-    refreshCount: Int,
     onTriggerRefresh: () -> Unit,
     onRequestRename: (File) -> Unit,
     onRequestDelete: (File, String) -> Unit,
     onQuickPlayWorld: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val file = rowItem.file
+    val folder = rowItem.folder
+    val displayTitle = rowItem.displayTitle
+    val subtitleText = rowItem.subtitleText
+    val isEnabled = rowItem.isEnabled
+    val modDetail = rowItem.modDetail
+    val saveDetail = rowItem.saveDetail
+    val packDetail = rowItem.packDetail
+
     var showInfoPopover by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var expandedDetails by remember { mutableStateOf(false) }
 
     val isToggleable = folder in listOf("mods", "shaderpacks", "resourcepacks")
-    val isEnabled = remember(file.name, refreshCount, folder) {
-        if (isToggleable) {
-            HorizonNativeBridge.isContentItemEnabled(context, folder, file.name, profileSlot)
-        } else true
-    }
-
-    var localIconBmp by remember(file.absolutePath, file.lastModified()) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(file.absolutePath, file.lastModified()) {
-        localIconBmp = withContext(Dispatchers.IO) {
-            HorizonNativeBridge.loadLocalContentIconBitmap(file)
-        }
-    }
-
-    val modDetail = remember(file.absolutePath, file.lastModified(), folder, refreshCount) {
-        if (folder == "mods") HorizonNativeBridge.inspectModPackage(file) else null
-    }
-    val saveDetail = remember(file.absolutePath, file.lastModified(), folder) {
-        if (folder == "saves") HorizonNativeBridge.inspectWorldSave(file) else null
-    }
-    val packDetail = remember(file.absolutePath, file.lastModified(), folder) {
-        if (folder in listOf("resourcepacks", "shaderpacks")) HorizonNativeBridge.inspectResourcePack(file) else null
-    }
-
-    val displayTitle = when {
-        modDetail != null -> modDetail.displayName
-        saveDetail != null -> saveDetail.displayName
-        packDetail != null -> packDetail.title
-        else -> file.nameWithoutExtension.replace("-", " ").replace("_", " ")
-    }
-
-    val subtitleText = when {
-        modDetail != null -> "${modDetail.description} • by ${modDetail.author} (${modDetail.fileName})"
-        saveDetail != null -> "Last played: ${saveDetail.lastPlayedFormatted}"
-        packDetail != null -> packDetail.description
-        else -> "File Name: ${file.name}"
-    }
-
-    val animatedBorderColor by animateColorAsState(
-        targetValue = if (isToggleable && isEnabled) SkyBlueAccent.copy(alpha = 0.38f) else Color.Transparent,
-        animationSpec = tween(220),
-        label = "ManagerRowBorderColor"
-    )
-    val animatedCardColor by animateColorAsState(
-        targetValue = if (expandedDetails) SubRailCapsuleActive.copy(alpha = 0.55f) else CardRowBg,
-        animationSpec = tween(220),
-        label = "ManagerRowBgColor"
-    )
+    val borderColor = if (isToggleable && isEnabled) SkyBlueAccent.copy(alpha = 0.38f) else Color.Transparent
+    val cardColor = if (expandedDetails) SubRailCapsuleActive.copy(alpha = 0.55f) else CardRowBg
 
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = animatedCardColor,
+        color = cardColor,
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, animatedBorderColor, RoundedCornerShape(16.dp))
-            .animatedPressScale { expandedDetails = !expandedDetails }
+            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+            .clickable { expandedDetails = !expandedDetails }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -5564,10 +6706,9 @@ private fun FileManagerRowCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left 44dp Icon
-                if (localIconBmp != null) {
+                if (rowItem.iconImage != null) {
                     Image(
-                        bitmap = localIconBmp!!.asImageBitmap(),
+                        bitmap = rowItem.iconImage,
                         contentDescription = displayTitle,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
@@ -5586,7 +6727,6 @@ private fun FileManagerRowCard(
 
                 Spacer(Modifier.width(12.dp))
 
-                // Middle Title + Badges + Subtitle
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -5607,6 +6747,37 @@ private fun FileManagerRowCard(
                             "mods" -> {
                                 LavenderTagBadge(text = "v${modDetail?.version ?: "1.0.0"}")
                                 LavenderTagBadge(text = "26.3")
+                                if (rowItem.hasStoreUpdate && rowItem.storeCatalogMatch != null) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFFFFB74D),
+                                        modifier = Modifier.clickable {
+                                            val targetItem = rowItem.storeCatalogMatch
+                                            Toast.makeText(context, "Mengupdate ${targetItem.title} ke v${targetItem.version}...", Toast.LENGTH_SHORT).show()
+                                            HorizonNativeBridge.downloadAndInstallStoreItem(
+                                                context = context,
+                                                item = targetItem,
+                                                profileSlot = profileSlot,
+                                                logEnabled = logEnabled,
+                                                onProgress = {},
+                                                onComplete = { _, msg ->
+                                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                        onTriggerRefresh()
+                                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    ) {
+                                        Text(
+                                            text = "↑ Update v${rowItem.storeCatalogMatch.version}",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFF261600),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = if (isEnabled) Color(0xFF1E3E29) else Color(0xFF3A2326)
@@ -5655,7 +6826,6 @@ private fun FileManagerRowCard(
 
                 Spacer(Modifier.width(10.dp))
 
-                // Right Action Controls
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -5664,8 +6834,12 @@ private fun FileManagerRowCard(
                         Checkbox(
                             checked = isEnabled,
                             onCheckedChange = {
-                                HorizonNativeBridge.toggleContentItem(context, folder, file.name, profileSlot, logEnabled)
-                                onTriggerRefresh()
+                                scope.launch(Dispatchers.IO) {
+                                    HorizonNativeBridge.toggleContentItem(context, folder, file.name, profileSlot, logEnabled)
+                                    withContext(Dispatchers.Main) {
+                                        onTriggerRefresh()
+                                    }
+                                }
                             },
                             colors = CheckboxDefaults.colors(
                                 checkedColor = SkyBlueAccent,
@@ -5676,7 +6850,6 @@ private fun FileManagerRowCard(
                         )
                     }
 
-                    // `ⓘ` Info Icon with Floating Popover Card
                     Box {
                         Icon(
                             imageVector = Icons.Outlined.Info,
@@ -5684,103 +6857,103 @@ private fun FileManagerRowCard(
                             tint = Color(0xFFD5DEE5),
                             modifier = Modifier
                                 .size(20.dp)
-                                .animatedPressScale { showInfoPopover = true }
+                                .clickable { showInfoPopover = true }
                         )
 
-                        DropdownMenu(
-                            expanded = showInfoPopover,
-                            onDismissRequest = { showInfoPopover = false },
-                            modifier = Modifier
-                                .widthIn(min = 260.dp, max = 330.dp)
-                                .background(Color(0xFF283036))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                        if (showInfoPopover) {
+                            DropdownMenu(
+                                expanded = showInfoPopover,
+                                onDismissRequest = { showInfoPopover = false },
+                                modifier = Modifier
+                                    .widthIn(min = 260.dp, max = 330.dp)
+                                    .background(Color(0xFF283036))
                             ) {
-                                if (saveDetail != null) {
-                                    Text("Save Info", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    Spacer(Modifier.height(2.dp))
-                                    Text("File Name: ${saveDetail.folderName}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Text("Game Mode: ${saveDetail.gameMode}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Text("Difficulty: ${saveDetail.difficulty}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Text("Play Time: ${saveDetail.playTimeFormatted}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    if (saveDetail != null) {
+                                        Text("Save Info", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Spacer(Modifier.height(2.dp))
+                                        Text("File Name: ${saveDetail.folderName}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("Game Mode: ${saveDetail.gameMode}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("Difficulty: ${saveDetail.difficulty}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("Play Time: ${saveDetail.playTimeFormatted}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "World Seed: ${saveDetail.worldSeed}",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFFE0E6EB),
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = "Copy Seed",
+                                                tint = SkyBlueAccent,
+                                                modifier = Modifier
+                                                    .size(15.dp)
+                                                    .clickable {
+                                                        HorizonNativeBridge.copyToClipboard(context, "World Seed", saveDetail.worldSeed)
+                                                    }
+                                            )
+                                        }
+                                    } else if (packDetail != null) {
                                         Text(
-                                            text = "World Seed: ${saveDetail.worldSeed}",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFFE0E6EB),
-                                            modifier = Modifier.weight(1f, fill = false)
+                                            text = if (folder == "shaderpacks") "Shader Pack Information" else "Resource Pack Information",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
                                         )
-                                        Icon(
-                                            imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = "Copy Seed",
-                                            tint = SkyBlueAccent,
-                                            modifier = Modifier
-                                                .size(15.dp)
-                                                .animatedPressScale {
-                                                    HorizonNativeBridge.copyToClipboard(context, "World Seed", saveDetail.worldSeed)
-                                                }
+                                        Spacer(Modifier.height(2.dp))
+                                        Text("Pack Type: ${packDetail.packType}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("File Name: ${packDetail.fileName}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("File Size: ${packDetail.fileSizeFormatted}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("Format Version: ${packDetail.formatVersion}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                    } else if (modDetail != null) {
+                                        Text("Horizon Mod Manifest (horizon-mod.toml)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Spacer(Modifier.height(2.dp))
+                                        Text("Mod ID: ${modDetail.modId}", fontSize = 12.sp, color = SkyBlueAccent)
+                                        Text("Version: ${modDetail.version} (API ${modDetail.apiLine})", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("Author: ${modDetail.author}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("File: ${modDetail.fileName} (${modDetail.fileSizeFormatted})", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text(
+                                            text = "Capabilities: ${modDetail.capabilities.joinToString(", ").ifEmpty { "registries" }}",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF81C784)
+                                        )
+                                        Text(
+                                            text = "Status: ${if (isEnabled) "ON (Synced with horizon-mods.txt)" else "OFF (Disabled)"}",
+                                            fontSize = 12.sp,
+                                            color = if (isEnabled) Color(0xFF81C784) else Color(0xFFFF8A80)
                                         )
                                     }
-                                } else if (packDetail != null) {
-                                    Text(
-                                        text = if (folder == "shaderpacks") "Shader Pack Information" else "Resource Pack Information",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text("Pack Type: ${packDetail.packType}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Text("File Name: ${packDetail.fileName}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Text("File Size: ${packDetail.fileSizeFormatted}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Text("Format Version: ${packDetail.formatVersion}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                } else if (modDetail != null) {
-                                    Text("Horizon Mod Manifest (horizon-mod.toml)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    Spacer(Modifier.height(2.dp))
-                                    Text("Mod ID: ${modDetail.modId}", fontSize = 12.sp, color = SkyBlueAccent)
-                                    Text("Version: ${modDetail.version} (API ${modDetail.apiLine})", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Text("Author: ${modDetail.author}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Text("File: ${modDetail.fileName} (${modDetail.fileSizeFormatted})", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                    Text(
-                                        text = "Capabilities: ${modDetail.capabilities.joinToString(", ").ifEmpty { "registries" }}",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF81C784)
-                                    )
-                                    Text(
-                                        text = "Status: ${if (isEnabled) "ON (Synced with horizon-mods.txt)" else "OFF (Disabled)"}",
-                                        fontSize = 12.sp,
-                                        color = if (isEnabled) Color(0xFF81C784) else Color(0xFFFF8A80)
-                                    )
                                 }
                             }
                         }
                     }
 
                     if (folder == "mods") {
-                        // Delete Icon -> Opens Delete Confirmation Pop-Up Dialog!
                         Icon(
                             imageVector = Icons.Outlined.Delete,
                             contentDescription = "Delete Mod",
                             tint = Color(0xFFFF8A80),
                             modifier = Modifier
                                 .size(20.dp)
-                                .animatedPressScale {
+                                .clickable {
                                     onRequestDelete(file, displayTitle)
                                 }
                         )
                     } else {
-                        // `•••` More Options Button + Direct Delete Icon with Confirmation Pop-Up!
                         Icon(
                             imageVector = Icons.Outlined.Delete,
                             contentDescription = "Delete",
                             tint = Color(0xFFFF8A80),
                             modifier = Modifier
                                 .size(19.dp)
-                                .animatedPressScale {
+                                .clickable {
                                     onRequestDelete(file, displayTitle)
                                 }
                         )
@@ -5791,82 +6964,88 @@ private fun FileManagerRowCard(
                                 tint = Color(0xFFD5DEE5),
                                 modifier = Modifier
                                     .size(20.dp)
-                                    .animatedPressScale { showMoreMenu = true }
+                                    .clickable { showMoreMenu = true }
                             )
 
-                            DropdownMenu(
-                                expanded = showMoreMenu,
-                                onDismissRequest = { showMoreMenu = false },
-                                modifier = Modifier.background(Color(0xFF283036))
-                            ) {
-                                if (folder == "saves") {
-                                    DropdownMenuItem(
-                                        leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
-                                        text = { Text("Quick Play", fontSize = 12.sp, color = Color.White) },
-                                        onClick = {
-                                            showMoreMenu = false
-                                            onQuickPlayWorld()
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
-                                        text = { Text("Rename", fontSize = 12.sp, color = Color.White) },
-                                        onClick = {
-                                            showMoreMenu = false
-                                            onRequestRename(file)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        leadingIcon = { Icon(Icons.Default.Save, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
-                                        text = { Text("Backup Save", fontSize = 12.sp, color = Color.White) },
-                                        onClick = {
-                                            showMoreMenu = false
-                                            HorizonNativeBridge.backupWorldSave(context, file, logEnabled)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(17.dp)) },
-                                        text = { Text("Delete", fontSize = 12.sp, color = Color(0xFFFF8A80)) },
-                                        onClick = {
-                                            showMoreMenu = false
-                                            onRequestDelete(file, displayTitle)
-                                        }
-                                    )
-                                } else {
-                                    if (isToggleable) {
+                            if (showMoreMenu) {
+                                DropdownMenu(
+                                    expanded = showMoreMenu,
+                                    onDismissRequest = { showMoreMenu = false },
+                                    modifier = Modifier.background(Color(0xFF283036))
+                                ) {
+                                    if (folder == "saves") {
                                         DropdownMenuItem(
-                                            leadingIcon = {
-                                                Icon(
-                                                    if (isEnabled) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                                                    contentDescription = null,
-                                                    tint = SkyBlueAccent,
-                                                    modifier = Modifier.size(17.dp)
-                                                )
-                                            },
-                                            text = { Text(if (isEnabled) "Disable Pack" else "Enable Pack", fontSize = 12.sp, color = Color.White) },
+                                            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Quick Play", fontSize = 12.sp, color = Color.White) },
                                             onClick = {
                                                 showMoreMenu = false
-                                                HorizonNativeBridge.toggleContentItem(context, folder, file.name, profileSlot, logEnabled)
-                                                onTriggerRefresh()
+                                                onQuickPlayWorld()
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Rename", fontSize = 12.sp, color = Color.White) },
+                                            onClick = {
+                                                showMoreMenu = false
+                                                onRequestRename(file)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            leadingIcon = { Icon(Icons.Default.Save, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Backup Save", fontSize = 12.sp, color = Color.White) },
+                                            onClick = {
+                                                showMoreMenu = false
+                                                HorizonNativeBridge.backupWorldSave(context, file, logEnabled)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Delete", fontSize = 12.sp, color = Color(0xFFFF8A80)) },
+                                            onClick = {
+                                                showMoreMenu = false
+                                                onRequestDelete(file, displayTitle)
+                                            }
+                                        )
+                                    } else {
+                                        if (isToggleable) {
+                                            DropdownMenuItem(
+                                                leadingIcon = {
+                                                    Icon(
+                                                        if (isEnabled) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                                                        contentDescription = null,
+                                                        tint = SkyBlueAccent,
+                                                        modifier = Modifier.size(17.dp)
+                                                    )
+                                                },
+                                                text = { Text(if (isEnabled) "Disable Pack" else "Enable Pack", fontSize = 12.sp, color = Color.White) },
+                                                onClick = {
+                                                    showMoreMenu = false
+                                                    scope.launch(Dispatchers.IO) {
+                                                        HorizonNativeBridge.toggleContentItem(context, folder, file.name, profileSlot, logEnabled)
+                                                        withContext(Dispatchers.Main) {
+                                                            onTriggerRefresh()
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                        DropdownMenuItem(
+                                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Rename", fontSize = 12.sp, color = Color.White) },
+                                            onClick = {
+                                                showMoreMenu = false
+                                                onRequestRename(file)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Delete", fontSize = 12.sp, color = Color(0xFFFF8A80)) },
+                                            onClick = {
+                                                showMoreMenu = false
+                                                onRequestDelete(file, displayTitle)
                                             }
                                         )
                                     }
-                                    DropdownMenuItem(
-                                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
-                                        text = { Text("Rename", fontSize = 12.sp, color = Color.White) },
-                                        onClick = {
-                                            showMoreMenu = false
-                                            onRequestRename(file)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(17.dp)) },
-                                        text = { Text("Delete", fontSize = 12.sp, color = Color(0xFFFF8A80)) },
-                                        onClick = {
-                                            showMoreMenu = false
-                                            onRequestDelete(file, displayTitle)
-                                        }
-                                    )
                                 }
                             }
                         }
@@ -5874,7 +7053,6 @@ private fun FileManagerRowCard(
                 }
             }
 
-            // Smooth Expandable Details Drawer when tapping a row card in Manager
             AnimatedVisibility(
                 visible = expandedDetails,
                 enter = expandVertically(tween(220, easing = FastOutSlowInEasing)) + fadeIn(tween(200)),
@@ -5888,12 +7066,7 @@ private fun FileManagerRowCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = when {
-                            modDetail != null -> "ID: ${modDetail.modId} • API ${modDetail.apiLine} • Side: ${modDetail.side} • Size: ${modDetail.fileSizeFormatted}"
-                            packDetail != null -> "${packDetail.packType} • Format v${packDetail.formatVersion} • Size: ${packDetail.fileSizeFormatted}"
-                            saveDetail != null -> "${saveDetail.difficulty} • ${saveDetail.playTimeFormatted} • Seed: ${saveDetail.worldSeed}"
-                            else -> "File: ${file.name} (${file.length() / 1024} KB)"
-                        },
+                        text = rowItem.detailSummary,
                         fontSize = 10.sp,
                         color = SkyBlueAccent
                     )
@@ -5902,13 +7075,17 @@ private fun FileManagerRowCard(
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isEnabled) Color(0xFF1E3E29) else SkyBlueAccent,
-                                modifier = Modifier.animatedPressScale {
-                                    HorizonNativeBridge.toggleContentItem(context, folder, file.name, profileSlot, logEnabled)
-                                    onTriggerRefresh()
+                                modifier = Modifier.clickable {
+                                    scope.launch(Dispatchers.IO) {
+                                        HorizonNativeBridge.toggleContentItem(context, folder, file.name, profileSlot, logEnabled)
+                                        withContext(Dispatchers.Main) {
+                                            onTriggerRefresh()
+                                        }
+                                    }
                                 }
                             ) {
                                 Text(
-                                    text = if (isEnabled) "Matikan (Disable)" else "Aktifkan (Enable)",
+                                    text = if (isEnabled) "Disable" else "Enable",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isEnabled) Color(0xFF81C784) else SkyBlueDarkText,
@@ -5919,7 +7096,7 @@ private fun FileManagerRowCard(
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color(0xFF3A2326),
-                            modifier = Modifier.animatedPressScale { onRequestDelete(file, displayTitle) }
+                            modifier = Modifier.clickable { onRequestDelete(file, displayTitle) }
                         ) {
                             Text(
                                 text = "Delete",
@@ -5979,8 +7156,16 @@ private fun CleanSettingsViewport(
             ) {
                 when (section) {
                     SettingsSubCategory.RENDERER -> {
+                        ZalithRamAllocationCard(
+                            context = context,
+                            ramAllocationMb = config.ramAllocationMb,
+                            onRamChange = { newRamMb ->
+                                onConfigChange(config.copy(ramAllocationMb = newRamMb))
+                            }
+                        )
+
                         ZalithSettingDropdownCard(
-                            title = "Graphics API (Horizon Android 0.7.5)",
+                            title = "Graphics API (Horizon Android 0.7.6)",
                             description = "Set the native Vulkan / OpenGL ES renderer used by Minecraft 26.3",
                             selectedItem = config.renderer,
                             options = HorizonRendererMode.entries,
@@ -6055,6 +7240,14 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.GAME -> {
+                        ZalithRamAllocationCard(
+                            context = context,
+                            ramAllocationMb = config.ramAllocationMb,
+                            onRamChange = { newRamMb ->
+                                onConfigChange(config.copy(ramAllocationMb = newRamMb))
+                            }
+                        )
+
                         ZalithSettingDropdownCard(
                             title = "Game Profile Slot",
                             description = "Select which isolated profile directory (saves, mods, options.txt) is active",
@@ -6133,6 +7326,316 @@ private fun CleanSettingsViewport(
                                 onConfigChange(config.copy(extraMouseTweaks = it, extraInventorySort = it))
                             }
                         )
+                    }
+
+                    SettingsSubCategory.AI_AGENT -> {
+                        val scope = rememberCoroutineScope()
+                        var localApiKey by remember {
+                            mutableStateOf(HorizonNativeBridge.loadGeminiApiKeyLocal(context))
+                        }
+                        var showApiKeyText by remember { mutableStateOf(false) }
+                        var availableModels by remember {
+                            mutableStateOf(DEFAULT_GEMINI_MODELS)
+                        }
+                        var isRefreshingModels by remember { mutableStateOf(false) }
+                        var isTestingApi by remember { mutableStateOf(false) }
+                        var testResultDialogText by remember { mutableStateOf<String?>(null) }
+                        var testResultSuccess by remember { mutableStateOf(false) }
+
+                        LaunchedEffect(Unit) {
+                            val savedKey = HorizonNativeBridge.loadGeminiApiKeyLocal(context)
+                            if (savedKey.isNotBlank()) {
+                                val live = withContext(Dispatchers.IO) {
+                                    HorizonNativeBridge.fetchAvailableGeminiModels(context, savedKey)
+                                }
+                                if (live.isNotEmpty()) {
+                                    availableModels = live
+                                }
+                            }
+                        }
+
+                        if (testResultDialogText != null) {
+                            AlertDialog(
+                                onDismissRequest = { testResultDialogText = null },
+                                containerColor = Color(0xFF1E2429),
+                                title = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (testResultSuccess) Icons.Default.CheckCircle else Icons.Default.ErrorOutline,
+                                            contentDescription = null,
+                                            tint = if (testResultSuccess) Color(0xFF81C784) else Color(0xFFFF8A80)
+                                        )
+                                        Text(
+                                            text = if (testResultSuccess) "Google AI Studio Connected!" else "Gemini API Connection Failed",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                },
+                                text = {
+                                    Text(
+                                        text = testResultDialogText.orEmpty(),
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFD5DEE5),
+                                        lineHeight = 18.sp
+                                    )
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = { testResultDialogText = null },
+                                        colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent)
+                                    ) {
+                                        Text("OK", color = SkyBlueDarkText, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            )
+                        }
+
+                        ZalithSettingToggleCard(
+                            title = "Enable Minecraft In-Game AI Agent (Gemini AI Studio)",
+                            description = "Enable the AI Agent inside Minecraft 26.3, connected to Google AI Studio (Gemini API) & the game control socket (horizon-control.json)",
+                            checked = config.aiAgentEnabled,
+                            onCheckedChange = { onConfigChange(config.copy(aiAgentEnabled = it)) }
+                        )
+
+                        ZalithSettingDropdownCard(
+                            title = "AI Agent Engine Provider",
+                            description = "Choose Google AI Studio integration (Gemini API with a local API key) or Local Socket only",
+                            selectedItem = config.aiAgentProvider,
+                            options = HorizonAiAgentProvider.entries,
+                            itemLabel = { it.label },
+                            onSelect = { onConfigChange(config.copy(aiAgentProvider = it)) }
+                        )
+
+                        // Local-Only Google AI Studio API Key Card
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = CardSlateBg,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Google AI Studio API Key (Disimpan Lokal)",
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "The API key is stored only in the device's private storage (0600) and is never sent to logs or any other server.",
+                                            fontSize = 12.sp,
+                                            color = MutedSubtitleText
+                                        )
+                                    }
+                                    LavenderTagBadge(
+                                        text = if (localApiKey.isNotBlank()) "Key Saved Locally" else "Not Set"
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = localApiKey,
+                                    onValueChange = { newKey ->
+                                        localApiKey = newKey
+                                        HorizonNativeBridge.saveGeminiApiKeyLocal(context, newKey)
+                                    },
+                                    label = { Text("Paste Google AI Studio API Key (AIzaSy...)", fontSize = 11.sp) },
+                                    singleLine = true,
+                                    visualTransformation = if (showApiKeyText) {
+                                        androidx.compose.ui.text.input.VisualTransformation.None
+                                    } else {
+                                        androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                    },
+                                    trailingIcon = {
+                                        IconButton(onClick = { showApiKeyText = !showApiKeyText }) {
+                                            Icon(
+                                                imageVector = if (showApiKeyText) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = "Show/Hide API Key",
+                                                tint = SkyBlueAccent
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            HorizonNativeBridge.saveGeminiApiKeyLocal(context, localApiKey)
+                                            Toast.makeText(
+                                                context,
+                                                "Gemini API key saved locally on this device!",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            scope.launch {
+                                                isRefreshingModels = true
+                                                val models = withContext(Dispatchers.IO) {
+                                                    HorizonNativeBridge.fetchAvailableGeminiModels(context, localApiKey)
+                                                }
+                                                availableModels = models
+                                                isRefreshingModels = false
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.Save, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Save Key & Load Models", fontSize = 12.sp, color = SkyBlueDarkText, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            if (!isTestingApi) {
+                                                isTestingApi = true
+                                                scope.launch {
+                                                    val (ok, msg) = withContext(Dispatchers.IO) {
+                                                        HorizonNativeBridge.testGeminiApiConnection(
+                                                            context = context,
+                                                            apiKeyOverride = localApiKey,
+                                                            modelId = config.geminiModel
+                                                        )
+                                                    }
+                                                    isTestingApi = false
+                                                    testResultSuccess = ok
+                                                    testResultDialogText = msg
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.Bolt, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isTestingApi) "Menguji Gemini..." else "Test Koneksi Gemini",
+                                            fontSize = 12.sp,
+                                            color = SkyBlueAccent,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+
+                                    if (localApiKey.isNotBlank()) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                localApiKey = ""
+                                                HorizonNativeBridge.clearGeminiApiKeyLocal(context)
+                                                Toast.makeText(context, "API Key lokal dihapus.", Toast.LENGTH_SHORT).show()
+                                            }
+                                        ) {
+                                            Icon(Icons.Default.DeleteOutline, contentDescription = "Clear Key", tint = Color(0xFFFF8A80), modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Gemini Model Selector Dropdown
+                        val selectedModelObj = availableModels.firstOrNull { it.modelId == config.geminiModel }
+                            ?: GeminiModelOption(
+                                modelId = config.geminiModel,
+                                displayName = config.geminiModel,
+                                badge = "GEMINI",
+                                description = "Selected Google AI Studio model"
+                            )
+
+                        ZalithSettingDropdownCard(
+                            title = if (isRefreshingModels) "Google AI Studio Model (Loading model list...)" else "Choose Google AI Studio Model (${availableModels.size} Models Available)",
+                            description = "${selectedModelObj.description} (${selectedModelObj.badge})",
+                            selectedItem = selectedModelObj,
+                            options = availableModels,
+                            itemLabel = { "${it.displayName} [${it.modelId}]" },
+                            onSelect = { chosen ->
+                                onConfigChange(config.copy(geminiModel = chosen.modelId))
+                            }
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = CardSlateBg,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Custom / Manual Gemini Model ID",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Pick from the 22+ models above (Gemini 4 Argon, Gemini 3.8, Gemini 3.5 Flash-Lite, Gemini 2.5 Pro/Flash, etc.) or type a model ID manually:",
+                                    fontSize = 11.sp,
+                                    color = MutedSubtitleText
+                                )
+                                OutlinedTextField(
+                                    value = config.geminiModel,
+                                    onValueChange = { onConfigChange(config.copy(geminiModel = it.trim())) },
+                                    label = { Text("Active Gemini Model ID (contoh: gemini-4-argon, gemini-3.8-pro, gemini-3.5-flash-lite)", fontSize = 11.sp) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        ZalithSettingToggleCard(
+                            title = "In-Game Chat Assistant (@ai / !ai Trigger)",
+                            description = "Allow typing @ai or !ai in Minecraft chat to ask questions or give commands directly to the Gemini AI Agent",
+                            checked = config.aiAgentAutoAssistChat,
+                            onCheckedChange = { onConfigChange(config.copy(aiAgentAutoAssistChat = it)) }
+                        )
+
+                        ZalithSettingToggleCard(
+                            title = "Autonomous Game Control Actions (Move, Look, Mine, Place, Craft)",
+                            description = "Allow the Gemini AI Agent to control character actions via the local horizon-control.json protocol when asked",
+                            checked = config.aiAgentAutonomousActions,
+                            onCheckedChange = { onConfigChange(config.copy(aiAgentAutonomousActions = it)) }
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = CardSlateBg,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Instruksi & Peran Default AI Agent di Minecraft",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "System instructions sent to the ${config.geminiModel} model while the AI Agent is active in the Minecraft 26.3 world:",
+                                    fontSize = 12.sp,
+                                    color = MutedSubtitleText
+                                )
+                                OutlinedTextField(
+                                    value = config.aiAgentTaskPrompt,
+                                    onValueChange = { onConfigChange(config.copy(aiAgentTaskPrompt = it)) },
+                                    label = { Text("System Prompt / Tugas AI Agent", fontSize = 11.sp) },
+                                    maxLines = 3,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
                     }
 
                     SettingsSubCategory.CONTROLS -> {
@@ -6280,7 +7783,7 @@ private fun CleanSettingsViewport(
                         )
 
                         ZalithSettingToggleCard(
-                            title = "Auto-Play Minecraft YouTube 'Trailer' Video (720p)",
+                            title = "Auto-Play Minecraft YouTube 'Trailer' Video",
                             description = "Automatically play the latest official @Minecraft YouTube videos containing 'Trailer' on the dashboard and turn off static wallpaper while playing",
                             checked = config.useYoutubeTrailerWallpaper || config.backgroundMode == HorizonBackgroundMode.YOUTUBE_TRAILER,
                             onCheckedChange = { enabled ->
@@ -6418,6 +7921,179 @@ private fun CleanSettingsViewport(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZalithRamAllocationCard(
+    context: android.content.Context,
+    ramAllocationMb: Int,
+    onRamChange: (Int) -> Unit
+) {
+    val totalRamMb = remember { HorizonNativeBridge.getDeviceTotalRamMb(context) }
+    val availRamMb = remember(ramAllocationMb) { HorizonNativeBridge.getDeviceAvailableRamMb(context) }
+    val isUnlimited = ramAllocationMb <= 0
+    val minRamMb = 1024
+    val maxRamMb = totalRamMb.coerceAtLeast(2048)
+    val sliderDisplayMb = if (isUnlimited) {
+        maxRamMb
+    } else {
+        ramAllocationMb.coerceIn(minRamMb, maxRamMb)
+    }
+
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = CardSlateBg,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "RAM Allocation (Minecraft 26.3 Engine)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        LavenderTagBadge(
+                            text = if (isUnlimited) "Unlimited (Default OS)" else "$sliderDisplayMb MB"
+                        )
+                    }
+                    Text(
+                        text = "Detected Phone RAM: $totalRamMb MB (~${String.format(Locale.US, "%.1f", totalRamMb / 1024f)} GB) • Available: $availRamMb MB",
+                        fontSize = 11.sp,
+                        color = SkyBlueAccent
+                    )
+                    Text(
+                        text = if (isUnlimited) {
+                            "Default Mode Active: Dynamically follows the Android OS maximum limit (Recommended)"
+                        } else {
+                            "Manual memory allocation limit for the Rust runtime, WGPU & Minecraft textures: $sliderDisplayMb MB"
+                        },
+                        fontSize = 11.sp,
+                        color = MutedSubtitleText
+                    )
+                }
+            }
+
+            // Mode Selector Pills: [ Bebas / Limit OS Android (Default) ]  [ Manual Adjust (Slider) ]
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isUnlimited) SkyBlueAccent else CardRowBg,
+                    modifier = Modifier
+                        .weight(1f)
+                        .animatedPressScale { onRamChange(0) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isUnlimited) Icons.Default.CheckCircle else Icons.Default.AllInclusive,
+                            contentDescription = null,
+                            tint = if (isUnlimited) SkyBlueDarkText else SkyBlueAccent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Bebas / Limit OS Android (Default)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isUnlimited) SkyBlueDarkText else Color.White,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (!isUnlimited) SkyBlueAccent else CardRowBg,
+                    modifier = Modifier
+                        .weight(1f)
+                        .animatedPressScale {
+                            if (isUnlimited) {
+                                val recommended = ((totalRamMb * 3) / 4 / 256 * 256).coerceIn(minRamMb, maxRamMb)
+                                onRamChange(recommended)
+                            }
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = null,
+                            tint = if (!isUnlimited) SkyBlueDarkText else SkyBlueAccent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (!isUnlimited) "Manual: $sliderDisplayMb MB" else "Manual Adjust (Slider)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (!isUnlimited) SkyBlueDarkText else Color.White,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            // Slider Row (1024 MB .. totalRamMb, step 256 MB)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Slider(
+                    value = sliderDisplayMb.toFloat(),
+                    onValueChange = { rawVal ->
+                        val snapped = ((rawVal.toInt() + 128) / 256) * 256
+                        val clamped = snapped.coerceIn(minRamMb, maxRamMb)
+                        onRamChange(clamped)
+                    },
+                    valueRange = minRamMb.toFloat()..maxRamMb.toFloat(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = SkyBlueAccent,
+                        activeTrackColor = SkyBlueAccent,
+                        inactiveTrackColor = Color(0xFF33424B)
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isUnlimited) SubRailCapsuleActive else SkyBlueAccent
+                ) {
+                    Text(
+                        text = if (isUnlimited) "OS Limit" else "$sliderDisplayMb MB",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isUnlimited) SkyBlueAccent else SkyBlueDarkText,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                    )
                 }
             }
         }

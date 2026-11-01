@@ -159,6 +159,89 @@ fn sanitize_and_repair_horizon_mods(home: &std::path::Path) {
     }
 }
 
+fn apply_horizonz_shader_and_agent_config(home: &std::path::Path) {
+    // 1. Propagate active shader pack from options.txt / horizon-shaders.txt to HORIZON_SHADER_PACK
+    let mut active_shader = String::new();
+    if let Ok(sh_txt) = std::fs::read_to_string(home.join("horizon-shaders.txt")) {
+        for line in sh_txt.lines() {
+            if let Some(p) = line.strip_prefix("pack:") {
+                let trimmed = p.trim();
+                if !trimmed.is_empty() {
+                    active_shader = trimmed.to_string();
+                }
+            }
+        }
+    }
+    if active_shader.is_empty() {
+        if let Ok(opt_txt) = std::fs::read_to_string(home.join("options.txt")) {
+            for line in opt_txt.lines() {
+                if let Some(p) = line.strip_prefix("shaderPack:") {
+                    let trimmed = p.trim();
+                    if !trimmed.is_empty() {
+                        active_shader = trimmed.to_string();
+                    }
+                }
+            }
+        }
+    }
+    if !active_shader.is_empty() {
+        unsafe {
+            std::env::set_var("HORIZON_SHADER_PACK", &active_shader);
+        }
+    }
+
+    // 2. Propagate Gemini AI Agent control endpoint from horizon-agent.txt
+    if let Ok(ag_txt) = std::fs::read_to_string(home.join("horizon-agent.txt")) {
+        let mut ag_enabled = false;
+        for line in ag_txt.lines() {
+            if let Some(v) = line.strip_prefix("enabled:") {
+                ag_enabled = v.trim().eq_ignore_ascii_case("true");
+            }
+        }
+        if ag_enabled {
+            let ctrl_path = home.join("horizon-control.json");
+            unsafe {
+                std::env::set_var("HORIZON_AI_AGENT_ENABLED", "1");
+                std::env::set_var("HORIZON_CONTROL", ctrl_path.to_string_lossy().as_ref());
+            }
+        }
+    }
+}
+
+fn apply_horizonz_ram_allocation(home: &std::path::Path) {
+    let mem_file = home.join("horizon-memory.txt");
+    let mut ram_mb: u64 = 0;
+    let mut unlimited = true;
+    if let Ok(txt) = std::fs::read_to_string(&mem_file) {
+        for line in txt.lines() {
+            if let Some(v) = line.strip_prefix("ramAllocationMb:") {
+                ram_mb = v.trim().parse::<u64>().unwrap_or(0);
+            } else if let Some(u) = line.strip_prefix("unlimited:") {
+                unlimited = u.trim().eq_ignore_ascii_case("true");
+            }
+        }
+    }
+    if let Ok(env_mb) = std::env::var("HORIZON_RAM_ALLOCATION_MB") {
+        if let Ok(parsed) = env_mb.trim().parse::<u64>() {
+            ram_mb = parsed;
+            unlimited = parsed == 0;
+        }
+    }
+    if unlimited || ram_mb == 0 {
+        unsafe {
+            std::env::set_var("HORIZON_RAM_UNLIMITED", "1");
+        }
+    } else {
+        let clamped_mb = ram_mb.clamp(1024, 32768);
+        let budget_bytes = clamped_mb.saturating_mul(1024 * 1024);
+        unsafe {
+            std::env::set_var("HORIZON_RAM_UNLIMITED", "0");
+            std::env::set_var("HORIZON_MEMORY_BUDGET_BYTES", budget_bytes.to_string());
+            std::env::set_var("WGPU_MEMORY_BUDGET_MB", clamped_mb.to_string());
+        }
+    }
+}
+
 fn apply_horizonz_custom_skin(home: &std::path::Path) {
     let custom_skin = home.join("custom_skin_active.png");
     if !custom_skin.is_file() {
@@ -251,6 +334,8 @@ pub(super) struct Launcher {'''
             + "            return;\n"
             + "        }\n"
             + "        let _ = std::fs::write(self.home.join(\"zalith-game-boot.txt\"), \"38|Verifying Horizon Mods & Profile Catalog...\");\n"
+            + "        apply_horizonz_ram_allocation(&self.home);\n"
+        + "        apply_horizonz_shader_and_agent_config(&self.home);\n"
             + "        sanitize_and_repair_horizon_mods(&self.home);\n"
             + "        self.catalog.refresh(&self.home);\n"
             + "        let _ = std::fs::write(self.home.join(\"zalith-game-boot.txt\"), \"55|Creating Vulkan / WGPU Surface...\");\n"
@@ -542,6 +627,95 @@ pub extern "system" fn Java_dev_horizon_android_bridge_HorizonNativeBridge_nativ
         main_txt = main_txt + jni_bridge_code
         android_main_rs.write_text(main_txt, encoding="utf-8")
         print("[HorizonZ Patch] Added JNI official_install hooks & verbose URL/speed logger to android_main.rs!")
+
+# ==============================================================================
+# 4.5. Patch In-Game AI Agent UI (`Options > Horizon Settings > AI Agent`) &
+#      Integrate Official Native Mods (`zoom`, `fps_overlay`, `keystrokes`, `minimap`, `coords_hud`, `recipes`)
+# ==============================================================================
+def patch_ingame_ai_agent_and_native_mods():
+    import shutil
+    crates_client = Path("crates/horizon-client/src")
+    if not crates_client.is_dir():
+        return
+
+    # (a) Allow AI Agent control socket on Android when HORIZON_AI_AGENT_ENABLED=1 and label Gemini API in Options UI
+    for rs_path in sorted(crates_client.rglob("*.rs")):
+        try:
+            content = rs_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        modified = False
+        if "AI Agent" in content and "AI Agent (Gemini AI)" not in content:
+            content = content.replace('"AI Agent"', '"AI Agent (Gemini AI)"')
+            modified = True
+        if 'std::env::var_os("HORIZON_ANDROID_PUBLIC").is_some()' in content and "HORIZON_AI_AGENT_ENABLED" not in content and ("control" in rs_path.name or "agent" in rs_path.name or "options" in rs_path.name):
+            content = content.replace(
+                'std::env::var_os("HORIZON_ANDROID_PUBLIC").is_some()',
+                '(std::env::var_os("HORIZON_ANDROID_PUBLIC").is_some() && std::env::var("HORIZON_AI_AGENT_ENABLED").as_deref() != Ok("1"))'
+            )
+            modified = True
+        if modified:
+            rs_path.write_text(content, encoding="utf-8")
+            print(f"[HorizonZ Patch] Updated AI Agent / Gemini support in {rs_path}")
+
+    # (b) Try applying official Horizon native mods (`zoom`, `fps_overlay`, `keystrokes`, `minimap`, `coords_hud`, `recipes`)
+    #     via `horizon-mixins` with safe backup & rollback if upstream hook signatures differ
+    backup_dir = Path("/tmp/horizon-client-pre-mixins-backup")
+    shutil.rmtree(backup_dir, ignore_errors=True)
+    shutil.copytree(Path("crates/horizon-client"), backup_dir)
+
+    try:
+        mods_repo = Path("/tmp/horizon-official-mods")
+        mixins_repo = Path("/tmp/horizon-mixins-tool")
+        shutil.rmtree(mods_repo, ignore_errors=True)
+        shutil.rmtree(mixins_repo, ignore_errors=True)
+        r1 = subprocess.run(
+            ["git", "clone", "--depth", "1", "https://github.com/horizon-rust/horizon-mods.git", str(mods_repo)],
+            capture_output=True, text=True, timeout=60
+        )
+        r2 = subprocess.run(
+            ["git", "clone", "--depth", "1", "https://github.com/horizon-rust/horizon-mixins.git", str(mixins_repo)],
+            capture_output=True, text=True, timeout=60
+        )
+        if r1.returncode == 0 and r2.returncode == 0 and (mods_repo / "native").is_dir():
+            build_mx = subprocess.run(
+                ["cargo", "build", "--release", "--manifest-path", str(mixins_repo / "Cargo.toml")],
+                capture_output=True, text=True, timeout=180
+            )
+            mx_bin = mixins_repo / "target/release/horizon-mixins"
+            if build_mx.returncode == 0 and mx_bin.is_file():
+                bundle_dirs = []
+                for mod_name in ["zoom", "fps_overlay", "keystrokes", "minimap", "coords_hud", "recipes"]:
+                    cand = mods_repo / "native" / mod_name
+                    if (cand / "horizon-mixin.toml").is_file():
+                        bundle_dirs.append(str(cand))
+                if bundle_dirs:
+                    stage_out = Path("/tmp/horizon-mixins-stage")
+                    shutil.rmtree(stage_out, ignore_errors=True)
+                    apply_cmd = [str(mx_bin), "apply", "--game", ".", "--out", str(stage_out)] + bundle_dirs
+                    ap = subprocess.run(apply_cmd, capture_output=True, text=True, timeout=60)
+                    if ap.returncode == 0 and (stage_out / "crates/horizon-client").is_dir():
+                        shutil.rmtree(Path("crates/horizon-client"))
+                        shutil.copytree(stage_out / "crates/horizon-client", Path("crates/horizon-client"))
+                        chk = subprocess.run(
+                            ["cargo", "check", "-p", "horizon-android"],
+                            capture_output=True, text=True, timeout=240
+                        )
+                        if chk.returncode == 0:
+                            print(f"[HorizonZ Patch] Successfully compiled {len(bundle_dirs)} official native mods into horizon-client!")
+                        else:
+                            print("[HorizonZ Patch] Notice: horizon-mixins stage had hook version diff; restoring clean horizon-client.")
+                            shutil.rmtree(Path("crates/horizon-client"))
+                            shutil.copytree(backup_dir, Path("crates/horizon-client"))
+    except Exception as exc:
+        print(f"[HorizonZ Patch] Notice during optional native-mods mixin stage: {exc}")
+        if backup_dir.is_dir():
+            shutil.rmtree(Path("crates/horizon-client"), ignore_errors=True)
+            shutil.copytree(backup_dir, Path("crates/horizon-client"))
+    finally:
+        shutil.rmtree(backup_dir, ignore_errors=True)
+
+patch_ingame_ai_agent_and_native_mods()
 
 # ==============================================================================
 # 5. Automatically run scripts/prestage_controls_and_wallpapers.py

@@ -233,14 +233,25 @@ data class ModPackageDetailInfo(
 
 enum class HorizonBackgroundMode(val serdeKey: String, val label: String) {
     WALLPAPER("wallpaper", "Static HD Minecraft Wallpaper (16:9)"),
-    YOUTUBE_TRAILER("youtube-trailer", "Auto-Play Minecraft YouTube Trailer (720p)")
+    YOUTUBE_TRAILER("youtube-trailer", "Auto-Play Minecraft YouTube Trailer")
 }
 
 data class MinecraftTrailerVideo(
     val videoId: String,
     val title: String,
     val publishedDate: String,
-    val watchUrl: String = "https://www.youtube.com/watch?v=$videoId"
+    val watchUrl: String = "https://www.youtube.com/watch?v=$videoId",
+    val directMp4Url: String = ""
+)
+
+data class SavedCustomSkinItem(
+    val id: String,
+    val fileName: String,
+    val displayName: String,
+    val filePath: String,
+    val slimModel: Boolean,
+    val sourceLabel: String = "Custom Skin",
+    val addedAt: Long = System.currentTimeMillis()
 )
 
 enum class ZalithThemePalette(val label: String, val primaryHex: Long, val secondaryHex: Long, val surfaceHex: Long) {
@@ -266,7 +277,163 @@ data class SkinDetectionResult(
     val skinFile: java.io.File?,
     val slimModel: Boolean,
     val sourceLabel: String,
-    val message: String
+    val message: String,
+    val savedFileName: String = ""
+)
+
+
+enum class HorizonAiAgentProvider(val serdeKey: String, val label: String) {
+    GEMINI_API("gemini", "Google AI Studio (Gemini API)"),
+    LOCAL_SOCKET("local", "Local AI / Control Socket (horizon-control.json)")
+}
+
+data class GeminiModelOption(
+    val modelId: String,
+    val displayName: String,
+    val badge: String,
+    val description: String
+)
+
+val DEFAULT_GEMINI_MODELS = listOf(
+    // === Gemini 4 Series (Flagship & Next-Gen Autonomous Models) ===
+    GeminiModelOption(
+        modelId = "gemini-4-argon",
+        displayName = "Gemini 4 Argon (Flagship Autonomous Agent)",
+        badge = "GEMINI 4 • ARGON",
+        description = "4th-generation flagship model with real-time tactical reasoning, autonomous control execution, and deep understanding of the Minecraft 26.3 world"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-4.0-ultra",
+        displayName = "Gemini 4.0 Ultra (Deep World & Redstone Reasoning)",
+        badge = "GEMINI 4 • ULTRA",
+        description = "Top reasoning capacity for large build architecture, complex redstone logic, and survival strategy"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-4.0-pro",
+        displayName = "Gemini 4.0 Pro (Advanced Multi-Step Agent)",
+        badge = "GEMINI 4 • PRO",
+        description = "High-precision multi-step planning for exploration, crafting, and in-game command automation"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-4.0-flash",
+        displayName = "Gemini 4.0 Flash (High-Speed Next-Gen Agent)",
+        badge = "GEMINI 4 • FLASH",
+        description = "Lightning-fast 4th-generation responses for direct control actions and real-time chat assistance"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-4.0-flash-lite",
+        displayName = "Gemini 4.0 Flash-Lite (Ultra-Low Latency)",
+        badge = "GEMINI 4 • LITE",
+        description = "Ultra-light 4th-generation variant with the lowest latency and low token usage"
+    ),
+
+    // === Gemini 3.8 & 3.5 Series ===
+    GeminiModelOption(
+        modelId = "gemini-3.8-pro",
+        displayName = "Gemini 3.8 Pro (Tactical & Survival Specialist)",
+        badge = "GEMINI 3.8 • PRO",
+        description = "Deep reasoning from the 3.8 series for world navigation, mob combat, and inventory management"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-3.8-flash",
+        displayName = "Gemini 3.8 Flash (Fast Multimodal Agent)",
+        badge = "GEMINI 3.8 • FLASH",
+        description = "High-speed 3.8 series for command execution and instant survival guidance"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-3.8-flash-lite",
+        displayName = "Gemini 3.8 Flash-Lite (Instant Lightweight)",
+        badge = "GEMINI 3.8 • LITE",
+        description = "Lightweight 3.8 series model for quick Q&A in Minecraft chat (@ai)"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-3.5-pro",
+        displayName = "Gemini 3.5 Pro (Advanced Coding & Commands)",
+        badge = "GEMINI 3.5 • PRO",
+        description = "Excels at designing command blocks, structure coordinates, and progression strategy"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-3.5-flash",
+        displayName = "Gemini 3.5 Flash (Balanced In-Game Agent)",
+        badge = "GEMINI 3.5 • FLASH",
+        description = "3.5 series balance of speed and accuracy to accompany your play sessions"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-3.5-flash-lite",
+        displayName = "Gemini 3.5 Flash-Lite (Ultra-Fast Chat & Actions)",
+        badge = "GEMINI 3.5 • LITE",
+        description = "Fast and efficient 3.5 Flash-Lite model for chat replies and light actions with no delay"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-3.0-pro",
+        displayName = "Gemini 3.0 Pro",
+        badge = "GEMINI 3.0 • PRO",
+        description = "Stable 3.0 series reasoning model for Minecraft world planning"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-3.0-flash",
+        displayName = "Gemini 3.0 Flash",
+        badge = "GEMINI 3.0 • FLASH",
+        description = "Responsive 3.0 series model for the in-game assistant"
+    ),
+
+    // === Gemini 2.5 & 2.0 Series (Google AI Studio Direct) ===
+    GeminiModelOption(
+        modelId = "gemini-2.5-pro",
+        displayName = "Gemini 2.5 Pro (Deep Thinking & Strategy)",
+        badge = "GEMINI 2.5 • PRO",
+        description = "Google AI Studio Pro model for in-depth analysis and complex action planning"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-2.5-flash",
+        displayName = "Gemini 2.5 Flash (Fast Multimodal Agent)",
+        badge = "GEMINI 2.5 • FLASH",
+        description = "High-speed Google AI Studio Flash model for real-time agent control"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-2.5-flash-lite",
+        displayName = "Gemini 2.5 Flash-Lite (High-Throughput Lite)",
+        badge = "GEMINI 2.5 • LITE",
+        description = "Quota-friendly Flash-Lite model for high-frequency chat replies"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-2.0-flash",
+        displayName = "Gemini 2.0 Flash",
+        badge = "GEMINI 2.0 • FLASH",
+        description = "Model multimodal stabil seri 2.0 di Google AI Studio"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-2.0-flash-lite",
+        displayName = "Gemini 2.0 Flash-Lite",
+        badge = "GEMINI 2.0 • LITE",
+        description = "Lightweight 2.0 series variant for fast responses"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-2.0-pro-exp",
+        displayName = "Gemini 2.0 Pro Experimental",
+        badge = "GEMINI 2.0 • EXP",
+        description = "Experimental Pro model with advanced reasoning capabilities"
+    ),
+
+    // === Gemini 1.5 & Gemma 3 Series ===
+    GeminiModelOption(
+        modelId = "gemini-1.5-pro",
+        displayName = "Gemini 1.5 Pro (2M Context Window)",
+        badge = "GEMINI 1.5 • PRO",
+        description = "Context memory of up to 2 million tokens for long survival sessions"
+    ),
+    GeminiModelOption(
+        modelId = "gemini-1.5-flash",
+        displayName = "Gemini 1.5 Flash",
+        badge = "GEMINI 1.5 • FLASH",
+        description = "Model cepat serbaguna seri 1.5"
+    ),
+    GeminiModelOption(
+        modelId = "gemma-3-27b-it",
+        displayName = "Gemma 3 27B Instruct (Google AI Studio)",
+        badge = "GEMMA 3 • 27B",
+        description = "Model instruksi terbuka Google Gemma 3 27B melalui endpoint Google AI Studio"
+    )
 )
 
 data class HorizonConfigState(
@@ -315,7 +482,14 @@ data class HorizonConfigState(
     val publicOnDeviceAssetDownload: Boolean = true,
     val backgroundMode: HorizonBackgroundMode = HorizonBackgroundMode.WALLPAPER,
     val useYoutubeTrailerWallpaper: Boolean = false,
-    val muteTrailerVideo: Boolean = false
+    val muteTrailerVideo: Boolean = false,
+    val ramAllocationMb: Int = 0,
+    val aiAgentEnabled: Boolean = false,
+    val aiAgentProvider: HorizonAiAgentProvider = HorizonAiAgentProvider.GEMINI_API,
+    val geminiModel: String = "gemini-4-argon",
+    val aiAgentAutoAssistChat: Boolean = true,
+    val aiAgentAutonomousActions: Boolean = true,
+    val aiAgentTaskPrompt: String = "Help the player in Minecraft 26.3, answer chat/instructions, and run control actions when asked."
 )
 
 val MINECRAFT_SPLASH_QUOTES = listOf(

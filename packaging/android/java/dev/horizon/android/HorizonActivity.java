@@ -24,12 +24,22 @@ import android.view.WindowManager;
 
 import dev.horizon.android.ui.ZalithMainActivity;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -87,6 +97,7 @@ public final class HorizonActivity extends NativeActivity {
         showHorizonSplashDialog(homeDir);
 
         startExitWatchdog(homeDir);
+        startGeminiAiAgentBridgeIfEnabled(homeDir, getIntent());
         super.onCreate(savedInstanceState);
     }
 
@@ -145,12 +156,16 @@ public final class HorizonActivity extends NativeActivity {
         try {
             if (splashOverlayView != null) {
                 splashOverlayView.stopPolling();
+                if (splashOverlayView.getParent() instanceof ViewGroup) {
+                    ((ViewGroup) splashOverlayView.getParent()).removeView(splashOverlayView);
+                }
             }
             if (splashDialog != null && splashDialog.isShowing()) {
                 splashDialog.dismiss();
             }
         } catch (Exception ignored) {
         }
+        splashOverlayView = null;
         splashDialog = null;
         enableImmersiveFullscreen();
     }
@@ -176,14 +191,300 @@ public final class HorizonActivity extends NativeActivity {
                         runOnUiThread(this::returnToLauncherAndFinish);
                         break;
                     }
-                    Thread.sleep(150L);
+                    Thread.sleep(400L);
                 } catch (InterruptedException ignored) {
                     break;
                 }
             }
         }, "HorizonZ-ExitWatchdog");
         watchdog.setDaemon(true);
+        watchdog.setPriority(Thread.MIN_PRIORITY);
         watchdog.start();
+    }
+
+    /**
+     * Bridges Horizon's local in-game AI Agent control protocol (`$HORIZON_CONTROL` / `horizon-control.json`)
+     * to Google AI Studio (`generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`)
+     * using the API key stored strictly locally in `horizon-gemini-secret.json`.
+     */
+    private void startGeminiAiAgentBridgeIfEnabled(final File homeDir, final Intent intent) {
+        if (homeDir == null || intent == null) return;
+        final boolean aiEnabled = intent.getBooleanExtra("HORIZON_AI_AGENT_ENABLED", false);
+        final String provider = intent.getStringExtra("HORIZON_AI_AGENT_PROVIDER");
+        if (!aiEnabled || (provider != null && !"gemini".equalsIgnoreCase(provider))) {
+            return;
+        }
+        final String modelId = intent.getStringExtra("HORIZON_GEMINI_MODEL") != null
+            ? intent.getStringExtra("HORIZON_GEMINI_MODEL")
+            : "gemini-4-argon";
+        final boolean autoAssistChat = intent.getBooleanExtra("HORIZON_AI_AGENT_AUTO_CHAT", true);
+        final boolean autonomousActions = intent.getBooleanExtra("HORIZON_AI_AGENT_AUTONOMOUS", true);
+        final String taskPrompt = intent.getStringExtra("HORIZON_AI_AGENT_TASK") != null
+            ? intent.getStringExtra("HORIZON_AI_AGENT_TASK")
+            : "Help the player in Minecraft 26.3.";
+
+        Thread agentThread = new Thread(() -> {
+            String localApiKey = readLocalGeminiKey(homeDir);
+            if (localApiKey.isEmpty()) {
+                appendCrossProcessLog(homeDir, "[GeminiAgent] AI Agent enabled, waiting for local Google AI Studio API key in Settings > AI Agent.");
+                return;
+            }
+            appendCrossProcessLog(homeDir, "[GeminiAgent] Google AI Studio Bridge active (model=" + modelId + ", local key verified).");
+            String lastHandledChatLine = "";
+            boolean greetedInWorld = false;
+
+            while (watchdogRunning) {
+                try {
+                    File ctrlFile = new File(homeDir, "horizon-control.json");
+                    if (!ctrlFile.exists()) {
+                        Thread.sleep(2000L);
+                        continue;
+                    }
+                    String ctrlRaw = readSmallTextFile(ctrlFile);
+                    JSONObject ctrlObj = new JSONObject(ctrlRaw);
+                    String addr = ctrlObj.optString("address", ctrlObj.optString("addr", "127.0.0.1:0"));
+                    String token = ctrlObj.optString("token", "");
+                    int colon = addr.lastIndexOf(':');
+                    if (colon <= 0) {
+                        Thread.sleep(2000L);
+                        continue;
+                    }
+                    String host = addr.substring(0, colon).trim();
+                    int port = Integer.parseInt(addr.substring(colon + 1).trim());
+                    if (port <= 0) {
+                        Thread.sleep(2000L);
+                        continue;
+                    }
+
+                    String stateJson = sendControlCommand(host, port, token, "{\"op\":\"state\"}");
+                    if (stateJson == null || stateJson.isEmpty()) {
+                        Thread.sleep(2000L);
+                        continue;
+                    }
+
+                    if (!greetedInWorld) {
+                        greetedInWorld = true;
+                        JSONObject chatGreet = new JSONObject();
+                        chatGreet.put("op", "chat");
+                        chatGreet.put("message", "[HorizonZ Gemini AI] Connected to Google AI Studio (" + modelId + "). Type @ai <message> in chat to ask for help!");
+                        sendControlCommand(host, port, token, chatGreet.toString());
+                    }
+
+                    if (autoAssistChat) {
+                        String msgsJson = sendControlCommand(host, port, token, "{\"op\":\"messages\"}");
+                        if (msgsJson != null && !msgsJson.isEmpty()) {
+                            String triggerMsg = extractLatestAiChatTrigger(msgsJson, lastHandledChatLine);
+                            if (triggerMsg != null && !triggerMsg.isEmpty()) {
+                                lastHandledChatLine = triggerMsg;
+                                String invJson = sendControlCommand(host, port, token, "{\"op\":\"inventory\"}");
+                                String lookJson = sendControlCommand(host, port, token, "{\"op\":\"looking-at\"}");
+                                String geminiReply = callGeminiAgentApi(
+                                    localApiKey,
+                                    modelId,
+                                    taskPrompt,
+                                    stateJson,
+                                    invJson != null ? invJson : "{}",
+                                    lookJson != null ? lookJson : "{}",
+                                    triggerMsg,
+                                    autonomousActions
+                                );
+                                if (geminiReply != null && !geminiReply.isEmpty()) {
+                                    dispatchGeminiAgentResponse(host, port, token, geminiReply, autonomousActions);
+                                }
+                            }
+                        }
+                    }
+                    Thread.sleep(1500L);
+                } catch (Exception ignored) {
+                    try { Thread.sleep(2500L); } catch (InterruptedException ie) { break; }
+                }
+            }
+        }, "HorizonZ-GeminiAgentBridge");
+        agentThread.setDaemon(true);
+        agentThread.setPriority(Thread.MIN_PRIORITY);
+        agentThread.start();
+    }
+
+    private String readLocalGeminiKey(File homeDir) {
+        try {
+            File f = new File(homeDir, "horizon-gemini-secret.json");
+            if (!f.exists()) return "";
+            String txt = readSmallTextFile(f);
+            JSONObject obj = new JSONObject(txt);
+            return obj.optString("gemini_api_key", "").trim();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String readSmallTextFile(File f) {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+            return sb.toString().trim();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String sendControlCommand(String host, int port, String token, String cmdJsonStr) {
+        try (Socket sock = new Socket()) {
+            sock.connect(new InetSocketAddress(host, port), 1500);
+            sock.setSoTimeout(2000);
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(sock.getOutputStream(), StandardCharsets.UTF_8));
+            BufferedReader reader = new BufferedReader(new InputStreamReader(sock.getInputStream(), StandardCharsets.UTF_8));
+            if (token != null && !token.isEmpty()) {
+                JSONObject cmdObj = new JSONObject(cmdJsonStr);
+                if (!cmdObj.has("token")) {
+                    cmdObj.put("token", token);
+                }
+                cmdJsonStr = cmdObj.toString();
+            }
+            writer.write(cmdJsonStr);
+            writer.write("\n");
+            writer.flush();
+            return reader.readLine();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String extractLatestAiChatTrigger(String msgsJson, String lastHandled) {
+        try {
+            JSONObject root = new JSONObject(msgsJson);
+            JSONArray arr = root.optJSONArray("messages");
+            if (arr == null) return null;
+            for (int i = arr.length() - 1; i >= 0; i--) {
+                String line = arr.optString(i, "").trim();
+                if (line.contains("[HorizonZ Gemini AI]")) continue;
+                String lower = line.toLowerCase();
+                int idx = lower.indexOf("@ai ");
+                if (idx < 0) idx = lower.indexOf("!ai ");
+                if (idx >= 0) {
+                    if (line.equals(lastHandled)) return null;
+                    return line;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private String callGeminiAgentApi(
+        String apiKey,
+        String modelId,
+        String taskPrompt,
+        String stateJson,
+        String invJson,
+        String lookJson,
+        String userTrigger,
+        boolean allowActions
+    ) {
+        String cleanModel = modelId.startsWith("models/") ? modelId.substring(7) : modelId;
+        String lower = cleanModel.toLowerCase();
+        String fallback1 = (lower.contains("argon") || lower.contains("ultra") || lower.contains("pro"))
+            ? "gemini-2.5-pro"
+            : (lower.contains("lite") ? "gemini-2.5-flash-lite" : "gemini-2.5-flash");
+        String[] candidates = new String[] { cleanModel, fallback1, "gemini-2.5-flash", "gemini-2.0-flash" };
+
+        for (String candidate : candidates) {
+            try {
+                String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/" + candidate + ":generateContent?key=" + apiKey;
+                HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(12000);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+
+            String sysPrompt = "You are HorizonZ Gemini AI Agent inside Minecraft 26.3. "
+                + "Role instruction: " + taskPrompt + "\n"
+                + "Current game state JSON: " + stateJson + "\n"
+                + "Inventory JSON: " + invJson + "\n"
+                + "Looking-at JSON: " + lookJson + "\n"
+                + "Player message: " + userTrigger + "\n"
+                + "Respond ONLY with a single compact JSON object: "
+                + "{\"reply\":\"<short helpful chat reply under 180 chars>\",\"actions\":[{\"op\":\"jump\"}]} "
+                + (allowActions
+                    ? "Allowed action ops in actions array: jump, attack, interact, use-item, or {\"op\":\"command\",\"command\":\"...\"}."
+                    : "Keep actions array empty [].");
+
+            JSONObject payload = new JSONObject();
+            JSONArray contents = new JSONArray();
+            JSONObject contentItem = new JSONObject();
+            JSONArray parts = new JSONArray();
+            parts.put(new JSONObject().put("text", sysPrompt));
+            contentItem.put("parts", parts);
+            contents.put(contentItem);
+            payload.put("contents", contents);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(payload.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            if (conn.getResponseCode() >= 200 && conn.getResponseCode() < 300) {
+                StringBuilder sb = new StringBuilder();
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = br.readLine()) != null) sb.append(line);
+                }
+                JSONObject resp = new JSONObject(sb.toString());
+                return resp.optJSONArray("candidates")
+                    .optJSONObject(0)
+                    .optJSONObject("content")
+                    .optJSONArray("parts")
+                    .optJSONObject(0)
+                    .optString("text", "")
+                    .trim();
+                } else if (conn.getResponseCode() == 400 || conn.getResponseCode() == 401 || conn.getResponseCode() == 403) {
+                    break;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private void dispatchGeminiAgentResponse(String host, int port, String token, String rawText, boolean allowActions) {
+        try {
+            String cleaned = rawText.trim();
+            if (cleaned.startsWith("```")) {
+                int firstNl = cleaned.indexOf('\n');
+                if (firstNl > 0) cleaned = cleaned.substring(firstNl + 1);
+                if (cleaned.endsWith("```")) cleaned = cleaned.substring(0, cleaned.length() - 3).trim();
+            }
+            String replyText = cleaned;
+            JSONArray actions = null;
+            if (cleaned.startsWith("{")) {
+                JSONObject obj = new JSONObject(cleaned);
+                replyText = obj.optString("reply", obj.optString("chat", cleaned));
+                actions = obj.optJSONArray("actions");
+            }
+            if (replyText != null && !replyText.isEmpty()) {
+                JSONObject chatCmd = new JSONObject();
+                chatCmd.put("op", "chat");
+                chatCmd.put("message", "[HorizonZ Gemini AI] " + replyText);
+                sendControlCommand(host, port, token, chatCmd.toString());
+            }
+            if (allowActions && actions != null) {
+                for (int i = 0; i < actions.length(); i++) {
+                    JSONObject act = actions.optJSONObject(i);
+                    if (act != null && act.has("op")) {
+                        sendControlCommand(host, port, token, act.toString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            try {
+                JSONObject fallbackChat = new JSONObject();
+                fallbackChat.put("op", "chat");
+                fallbackChat.put("message", "[HorizonZ Gemini AI] " + rawText.replace("\n", " ").substring(0, Math.min(180, rawText.length())));
+                sendControlCommand(host, port, token, fallbackChat.toString());
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     private void returnToLauncherAndFinish() {
@@ -307,6 +608,43 @@ public final class HorizonActivity extends NativeActivity {
                 String renderBackend = intent.getStringExtra("HORIZON_WGPU_BACKEND");
                 if (renderBackend != null && !renderBackend.isEmpty()) {
                     Os.setenv("WGPU_BACKEND", renderBackend, true);
+                }
+
+                int ramAllocMb = intent.getIntExtra("HORIZON_RAM_ALLOCATION_MB", 0);
+                int deviceTotalRamMb = intent.getIntExtra("HORIZON_DEVICE_TOTAL_RAM_MB", 8192);
+                boolean unlimitedRam = (ramAllocMb <= 0);
+                int effectiveRamMb = unlimitedRam ? Math.max(2048, (int) (deviceTotalRamMb * 0.85f)) : Math.max(1024, ramAllocMb);
+                Os.setenv("HORIZON_RAM_ALLOCATION_MB", String.valueOf(ramAllocMb), true);
+                Os.setenv("HORIZON_RAM_UNLIMITED", unlimitedRam ? "1" : "0", true);
+                Os.setenv("HORIZON_EFFECTIVE_RAM_MB", String.valueOf(effectiveRamMb), true);
+                Os.setenv("WGPU_MEMORY_BUDGET_MB", String.valueOf(effectiveRamMb), true);
+
+                String shaderPack = intent.getStringExtra("HORIZON_SHADER_PACK");
+                if (shaderPack != null && !shaderPack.trim().isEmpty()) {
+                    Os.setenv("HORIZON_SHADER_PACK", shaderPack.trim(), true);
+                } else {
+                    try { Os.unsetenv("HORIZON_SHADER_PACK"); } catch (Exception ignored) {}
+                }
+
+                boolean aiAgentEnabled = intent.getBooleanExtra("HORIZON_AI_AGENT_ENABLED", false);
+                String aiProvider = intent.getStringExtra("HORIZON_AI_AGENT_PROVIDER");
+                String geminiModel = intent.getStringExtra("HORIZON_GEMINI_MODEL");
+                if (aiAgentEnabled && homeDir != null) {
+                    File controlFile = new File(homeDir, "horizon-control.json");
+                    Os.setenv("HORIZON_CONTROL", controlFile.getAbsolutePath(), true);
+                    Os.setenv("HORIZON_AI_AGENT_ENABLED", "1", true);
+                    Os.setenv("HORIZON_AI_AGENT_PROVIDER", (aiProvider != null && !aiProvider.isEmpty()) ? aiProvider : "gemini", true);
+                    Os.setenv("HORIZON_GEMINI_MODEL", (geminiModel != null && !geminiModel.isEmpty()) ? geminiModel : "gemini-4-argon", true);
+                } else {
+                    Os.setenv("HORIZON_AI_AGENT_ENABLED", "0", true);
+                }
+
+                try {
+                    Class<?> vmRuntimeClass = Class.forName("dalvik.system.VMRuntime");
+                    Object vmRuntime = vmRuntimeClass.getDeclaredMethod("getRuntime").invoke(null);
+                    vmRuntimeClass.getDeclaredMethod("setTargetHeapUtilization", float.class)
+                        .invoke(vmRuntime, unlimitedRam ? 0.85f : 0.75f);
+                } catch (Throwable ignored) {
                 }
             }
         } catch (Exception e) {
@@ -503,7 +841,7 @@ public final class HorizonActivity extends NativeActivity {
 
         void stopPolling() {
             active = false;
-            handler.removeCallbacks(frameLoop);
+            handler.removeCallbacksAndMessages(null);
         }
 
         private void pollBootMilestone() {

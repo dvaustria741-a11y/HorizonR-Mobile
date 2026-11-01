@@ -48,7 +48,7 @@ jobs:
           exit 0
 
   build-horizonz-apk:
-    name: Build HorizonZ 1.2 APK (${{ matrix.abi }})
+    name: Build HorizonZ 1.8 APK (${{ matrix.abi }})
     needs: apply-update-zip
     if: always() && !cancelled()
     runs-on: ubuntu-latest
@@ -124,11 +124,11 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
-      - name: Clone Latest Vasysik/horizon-android Engine & Apply HorizonZ 1.2 Patches
+      - name: Clone Latest Vasysik/horizon-android Engine & Apply HorizonZ 1.8 Patches
         run: |
           rm -rf /tmp/horizon-upstream
           git clone --depth 1 --branch android https://github.com/Vasysik/horizon-android.git /tmp/horizon-upstream
-          rsync -a --delete --exclude='packaging/android' --exclude='scripts' --exclude='Update' --exclude='docs/screenshots' --exclude='README.md' --exclude='.local' --exclude='.git' --exclude='.github' /tmp/horizon-upstream/ ./
+          rsync -a --delete --exclude='packaging/android' --exclude='scripts' --exclude='Update' --exclude='BBS' --exclude='docs/screenshots' --exclude='README.md' --exclude='.local' --exclude='.git' --exclude='.github' /tmp/horizon-upstream/ ./
           if [ -d "/tmp/horizon-upstream/docs" ]; then
             mkdir -p docs
             cp -rf /tmp/horizon-upstream/docs/* docs/ 2>/dev/null || true
@@ -140,7 +140,11 @@ jobs:
           if [ -f "/tmp/horizon-upstream/packaging/android/bedrock-controls.json" ]; then
             cp -f "/tmp/horizon-upstream/packaging/android/bedrock-controls.json" packaging/android/bedrock-controls.json
           fi
-          python3 scripts/patch_horizon_direct_boot.py
+          if [ -f "BBS/sync_and_merge_bbs.py" ]; then
+            python3 BBS/sync_and_merge_bbs.py /tmp/horizon-upstream
+          else
+            python3 scripts/patch_horizon_direct_boot.py
+          fi
           rm -rf /tmp/horizon-upstream
           rm -f packaging/android/assets/bedrock-controls.json
 
@@ -149,7 +153,7 @@ jobs:
       - name: Cache Rust Engine Build
         uses: Swatinem/rust-cache@v2
         with:
-          key: horizon-real-engine-v11-${{ matrix.rust_target }}
+          key: horizon-real-engine-v16-${{ matrix.rust_target }}
 
       - name: Compile Real Horizon Rust Engine (libhorizon_android.so) & Prestage Controls (${{ matrix.abi }})
         run: |
@@ -158,9 +162,10 @@ jobs:
           cp -f LICENSE .local/android/gradle-assets/LICENSE.txt || cp -f LICENSE.txt .local/android/gradle-assets/LICENSE.txt || true
           cp -f THIRD_PARTY_NOTICES.md .local/android/gradle-assets/ || true
 
+          APK_URL_076="https://github.com/Vasysik/horizon-android/releases/download/v0.7.6/Horizon-Android-0.7.6-${{ matrix.abi }}.apk"
           APK_URL_075="https://github.com/Vasysik/horizon-android/releases/download/v0.7.5/Horizon-Android-0.7.5-${{ matrix.abi }}.apk"
           APK_URL_074="https://github.com/Vasysik/horizon-android/releases/download/v0.7.4/Horizon-Android-0.7.4-${{ matrix.abi }}.apk"
-          if curl -fsSL -L "$APK_URL_075" -o /tmp/upstream_assets.apk || curl -fsSL -L "$APK_URL_074" -o /tmp/upstream_assets.apk; then
+          if curl -fsSL -L "$APK_URL_076" -o /tmp/upstream_assets.apk || curl -fsSL -L "$APK_URL_075" -o /tmp/upstream_assets.apk || curl -fsSL -L "$APK_URL_074" -o /tmp/upstream_assets.apk; then
             unzip -q -o /tmp/upstream_assets.apk "assets/*" -d /tmp/upstream_assets_dir || true
             if [ -d "/tmp/upstream_assets_dir/assets" ]; then
               cp -rf /tmp/upstream_assets_dir/assets/* .local/android/gradle-assets/ || true
@@ -229,18 +234,18 @@ jobs:
           fi
           mkdir -p ../../dist
           APK_FOUND="$(find build/outputs/apk/release ../../.local/android/gradle-build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)"
-          cp -f "$APK_FOUND" "../../dist/HorizonZ-Launcher-1.2-${{ matrix.abi }}.apk"
+          cp -f "$APK_FOUND" "../../dist/HorizonZ-Launcher-1.8-${{ matrix.abi }}.apk"
           ls -lh ../../dist/
 
       - name: Upload APK Artifact (${{ matrix.abi }})
         uses: actions/upload-artifact@v4
         with:
-          name: HorizonZ-Launcher-1.2-${{ matrix.abi }}
-          path: dist/HorizonZ-Launcher-1.2-${{ matrix.abi }}.apk
+          name: HorizonZ-Launcher-1.8-${{ matrix.abi }}
+          path: dist/HorizonZ-Launcher-1.8-${{ matrix.abi }}.apk
           if-no-files-found: error
 
   publish-release:
-    name: Publish HorizonZ 1.2 Release APKs
+    name: Publish HorizonZ 1.8 Release APKs
     needs: build-horizonz-apk
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -260,14 +265,13 @@ jobs:
       - name: Create or Update Latest GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: horizonz-v1.2.0-build-${{ github.run_number }}
-          name: "HorizonZ - Launcher v1.2 (Build #${{ github.run_number }} • Android Fork Release • ARM64 & ARM32)"
+          tag_name: horizonz-v1.8.0-build-${{ github.run_number }}
+          name: "HorizonZ - Launcher v1.8 (Build #${{ github.run_number }} • Android Fork Release • ARM64 & ARM32)"
           body: |
-            ## HorizonZ - Launcher v1.2 (Official Android Fork of `horizon-rust/horizon`)
-            - **Native ARM64 (`arm64-v8a`) & ARM32 (`armeabi-v7a`) Builds**: Built from the latest upstream `Vasysik/horizon-android` (`v0.7.5`) + `horizon-rust/horizon` (`26.3`) Rust engine.
-            - **Updated Fork Release Update Detector**: Checks `Fadiba21/Horizonz-Launcher/releases` with automatic ABI matching and semantic version comparison.
-            - **Pre-Bundled 60 Bedrock Touch Controls & Background Download Notification**: Eliminates `17/60` stall and keeps asset downloads running in the background with live progress notifications.
-            - **Self-Healing `.hmod` Validator & Two-Way Settings Sync**: Automatically repairs `.hmod` manifests and syncs Vulkan/OpenGL ES renderer, keypad, and `options.txt`.
+            ## What's New in v1.8
+            - Expanded the in-app Gemini model picker with additional presets and manual model-ID entry.
+            - Added ordered Gemini API fallback attempts, trying the selected model ID before fallback endpoints.
+            - Randomized Dashboard cinematic/trailer playback and expanded the fallback trailer list.
           files: |
             release-apks/*.apk
             release-apks/SHA256SUMS.txt

@@ -35,6 +35,16 @@ class HorizonDownloadService : Service() {
             } catch (ignored: Exception) {
             }
         }
+
+        fun stopIfIdle(context: Context) {
+            try {
+                val status = HorizonNativeBridge.pollInstallProgress(context, false)
+                if (!status.running) {
+                    context.stopService(Intent(context, HorizonDownloadService::class.java))
+                }
+            } catch (ignored: Exception) {
+            }
+        }
     }
 
     @Volatile

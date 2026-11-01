@@ -1,91 +1,72 @@
 <!-- HORIZONZ_README_PRESERVE -->
-<!-- HORIZONZ_README_LANGUAGE: en -->
-<p align="center">
-  <img src="docs/screenshots/horizonz-banner.jpg" alt="HorizonZ Launcher and Minecraft 26.3 Rust Edition" width="100%">
-</p>
+<!-- HORIZONZ_README_MOBILE_V3 -->
+<div align="center">
 
-<h1 align="center">HorizonZ Launcher</h1>
-<p align="center"><strong>Minecraft: Java Edition on Android — Kotlin launcher, native Rust runtime.</strong></p>
-<p align="center">
-  <a href="https://github.com/Fadiba21/Horizonz-Launcher/actions/workflows/build-apk.yml"><img src="https://img.shields.io/badge/Build-GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="Build with GitHub Actions"></a>
-  <img src="https://img.shields.io/badge/Android-API%2028%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android API 28 or later">
-  <img src="https://img.shields.io/badge/Kotlin%20UI%20%2B%20Rust%20Engine-243B53?style=for-the-badge" alt="Kotlin UI plus Rust engine">
-</p>
+<img src="docs/screenshots/horizonz-banner.jpg" alt="HorizonZ Launcher Banner" width="100%" />
 
-<!-- HORIZONZ_VERSION_START -->
-<p align="center">
-  <a href="https://github.com/Fadiba21/Horizonz-Launcher/releases/latest"><img src="https://img.shields.io/badge/Release-v1.2.0-52b788?style=for-the-badge&logo=android&logoColor=white" alt="Release v1.2.0"></a>
-  <strong>Current source:</strong> <code>1.2.0-HorizonZ</code> · <strong>versionCode:</strong> <code>52</code> · <strong>Minimum Android:</strong> API 28 · <strong>Compile/target SDK:</strong> 35/35
-</p>
-<!-- HORIZONZ_VERSION_END -->
+# 🎮 HorizonZ Launcher Android
 
-> **Banner and screenshots:** these images are included with the HorizonZ 1.2.0 source archive.
+**Native Rust Minecraft 26.3 Launcher & Engine for Android (`arm64-v8a` & `armeabi-v7a`)**
 
-## 📘 Contents
+<!-- VERSION_BADGE_START -->
+[![Release](https://img.shields.io/badge/HorizonZ_Launcher-v1.8-8BE0FF?style=for-the-badge&logo=android&logoColor=0E2430)](https://github.com/Fadiba21/HorizonZ-Launcher-Android/releases)
+[![Minecraft](https://img.shields.io/badge/Minecraft-26.3_Rust-81C784?style=for-the-badge&logo=rust&logoColor=0E2430)](https://github.com/horizon-rust/horizon)
+[![Upstream](https://img.shields.io/badge/Vasysik_Horizon-v0.7.6-D0C6F2?style=for-the-badge)](https://github.com/Vasysik/horizon-android)
+[![Gemini AI](https://img.shields.io/badge/Google_AI_Studio-Gemini_4_Argon_%7C_3.8_%7C_3.5-FFB74D?style=for-the-badge&logo=googlegemini&logoColor=261600)](https://aistudio.google.com/)
+<!-- VERSION_BADGE_END -->
 
-- [About HorizonZ](#-about-horizonz)
-- [Features](#-features)
-- [Latest source update](#-latest-source-update)
-- [How it works](#-how-it-works)
-- [Technical specifications](#-technical-specifications)
-- [Build and downloads](#-build-and-downloads)
-- [Authentic launcher screenshots](#-authentic-launcher-screenshots)
-- [Source map](#-source-map)
-- [ZIP updates and README language](#-zip-updates-and-readme-language)
-- [License and attribution](#-license-and-attribution)
+</div>
 
-## 🎮 About HorizonZ
+<!-- LATEST_VERSION_START -->
+> 🚀 **Latest Release — HorizonZ v1.8**: Full **Google AI Studio (Gemini API)** integration with **22+ model options** (`Gemini 4 Argon`, `Gemini 4.0 Ultra/Pro/Flash`, `Gemini 3.8 Pro/Flash`, `Gemini 3.5 Flash-Lite`, `Gemini 2.5 Pro/Flash`, `Gemma 3`), **Random Minecraft Cinematic & Official Trailer** player (< 5 minutes) on the Dashboard, full support for **WGSL Shader Packs (`horizon-shaders.toml` schema 1)**, and **Native Mods (`.hnmod` / `.hmod`)** synchronization.
+<!-- LATEST_VERSION_END -->
 
-HorizonZ is an Android launcher for **Minecraft: Java Edition**, powered by the native Horizon runtime. Archive v1.2.0 combines a Kotlin/Jetpack Compose Android interface with a Rust engine packaged as a JNI library. The app provides a dashboard, game-version and asset management, a content catalog, file access, accounts and skins, logs, and settings. The game runs in a separate Android process from the launcher.
+## ✨ Key Features
 
-This source targets Minecraft Java Edition 26.3. HorizonZ is a community project and **is not affiliated with Mojang or Microsoft**.
+- 🦀 **100% Native Rust Engine (`Minecraft 26.3`)**: Runs directly on **Vulkan** & **OpenGL ES (`wgpu`)** through `libhorizon_android.so` without *garbage collection* or Java VM overhead (`arm64-v8a` & `armeabi-v7a`).
+- 🤖 **In-Game AI Agent (`Google AI Studio / Gemini API`)**: Connects to the game's local control protocol (`horizon-control.json`) with **22+ Gemini model options** (`Gemini 4 Argon`, `Gemini 3.8`, `Gemini 3.5 Flash-Lite`, `Gemini 2.5`, etc.) and **100% local on-device API Key storage (`0600`)**.
+- 🎬 **Random Cinematic & Trailer Player**: Randomly plays a collection of **Minecraft Cinematic & Official Trailer** videos, each < 5 minutes long, in 720p quality, with captions automatically disabled and a minimalist 3-dot control menu.
+- 🧩 **2-Way Store & Manager Synchronization**: Download, install, and update **Mods (`.hmod`)**, **Native Mods (`.hnmod`)**, **Shader Packs (`.hshader`)**, **Resource Packs**, and **Modpacks (`.hpack`)** directly from the `playhorizon.dev/mods` catalog.
+- 🧠 **Dynamic RAM Allocation**: Configures the *engine* memory budget (`horizon-memory.txt` & `WGPU_MEMORY_BUDGET_MB`) according to the device's RAM capacity, with **Unlimited (OS Limit)** as the default mode.
+- 🎨 **Interactive 3D Skin Studio**: 3D character preview (360° rotation & walking animation), automatic detection of **Wide (4px)** / **Slim (3px)** arms, and a library of ready-to-use skins.
+- ⚡ **Zero-Overhead Gaming**: All background *threads*, UI *timers*, and the trailer `WebView` are automatically stopped when entering the `:game` process.
 
-## ✨ Features
+## ⚙️ Architecture & Technical Details
 
-| Area | What Archive v1.2.0 contains |
-|---|---|
-| 🏠 **Home dashboard** | Wallpaper carousel, splash text, and user wallpaper import; CI can prepare up to 18 widescreen 1280 × 720 backgrounds. |
-| ⬇️ **Game and assets** | First-run game and asset downloads with Android progress notifications, including live stage and transfer progress. |
-| 🧩 **Store and mods** | Mods, Native Mods, Modpacks, Resource Packs, and Shader Packs; install/update state and per-folder content management. |
-| 📁 **Files** | File access and import/export through Android's Storage Access Framework and the app's document provider. |
-| 👤 **Accounts and skins** | Profile and skin management, including 64×64 and legacy 64×32 skin imports with wide/slim arm-model detection. |
-| ⚙️ **Settings** | Renderer selection, resolution scaling, FPS, touch/gamepad controls, and synchronization of supported runtime options. |
-| 🧾 **System logs** | Cross-process logs and log clearing, plus performance-report export and asset repair actions. |
-| 🎮 **Gameplay** | Full-screen landscape `NativeActivity` in a separate `:game` process, touch controls, and a return to the launcher when the game exits. |
+| Technical Component | Specifications & How It Works in HorizonZ |
+| :--- | :--- |
+| **Process & Rendering (`:game`)** | `HorizonActivity` runs in a separate process (`android:process=":game"`) using `NativeActivity` + `wgpu` (**Vulkan Compatibility**, **Vulkan High-Perf**, or **OpenGL ES**) with support for *Android ADPF thermal hints*. |
+| **Assets & Worldgen System (`26.3`)** | Downloads and verifies SHA-1/SHA-256 for `client.jar`, Mojang CDN asset objects, the `26.3` *worldgen* registry, and 60 touch-control textures in `.local/horizon-client/26.3`. |
+| **Mod Pipeline & WGSL Shaders** | Supports `.hmod` & `.hnmod` *mixin* compilation (`horizon-mods.txt` & `horizon-extras.txt`), as well as automatic `.hshader` validation (`horizon-shaders.toml` `schema = 1` for the `sky.wgsl` & `post.wgsl` *stages*). |
+| **Gemini AI Agent Bridge** | The `HorizonZ-GeminiAgentBridge` daemon connects the `$HORIZON_CONTROL` JSON-line *socket* (`state`, `inventory`, `looking-at`, `messages`) to the `generativelanguage.googleapis.com` endpoint using the local key `horizon-gemini-secret.json` (`0600`). |
+| **Auto-Sync Runtime (`BBS/`)** | The `BBS/sync_and_merge_bbs.py` module pulls *runtime* updates from `Vasysik/horizon-android` (`v0.7.6`) and automatically reapplies all HorizonZ Rust *patches* during the *build*. |
 
-The main navigation includes **Home**, **Downloads**, **Store**, **Files & Mods**, **Account & Skins**, **System Logs**, and **Settings**.
+## 📱 Launcher Interface Screenshots
 
-## 🆕 Latest source update
+### 🏠 1. Main Dashboard (HD Wallpaper & Random Cinematic Trailer)
+<img src="docs/screenshots/launcher-dashboard.jpg" alt="HorizonZ Dashboard" width="100%" />
 
-<!-- HORIZONZ_UPDATE_SUMMARY_START -->
-<!-- HORIZONZ_UPDATE_SUMMARY_LANGUAGE: en -->
-**v1.2.0-HorizonZ — Archive source highlights.**
+### ⬇️ 2. Game & Assets Manager (Download, Smart Repair & Asset Allocation)
+<img src="docs/screenshots/launcher-versions.jpg" alt="HorizonZ Game & Assets" width="100%" />
 
-- **Upstream include scan:** the patch script removes comments before scanning Rust `include_str!`/`include_bytes!` references, so commented-out examples do not create false missing-file reports.
-- **Versioned release:** increments the Android app to `1.2.0-HorizonZ` (`versionCode` 52) and labels APK artifacts and releases as v1.2.
-- **Update detection fixes:** corrects quote decoding and regex escaping used when parsing fork release versions.
-- **Dual-ABI release:** keeps `arm64-v8a` and `armeabi-v7a` builds; release APKs and checksums are published only after both succeed.
-<!-- HORIZONZ_UPDATE_SUMMARY_END -->
+### 🛒 3. HorizonZ Store (`playhorizon.dev/mods` Registry)
+<img src="docs/screenshots/launcher-store.jpg" alt="HorizonZ Store" width="100%" />
 
-## 🧱 How it works
+### 🧩 4. Files & Mods Manager (Mods, Saves, Resource Packs & Shaders)
+<img src="docs/screenshots/launcher-mods-manager.jpg" alt="HorizonZ Files & Mods Manager" width="100%" />
 
-```mermaid
-flowchart LR
-  U[Player] --> UI[ZalithMainActivity<br/>Kotlin + Jetpack Compose]
-  UI --> B[HorizonNativeBridge<br/>Files, profiles, settings, store, skins]
-  UI --> D[HorizonDownloadService<br/>Foreground downloads + notifications]
-  B --> FS[App-private data<br/>profiles, options.txt, mods, logs]
-  UI --> A[HorizonActivity<br/>NativeActivity in the :game process]
-  A --> JNI[libhorizon_android.so<br/>JNI / Rust cdylib]
-  JNI --> E[Horizon Android engine<br/>Vasysik/horizon-android · android branch]
-  D --> FS
-```
+### 👕 5. Account & 3D Skin Studio
+<img src="docs/screenshots/launcher-skins.jpg" alt="HorizonZ Account & Skin Studio" width="100%" />
 
-Jetpack Compose renders the screens and handles navigation. `HorizonNativeBridge.kt` connects the UI to profiles, game files, the catalog, skins, logs, and the runtime. `HorizonDownloadService.kt` handles downloads as an Android foreground service. When the player taps **Play**, `HorizonActivity` launches `NativeActivity` in the separate `:game` process, loads `libhorizon_android.so`, prepares `HORIZON_HOME`, and starts the Rust runtime.
+### ✨ 6. Settings & AI Agent Integration (Google AI Studio / Gemini API)
+<img src="docs/screenshots/launcher-settings.jpg" alt="HorizonZ Settings & Gemini AI Agent" width="100%" />
 
-The engine workspace is not fully stored in this repository. The release workflow checks out the public [`Vasysik/horizon-android`](https://github.com/Vasysik/horizon-android) project on its `android` branch, syncs required upstream documentation/include assets while preserving bundled screenshots, applies HorizonZ patches, and builds the Android native library.
+## 📥 APK Download & Quick Start
 
-## ⚙️ Technical specifications
+### What's New in v1.8
+- Expanded the in-app Gemini model picker with additional presets and manual model-ID entry.
+- Added ordered Gemini API fallback attempts, trying the selected model ID before fallback endpoints.
+- Randomized Dashboard cinematic/trailer playback and expanded the fallback trailer list.
 
 | Component | Archive v1.2.0 value |
 |---|---|
@@ -100,71 +81,8 @@ The engine workspace is not fully stored in this repository. The release workflo
 | Graphics/device requirements | OpenGL ES 3.0 required; Vulkan 1 optional; touch screen and gamepad are optional in the manifest |
 | Orientation | Launcher and game use landscape/sensor-landscape orientation |
 
-## 🛠️ Build and downloads
+## 📜 License & Credits
 
-### Download an APK
-
-Open [GitHub Releases](https://github.com/Fadiba21/Horizonz-Launcher/releases/latest) and choose the APK for the device architecture: `arm64-v8a` for most modern Android phones or `armeabi-v7a` for 32-bit devices. Releases include `SHA256SUMS.txt` for integrity checks.
-
-### Build from source
-
-The complete release build is defined in [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml). It sets up JDK 17, Android platform/build-tools 35, the NDK, and Android Rust targets; syncs required upstream `docs/` and compile-time include assets while preserving bundled screenshots; verifies/restores missing `include_str!`/`include_bytes!` files; prepares control textures and wallpapers; builds both configured ABI variants; and publishes APKs and checksums only after both ABI builds succeed.
-
-`tools/android_build.py` is a helper for an already prepared workspace. For a release-equivalent build, use GitHub Actions because that workflow also prepares the engine checkout and patches. Example helper command after the required native workspace and dependencies are available:
-
-```bash
-python3 tools/android_build.py --abi arm64-v8a --profile release --public
-```
-
-## 📸 Authentic launcher screenshots
-
-These launcher screenshots are included with the HorizonZ 1.2.0 source archive.
-
-### 🏠 Home
-
-![HorizonZ Home screen with the Minecraft 26.3 profile and Play button](docs/screenshots/launcher-dashboard.jpg)
-
-### 🛍️ Store
-
-![HorizonZ Store catalog screen](docs/screenshots/launcher-store.jpg)
-
-### 🧩 Files and Mods
-
-![HorizonZ Files and Mods screen](docs/screenshots/launcher-mods-manager.jpg)
-
-### 👤 Account and Skins
-
-![HorizonZ Account and Skins screen](docs/screenshots/launcher-skins.jpg)
-
-### ⚙️ Settings
-
-![HorizonZ Settings screen](docs/screenshots/launcher-settings.jpg)
-
-## 🗂️ Source map
-
-| Path | Purpose |
-|---|---|
-| `packaging/android/java/.../ui/` | Compose launcher screens and theme |
-| `packaging/android/java/.../bridge/` | Kotlin bridges for files, profiles, downloads, store, skins, settings, and logs |
-| `packaging/android/java/.../service/` | Foreground download service |
-| `packaging/android/java/dev/horizon/android/HorizonActivity.java` | Game `NativeActivity`, runtime environment, splash, and exit watchdog |
-| `crates/horizon-android/` | Rust JNI/cdylib Android library used by the build |
-| `packaging/android/res/drawable-nodpi/` | Bundled pixel wallpapers and app assets |
-| `docs/screenshots/` | Launcher banner, launcher screenshots, and in-game screenshots included in the source archive |
-| `scripts/patch_horizon_direct_boot.py` | Applies the runtime patch and restores/verifies upstream compile-time include assets |
-| `scripts/prestage_controls_and_wallpapers.py` | Prepares touch-control textures and release wallpapers |
-| `scripts/apply_update_zip.py` | Applies a source ZIP from `Update/` while protecting README layout/language |
-| `tools/android_build.py` | Rust/Gradle build helper |
-| `.github/workflows/build-apk.yml` | APK build and release pipeline |
-
-## ♻️ ZIP updates and README language
-
-This branch is based on **Archive v1.2.0-HorizonZ**. The input ZIP is intentionally not committed under `Update/`; only its source files are applied.
-
-The README starts with `<!-- HORIZONZ_README_PRESERVE -->` and `<!-- HORIZONZ_README_LANGUAGE: en -->`. The ZIP updater preserves an existing README carrying the preserve marker and updates only supported version blocks when matching markers are present; it does not replace the README wholesale. This English summary and the release-specific feature details are maintained to match the applied source.
-
-For a future source ZIP, preserve this README and update only the marked summary with accurate English notes about the changes. If the minimum Android version, SDKs, ABI, build tools, or runtime architecture changes, update the relevant technical sections as well.
-
-## 📜 License and attribution
-
-See [`LICENSE.txt`](LICENSE.txt) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for source and third-party component licensing. Minecraft is a trademark of Mojang/Microsoft; HorizonZ is not an official Mojang or Microsoft product.
+- 🔗 **Fork Repository**: [Fadiba21/HorizonZ-Launcher-Android](https://github.com/Fadiba21/HorizonZ-Launcher-Android)
+- 📱 **Upstream Android Runtime**: [Vasysik/horizon-android](https://github.com/Vasysik/horizon-android) (`v0.7.6`)
+- 🦀 **Core Rust Engine**: [horizon-rust/horizon](https://github.com/horizon-rust/horizon) (`Apache-2.0`)

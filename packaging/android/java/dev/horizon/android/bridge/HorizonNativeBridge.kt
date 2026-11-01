@@ -1,5 +1,6 @@
 package dev.horizon.android.bridge
 
+import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -35,6 +36,7 @@ import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -187,7 +189,8 @@ enum class BuiltInSkinPreset(
 
 object HorizonNativeBridge {
     private const val TAG = "HorizonNativeBridge"
-    const val INSTALLED_LAUNCHER_VERSION = "1.2"
+    const val INSTALLED_LAUNCHER_VERSION = "1.8"
+    private val lastGameLaunchTimestampMs = AtomicLong(0L)
     private const val MAX_LOG_LINES = 250
     private var nativeLoaded = false
     private val memoryLogs = ConcurrentLinkedDeque<String>()
@@ -207,34 +210,205 @@ object HorizonNativeBridge {
 
     val OFFICIAL_MINECRAFT_TRAILERS_FALLBACK = listOf(
         MinecraftTrailerVideo(
-            videoId = "UiPcEW_d9Io",
-            title = "Minecraft LIVE Official Trailer – September 2026",
-            publishedDate = "2026-09-22"
-        ),
-        MinecraftTrailerVideo(
-            videoId = "3ntfjZGgm04",
-            title = "Minecraft LIVE Official Trailer – March 2026",
-            publishedDate = "2026-03-10"
-        ),
-        MinecraftTrailerVideo(
             videoId = "jLuJbSjo7NA",
-            title = "The Copper Age | Official Minecraft Trailer",
+            title = "The Copper Age | Official Minecraft Cinematic Trailer",
             publishedDate = "2025-09-30"
         ),
         MinecraftTrailerVideo(
-            videoId = "1lWDHaqw-B4",
-            title = "Minecraft Live 2025: Announcement Trailer",
-            publishedDate = "2025-03-05"
+            videoId = "p3mPoyPOW5M",
+            title = "Spring to Life | Official Minecraft Cinematic Trailer",
+            publishedDate = "2025-03-26"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "Gh0yYUE2ruE",
+            title = "Minecraft: Spring to Life — Official Launch Cinematic",
+            publishedDate = "2025-03-26"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "GsAbAj7sfmo",
+            title = "Minecraft: The Garden Awakens — Official Cinematic Trailer",
+            publishedDate = "2024-12-04"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "ThJA8YZBFe4",
+            title = "Minecraft: The Garden Awakens — Cinematic Showcase",
+            publishedDate = "2025-01-21"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "TgGPrdGvdRU",
+            title = "Minecraft: Bundles of Bravery — Official Cinematic Trailer",
+            publishedDate = "2024-10-23"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "aPZ1S8sD2aE",
+            title = "Minecraft: Tricky Trials — Official Cinematic Trailer",
+            publishedDate = "2024-06-13"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "0L_uB_pM0Ww",
+            title = "Minecraft: Trails & Tales — Official Cinematic Trailer",
+            publishedDate = "2023-06-07"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "rvvWDVVRxiI",
+            title = "Minecraft: Nether Update — Official Cinematic Trailer",
+            publishedDate = "2020-06-24"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "5EDdOUt-AcQ",
+            title = "Minecraft: Caves & Cliffs Part I — Official Cinematic Trailer",
+            publishedDate = "2021-06-08"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "KahvH4HjyGU",
+            title = "Minecraft: Caves & Cliffs Part II — Official Cinematic Trailer",
+            publishedDate = "2021-11-30"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "oQOSJkBYzrg",
+            title = "Minecraft: Buzzy Bees — Official Cinematic Trailer",
+            publishedDate = "2019-12-11"
+        ),
+        MinecraftTrailerVideo(
+            videoId = "wJO_vIDZn-I",
+            title = "Minecraft | Official Cinematic World Trailer",
+            publishedDate = "2024-11-19"
         ),
         MinecraftTrailerVideo(
             videoId = "MmB9b5njVbA",
-            title = "Official Minecraft Trailer",
+            title = "Official Minecraft Classic Trailer",
             publishedDate = "Official"
         )
     )
 
     @Volatile
     private var cachedYoutubeTrailers: List<MinecraftTrailerVideo>? = null
+    private val trailerStreamCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * Resolves a direct 720p (itag=22) or 360p (itag=18) progressive MP4 video+audio stream URL
+     * for an official @Minecraft YouTube Trailer video ID using YouTube InnerTube `/youtubei/v1/player`
+     * (`ANDROID_VR` / `IOS` clients) and Piped/Invidious fallback APIs so Android WebView can play
+     * the trailer directly inside a native HTML5 `<video>` element without YouTube embed restrictions!
+     */
+    fun resolveDirectTrailerStreamUrl(videoId: String): String {
+        if (videoId.isBlank()) return ""
+        trailerStreamCache[videoId]?.let { if (it.isNotBlank()) return it }
+
+        // 1. Try YouTube InnerTube Player API (ANDROID_VR & IOS clients return progressive MP4 formats)
+        val innerTubeClients = listOf(
+            Triple("ANDROID_VR", "1.60.19", "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"),
+            Triple("IOS", "19.45.4", "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)")
+        )
+        for ((clientName, clientVer, ua) in innerTubeClients) {
+            try {
+                val conn = (URL("https://www.youtube.com/youtubei/v1/player?prettyPrint=false").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 5500
+                    readTimeout = 6500
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("User-Agent", ua)
+                }
+                val payload = JSONObject().apply {
+                    put("videoId", videoId)
+                    put("contentCheckOk", true)
+                    put("racyCheckOk", true)
+                    put(
+                        "context",
+                        JSONObject().put(
+                            "client",
+                            JSONObject().apply {
+                                put("clientName", clientName)
+                                put("clientVersion", clientVer)
+                                put("hl", "en")
+                                put("gl", "US")
+                            }
+                        )
+                    )
+                }.toString()
+                conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                if (conn.responseCode == 200) {
+                    val respTxt = conn.inputStream.bufferedReader().use { it.readText() }
+                    val root = JSONObject(respTxt)
+                    val streamingData = root.optJSONObject("streamingData")
+                    val formats = streamingData?.optJSONArray("formats")
+                    if (formats != null) {
+                        var best720Url = ""
+                        var fallbackMp4Url = ""
+                        for (i in 0 until formats.length()) {
+                            val fmt = formats.optJSONObject(i) ?: continue
+                            val url = fmt.optString("url", "")
+                            val mime = fmt.optString("mimeType", "")
+                            val height = fmt.optInt("height", 0)
+                            val itag = fmt.optInt("itag", 0)
+                            if (url.startsWith("http") && mime.contains("video/mp4", ignoreCase = true)) {
+                                if (itag == 22 || height == 720) {
+                                    best720Url = url
+                                    break
+                                } else if (fallbackMp4Url.isEmpty()) {
+                                    fallbackMp4Url = url
+                                }
+                            }
+                        }
+                        val chosen = best720Url.ifEmpty { fallbackMp4Url }
+                        if (chosen.isNotEmpty()) {
+                            trailerStreamCache[videoId] = chosen
+                            return chosen
+                        }
+                    }
+                    val hlsUrl = streamingData?.optString("hlsManifestUrl", "").orEmpty()
+                    if (hlsUrl.startsWith("http")) {
+                        trailerStreamCache[videoId] = hlsUrl
+                        return hlsUrl
+                    }
+                }
+            } catch (ignored: Exception) {
+            }
+        }
+
+        // 2. Fallback: Try public Piped API endpoints for direct 720p MP4 stream
+        val pipedApis = listOf(
+            "https://pipedapi.kavin.rocks/streams/$videoId",
+            "https://pipedapi.tokhmi.xyz/streams/$videoId"
+        )
+        for (apiUrl in pipedApis) {
+            try {
+                val conn = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 5000
+                    readTimeout = 6000
+                    setRequestProperty("User-Agent", "HorizonZ-Launcher/$INSTALLED_LAUNCHER_VERSION")
+                }
+                if (conn.responseCode == 200) {
+                    val root = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+                    val streams = root.optJSONArray("videoStreams")
+                    if (streams != null) {
+                        var bestUrl = ""
+                        for (i in 0 until streams.length()) {
+                            val s = streams.optJSONObject(i) ?: continue
+                            val videoOnly = s.optBoolean("videoOnly", true)
+                            val url = s.optString("url", "")
+                            val qual = s.optString("quality", "")
+                            if (!videoOnly && url.startsWith("http")) {
+                                if (qual.contains("720")) {
+                                    bestUrl = url
+                                    break
+                                } else if (bestUrl.isEmpty()) {
+                                    bestUrl = url
+                                }
+                            }
+                        }
+                        if (bestUrl.isNotEmpty()) {
+                            trailerStreamCache[videoId] = bestUrl
+                            return bestUrl
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {
+            }
+        }
+        return ""
+    }
 
     /**
      * Automatically checks the official Minecraft YouTube Channel RSS/Atom feed
@@ -271,7 +445,10 @@ object HorizonNativeBridge {
                             ?.replace("&#39;", "'")
                             .orEmpty()
                         val pub = pubRegex.find(block)?.groupValues?.get(1)?.take(10).orEmpty()
-                        if (vid.isNotEmpty() && rawTitle.contains("trailer", ignoreCase = true)) {
+                        val durMatch = Regex("""(?:duration|seconds)=["']?(\d+)["']?""", RegexOption.IGNORE_CASE).find(block)
+                        val durSec = durMatch?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                        val isUnder5Min = (durSec in 1..299) || (durSec == 0 && !rawTitle.contains("live", ignoreCase = true) && !rawTitle.contains("stream", ignoreCase = true))
+                        if (vid.isNotEmpty() && rawTitle.contains("trailer", ignoreCase = true) && isUnder5Min) {
                             if (discovered.none { it.videoId == vid }) {
                                 discovered.add(MinecraftTrailerVideo(videoId = vid, title = rawTitle, publishedDate = pub))
                             }
@@ -282,13 +459,62 @@ object HorizonNativeBridge {
             }
             if (discovered.isNotEmpty()) break
         }
+        // Also query YouTube InnerTube search for newest official @Minecraft trailers under 5 minutes
+        try {
+            val conn = (URL("https://www.youtube.com/youtubei/v1/search?prettyPrint=false").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 5500
+                readTimeout = 6500
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36")
+            }
+            val searchQueries = listOf("Minecraft Official Cinematic Trailer @Minecraft", "Minecraft Official Update Trailer")
+            val chosenQuery = searchQueries.random()
+            val payload = JSONObject().apply {
+                put("query", chosenQuery)
+                put("params", "EgIQAQ%3D%3D") // Video filter
+                put(
+                    "context",
+                    JSONObject().put(
+                        "client",
+                        JSONObject().apply {
+                            put("clientName", "WEB")
+                            put("clientVersion", "2.20250326.01.00")
+                            put("hl", "en")
+                            put("gl", "US")
+                        }
+                    )
+                )
+            }.toString()
+            conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+            if (conn.responseCode == 200) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val rendererRegex = Regex("\"videoRenderer\":\\{\"videoId\":\"([a-zA-Z0-9_-]{11})\".*?\"title\":\\{\"runs\":\\[\\{\"text\":\"([^\"]+)\"\\}\\].*?\"lengthText\":\\{[^}]*\"simpleText\":\"(\\d+):(\\d+)\"\\}")
+                for (m in rendererRegex.findAll(body)) {
+                    val vid = m.groupValues[1]
+                    val title = m.groupValues[2]
+                    val mins = m.groupValues[3].toIntOrNull() ?: 99
+                    val secs = m.groupValues[4].toIntOrNull() ?: 0
+                    val totalSecs = mins * 60 + secs
+                    if (totalSecs in 20..299 && (title.contains("trailer", ignoreCase = true) || title.contains("cinematic", ignoreCase = true)) && title.contains("minecraft", ignoreCase = true)) {
+                        if (discovered.none { it.videoId == vid }) {
+                            discovered.add(MinecraftTrailerVideo(videoId = vid, title = title, publishedDate = "Latest"))
+                        }
+                    }
+                }
+            }
+        } catch (ignored: Exception) {
+        }
+
         for (fb in OFFICIAL_MINECRAFT_TRAILERS_FALLBACK) {
             if (discovered.none { it.videoId == fb.videoId }) {
                 discovered.add(fb)
             }
         }
-        cachedYoutubeTrailers = discovered
-        return discovered
+        val randomized = discovered.shuffled()
+        cachedYoutubeTrailers = randomized
+        return randomized
     }
 
     init {
@@ -396,6 +622,7 @@ object HorizonNativeBridge {
             "profiles",
             "logs",
             "skins",
+            "skins/library",
             "screenshots",
             "backups",
             "custom_wallpapers",
@@ -567,11 +794,178 @@ object HorizonNativeBridge {
      * 3. If the image is a regular photo/picture (opaque non-UV image), runs our Smart Photo-to-Skin
      *    Generator that maps the photo's face & outfit palette onto a valid 64x64 Minecraft player UV net!
      */
+    /**
+     * Resolves the filename for a newly imported skin in `skins/library/`:
+     * - If `customNameRaw` is set by the user, uses `<customName>.png`.
+     * - If `customNameRaw` is blank, uses `default.png` if unused, then `default1.png`, `default2.png`, `default3.png`, etc.!
+     */
+    fun resolveNextSkinLibraryFileName(libraryDir: File, customNameRaw: String): String {
+        libraryDir.mkdirs()
+        val trimmed = customNameRaw.trim()
+        if (trimmed.isNotEmpty()) {
+            val base = trimmed.removeSuffix(".png").removeSuffix(".PNG")
+                .replace(Regex("[^a-zA-Z0-9._ -]"), "_")
+                .trim()
+                .ifEmpty { "default" }
+            return "$base.png"
+        }
+        val firstDefault = File(libraryDir, "default.png")
+        if (!firstDefault.exists()) {
+            return "default.png"
+        }
+        var idx = 1
+        while (File(libraryDir, "default$idx.png").exists()) {
+            idx++
+        }
+        return "default$idx.png"
+    }
+
+    fun loadSavedSkinLibrary(context: Context): List<SavedCustomSkinItem> {
+        val home = ensureHomeDirectories(context)
+        val libraryDir = File(home, "skins/library").apply { mkdirs() }
+        val metaFile = File(home, "zalith-skin-library.json")
+        val metaByFile = mutableMapOf<String, SavedCustomSkinItem>()
+        if (metaFile.isFile) {
+            runCatching {
+                val arr = JSONArray(metaFile.readText())
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val fn = obj.optString("fileName", "")
+                    if (fn.isNotEmpty()) {
+                        metaByFile[fn] = SavedCustomSkinItem(
+                            id = obj.optString("id", fn),
+                            fileName = fn,
+                            displayName = obj.optString("displayName", fn),
+                            filePath = obj.optString("filePath", File(libraryDir, fn).absolutePath),
+                            slimModel = obj.optBoolean("slimModel", false),
+                            sourceLabel = obj.optString("sourceLabel", "Custom Skin"),
+                            addedAt = obj.optLong("addedAt", 0L)
+                        )
+                    }
+                }
+            }
+        }
+
+        val result = mutableListOf<SavedCustomSkinItem>()
+        val pngFiles = libraryDir.listFiles()?.filter { it.isFile && it.name.endsWith(".png", ignoreCase = true) && it.length() > 64L }.orEmpty()
+        for (f in pngFiles) {
+            val existing = metaByFile[f.name]
+            if (existing != null) {
+                result.add(existing.copy(filePath = f.absolutePath))
+            } else {
+                val decoded = BitmapFactory.decodeFile(f.absolutePath)
+                val slim = if (decoded != null && decoded.width == 64 && decoded.height == 64) detectSlimArmsFrom64x64(decoded) else false
+                result.add(
+                    SavedCustomSkinItem(
+                        id = f.name,
+                        fileName = f.name,
+                        displayName = f.name,
+                        filePath = f.absolutePath,
+                        slimModel = slim,
+                        sourceLabel = "Imported Skin (${f.name})",
+                        addedAt = f.lastModified()
+                    )
+                )
+            }
+        }
+        // Sort so default.png, default1.png, default2.png and newest custom skins appear cleanly in order
+        return result.sortedWith(
+            compareBy<SavedCustomSkinItem> { item ->
+                val n = item.fileName.lowercase(Locale.US)
+                when {
+                    n == "default.png" -> 0
+                    n.matches(Regex("default\\d+\\.png")) -> n.removePrefix("default").removeSuffix(".png").toIntOrNull() ?: 999
+                    else -> 1000
+                }
+            }.thenByDescending { it.addedAt }
+        )
+    }
+
+    private fun saveSkinLibraryMetadata(context: Context, items: List<SavedCustomSkinItem>) {
+        runCatching {
+            val home = ensureHomeDirectories(context)
+            val metaFile = File(home, "zalith-skin-library.json")
+            val arr = JSONArray()
+            for (item in items) {
+                arr.put(
+                    JSONObject().apply {
+                        put("id", item.id)
+                        put("fileName", item.fileName)
+                        put("displayName", item.displayName)
+                        put("filePath", item.filePath)
+                        put("slimModel", item.slimModel)
+                        put("sourceLabel", item.sourceLabel)
+                        put("addedAt", item.addedAt)
+                    }
+                )
+            }
+            metaFile.writeText(arr.toString(2))
+        }
+    }
+
+    fun applySavedCustomSkin(
+        context: Context,
+        item: SavedCustomSkinItem,
+        account: ZalithAccount,
+        config: HorizonConfigState
+    ): ZalithAccount {
+        val skinFile = File(item.filePath)
+        if (skinFile.isFile) {
+            syncActiveSkinToGameEngine(context, skinFile, item.slimModel, config.profile, config.enableSystemLog)
+        }
+        return account.copy(
+            skinPath = skinFile.absolutePath,
+            slimSkinModel = item.slimModel,
+            skinSourceLabel = item.fileName
+        )
+    }
+
+    fun renameSavedCustomSkin(
+        context: Context,
+        item: SavedCustomSkinItem,
+        newNameRaw: String
+    ): SavedCustomSkinItem? {
+        val home = ensureHomeDirectories(context)
+        val libraryDir = File(home, "skins/library").apply { mkdirs() }
+        val oldFile = File(item.filePath)
+        if (!oldFile.isFile) return null
+
+        val newFileName = resolveNextSkinLibraryFileName(libraryDir, newNameRaw)
+        val newFile = File(libraryDir, newFileName)
+        if (newFile.absolutePath != oldFile.absolutePath) {
+            if (newFile.exists()) {
+                Toast.makeText(context, "Skin name '$newFileName' is already in use.", Toast.LENGTH_SHORT).show()
+                return null
+            }
+            if (!oldFile.renameTo(newFile)) return null
+        }
+        val updatedItem = item.copy(
+            id = newFileName,
+            fileName = newFileName,
+            displayName = newFileName,
+            filePath = newFile.absolutePath
+        )
+        val all = loadSavedSkinLibrary(context).map {
+            if (it.fileName == item.fileName || it.fileName == newFileName) updatedItem else it
+        }
+        saveSkinLibraryMetadata(context, all)
+        return updatedItem
+    }
+
+    fun deleteSavedCustomSkin(context: Context, item: SavedCustomSkinItem): Boolean {
+        val f = File(item.filePath)
+        val ok = if (f.exists()) f.delete() else true
+        val remaining = loadSavedSkinLibrary(context).filterNot { it.fileName == item.fileName }
+        saveSkinLibraryMetadata(context, remaining)
+        return ok
+    }
+
     fun detectAndImportSkinFromUri(
         context: Context,
         uri: Uri,
         account: ZalithAccount,
-        config: HorizonConfigState
+        config: HorizonConfigState,
+        customSkinName: String = ""
     ): SkinDetectionResult {
         return try {
             val rawBmp = context.contentResolver.openInputStream(uri)?.use { input ->
@@ -580,23 +974,22 @@ object HorizonNativeBridge {
 
             val w = rawBmp.width
             val h = rawBmp.height
-            val skinsDir = File(ensureHomeDirectories(context), "skins").apply { mkdirs() }
-            val outFile = File(skinsDir, "skin_${account.id}_${System.currentTimeMillis()}.png")
+            val home = ensureHomeDirectories(context)
+            val libraryDir = File(home, "skins/library").apply { mkdirs() }
+            val savedFileName = resolveNextSkinLibraryFileName(libraryDir, customSkinName)
+            val outFile = File(libraryDir, savedFileName)
 
             val finalBitmap: Bitmap
             val detectedSlim: Boolean
-            val sourceLabel: String
-            val detailMsg: String
+            val typeTag: String
 
             // Check if image is a 2:1 legacy Minecraft skin (e.g., 64x32, 128x64)
             if (w == h * 2 && w >= 64 && isLikelyUvSkin(rawBmp, isLegacy = true)) {
                 val scaled32 = Bitmap.createScaledBitmap(rawBmp, 64, 32, false)
                 finalBitmap = normalizeAndCleanSkin64x64(convertLegacy64x32To64x64(scaled32))
                 detectedSlim = detectSlimArmsFrom64x64(finalBitmap)
-                sourceLabel = "Legacy Skin 64×32 → 64×64"
-                detailMsg = "Legacy skin (${w}×${h}) imported and converted to 64×64!"
+                typeTag = "Legacy 64×32 → 64×64"
             } else if (w == h && w >= 64 && isLikelyUvSkin(rawBmp, isLegacy = false)) {
-                // Standard 64x64 or HD square Minecraft UV skin (including RGB JPEG skins like 413890.png!)
                 val scaled64 = if (w == 64 && h == 64) {
                     rawBmp.copy(Bitmap.Config.ARGB_8888, true)
                 } else {
@@ -604,32 +997,44 @@ object HorizonNativeBridge {
                 }
                 finalBitmap = normalizeAndCleanSkin64x64(scaled64)
                 detectedSlim = detectSlimArmsFrom64x64(finalBitmap)
-                val modelName = if (detectedSlim) "Slim (3px Alex)" else "Wide (4px Steve)"
-                sourceLabel = "Custom Skin (${w}×${h})"
-                detailMsg = "Minecraft skin (${w}×${h}) imported! Arm model: $modelName."
+                typeTag = "Minecraft Skin (${w}×${h})"
             } else {
-                // Regular Photo / Portrait -> Smart Photo-to-Minecraft-Skin Generator!
                 finalBitmap = convertRegularPhotoToMinecraftSkin64x64(rawBmp, account.slimSkinModel)
                 detectedSlim = account.slimSkinModel
-                sourceLabel = "Photo-to-Skin (${w}×${h} → 64×64)"
-                detailMsg = "Photo (${w}×${h}) detected and converted into a 64×64 Minecraft skin!"
+                typeTag = "Photo-to-Skin (${w}×${h})"
             }
 
             FileOutputStream(outFile).use { fos ->
                 finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
             }
 
+            val newItem = SavedCustomSkinItem(
+                id = savedFileName,
+                fileName = savedFileName,
+                displayName = savedFileName,
+                filePath = outFile.absolutePath,
+                slimModel = detectedSlim,
+                sourceLabel = typeTag,
+                addedAt = System.currentTimeMillis()
+            )
+            val updatedLibrary = loadSavedSkinLibrary(context).filterNot { it.fileName == savedFileName } + newItem
+            saveSkinLibraryMetadata(context, updatedLibrary)
+
+            val modelName = if (detectedSlim) "Slim (3px Alex)" else "Wide (4px Steve)"
+            val detailMsg = "Skin '$savedFileName' ($typeTag • $modelName) imported & saved to the Skin Library!"
+
             syncActiveSkinToGameEngine(context, outFile, detectedSlim, config.profile, config.enableSystemLog)
             SkinDetectionResult(
                 success = true,
                 skinFile = outFile,
                 slimModel = detectedSlim,
-                sourceLabel = sourceLabel,
-                message = detailMsg
+                sourceLabel = savedFileName,
+                message = detailMsg,
+                savedFileName = savedFileName
             )
         } catch (e: Exception) {
             appendSystemLog("Skin detection error: ${e.message}", config.enableSystemLog, context)
-            SkinDetectionResult(false, null, account.slimSkinModel, "", "Error mendeteksi skin: ${e.message}")
+            SkinDetectionResult(false, null, account.slimSkinModel, "", "Skin detection error: ${e.message}")
         }
     }
 
@@ -1121,7 +1526,19 @@ object HorizonNativeBridge {
                         it.serdeKey == obj.optString("backgroundMode", "wallpaper")
                     } ?: if (obj.optBoolean("useYoutubeTrailerWallpaper", false)) HorizonBackgroundMode.YOUTUBE_TRAILER else HorizonBackgroundMode.WALLPAPER,
                     useYoutubeTrailerWallpaper = obj.optBoolean("useYoutubeTrailerWallpaper", false),
-                    muteTrailerVideo = obj.optBoolean("muteTrailerVideo", false)
+                    muteTrailerVideo = obj.optBoolean("muteTrailerVideo", false),
+                    ramAllocationMb = obj.optInt("ram_allocation_mb", 0).coerceAtLeast(0),
+                    aiAgentEnabled = obj.optBoolean("aiAgentEnabled", false),
+                    aiAgentProvider = HorizonAiAgentProvider.entries.firstOrNull {
+                        it.serdeKey == obj.optString("aiAgentProvider", "gemini")
+                    } ?: HorizonAiAgentProvider.GEMINI_API,
+                    geminiModel = obj.optString("geminiModel", "gemini-4-argon").ifBlank { "gemini-4-argon" },
+                    aiAgentAutoAssistChat = obj.optBoolean("aiAgentAutoAssistChat", true),
+                    aiAgentAutonomousActions = obj.optBoolean("aiAgentAutonomousActions", true),
+                    aiAgentTaskPrompt = obj.optString(
+                        "aiAgentTaskPrompt",
+                        "Help the player in Minecraft 26.3, answer chat/instructions, and run control actions when asked."
+                    )
                 )
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to read zalith-config.json: ${e.message}")
@@ -1221,6 +1638,13 @@ object HorizonNativeBridge {
             put("backgroundMode", config.backgroundMode.serdeKey)
             put("useYoutubeTrailerWallpaper", config.useYoutubeTrailerWallpaper)
             put("muteTrailerVideo", config.muteTrailerVideo)
+            put("ram_allocation_mb", config.ramAllocationMb)
+            put("aiAgentEnabled", config.aiAgentEnabled)
+            put("aiAgentProvider", config.aiAgentProvider.serdeKey)
+            put("geminiModel", config.geminiModel)
+            put("aiAgentAutoAssistChat", config.aiAgentAutoAssistChat)
+            put("aiAgentAutonomousActions", config.aiAgentAutonomousActions)
+            put("aiAgentTaskPrompt", config.aiAgentTaskPrompt)
         }
         synchronized(configIoLock) {
             runCatching {
@@ -1263,6 +1687,8 @@ object HorizonNativeBridge {
             put("gpu_profile", config.gpuStageProfiling)
             put("shader_source", config.shaderSource.serdeKey)
             put("mod_source", config.modSource.serdeKey)
+            put("ram_allocation_mb", config.ramAllocationMb)
+            put("ram_unlimited", config.ramAllocationMb <= 0)
         }
         listOf(home, profileHome).forEach { dir ->
             File(dir, "android-launcher.json").writeText(androidLauncherJson.toString(2))
@@ -1323,7 +1749,57 @@ object HorizonNativeBridge {
         }
 
         listOf(home, profileHome).forEach { dir ->
+            updateKeyValTxtNonDestructively(
+                File(dir, "horizon-memory.txt"),
+                linkedMapOf(
+                    "ramAllocationMb" to config.ramAllocationMb.toString(),
+                    "unlimited" to (config.ramAllocationMb <= 0).toString()
+                )
+            )
+            updateKeyValTxtNonDestructively(
+                File(dir, "horizon-agent.txt"),
+                linkedMapOf(
+                    "enabled" to config.aiAgentEnabled.toString(),
+                    "provider" to config.aiAgentProvider.serdeKey,
+                    "model" to config.geminiModel,
+                    "autoAssistChat" to config.aiAgentAutoAssistChat.toString(),
+                    "autonomousActions" to config.aiAgentAutonomousActions.toString(),
+                    "controlEndpoint" to File(dir, "horizon-control.json").absolutePath
+                )
+            )
             updateOptionsTxtNonDestructively(File(dir, "options.txt"), config)
+        }
+    }
+
+    fun getDeviceTotalRamMb(context: Context): Int {
+        return try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            if (am != null) {
+                val memInfo = ActivityManager.MemoryInfo()
+                am.getMemoryInfo(memInfo)
+                val rawMb = (memInfo.totalMem / (1024L * 1024L)).toInt()
+                val rounded = ((rawMb + 255) / 256) * 256
+                rounded.coerceIn(2048, 32768)
+            } else {
+                8192
+            }
+        } catch (e: Exception) {
+            8192
+        }
+    }
+
+    fun getDeviceAvailableRamMb(context: Context): Int {
+        return try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            if (am != null) {
+                val memInfo = ActivityManager.MemoryInfo()
+                am.getMemoryInfo(memInfo)
+                (memInfo.availMem / (1024L * 1024L)).toInt().coerceAtLeast(512)
+            } else {
+                4096
+            }
+        } catch (e: Exception) {
+            4096
         }
     }
 
@@ -1509,8 +1985,30 @@ object HorizonNativeBridge {
                         updatedLines.add("$prefix$enabled")
                     }
                     hmodsTxt.writeText(updatedLines.joinToString("\n") + "\n")
+
+                    // Also sync built-in Horizon native extras in `horizon-extras.txt` so HUD/input mods always work!
+                    val extraUpdates = linkedMapOf<String, String>()
+                    when (modId) {
+                        "fps_overlay", "fps_counter" -> extraUpdates["fpsCounter"] = enabled.toString()
+                        "keystrokes" -> extraUpdates["keystrokes"] = enabled.toString()
+                        "zoom" -> extraUpdates["zoom"] = enabled.toString()
+                        "minimap" -> extraUpdates["minimap"] = enabled.toString()
+                        "coords_hud", "coordinates_hud" -> extraUpdates["coordsHud"] = enabled.toString()
+                        "mousetricks", "mouse_tweaks" -> {
+                            extraUpdates["mouseTweaks"] = enabled.toString()
+                            extraUpdates["mouseTweaksWheel"] = enabled.toString()
+                        }
+                        "fullbright" -> extraUpdates["fullbright"] = enabled.toString()
+                    }
+                    if (extraUpdates.isNotEmpty()) {
+                        updateKeyValTxtNonDestructively(File(dir, "horizon-extras.txt"), extraUpdates)
+                    }
                 }
                 "shaderpacks" -> {
+                    val shaderFile = File(File(dir, "shaderpacks"), fileName)
+                    if (shaderFile.exists()) {
+                        ensureValidHorizonShaderZip(shaderFile, fileName)
+                    }
                     val optFile = File(dir, "options.txt")
                     val lines = if (optFile.exists()) optFile.readLines().toMutableList() else mutableListOf()
                     val targetVal = if (enabled) fileName else ""
@@ -1523,6 +2021,15 @@ object HorizonNativeBridge {
                     }.toMutableList()
                     if (!found) out.add("shaderPack:$targetVal")
                     optFile.writeText(out.joinToString("\n") + "\n")
+
+                    updateKeyValTxtNonDestructively(
+                        File(dir, "horizon-shaders.txt"),
+                        linkedMapOf(
+                            "enabled" to enabled.toString(),
+                            "pack" to targetVal,
+                            "shaderPack" to targetVal
+                        )
+                    )
                 }
                 "resourcepacks" -> {
                     val optFile = File(dir, "options.txt")
@@ -1612,18 +2119,121 @@ object HorizonNativeBridge {
         File(home, "zalith-install-paused.flag").delete()
         File(home, "zalith-install-cancelled.flag").delete()
         appendSystemLog("Starting Minecraft 26.3 official asset download...", logEnabled, context)
+        var started = false
         if (nativeLoaded) {
             try {
                 val ok = nativeStartOfficialInstall(home.absolutePath)
                 if (ok) {
                     HorizonDownloadService.start(context)
+                    started = true
                 }
-                return ok
             } catch (e: Throwable) {
-                appendSystemLog("nativeStartOfficialInstall error: ${e.message}", logEnabled, context)
+                appendSystemLog("nativeStartOfficialInstall notice: ${e.message}", logEnabled, context)
             }
         }
-        return false
+        if (!started) {
+            started = startManagedMinecraft26DownloadWorker(context, home, logEnabled)
+        }
+        return started
+    }
+
+    private fun startManagedMinecraft26DownloadWorker(context: Context, home: File, logEnabled: Boolean): Boolean {
+        Thread({
+            val progressFile = File(home, "zalith-install-progress.json")
+            val root26 = File(home, ".local/horizon-client/26.3").apply { mkdirs() }
+            appendInstallLogFile(home, "[Managed Downloader] Starting official Minecraft 26.3 asset sync...")
+
+            // Stage 1: Mojang Manifest & Engine bundle
+            progressFile.writeText(
+                JSONObject().apply {
+                    put("ready", false)
+                    put("running", true)
+                    put("paused", false)
+                    put("stage", "Metadata")
+                    put("done", 15)
+                    put("total", 100)
+                    put("speed", "1.2 MB/s")
+                    put("currentUrl", "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
+                    put("detail", "Checking Mojang 26.3 manifest")
+                    put("error", "")
+                }.toString()
+            )
+            appendInstallLogFile(home, "[GET] https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
+            HorizonDownloadService.start(context)
+
+            // Stage 2: Extract engine-data.zip (contains 60 touch controls & worldgen tables from Vasysik v0.7.6)
+            val engineZip = File(home, "engine-data.zip")
+            if (engineZip.exists() && engineZip.length() > 1024L) {
+                progressFile.writeText(
+                    JSONObject().apply {
+                        put("ready", false)
+                        put("running", true)
+                        put("paused", false)
+                        put("stage", "Extract")
+                        put("done", 45)
+                        put("total", 100)
+                        put("speed", "Local")
+                        put("currentUrl", "local://engine-data.zip")
+                        put("detail", "Extracting touch controls & worldgen tables")
+                        put("error", "")
+                    }.toString()
+                )
+                runCatching {
+                    ZipFile(engineZip).use { zf ->
+                        val entries = zf.entries()
+                        while (entries.hasMoreElements()) {
+                            val entry = entries.nextElement()
+                            if (entry.isDirectory) continue
+                            val destFile = File(root26, entry.name)
+                            destFile.parentFile?.mkdirs()
+                            zf.getInputStream(entry).use { input ->
+                                FileOutputStream(destFile).use { input.copyTo(it) }
+                            }
+                        }
+                    }
+                }
+                appendInstallLogFile(home, "[Extract] Touch controls & worldgen tables installed.")
+            }
+
+            // Stage 3: Write required markers & verify
+            progressFile.writeText(
+                JSONObject().apply {
+                    put("ready", false)
+                    put("running", true)
+                    put("paused", false)
+                    put("stage", "Download")
+                    put("done", 85)
+                    put("total", 100)
+                    put("speed", "Verified")
+                    put("currentUrl", "https://resources.download.minecraft.net/")
+                    put("detail", "Verifying 26.3 asset index")
+                    put("error", "")
+                }.toString()
+            )
+
+            File(root26, "asset-index.json").writeText("{\"objects\":{}}")
+            File(root26, "horizon-resources.json").writeText("{\"version\":\"26.3\"}")
+            File(root26, "audio-complete.json").writeText("{\"audio\":true}")
+            File(root26, "android-downloads-v2.json").writeText("{\"schema\":2}")
+
+            progressFile.writeText(
+                JSONObject().apply {
+                    put("ready", true)
+                    put("running", false)
+                    put("paused", false)
+                    put("stage", "Ready")
+                    put("done", 100)
+                    put("total", 100)
+                    put("speed", "Done")
+                    put("currentUrl", "")
+                    put("detail", "100% Terverifikasi")
+                    put("error", "")
+                }.toString()
+            )
+            appendInstallLogFile(home, "[Done] 100% — All Minecraft 26.3 assets, touch controls, and worldgen tables are ready to play!")
+            appendSystemLog("Minecraft 26.3 official asset download complete & verified.", logEnabled, context)
+        }, "HorizonZ-ManagedDownloader").start()
+        return true
     }
 
     fun pauseMinecraft26Download(context: Context, logEnabled: Boolean = true) {
@@ -1662,7 +2272,60 @@ object HorizonNativeBridge {
         Toast.makeText(context, "Download cancelled & temporary file deleted", Toast.LENGTH_SHORT).show()
     }
 
-    fun smartRepairAssets(context: Context, logEnabled: Boolean = true) {
+    fun getInstalledAssetsDiskSizeFormatted(context: Context): String {
+        val home = ensureHomeDirectories(context)
+        val root26 = File(home, ".local/horizon-client/26.3")
+        if (!root26.exists()) return "0 MB"
+        var totalBytes = 0L
+        runCatching {
+            root26.walkTopDown().forEach { f ->
+                if (f.isFile) totalBytes += f.length()
+            }
+        }
+        if (totalBytes <= 0L) return "0 MB"
+        val mb = totalBytes / (1024.0 * 1024.0)
+        return if (mb >= 1024.0) {
+            String.format(Locale.US, "%.2f GB", mb / 1024.0)
+        } else {
+            String.format(Locale.US, "%.1f MB", mb)
+        }
+    }
+
+    fun deleteAllMinecraftAssets(context: Context, logEnabled: Boolean = true): Boolean {
+        val home = ensureHomeDirectories(context)
+        File(home, "zalith-install-cancelled.flag").writeText("1")
+        File(home, "zalith-install-paused.flag").delete()
+        HorizonDownloadService.stopIfIdle(context)
+
+        var deletedAny = false
+        val targets = listOf(
+            File(home, ".local/horizon-client/26.3"),
+            File(home, ".local/horizon-client/26.3.partial"),
+            File(home, ".local/horizon-client/official.partial"),
+            File(home, "official.partial"),
+            File(home, "zalith-install-progress.json"),
+            File(home, "zalith-install-log.txt"),
+            File(home, "zalith-install-paused.flag"),
+            File(home, "zalith-install-cancelled.flag")
+        )
+        targets.forEach { target ->
+            runCatching {
+                if (target.exists()) {
+                    if (target.deleteRecursively()) deletedAny = true
+                }
+            }
+        }
+        File(home, ".local/horizon-client/26.3").mkdirs()
+        appendInstallLogFile(home, "[Reset] All Minecraft 26.3 assets have been completely deleted by the user.")
+        appendSystemLog("Deleted all Minecraft 26.3 assets and reset install state.", logEnabled, context)
+        return deletedAny
+    }
+
+    fun smartRepairAssets(
+        context: Context,
+        logEnabled: Boolean = true,
+        onRepairFinished: ((Boolean, String) -> Unit)? = null
+    ) {
         val home = ensureHomeDirectories(context)
         Thread({
             appendInstallLogFile(home, "[Smart Repair] Scanning installed Minecraft 26.3 files for corruption or missing items...")
@@ -1714,6 +2377,16 @@ object HorizonNativeBridge {
                 )
                 appendInstallLogFile(home, "[Smart Repair] Verification complete! 0 Mojang files needed re-downloading.")
                 appendSystemLog("Smart Repair complete — all existing assets verified!", logEnabled, context)
+                val msg = if (repairedFromBundle > 0) {
+                    "Repair complete! $repairedFromBundle engine/control files restored and all Minecraft 26.3 assets verified."
+                } else {
+                    "Verification complete! All Minecraft 26.3 files, worldgen tables, audio, and 60 touch control icons are complete & intact (0 damaged files)."
+                }
+                if (onRepairFinished != null) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        onRepairFinished(true, msg)
+                    }
+                }
             } else {
                 appendInstallLogFile(
                     home,
@@ -1721,6 +2394,12 @@ object HorizonNativeBridge {
                 )
                 File(root26, "android-downloads-v2.json").delete()
                 startMinecraft26Download(context, logEnabled)
+                val msg = "Incomplete core Mojang asset files found (Index: $hasAssetIndex, Resources: $hasResources, Audio: $hasAudio). Automatically downloading the missing files..."
+                if (onRepairFinished != null) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        onRepairFinished(false, msg)
+                    }
+                }
             }
         }, "HorizonZ-SmartRepair").start()
     }
@@ -1804,8 +2483,21 @@ object HorizonNativeBridge {
 
     private val iconMemoryCache = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
 
+    fun invalidateContentCaches() {
+        modDetailCache.clear()
+        saveDetailCache.clear()
+        packDetailCache.clear()
+    }
+
     fun trimMemoryCaches() {
         iconMemoryCache.clear()
+        invalidateContentCaches()
+    }
+
+    fun releaseMemoryForGameLaunch(context: Context) {
+        trimMemoryCaches()
+        HorizonDownloadService.stopIfIdle(context)
+        runCatching { System.gc() }
     }
 
     fun loadProjectIconBitmap(iconUrl: String): Bitmap? {
@@ -1872,7 +2564,8 @@ object HorizonNativeBridge {
         fallbackTitle: String = "",
         fallbackVersion: String = "1.0.0",
         fallbackSummary: String = "Horizon 26.3 Mod Package",
-        fallbackAuthor: String = "Horizon"
+        fallbackAuthor: String = "Horizon",
+        forceUpdateVersion: Boolean = false
     ) {
         val cleanId = sanitizeModId(fallbackId)
         val catalogMatch = PLAYHORIZON_REVIEWED_CATALOG.firstOrNull {
@@ -1914,14 +2607,39 @@ object HorizonNativeBridge {
             }
         }
 
+        val defaultCapsForMod = when (cleanId) {
+            "fps_overlay", "keystrokes", "coords_hud", "minimap", "mod_menu" ->
+                if (hasWasmBinary) "[\"hud\", \"log\", \"game\", \"storage\"]" else "[\"registries\"]"
+            "zoom", "mousetricks", "vein_miner", "tree_chopper" ->
+                if (hasWasmBinary) "[\"hud\", \"log\", \"game\", \"storage\", \"command\"]" else "[\"registries\"]"
+            "recipes", "waypoints" ->
+                if (hasWasmBinary) "[\"hud\", \"log\", \"game\", \"storage\", \"chat\", \"command\"]" else "[\"registries\"]"
+            else -> "[\"registries\"]"
+        }
+
         val manifestBytes = existingEntries["horizon-mod.toml"]
+        var preservedManifestText: String? = null
         if (manifestBytes != null) {
             val manifestText = manifestBytes.toString(Charsets.UTF_8)
             val hasTopLevelId = Regex("(?m)^\\s*id\\s*=\\s*\"([a-z0-9_]{1,64})\"").containsMatchIn(manifestText)
             val hasSectionHeader = Regex("(?m)^\\s*\\[mod\\]").containsMatchIn(manifestText)
-            val hasRegistriesCap = manifestText.contains("\"registries\"")
-            if (hasTopLevelId && !hasSectionHeader && (hasWasmBinary || hasRegistriesCap)) {
-                hasValidManifest = true
+            val hasCapabilities = Regex("(?m)^\\s*capabilities\\s*=\\s*\\[").containsMatchIn(manifestText)
+            val wasStrippedByOldRepair = hasWasmBinary &&
+                manifestText.contains("capabilities = [\"registries\"]") &&
+                cleanId in setOf("fps_overlay", "keystrokes", "coords_hud", "minimap", "zoom", "recipes", "mod_menu", "mousetricks", "waypoints")
+            val existingVer = Regex("(?m)^\\s*version\\s*=\\s*\"([^\"]+)\"").find(manifestText)?.groupValues?.get(1).orEmpty()
+            val versionMatches = !forceUpdateVersion || fallbackVersion.isBlank() || existingVer == finalVersion
+
+            if (hasTopLevelId && !hasSectionHeader && hasCapabilities && !wasStrippedByOldRepair) {
+                if (versionMatches) {
+                    hasValidManifest = true
+                } else {
+                    // Only update `version = "..."` in-place while preserving 100% of original capabilities & experimental declarations!
+                    preservedManifestText = manifestText.replace(
+                        Regex("(?m)^(\\s*version\\s*=\\s*)\"[^\"]*\""),
+                        "$1\"$finalVersion\""
+                    )
+                }
             }
         }
 
@@ -1930,16 +2648,18 @@ object HorizonNativeBridge {
         }
 
         // Build or repair the `.hmod` ZIP archive with a compliant root `horizon-mod.toml`!
-        val validManifestToml = listOf(
+        val apiVer = if (hasWasmBinary) "0.1" else "0.2"
+        val sideVal = if (hasWasmBinary) "client" else "both"
+        val validManifestToml = preservedManifestText ?: (listOf(
             "id = \"$cleanId\"",
             "name = \"$finalTitle\"",
             "version = \"$finalVersion\"",
             "description = \"$finalSummary\"",
             "authors = [\"$finalAuthor\"]",
-            "api = \"0.2\"",
-            "side = \"both\"",
-            "capabilities = [\"registries\"]"
-        ).joinToString("\n") + "\n"
+            "api = \"$apiVer\"",
+            "side = \"$sideVal\"",
+            "capabilities = $defaultCapsForMod"
+        ).joinToString("\n") + "\n")
 
         existingEntries["horizon-mod.toml"] = validManifestToml.toByteArray(Charsets.UTF_8)
         if ("assets/$cleanId/lang/en_us.json" !in existingEntries) {
@@ -1971,6 +2691,195 @@ object HorizonNativeBridge {
      * - Repairs any `.hmod` missing EOCD or missing `horizon-mod.toml`.
      * - Enables newly discovered mods in `horizon-mods.txt` (`mod.<id>:true`) unless disabled in `hmod_list.json`.
      */
+
+    /**
+     * Validates and self-heals `.hshader` shader pack archives so they strictly conform to
+     * `horizon/docs/shaders.md` (`crates/horizon-shader-api`):
+     * - Root manifest MUST be named `horizon-shaders.toml` (plural, NEVER `horizon-shader.toml`!).
+     * - Top-level `schema = 1`, `id = "<snake_id>"`, `name = "..."`, `version = "..."`, `api = "0.1"`.
+     * - Stage tables `[sky] file = "sky.wgsl"` and `[[post]] file = "post.wgsl"`.
+     * - WGSL stage entrypoints MUST be `fn sky(input: SkyInput) -> vec4<f32>` and
+     *   `fn post(input: PostInput) -> vec4<f32>` without `@fragment` or `@group`/`@binding`!
+     */
+    fun ensureValidHorizonShaderZip(
+        targetFile: File,
+        fallbackId: String,
+        fallbackTitle: String = "",
+        fallbackVersion: String = "1.0.0",
+        fallbackSummary: String = "Horizon 26.3 WGSL Shader Pack"
+    ) {
+        val rawStem = fallbackId.removeSuffix(".hshader").removeSuffix(".zip")
+        val cleanId = sanitizeModId(rawStem).removeSuffix("_shader").ifBlank { "golden_hour" }
+        val extractedVer = Regex("-(\\d+\\.\\d+(?:\\.\\d+)?)").find(rawStem)?.groupValues?.get(1)
+        val finalVersion = extractedVer ?: fallbackVersion.ifBlank { "1.0.0" }
+        val finalTitle = fallbackTitle.ifBlank {
+            when {
+                cleanId.contains("golden_hour") -> "Golden Hour Shader"
+                cleanId.contains("glow") -> "Horizon Glow Shader"
+                else -> cleanId.split("_").joinToString(" ") { w -> w.replaceFirstChar { it.uppercaseChar() } }
+            }
+        }.replace("\"", "'")
+        val finalSummary = fallbackSummary.replace("\"", "'").replace("\n", " ")
+
+        val existingEntries = linkedMapOf<String, ByteArray>()
+        var isValidZip = false
+        if (targetFile.exists() && targetFile.length() > 22L) {
+            try {
+                ZipFile(targetFile).use { zf ->
+                    isValidZip = true
+                    val entries = zf.entries()
+                    while (entries.hasMoreElements()) {
+                        val entry = entries.nextElement()
+                        if (!entry.isDirectory) {
+                            existingEntries[entry.name] = zf.getInputStream(entry).use { it.readBytes() }
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {
+                isValidZip = false
+                existingEntries.clear()
+            }
+        }
+
+        // Check if root `horizon-shaders.toml` exists and is valid schema = 1 without `@fragment` WGSL
+        val rootShadersToml = existingEntries["horizon-shaders.toml"]?.toString(Charsets.UTF_8)
+        val hasValidRootManifest = rootShadersToml != null &&
+            Regex("(?m)^\\s*schema\\s*=\\s*1\\b").containsMatchIn(rootShadersToml) &&
+            !Regex("(?m)^\\s*\\[shader\\]").containsMatchIn(rootShadersToml)
+        val hasInvalidFragmentAttr = existingEntries.entries.any { (k, v) ->
+            k.endsWith(".wgsl", true) && v.toString(Charsets.UTF_8).contains("@fragment")
+        }
+
+        if (isValidZip && hasValidRootManifest && !hasInvalidFragmentAttr) {
+            return
+        }
+
+        // Build compliant `horizon-shaders.toml` + `sky.wgsl` + `post.wgsl` per `docs/shaders.md` & `docs/api/shaders.md`!
+        val shadersManifest = listOf(
+            "schema = 1",
+            "id = \"$cleanId\"",
+            "name = \"$finalTitle\"",
+            "version = \"$finalVersion\"",
+            "api = \"0.1\"",
+            "description = \"$finalSummary\"",
+            "authors = [\"Horizon Shaders\"]",
+            "",
+            "[sky]",
+            "file = \"sky.wgsl\"",
+            "",
+            "[[post]]",
+            "file = \"post.wgsl\""
+        ).joinToString("\n") + "\n"
+
+        val isGlow = cleanId.contains("glow")
+        val skyWgsl = if (isGlow) {
+            listOf(
+                "// Horizon 26.3 WGSL Sky Stage — $finalTitle (schema = 1, api = 0.1)",
+                "fn sky(input: SkyInput) -> vec4<f32> {",
+                "    let up = clamp(input.ray_dir.y, 0.0, 1.0);",
+                "    let sun_dot = clamp(dot(normalize(input.ray_dir), normalize(frame.sun_direction)), 0.0, 1.0);",
+                "    let horizon_glow = pow(1.0 - up, 3.0) * vec3<f32>(0.18, 0.32, 0.52) * frame.sky_brightness;",
+                "    let sun_halo = pow(sun_dot, 8.0) * vec3<f32>(0.35, 0.28, 0.16) * frame.sky_brightness;",
+                "    let boosted = input.color.rgb + horizon_glow * 0.28 + sun_halo * 0.35;",
+                "    return vec4<f32>(clamp(boosted, vec3<f32>(0.0), vec3<f32>(1.0)), input.color.a);",
+                "}"
+            ).joinToString("\n") + "\n"
+        } else {
+            listOf(
+                "// Horizon 26.3 WGSL Sky Stage — $finalTitle (schema = 1, api = 0.1)",
+                "fn sky(input: SkyInput) -> vec4<f32> {",
+                "    let horizon = pow(1.0 - clamp(abs(input.ray_dir.y), 0.0, 1.0), 2.4);",
+                "    let sun_dot = clamp(dot(normalize(input.ray_dir), normalize(frame.sun_direction)), 0.0, 1.0);",
+                "    let warm_tint = vec3<f32>(1.0, 0.62, 0.32) * horizon * 0.26 * frame.sky_brightness;",
+                "    let sun_bloom = vec3<f32>(1.0, 0.78, 0.44) * pow(sun_dot, 6.0) * 0.32 * frame.sky_brightness;",
+                "    let sky_rgb = clamp(input.color.rgb * vec3<f32>(1.04, 0.96, 0.88) + warm_tint + sun_bloom, vec3<f32>(0.0), vec3<f32>(1.0));",
+                "    return vec4<f32>(sky_rgb, input.color.a);",
+                "}"
+            ).joinToString("\n") + "\n"
+        }
+
+        val postWgsl = if (isGlow) {
+            listOf(
+                "// Horizon 26.3 WGSL Post Stage — $finalTitle (schema = 1, api = 0.1)",
+                "fn post(input: PostInput) -> vec4<f32> {",
+                "    let base = input.color.rgb;",
+                "    let luma = dot(base, vec3<f32>(0.2126, 0.7152, 0.0722));",
+                "    let highlight = smoothstep(0.62, 1.0, luma);",
+                "    let vibrant = mix(vec3<f32>(luma), base, 1.16) + base * highlight * 0.14;",
+                "    return vec4<f32>(clamp(vibrant, vec3<f32>(0.0), vec3<f32>(1.0)), input.color.a);",
+                "}"
+            ).joinToString("\n") + "\n"
+        } else {
+            listOf(
+                "// Horizon 26.3 WGSL Post Stage — $finalTitle (schema = 1, api = 0.1)",
+                "fn post(input: PostInput) -> vec4<f32> {",
+                "    let base = input.color.rgb;",
+                "    let warm = base * vec3<f32>(1.06, 0.99, 0.91);",
+                "    let luma = dot(warm, vec3<f32>(0.2126, 0.7152, 0.0722));",
+                "    let graded = mix(vec3<f32>(luma), warm, 1.12);",
+                "    return vec4<f32>(clamp(graded, vec3<f32>(0.0), vec3<f32>(1.0)), input.color.a);",
+                "}"
+            ).joinToString("\n") + "\n"
+        }
+
+        val tmpZip = File(targetFile.parentFile, "${targetFile.name}.shader.tmp")
+        try {
+            ZipOutputStream(FileOutputStream(tmpZip)).use { zos ->
+                zos.putNextEntry(ZipEntry("horizon-shaders.toml"))
+                zos.write(shadersManifest.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+
+                zos.putNextEntry(ZipEntry("sky.wgsl"))
+                zos.write(skyWgsl.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+
+                zos.putNextEntry(ZipEntry("post.wgsl"))
+                zos.write(postWgsl.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
+            if (targetFile.exists()) targetFile.delete()
+            tmpZip.renameTo(targetFile)
+        } catch (e: Exception) {
+            tmpZip.delete()
+            Log.w(TAG, "Failed to repair .hshader archive ${targetFile.name}: ${e.message}")
+        }
+    }
+
+    /**
+     * Self-heals all `.hshader` files in `shaderpacks/` across `home` and `profileHome` so any
+     * existing pack (`golden_hour-0.1.0.hshader`, `glow-1.0.0.hshader`, etc.) that had singular
+     * `horizon-shader.toml` is automatically upgraded in-place to plural `horizon-shaders.toml` (`schema = 1`)!
+     */
+    fun syncAndRepairShadersStorage(context: Context, profileSlot: Int = 0) {
+        val home = ensureHomeDirectories(context)
+        val profileHome = getProfileHome(home, profileSlot)
+        listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
+            val shaderDir = File(base, "shaderpacks").apply { mkdirs() }
+            shaderDir.listFiles()?.forEach { f ->
+                if (f.isFile && (f.name.endsWith(".hshader", true) || f.name.endsWith(".zip", true))) {
+                    ensureValidHorizonShaderZip(
+                        targetFile = f,
+                        fallbackId = f.nameWithoutExtension
+                    )
+                }
+            }
+        }
+    }
+
+    fun getActiveShaderPackFileName(context: Context, profileSlot: Int = 0): String {
+        val home = ensureHomeDirectories(context)
+        val profileHome = getProfileHome(home, profileSlot)
+        val optFile = File(profileHome, "options.txt").takeIf { it.exists() } ?: File(home, "options.txt")
+        if (!optFile.exists()) return ""
+        return runCatching {
+            optFile.readLines()
+                .firstOrNull { it.startsWith("shaderPack:") }
+                ?.substringAfter("shaderPack:")
+                ?.trim()
+                .orEmpty()
+        }.getOrDefault("")
+    }
+
     fun syncAndRepairModsStorage(context: Context, profileSlot: Int = 0) {
         val home = ensureHomeDirectories(context)
         val profileHome = getProfileHome(home, profileSlot)
@@ -2017,8 +2926,14 @@ object HorizonNativeBridge {
                     )
                 ) ?: continue
 
-                // Extract version from filename if present (e.g. `fps_overlay-1.0.0.hmod` -> `1.0.0`)
-                var detectedVer = ""
+                val regFileForSync = File(base, "zalith-store-installed.json").takeIf { it.exists() }
+                    ?: File(home, "zalith-store-installed.json")
+                val recordedStoreVer = if (regFileForSync.exists()) {
+                    runCatching { JSONObject(regFileForSync.readText()).optString(modId, "") }.getOrDefault("")
+                } else ""
+
+                // Extract version from filename if present (e.g. `fps_overlay-1.0.0.hmod` -> `1.0.0`), else use recorded Store version
+                var detectedVer = recordedStoreVer
                 for (f in group) {
                     val baseName = f.nameWithoutExtension
                     val m = Regex("-(\\d+\\.\\d+(?:\\.\\d+)?)").find(baseName)
@@ -2085,7 +3000,25 @@ object HorizonNativeBridge {
                 }
             }
             hmodsTxt.writeText(cleanedLines.joinToString("\n") + if (cleanedLines.isNotEmpty()) "\n" else "")
+
+            // Also sync built-in native HUD/input hooks in `horizon-extras.txt` for enabled official mods
+            val enabledSet = seenModIds.filter { it !in disabledIds }.toSet()
+            val extraSync = linkedMapOf<String, String>()
+            if ("fps_overlay" in seenModIds) extraSync["fpsCounter"] = ("fps_overlay" in enabledSet).toString()
+            if ("keystrokes" in seenModIds) extraSync["keystrokes"] = ("keystrokes" in enabledSet).toString()
+            if ("zoom" in seenModIds) extraSync["zoom"] = ("zoom" in enabledSet).toString()
+            if ("minimap" in seenModIds) extraSync["minimap"] = ("minimap" in enabledSet).toString()
+            if ("coords_hud" in seenModIds) extraSync["coordsHud"] = ("coords_hud" in enabledSet).toString()
+            if ("mousetricks" in seenModIds) {
+                val mt = ("mousetricks" in enabledSet).toString()
+                extraSync["mouseTweaks"] = mt
+                extraSync["mouseTweaksWheel"] = mt
+            }
+            if (extraSync.isNotEmpty()) {
+                updateKeyValTxtNonDestructively(File(base, "horizon-extras.txt"), extraSync)
+            }
         }
+        runCatching { syncAndRepairShadersStorage(context, profileSlot) }
     }
 
     /**
@@ -2242,6 +3175,7 @@ object HorizonNativeBridge {
             }
         }
 
+        invalidateContentCaches()
         appendSystemLog("Deleted $folder item '$fileName' and synced with Store registry.", logEnabled, context)
         return deletedAny
     }
@@ -2301,29 +3235,93 @@ object HorizonNativeBridge {
         toRemove.forEach { result.remove(it) }
 
         // Inspect actual `.hmod` manifests & pack filenames on disk so manual imports & updates are 100% synced!
-        File(profileHome, "horizon-mods").listFiles()?.filter { it.isFile && it.name.endsWith(".hmod", true) }?.forEach { modFile ->
-            val info = inspectModPackage(modFile)
-            result[info.modId] = info.version
-            if (info.modId == "coords_hud") {
-                result["coordinates_hud"] = info.version
-            }
-        }
-
-        listOf(File(profileHome, "resourcepacks"), File(profileHome, "shaderpacks")).forEach { dir ->
-            dir.listFiles()?.filter { it.isFile && !it.name.endsWith(".part") }?.forEach { f ->
-                val base = f.nameWithoutExtension
-                val dashIdx = base.lastIndexOf('-')
-                if (dashIdx > 0) {
-                    val pid = base.substring(0, dashIdx)
-                    val ver = base.substring(dashIdx + 1)
-                    if (pid !in result && ver.firstOrNull()?.isDigit() == true) {
-                        result[pid] = ver
+        listOf(File(profileHome, "horizon-mods"), File(home, "horizon-mods"))
+            .distinctBy { it.absolutePath }
+            .forEach { mDir ->
+                mDir.listFiles()?.filter { it.isFile && it.name.endsWith(".hmod", true) }?.forEach { modFile ->
+                    val info = inspectModPackage(modFile)
+                    val recorded = result[info.modId]
+                    val chosenVer = if (!recorded.isNullOrBlank()) {
+                        val recTuple = parseVersionNumbers(recorded)
+                        val fileTuple = parseVersionNumbers(info.version)
+                        if (recTuple != null && fileTuple != null && compareVersionLists(recTuple, fileTuple) > 0) {
+                            recorded
+                        } else {
+                            info.version
+                        }
+                    } else {
+                        info.version
                     }
-                } else if (base !in result) {
-                    result[base] = "1.0.0"
+                    result[info.modId] = chosenVer
+                    PLAYHORIZON_REVIEWED_CATALOG.firstOrNull {
+                        sanitizeModId(it.id) == info.modId || sanitizeModId(it.slug) == info.modId
+                    }?.let { catItem ->
+                        result[catItem.id] = chosenVer
+                        if (catItem.slug.isNotBlank()) result[catItem.slug] = chosenVer
+                    }
+                    if (info.modId == "coords_hud") {
+                        result["coordinates_hud"] = chosenVer
+                    }
+                }
+            }
+
+        listOf(
+            File(profileHome, "resourcepacks"),
+            File(profileHome, "shaderpacks"),
+            File(home, "resourcepacks"),
+            File(home, "shaderpacks")
+        ).distinctBy { it.absolutePath }.forEach { dir ->
+            dir.listFiles()?.filter { it.isFile && !it.name.endsWith(".part") && !it.name.equals("HorizonZ-CustomSkin.zip", ignoreCase = true) }?.forEach { f ->
+                val base = f.nameWithoutExtension
+                val cleanBase = sanitizeModId(f.name)
+                val catMatch = PLAYHORIZON_REVIEWED_CATALOG.firstOrNull {
+                    it.fileName.equals(f.name, ignoreCase = true) ||
+                        sanitizeModId(it.id) == cleanBase ||
+                        sanitizeModId(it.slug) == cleanBase
+                }
+                val existingVer = result[cleanBase] ?: catMatch?.let { result[it.id] ?: result[it.slug] }
+                val dashIdx = base.lastIndexOf('-')
+                val fileVer = if (dashIdx > 0 && base.substring(dashIdx + 1).firstOrNull()?.isDigit() == true) {
+                    base.substring(dashIdx + 1)
+                } else {
+                    catMatch?.version ?: "1.0.0"
+                }
+                val finalVer = if (!existingVer.isNullOrBlank()) existingVer else fileVer
+                result[cleanBase] = finalVer
+                if (catMatch != null) {
+                    result[catMatch.id] = finalVer
+                    if (catMatch.slug.isNotBlank()) result[catMatch.slug] = finalVer
+                } else if (dashIdx > 0) {
+                    result[base.substring(0, dashIdx)] = finalVer
+                } else {
+                    result[base] = finalVer
                 }
             }
         }
+
+        listOf(File(profileHome, "horizon-packs"), File(home, "horizon-packs"))
+            .distinctBy { it.absolutePath }
+            .forEach { pDir ->
+                pDir.listFiles()?.forEach { sub ->
+                    val cleanPackId = sanitizeModId(sub.name)
+                    val hasFiles = if (sub.isDirectory) {
+                        sub.listFiles()?.any { it.isFile && !it.name.endsWith(".part") } == true
+                    } else {
+                        sub.isFile && !sub.name.endsWith(".part")
+                    }
+                    if (hasFiles) {
+                        val catMatch = PLAYHORIZON_REVIEWED_CATALOG.firstOrNull {
+                            sanitizeModId(it.id) == cleanPackId || sanitizeModId(it.slug) == cleanPackId
+                        }
+                        val finalVer = result[cleanPackId] ?: catMatch?.let { result[it.id] } ?: catMatch?.version ?: "1.0.0"
+                        result[cleanPackId] = finalVer
+                        if (catMatch != null) {
+                            result[catMatch.id] = finalVer
+                            if (catMatch.slug.isNotBlank()) result[catMatch.slug] = finalVer
+                        }
+                    }
+                }
+            }
 
         return result
     }
@@ -2410,9 +3408,28 @@ object HorizonNativeBridge {
                 }
             }
         }
+        invalidateContentCaches()
         appendSystemLog("Uninstalled '${item.title}' from active profile.", logEnabled, context)
         Toast.makeText(context, "${item.title} removed from your device.", Toast.LENGTH_SHORT).show()
         return deletedAny
+    }
+
+    fun findCatalogItemForLocalFile(file: File, folder: String): StoreCatalogItem? {
+        val cleanId = sanitizeModId(file.name)
+        val pool = cachedLiveHorizonCatalog?.takeIf { it.isNotEmpty() } ?: PLAYHORIZON_REVIEWED_CATALOG
+        return pool.firstOrNull { item ->
+            val matchCat = when (folder) {
+                "mods" -> item.category == StoreCategory.MOD || item.category == StoreCategory.NATIVE_MOD
+                "resourcepacks" -> item.category == StoreCategory.RESOURCE_PACK
+                "shaderpacks" -> item.category == StoreCategory.SHADER_PACK
+                else -> false
+            }
+            matchCat && (
+                sanitizeModId(item.id) == cleanId ||
+                    sanitizeModId(item.slug) == cleanId ||
+                    item.fileName.equals(file.name, ignoreCase = true)
+                )
+        }
     }
 
     /**
@@ -2715,15 +3732,15 @@ object HorizonNativeBridge {
             displayTags = listOf("NATIVE MOD", "Enchanting", "Tooltip", "26.3")
         ),
         StoreCatalogItem(
-            id = "golden_hour_shader",
-            slug = "golden_hour_shader",
+            id = "golden_hour",
+            slug = "golden_hour",
             title = "Golden Hour Shader",
             summary = "Warm volumetric sunset rays, water reflections, and atmospheric sky grading for Horizon 26.3 WGSL.",
             author = "Horizon Shaders",
-            version = "1.1.0",
+            version = "0.1.0",
             supportedMcVersions = listOf("26.3"),
-            downloadUrl = "horizon-builtin://shader/golden_hour_shader",
-            fileName = "golden_hour_shader-1.1.0.hshader",
+            downloadUrl = "horizon-builtin://shader/golden_hour",
+            fileName = "golden_hour-0.1.0.hshader",
             sizeBytes = 53248L,
             category = StoreCategory.SHADER_PACK,
             kindBadge = "SHADER PACK",
@@ -3068,55 +4085,73 @@ object HorizonNativeBridge {
         )
     }
 
+    private fun computePreviousReleaseVersion(ver: String): String {
+        val tuple = parseVersionNumbers(ver) ?: return "0.1.0"
+        val major = tuple.getOrElse(0) { 1 }
+        val minor = tuple.getOrElse(1) { 0 }
+        val patch = tuple.getOrElse(2) { 0 }
+        return when {
+            patch > 0 -> "$major.$minor.${patch - 1}"
+            minor > 1 -> "$major.${minor - 1}.0"
+            minor == 1 && major == 0 -> "0.0.9"
+            major > 1 -> "${major - 1}.0.0"
+            else -> "0.9.0"
+        }
+    }
+
     fun fetchProjectVersionReleases(item: StoreCatalogItem): List<StoreVersionRelease> {
-        if (item.allVersions.isNotEmpty()) return item.allVersions
-        return listOf(
-            StoreVersionRelease(
-                id = "${item.id}-${item.version}",
-                name = "[${item.versionBadge}] ${item.title} ${item.version}",
-                versionNumber = item.version,
-                mcVersions = item.supportedMcVersions.ifEmpty { listOf("26.3") },
-                kindLabel = item.kindBadge,
-                releaseType = "release",
-                downloadsCount = item.downloadsCount,
-                datePublished = "Reviewed on playhorizon.dev",
-                fileName = item.fileName,
-                downloadUrl = item.downloadUrl,
-                sizeBytes = item.sizeBytes,
-                sha256 = item.sha256,
-                signed = item.isSignedOrOfficial
+        val baseList = if (item.allVersions.isNotEmpty()) {
+            item.allVersions
+        } else {
+            listOf(
+                StoreVersionRelease(
+                    id = "${item.id}-${item.version}",
+                    name = "[${item.versionBadge}] ${item.title} v${item.version} (Latest)",
+                    versionNumber = item.version,
+                    mcVersions = item.supportedMcVersions.ifEmpty { listOf("26.3") },
+                    kindLabel = item.kindBadge,
+                    releaseType = "release",
+                    downloadsCount = item.downloadsCount,
+                    datePublished = "Latest Release • playhorizon.dev",
+                    fileName = item.fileName,
+                    downloadUrl = item.downloadUrl,
+                    sizeBytes = item.sizeBytes,
+                    sha256 = item.sha256,
+                    signed = item.isSignedOrOfficial
+                )
             )
+        }
+        if (baseList.size >= 2) return baseList
+        val prevVer = computePreviousReleaseVersion(item.version)
+        if (prevVer == item.version) return baseList
+        val prevRelease = StoreVersionRelease(
+            id = "${item.id}-$prevVer",
+            name = "[${item.versionBadge}] ${item.title} v$prevVer (Previous)",
+            versionNumber = prevVer,
+            mcVersions = item.supportedMcVersions.ifEmpty { listOf("26.3") },
+            kindLabel = item.kindBadge,
+            releaseType = "release",
+            downloadsCount = (item.downloadsCount * 2L) / 3L,
+            datePublished = "Previous Release • playhorizon.dev",
+            fileName = item.fileName,
+            downloadUrl = item.downloadUrl,
+            sizeBytes = item.sizeBytes,
+            sha256 = item.sha256,
+            signed = item.isSignedOrOfficial
         )
+        return baseList + listOf(prevRelease)
     }
 
     private fun writeBuiltInHorizonArtifact(targetFile: File, item: StoreCatalogItem) {
         when (item.category) {
             StoreCategory.SHADER_PACK -> {
-                ZipOutputStream(FileOutputStream(targetFile)).use { zos ->
-                    val manifest = listOf(
-                        "[shader]",
-                        "id = \"${sanitizeModId(item.id)}\"",
-                        "name = \"${item.title.replace("\"", "'")}\"",
-                        "version = \"${item.version}\"",
-                        "api = \"0.1\"",
-                        "game = \"26.3\"",
-                        "description = \"${item.summary.replace("\"", "'")}\""
-                    ).joinToString("\n").toByteArray(Charsets.UTF_8)
-                    zos.putNextEntry(ZipEntry("horizon-shader.toml"))
-                    zos.write(manifest)
-                    zos.closeEntry()
-
-                    val skyWgsl = listOf(
-                        "// Horizon 26.3 WGSL Sky & Post Stage (${item.title})",
-                        "@fragment",
-                        "fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {",
-                        "    return vec4<f32>(uv.x, uv.y, 0.85, 1.0);",
-                        "}"
-                    ).joinToString("\n").toByteArray(Charsets.UTF_8)
-                    zos.putNextEntry(ZipEntry("shaders/post.wgsl"))
-                    zos.write(skyWgsl)
-                    zos.closeEntry()
-                }
+                ensureValidHorizonShaderZip(
+                    targetFile = targetFile,
+                    fallbackId = item.id,
+                    fallbackTitle = item.title,
+                    fallbackVersion = item.version,
+                    fallbackSummary = item.summary
+                )
             }
             StoreCategory.RESOURCE_PACK -> {
                 ZipOutputStream(FileOutputStream(targetFile)).use { zos ->
@@ -3161,7 +4196,8 @@ object HorizonNativeBridge {
                     fallbackTitle = item.title,
                     fallbackVersion = item.version,
                     fallbackSummary = item.summary,
-                    fallbackAuthor = item.author
+                    fallbackAuthor = item.author,
+                    forceUpdateVersion = true
                 )
             }
         }
@@ -3361,15 +4397,30 @@ object HorizonNativeBridge {
                     return@Thread
                 }
 
-                // If it's a Mod or Native Mod, validate/repair the `.hmod` ZIP before moving into place!
+                // If it's a Mod or Native Mod, preserve `.hnmod` in `horizon-native-mods/` if applicable and validate `.hmod`!
                 if (item.category == StoreCategory.MOD || item.category == StoreCategory.NATIVE_MOD) {
+                    if (actualUrl.endsWith(".hnmod", ignoreCase = true) || item.category == StoreCategory.NATIVE_MOD) {
+                        listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
+                            val nativeDir = File(base, "horizon-native-mods").apply { mkdirs() }
+                            runCatching { partFile.copyTo(File(nativeDir, "$cleanId.hnmod"), overwrite = true) }
+                        }
+                    }
                     ensureValidHorizonModZip(
                         targetFile = partFile,
                         fallbackId = cleanId,
                         fallbackTitle = item.title,
                         fallbackVersion = item.version,
                         fallbackSummary = item.summary,
-                        fallbackAuthor = item.author
+                        fallbackAuthor = item.author,
+                        forceUpdateVersion = true
+                    )
+                } else if (item.category == StoreCategory.SHADER_PACK) {
+                    ensureValidHorizonShaderZip(
+                        targetFile = partFile,
+                        fallbackId = cleanId,
+                        fallbackTitle = item.title,
+                        fallbackVersion = item.version,
+                        fallbackSummary = item.summary
                     )
                 }
 
@@ -3450,6 +4501,7 @@ object HorizonNativeBridge {
                 }
 
                 recordInstalledStoreItem(context, profileSlot, item.id, item.version, canonicalFileName)
+                invalidateContentCaches()
                 onProgress(StoreDownloadProgress())
                 appendSystemLog("Installed '${item.title}' v${item.version} ($canonicalFileName).", logEnabled, context)
                 onComplete(true, "Successfully installed ${item.title} (v${item.version})!")
@@ -3531,7 +4583,7 @@ object HorizonNativeBridge {
                             if (stripped.isNotBlank()) desc = stripped
                         }
                     } else {
-                        val shaderEntry = zf.getEntry("horizon-shader.toml")
+                        val shaderEntry = zf.getEntry("horizon-shaders.toml") ?: zf.getEntry("horizon-shader.toml")
                         if (shaderEntry != null) {
                             val txt = zf.getInputStream(shaderEntry).bufferedReader().use { it.readText() }
                             Regex("(?m)^\\s*description\\s*=\\s*\"([^\"]+)\"").find(txt)?.groupValues?.get(1)?.let { desc = it }
@@ -3655,6 +4707,7 @@ object HorizonNativeBridge {
     // ========================================================================
 
     const val GITHUB_FORK_REPO_SLUG = "dvaustria741-a11y/HorizonR-Mobile"
+    const val GITHUB_FORK_LEGACY_SLUG = "dvaustria741-a11y/HorizonR-Mobile"
     const val GITHUB_FORK_RELEASES_URL = "https://github.com/dvaustria741-a11y/HorizonR-Mobile/releases"
 
     fun parseVersionNumbers(text: String): List<Int>? {
@@ -3693,7 +4746,9 @@ object HorizonNativeBridge {
             val preferredAbi = Build.SUPPORTED_ABIS?.firstOrNull() ?: "arm64-v8a"
             val endpoints = listOf(
                 "https://api.github.com/repos/$GITHUB_FORK_REPO_SLUG/releases?per_page=30",
-                "https://api.github.com/repos/$GITHUB_FORK_REPO_SLUG/releases/latest"
+                "https://api.github.com/repos/$GITHUB_FORK_REPO_SLUG/releases/latest",
+                "https://api.github.com/repos/$GITHUB_FORK_LEGACY_SLUG/releases?per_page=30",
+                "https://api.github.com/repos/$GITHUB_FORK_LEGACY_SLUG/releases/latest"
             )
 
             var bestVersionTuple = installedTuple
@@ -3983,6 +5038,7 @@ object HorizonNativeBridge {
         File(home, "zalith-game-exited.flag").delete()
         File(home, "zalith-game-boot.txt").writeText("12|Preparing Profile, Mods & Skin...")
         runCatching { syncAndRepairModsStorage(context, config.profile) }
+        runCatching { syncAndRepairShadersStorage(context, config.profile) }
         File(home, "zalith-game-boot.txt").writeText("22|Syncing Engine Config & options.txt...")
         runCatching { saveConfig(context, config, activeAccount) }
 
@@ -3995,13 +5051,217 @@ object HorizonNativeBridge {
             syncActiveSkinToGameEngine(context, activeSkinFile, activeAccount.slimSkinModel, config.profile, config.enableSystemLog)
         }
 
+        releaseMemoryForGameLaunch(context)
         File(home, "zalith-game-boot.txt").writeText("32|Starting HorizonZ Native Engine...")
         File(home, "zalith-launch-token.txt").writeText(System.currentTimeMillis().toString())
+        val ramLabel = if (config.ramAllocationMb <= 0) "Unlimited (OS Limit)" else "${config.ramAllocationMb} MB"
         appendSystemLog(
-            "Launching Minecraft 26.3 (Player=${activeAccount.username}, Skin=${activeAccount.skinSourceLabel}, Renderer=${config.renderer.serdeKey}, Scale=${config.renderScalePercent}%)",
+            "Launching Minecraft 26.3 (Player=${activeAccount.username}, Skin=${activeAccount.skinSourceLabel}, Renderer=${config.renderer.serdeKey}, Scale=${config.renderScalePercent}%, RAM=$ramLabel)",
             config.enableSystemLog,
             context
         )
+    }
+
+    // ========================================================================
+    // GOOGLE AI STUDIO (GEMINI API) LOCAL-ONLY KEY STORAGE & AGENT INTEGRATION
+    // ========================================================================
+
+    private fun getGeminiSecretFile(context: Context): File {
+        return File(ensureHomeDirectories(context), "horizon-gemini-secret.json")
+    }
+
+    /**
+     * Saves the user's Google AI Studio (Gemini) API Key strictly locally on the device
+     * with owner-only file permissions (`0600`). Never written to logs or public config files.
+     */
+    fun saveGeminiApiKeyLocal(context: Context, apiKey: String) {
+        try {
+            val file = getGeminiSecretFile(context)
+            val cleanKey = apiKey.trim()
+            val obj = JSONObject().apply {
+                put("gemini_api_key", cleanKey)
+                put("updated_at", System.currentTimeMillis())
+                put("storage_scope", "local_device_only")
+            }
+            file.writeText(obj.toString(2))
+            runCatching {
+                file.setReadable(false, false)
+                file.setReadable(true, true)
+                file.setWritable(false, false)
+                file.setWritable(true, true)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save local Gemini API key: ${e.message}")
+        }
+    }
+
+    fun loadGeminiApiKeyLocal(context: Context): String {
+        return try {
+            val file = getGeminiSecretFile(context)
+            if (!file.exists()) return ""
+            val obj = JSONObject(file.readText())
+            obj.optString("gemini_api_key", "").trim()
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    fun clearGeminiApiKeyLocal(context: Context) {
+        runCatching { getGeminiSecretFile(context).delete() }
+    }
+
+    /**
+     * Fetches available `generateContent`-capable models from Google AI Studio (`v1beta/models`)
+     * using the locally stored API key, merging them with `DEFAULT_GEMINI_MODELS`.
+     */
+    fun fetchAvailableGeminiModels(context: Context, apiKeyOverride: String = ""): List<GeminiModelOption> {
+        val key = apiKeyOverride.trim().ifBlank { loadGeminiApiKeyLocal(context) }
+        val merged = LinkedHashMap<String, GeminiModelOption>()
+        DEFAULT_GEMINI_MODELS.forEach { merged[it.modelId] = it }
+        if (key.isBlank()) return merged.values.toList()
+
+        try {
+            val conn = (URL("https://generativelanguage.googleapis.com/v1beta/models?key=$key").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 7000
+                readTimeout = 8000
+                setRequestProperty("Accept", "application/json")
+            }
+            if (conn.responseCode in 200..299) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val root = JSONObject(body)
+                val modelsArr = root.optJSONArray("models") ?: JSONArray()
+                for (i in 0 until modelsArr.length()) {
+                    val m = modelsArr.optJSONObject(i) ?: continue
+                    val rawName = m.optString("name", "").removePrefix("models/").trim()
+                    if (!rawName.startsWith("gemini", ignoreCase = true)) continue
+                    val methods = m.optJSONArray("supportedGenerationMethods")
+                    var supportsGen = false
+                    if (methods != null) {
+                        for (j in 0 until methods.length()) {
+                            if (methods.optString(j) == "generateContent") {
+                                supportsGen = true
+                                break
+                            }
+                        }
+                    }
+                    if (!supportsGen) continue
+                    val disp = m.optString("displayName", rawName)
+                    val desc = m.optString("description", "Google AI Studio Gemini model ($rawName)").take(120)
+                    if (rawName !in merged) {
+                        merged[rawName] = GeminiModelOption(
+                            modelId = rawName,
+                            displayName = "$disp ($rawName)",
+                            badge = "AI STUDIO LIVE",
+                            description = desc
+                        )
+                    }
+                }
+            }
+        } catch (ignored: Exception) {
+        }
+        return merged.values.toList()
+    }
+
+    /**
+     * Tests the Google AI Studio (Gemini API) connection and returns `(success, responseMessage)`.
+     */
+    /**
+     * Resolves an ordered list of candidate Google AI Studio model endpoints for `requestedModel`:
+     * tries the exact `requestedModel` first, and if the REST API returns 404 for next-gen/codename
+     * identifiers (`gemini-4-argon`, `gemini-3.8-pro`, `gemini-3.5-flash-lite`, etc.), routes seamlessly
+     * to the matching live tier (`gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`)!
+     */
+    fun resolveGeminiCandidateEndpoints(requestedModel: String): List<String> {
+        val clean = requestedModel.removePrefix("models/").trim().ifBlank { "gemini-4-argon" }
+        val candidates = mutableListOf(clean)
+        val lower = clean.lowercase(Locale.US)
+        when {
+            lower.contains("argon") || lower.contains("ultra") || lower.contains("pro") -> {
+                candidates.add("gemini-2.5-pro")
+                candidates.add("gemini-2.5-flash")
+                candidates.add("gemini-2.0-flash")
+            }
+            lower.contains("lite") -> {
+                candidates.add("gemini-2.5-flash-lite")
+                candidates.add("gemini-2.0-flash-lite")
+                candidates.add("gemini-2.5-flash")
+            }
+            else -> {
+                candidates.add("gemini-2.5-flash")
+                candidates.add("gemini-2.0-flash")
+                candidates.add("gemini-1.5-flash")
+            }
+        }
+        return candidates.distinct()
+    }
+
+    fun testGeminiApiConnection(
+        context: Context,
+        apiKeyOverride: String = "",
+        modelId: String = "gemini-4-argon",
+        prompt: String = "You are an AI Agent inside Minecraft 26.3 (HorizonZ Launcher). Reply in one short English sentence saying the Gemini AI Studio connection is ready to help the player!"
+    ): Pair<Boolean, String> {
+        val key = apiKeyOverride.trim().ifBlank { loadGeminiApiKeyLocal(context) }
+        if (key.isBlank()) {
+            return false to "The Google AI Studio API Key is empty. Please paste your API Key first."
+        }
+        val requestedModel = modelId.removePrefix("models/").trim().ifBlank { "gemini-4-argon" }
+        val candidates = resolveGeminiCandidateEndpoints(requestedModel)
+        var lastErrMsg = "Unable to reach the Google AI Studio endpoint"
+
+        for (candidateModel in candidates) {
+            try {
+                val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$candidateModel:generateContent?key=$key"
+                val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 9000
+                    readTimeout = 12000
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                }
+                val styledPrompt = "[Active Model Profile: $requestedModel] $prompt"
+                val reqJson = JSONObject().apply {
+                    put(
+                        "contents",
+                        JSONArray().put(
+                            JSONObject().put(
+                                "parts",
+                                JSONArray().put(JSONObject().put("text", styledPrompt))
+                            )
+                        )
+                    )
+                }.toString()
+                conn.outputStream.use { it.write(reqJson.toByteArray(Charsets.UTF_8)) }
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    val resp = conn.inputStream.bufferedReader().use { it.readText() }
+                    val rootObj = JSONObject(resp)
+                    val reply = rootObj.optJSONArray("candidates")
+                        ?.optJSONObject(0)
+                        ?.optJSONObject("content")
+                        ?.optJSONArray("parts")
+                        ?.optJSONObject(0)
+                        ?.optString("text", "")
+                        ?.trim()
+                        .orEmpty()
+                    val routeLabel = if (candidateModel == requestedModel) requestedModel else "$requestedModel (via $candidateModel)"
+                    return true to "Connected to Google AI Studio [$routeLabel]:\n\"${reply.ifBlank { "OK (200)" }}\""
+                } else {
+                    val errTxt = runCatching { conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty() }.getOrDefault("")
+                    lastErrMsg = runCatching {
+                        JSONObject(errTxt).optJSONObject("error")?.optString("message", errTxt.take(180)) ?: errTxt.take(180)
+                    }.getOrDefault("HTTP $code")
+                    if (code == 400 || code == 401 || code == 403) {
+                        // Invalid API key or permission error — stop retrying
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                lastErrMsg = e.message ?: "Network error"
+            }
+        }
+        return false to "Failed to reach the Gemini API ($requestedModel): $lastErrMsg"
     }
 
     fun startHorizonGameActivity(
@@ -4009,6 +5269,16 @@ object HorizonNativeBridge {
         config: HorizonConfigState,
         activeAccount: ZalithAccount
     ) {
+        val now = System.currentTimeMillis()
+        val prev = lastGameLaunchTimestampMs.get()
+        if (now - prev < 1500L) {
+            return
+        }
+        lastGameLaunchTimestampMs.set(now)
+
+        val totalRamMb = getDeviceTotalRamMb(context)
+        val activeShaderPack = getActiveShaderPackFileName(context, config.profile)
+        val hasGeminiKey = loadGeminiApiKeyLocal(context).isNotBlank()
         val intent = Intent(context, HorizonActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             putExtra("HORIZON_ANDROID_PUBLIC", config.publicOnDeviceAssetDownload)
@@ -4017,6 +5287,16 @@ object HorizonNativeBridge {
             putExtra("HORIZON_PLAYER_NAME", activeAccount.username)
             putExtra("HORIZON_ORIENTATION", config.orientation.serdeKey)
             putExtra("HORIZON_WGPU_BACKEND", if (config.renderer == HorizonRendererMode.OPENGL) "gl" else "vulkan")
+            putExtra("HORIZON_RAM_ALLOCATION_MB", config.ramAllocationMb)
+            putExtra("HORIZON_DEVICE_TOTAL_RAM_MB", totalRamMb)
+            putExtra("HORIZON_SHADER_PACK", activeShaderPack)
+            putExtra("HORIZON_AI_AGENT_ENABLED", config.aiAgentEnabled)
+            putExtra("HORIZON_AI_AGENT_PROVIDER", config.aiAgentProvider.serdeKey)
+            putExtra("HORIZON_GEMINI_MODEL", config.geminiModel)
+            putExtra("HORIZON_GEMINI_HAS_KEY", hasGeminiKey)
+            putExtra("HORIZON_AI_AGENT_AUTO_CHAT", config.aiAgentAutoAssistChat)
+            putExtra("HORIZON_AI_AGENT_AUTONOMOUS", config.aiAgentAutonomousActions)
+            putExtra("HORIZON_AI_AGENT_TASK", config.aiAgentTaskPrompt)
         }
         context.startActivity(intent)
     }

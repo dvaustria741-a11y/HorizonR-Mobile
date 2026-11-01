@@ -27,7 +27,7 @@ def sync_readme_version_only(existing_readme: Path, incoming_readme: Path):
     try:
         cur_txt = existing_readme.read_text(encoding="utf-8")
         inc_txt = incoming_readme.read_text(encoding="utf-8")
-        if "<!-- HORIZONZ_README_PRESERVE -->" not in cur_txt:
+        if "<!-- HORIZONZ_README_PRESERVE -->" not in cur_txt or "<!-- HORIZONZ_README_MOBILE_V3 -->" not in cur_txt:
             shutil.copy2(incoming_readme, existing_readme)
             return
 
@@ -65,7 +65,7 @@ def extract_zip_to_root(zip_path: Path, root_dir: Path) -> int:
         entries = [p for p in tmp_dir.iterdir() if p.name != "__MACOSX"]
         source_base = tmp_dir
         if len(entries) == 1 and entries[0].is_dir():
-            if entries[0].name not in ("crates", "packaging", "scripts", "tools", ".github", "Update"):
+            if entries[0].name not in ("crates", "packaging", "scripts", "tools", ".github", "Update", "BBS"):
                 source_base = entries[0]
                 print(f"[Auto-Update] Detected wrapper folder '{source_base.name}/', unwrapping to root...")
 
