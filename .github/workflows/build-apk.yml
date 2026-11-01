@@ -68,7 +68,7 @@ jobs:
       - name: Checkout Latest Main Source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Ensure Any Remaining Update/ ZIP is Applied in Build Workspace
         run: |
