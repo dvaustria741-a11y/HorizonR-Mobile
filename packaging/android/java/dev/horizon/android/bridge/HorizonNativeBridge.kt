@@ -5791,6 +5791,7 @@ object HorizonNativeBridge {
             putExtra("HORIZON_RAM_ALLOCATION_MB", config.ramAllocationMb)
             putExtra("HORIZON_DEVICE_TOTAL_RAM_MB", totalRamMb)
             putExtra("HORIZON_SHADER_PACK", activeShaderPack)
+            HorizonServerStore.pendingQuickPlayServer?.also { HorizonServerStore.pendingQuickPlayServer = null }?.takeIf { it.isNotBlank() }?.let { putExtra("HORIZON_QUICK_PLAY_SERVER", it) }
             putExtra("HORIZON_AI_AGENT_ENABLED", config.aiAgentEnabled)
             putExtra("HORIZON_AI_AGENT_PROVIDER", config.aiAgentProvider.serdeKey)
             putExtra("HORIZON_GEMINI_MODEL", config.geminiModel)

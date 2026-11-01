@@ -605,6 +605,13 @@ public final class HorizonActivity extends NativeActivity {
                     Os.setenv("HORIZON_PLAYER_NAME", playerName, true);
                 }
 
+                String quickPlayServer = intent.getStringExtra("HORIZON_QUICK_PLAY_SERVER");
+                if (quickPlayServer != null && !quickPlayServer.isEmpty()) {
+                    Os.setenv("HORIZON_QUICK_PLAY_SERVER", quickPlayServer, true);
+                } else {
+                    try { Os.unsetenv("HORIZON_QUICK_PLAY_SERVER"); } catch (Exception ignored) {}
+                }
+
                 String renderBackend = intent.getStringExtra("HORIZON_WGPU_BACKEND");
                 if (renderBackend != null && !renderBackend.isEmpty()) {
                     Os.setenv("WGPU_BACKEND", renderBackend, true);

@@ -5,6 +5,7 @@ enum class ZalithNavTab(val title: String) {
     VERSIONS("Game & Assets"),
     STORE("Store"),
     FILES("Files & Mods"),
+    SERVERS("Servers"),
     ACCOUNTS("Account & Skins"),
     LOGS("System Logs"),
     SETTINGS("Settings")

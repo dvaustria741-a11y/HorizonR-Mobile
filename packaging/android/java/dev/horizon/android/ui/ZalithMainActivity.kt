@@ -1601,6 +1601,14 @@ fun ZalithCleanLauncherScreen(
                                     }
                                 )
 
+                                ZalithNavTab.SERVERS -> CleanServersViewport(
+                                    profileSlot = config.profile,
+                                    onQuickPlayServer = { address ->
+                                        HorizonServerStore.pendingQuickPlayServer = address
+                                        handleLaunchOrDownload()
+                                    }
+                                )
+
                                 ZalithNavTab.ACCOUNTS -> CleanAccountsAndSkinsViewport(
                                     accounts = accounts,
                                     activeAccount = activeAccount,
@@ -1735,6 +1743,7 @@ private fun HorizonTopNav(
             HorizonNavItem(ZalithNavTab.VERSIONS, Icons.Default.Download, "Game"),
             HorizonNavItem(ZalithNavTab.STORE, Icons.Default.Storefront, "Store"),
             HorizonNavItem(ZalithNavTab.FILES, Icons.Default.Extension, "Mods"),
+            HorizonNavItem(ZalithNavTab.SERVERS, Icons.Default.Dns, "Servers"),
             HorizonNavItem(ZalithNavTab.ACCOUNTS, Icons.Default.Checkroom, "Skins"),
             HorizonNavItem(ZalithNavTab.SETTINGS, Icons.Default.Settings, "Settings")
         )
@@ -3581,6 +3590,270 @@ private fun CleanAccountsAndSkinsViewport(
             }
         }
     }
+}
+
+@Composable
+private fun CleanServersViewport(
+    profileSlot: Int,
+    onQuickPlayServer: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val serversFile = remember(profileSlot) {
+        HorizonServerStore.serversFile(HorizonNativeBridge.getProfileHome(context.filesDir, profileSlot))
+    }
+    val servers = remember(profileSlot) { mutableStateListOf<ServerEntry>() }
+    val statuses = remember(profileSlot) { mutableStateMapOf<String, ServerStatus?>() }
+    var editing by remember { mutableStateOf<ServerEntry?>(null) }
+    var showEditor by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<ServerEntry?>(null) }
+    var refreshTick by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(serversFile) {
+        val loaded = withContext(Dispatchers.IO) { HorizonServerStore.load(serversFile) }
+        servers.clear()
+        servers.addAll(loaded)
+    }
+
+    LaunchedEffect(servers.size, refreshTick) {
+        val addresses = servers.map { it.address }.distinct()
+        addresses.forEach { statuses[it] = null }
+        addresses.forEach { addr ->
+            launch(Dispatchers.IO) {
+                val status = HorizonServerStore.ping(addr)
+                withContext(Dispatchers.Main) { statuses[addr] = status }
+            }
+        }
+    }
+
+    val persist = {
+        val snapshot = servers.toList()
+        scope.launch(Dispatchers.IO) { HorizonServerStore.save(serversFile, snapshot) }
+        Unit
+    }
+
+    if (showEditor) {
+        ServerEditorDialog(
+            initial = editing,
+            onDismiss = { showEditor = false; editing = null },
+            onSave = { name, address ->
+                val target = editing
+                if (target == null) {
+                    servers.add(ServerEntry(name, address))
+                } else {
+                    val i = servers.indexOf(target)
+                    if (i >= 0) {
+                        target.name = name
+                        target.address = address
+                        servers[i] = target
+                    }
+                }
+                persist()
+                refreshTick++
+                showEditor = false
+                editing = null
+            }
+        )
+    }
+
+    pendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            containerColor = Color(0xFF1F262B),
+            title = { Text("Remove server", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
+            text = { Text("Remove ${target.name.ifBlank { target.address }} from your list?", fontSize = 13.sp, color = Color(0xFFD5DEE5)) },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel", color = Color(0xFFD5DEE5)) } },
+            confirmButton = {
+                TextButton(onClick = {
+                    servers.remove(target)
+                    persist()
+                    pendingDelete = null
+                }) { Text("Remove", color = Color(0xFFFF8A80)) }
+            }
+        )
+    }
+
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = CardSlateBg.copy(alpha = 0.90f),
+        border = horizonGlassBorder(),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Servers", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("${servers.size} saved", fontSize = 11.sp, color = MutedSubtitleText)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF283036),
+                        modifier = Modifier.clickable { refreshTick++ }
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = SkyBlueAccent, modifier = Modifier.padding(8.dp).size(18.dp))
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = SkyBlueAccent,
+                        modifier = Modifier.clickable { editing = null; showEditor = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Text("Add Server", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+            }
+
+            if (servers.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    Text("No servers yet. Tap Add Server to save one.", fontSize = 13.sp, color = MutedSubtitleText)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(servers.toList(), key = { System.identityHashCode(it) }) { entry ->
+                        val status = statuses[entry.address]
+                        val known = statuses.containsKey(entry.address)
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = CardRowBg,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            entry.name.ifBlank { "Minecraft Server" },
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            maxLines = 1
+                                        )
+                                        Text(entry.address, fontSize = 11.sp, color = MutedSubtitleText, maxLines = 1)
+                                    }
+                                    val dot = when {
+                                        !known || status == null -> Color(0xFFFFD54F)
+                                        status.online -> Color(0xFF66BB6A)
+                                        else -> Color(0xFFEF5350)
+                                    }
+                                    Surface(shape = RoundedCornerShape(50), color = dot, modifier = Modifier.size(10.dp)) {}
+                                }
+                                val detail = when {
+                                    !known || status == null -> "Checking..."
+                                    !status.online -> "Offline or unreachable"
+                                    else -> buildString {
+                                        append("${status.playersOnline}/${status.playersMax} players")
+                                        if (status.pingMs >= 0) append("  |  ${status.pingMs} ms")
+                                        if (status.version.isNotBlank()) append("  |  ${status.version}")
+                                    }
+                                }
+                                Text(detail, fontSize = 11.sp, color = Color(0xFFD5DEE5), maxLines = 1)
+                                if (status != null && status.online && status.motd.isNotBlank()) {
+                                    Text(status.motd, fontSize = 11.sp, color = MutedSubtitleText, maxLines = 2)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = SkyBlueAccent,
+                                        modifier = Modifier.clickable { onQuickPlayServer(entry.address) }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                            Text("Quick Play", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFF283036),
+                                        modifier = Modifier.clickable { editing = entry; showEditor = true }
+                                    ) {
+                                        Text("Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SkyBlueAccent, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFF283036),
+                                        modifier = Modifier.clickable { pendingDelete = entry }
+                                    ) {
+                                        Text("Remove", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF8A80), modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServerEditorDialog(
+    initial: ServerEntry?,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit
+) {
+    var name by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
+    var address by remember(initial) { mutableStateOf(initial?.address.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1F262B),
+        title = {
+            Text(
+                if (initial == null) "Add Server" else "Edit Server",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    label = { Text("Server name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it.trim() },
+                    singleLine = true,
+                    label = { Text("Address (host or host:port)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFFD5DEE5)) } },
+        confirmButton = {
+            TextButton(
+                enabled = address.isNotBlank(),
+                onClick = { onSave(name.trim().ifBlank { address }, address.trim()) }
+            ) { Text("Save", color = SkyBlueAccent) }
+        }
+    )
 }
 
 @Composable
