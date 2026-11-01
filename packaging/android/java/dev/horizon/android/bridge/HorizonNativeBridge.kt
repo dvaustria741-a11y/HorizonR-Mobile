@@ -12,6 +12,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
 import android.net.Uri
+import android.os.Build
 import android.os.Process
 import android.provider.DocumentsContract
 import android.util.Log
@@ -186,7 +187,7 @@ enum class BuiltInSkinPreset(
 
 object HorizonNativeBridge {
     private const val TAG = "HorizonNativeBridge"
-    const val INSTALLED_LAUNCHER_VERSION = "1.0"
+    const val INSTALLED_LAUNCHER_VERSION = "1.2"
     private const val MAX_LOG_LINES = 250
     private var nativeLoaded = false
     private val memoryLogs = ConcurrentLinkedDeque<String>()
@@ -3657,10 +3658,10 @@ object HorizonNativeBridge {
     const val GITHUB_FORK_RELEASES_URL = "https://github.com/dvaustria741-a11y/HorizonR-Mobile/releases"
 
     fun parseVersionNumbers(text: String): List<Int>? {
-        val horizonzExplicit = Regex("""(?:HorizonZ[-_ ]*Launcher[-_ ]*v?|HorizonZ[-_ ]*v?)(\d+)\.(\d+)(?:\.(\d+))?""", RegexOption.IGNORE_CASE).find(text)
+        val horizonzExplicit = Regex("(?:HorizonZ[-_ ]*Launcher[-_ ]*v?|HorizonZ[-_ ]*v?)(\\d+)\\.(\\d+)(?:\\.(\\d+))?", RegexOption.IGNORE_CASE).find(text)
         val match = horizonzExplicit
-            ?: Regex("""\bv(\d+)\.(\d+)(?:\.(\d+))?\b""", RegexOption.IGNORE_CASE).find(text)
-            ?: Regex("""(\d+)\.(\d+)(?:\.(\d+))?""").find(text)
+            ?: Regex("\\bv(\\d+)\\.(\\d+)(?:\\.(\\d+))?\\b", RegexOption.IGNORE_CASE).find(text)
+            ?: Regex("(\\d+)\\.(\\d+)(?:\\.(\\d+))?").find(text)
             ?: return null
         val major = match.groupValues[1].toIntOrNull() ?: return null
         val minor = match.groupValues[2].toIntOrNull() ?: return null

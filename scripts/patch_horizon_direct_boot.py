@@ -5,6 +5,99 @@ import sys
 from pathlib import Path
 
 # ==============================================================================
+# 0. Sync & Verify Upstream `docs/` and All `include_str!` / `include_bytes!` Assets
+#    Fixes `crates/horizon-port-pack/src/classify.rs` requiring `docs/modpacks/atm10-mods.csv`
+#    even if an older workflow ran `rsync --exclude='docs'`.
+# ==============================================================================
+def ensure_upstream_include_assets():
+    import shutil
+    import urllib.request
+
+    root_dir = Path(".").resolve()
+    upstream_tmp = Path("/tmp/horizon-upstream")
+
+    # If /tmp/horizon-upstream is still present, sync its docs/ (preserving docs/screenshots)
+    if (upstream_tmp / "docs").is_dir():
+        for src_file in sorted((upstream_tmp / "docs").rglob("*")):
+            if src_file.is_file():
+                rel = src_file.relative_to(upstream_tmp)
+                if len(rel.parts) >= 2 and rel.parts[0] == "docs" and rel.parts[1] == "screenshots":
+                    continue
+                dest = root_dir / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_file, dest)
+
+    # Scan all Rust source files in crates/ for include_str!("...") and include_bytes!("...")
+    include_pattern = re.compile(r'include_(?:str|bytes)!\(\s*"([^"]+)"\s*\)')
+    crates_dir = root_dir / "crates"
+    if not crates_dir.is_dir():
+        return
+
+    missing_rel_paths = []
+    verified_count = 0
+    for rs_file in sorted(crates_dir.rglob("*.rs")):
+        try:
+            raw_content = rs_file.read_text(encoding="utf-8", errors="ignore")
+            content = re.sub(r"/\*.*?\*/", "", raw_content, flags=re.S)
+            content = re.sub(r"//.*", "", content)
+        except Exception:
+            continue
+        for match in include_pattern.finditer(content):
+            raw_target = match.group(1)
+            if raw_target.startswith("/") or "$" in raw_target:
+                continue
+            resolved = (rs_file.parent / raw_target).resolve()
+            if resolved.is_file() and resolved.stat().st_size > 0:
+                verified_count += 1
+                continue
+            try:
+                rel_to_root = resolved.relative_to(root_dir).as_posix()
+            except ValueError:
+                continue
+            missing_rel_paths.append((rs_file.relative_to(root_dir).as_posix(), rel_to_root, resolved))
+
+    if missing_rel_paths:
+        print(f"[HorizonZ Patch] Detected {len(missing_rel_paths)} missing include_str!/include_bytes! target(s); restoring from upstream Vasysik/horizon-android...")
+        for rs_rel, rel_to_root, resolved_path in missing_rel_paths:
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+            urls = [
+                f"https://raw.githubusercontent.com/Vasysik/horizon-android/android/{rel_to_root}",
+                f"https://raw.githubusercontent.com/horizon-rust/horizon/main/{rel_to_root}",
+            ]
+            fetched = False
+            for url in urls:
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "HorizonZ-CI/1.1"})
+                    with urllib.request.urlopen(req, timeout=20) as resp:
+                        data = resp.read()
+                    if data:
+                        resolved_path.write_bytes(data)
+                        print(f"[HorizonZ Patch] Restored real upstream file {rel_to_root} ({len(data)} bytes) referenced by {rs_rel}")
+                        fetched = True
+                        verified_count += 1
+                        break
+                except Exception as exc:
+                    print(f"[HorizonZ Patch] Notice fetching {url}: {exc}")
+            if not fetched and not resolved_path.is_file():
+                # Fallback: shallow-clone upstream docs if direct raw download failed
+                clone_tmp = Path("/tmp/horizon-upstream-docs-recovery")
+                shutil.rmtree(clone_tmp, ignore_errors=True)
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", "--branch", "android", "https://github.com/Vasysik/horizon-android.git", str(clone_tmp)],
+                    check=False,
+                )
+                candidate = clone_tmp / rel_to_root
+                if candidate.is_file():
+                    shutil.copy2(candidate, resolved_path)
+                    print(f"[HorizonZ Patch] Restored {rel_to_root} via upstream git clone ({resolved_path.stat().st_size} bytes)")
+                    verified_count += 1
+                shutil.rmtree(clone_tmp, ignore_errors=True)
+
+    print(f"[HorizonZ Patch] Verified {verified_count} compile-time include_str!/include_bytes! asset reference(s) across crates/.")
+
+ensure_upstream_include_assets()
+
+# ==============================================================================
 # 1. Patch crates/horizon-client/src/android/launcher_pages.rs:
 #    Bypass `draw_pages` at runtime using an env-var check so `Horizon Android 0.7.5` UI
 #    is NEVER drawn while keeping 100% of `launcher_pages.rs` reachable to the compiler!

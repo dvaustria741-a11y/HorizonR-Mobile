@@ -114,6 +114,8 @@ def build_rust_for_abi(abi: str, ndk_path: Path, min_sdk: int, profile: str, che
     cmd = ["cargo", "check" if check_only else "build", "-p", "horizon-android", "--target", rust_triple]
     if profile == "release":
         cmd.append("--release")
+    if abi == "armeabi-v7a":
+        cmd.extend(["--no-default-features", "--features", "audio"])
 
     print(f"[HorizonZ] Running: {' '.join(cmd)}")
     subprocess.run(cmd, cwd=ROOT_DIR, env=env, check=True)

@@ -48,7 +48,7 @@ jobs:
           exit 0
 
   build-horizonz-apk:
-    name: Build HorizonZ 1.0 APK (${{ matrix.abi }})
+    name: Build HorizonZ 1.2 APK (${{ matrix.abi }})
     needs: apply-update-zip
     if: always() && !cancelled()
     runs-on: ubuntu-latest
@@ -124,27 +124,32 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
-      - name: Clone Latest Vasysik/horizon-android Engine & Apply HorizonZ 1.0 Patches
+      - name: Clone Latest Vasysik/horizon-android Engine & Apply HorizonZ 1.2 Patches
         run: |
           rm -rf /tmp/horizon-upstream
           git clone --depth 1 --branch android https://github.com/Vasysik/horizon-android.git /tmp/horizon-upstream
-          rsync -a --delete --exclude='packaging/android' --exclude='scripts' --exclude='Update' --exclude='docs' --exclude='README.md' --exclude='.local' --exclude='.git' --exclude='.github' /tmp/horizon-upstream/ ./
-          # The engine reads docs/modpacks/*.csv at compile time (include_str!); docs/ is excluded from the sync above.
-          mkdir -p docs/modpacks
-          cp -rf /tmp/horizon-upstream/docs/modpacks/. docs/modpacks/ || true
+          rsync -a --delete --exclude='packaging/android' --exclude='scripts' --exclude='Update' --exclude='docs/screenshots' --exclude='README.md' --exclude='.local' --exclude='.git' --exclude='.github' /tmp/horizon-upstream/ ./
+          if [ -d "/tmp/horizon-upstream/docs" ]; then
+            mkdir -p docs
+            cp -rf /tmp/horizon-upstream/docs/* docs/ 2>/dev/null || true
+          fi
+          if [ -d "/tmp/horizon-upstream/scripts" ]; then
+            mkdir -p scripts
+            cp -rn /tmp/horizon-upstream/scripts/* scripts/ 2>/dev/null || true
+          fi
           if [ -f "/tmp/horizon-upstream/packaging/android/bedrock-controls.json" ]; then
             cp -f "/tmp/horizon-upstream/packaging/android/bedrock-controls.json" packaging/android/bedrock-controls.json
           fi
+          python3 scripts/patch_horizon_direct_boot.py
           rm -rf /tmp/horizon-upstream
           rm -f packaging/android/assets/bedrock-controls.json
 
-          python3 scripts/patch_horizon_direct_boot.py
           rustup target add "${{ matrix.rust_target }}"
 
       - name: Cache Rust Engine Build
         uses: Swatinem/rust-cache@v2
         with:
-          key: horizon-real-engine-v10-${{ matrix.rust_target }}
+          key: horizon-real-engine-v11-${{ matrix.rust_target }}
 
       - name: Compile Real Horizon Rust Engine (libhorizon_android.so) & Prestage Controls (${{ matrix.abi }})
         run: |
@@ -224,18 +229,18 @@ jobs:
           fi
           mkdir -p ../../dist
           APK_FOUND="$(find build/outputs/apk/release ../../.local/android/gradle-build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)"
-          cp -f "$APK_FOUND" "../../dist/HorizonZ-Launcher-1.0-${{ matrix.abi }}.apk"
+          cp -f "$APK_FOUND" "../../dist/HorizonZ-Launcher-1.2-${{ matrix.abi }}.apk"
           ls -lh ../../dist/
 
       - name: Upload APK Artifact (${{ matrix.abi }})
         uses: actions/upload-artifact@v4
         with:
-          name: HorizonZ-Launcher-1.0-${{ matrix.abi }}
-          path: dist/HorizonZ-Launcher-1.0-${{ matrix.abi }}.apk
+          name: HorizonZ-Launcher-1.2-${{ matrix.abi }}
+          path: dist/HorizonZ-Launcher-1.2-${{ matrix.abi }}.apk
           if-no-files-found: error
 
   publish-release:
-    name: Publish HorizonZ 1.0 Release APKs
+    name: Publish HorizonZ 1.2 Release APKs
     needs: build-horizonz-apk
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -255,10 +260,10 @@ jobs:
       - name: Create or Update Latest GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: horizonz-v1.0.0-build-${{ github.run_number }}
-          name: "HorizonZ - Launcher v1.0 (Build #${{ github.run_number }} • Android Fork Release • ARM64 & ARM32)"
+          tag_name: horizonz-v1.2.0-build-${{ github.run_number }}
+          name: "HorizonZ - Launcher v1.2 (Build #${{ github.run_number }} • Android Fork Release • ARM64 & ARM32)"
           body: |
-            ## HorizonZ - Launcher v1.0 (Official Android Fork of `horizon-rust/horizon`)
+            ## HorizonZ - Launcher v1.2 (Official Android Fork of `horizon-rust/horizon`)
             - **Native ARM64 (`arm64-v8a`) & ARM32 (`armeabi-v7a`) Builds**: Built from the latest upstream `Vasysik/horizon-android` (`v0.7.5`) + `horizon-rust/horizon` (`26.3`) Rust engine.
             - **Updated Fork Release Update Detector**: Checks `Fadiba21/Horizonz-Launcher/releases` with automatic ABI matching and semantic version comparison.
             - **Pre-Bundled 60 Bedrock Touch Controls & Background Download Notification**: Eliminates `17/60` stall and keeps asset downloads running in the background with live progress notifications.
