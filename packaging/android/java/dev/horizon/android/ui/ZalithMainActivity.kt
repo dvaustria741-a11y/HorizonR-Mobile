@@ -32,6 +32,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -1366,53 +1367,67 @@ fun <T> ZalithSubCategoryRail(
     itemIcon: (T) -> ImageVector,
     onSelect: (T) -> Unit
 ) {
-    Column(
+    // Horizontal chip row: sits under the top bar, scrolls sideways, selected chip glows + lifts.
+    Row(
         modifier = Modifier
-            .width(84.dp)
-            .fillMaxHeight()
-            .verticalScroll(rememberScrollState())
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 2.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         items.forEach { item ->
             val selected = item == selectedItem
-            val pillBg by animateColorAsState(
-                targetValue = if (selected) SubRailCapsuleActive else Color.Transparent,
-                animationSpec = tween(200),
-                label = "SubRailPillBg"
+            val chipFill by animateColorAsState(
+                targetValue = if (selected) SkyBlueAccent.copy(alpha = 0.22f) else CardSlateBg.copy(alpha = 0.55f),
+                animationSpec = tween(240, easing = FastOutSlowInEasing),
+                label = "ChipFill"
             )
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+            val chipBorder by animateColorAsState(
+                targetValue = if (selected) SkyBlueAccent.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.08f),
+                animationSpec = tween(240, easing = FastOutSlowInEasing),
+                label = "ChipBorder"
+            )
+            val chipLift by animateFloatAsState(
+                targetValue = if (selected) 1.04f else 1f,
+                animationSpec = spring(dampingRatio = 0.62f, stiffness = 420f),
+                label = "ChipLift"
+            )
+            val iconTint by animateColorAsState(
+                targetValue = if (selected) SkyBlueAccent else MutedSubtitleText,
+                animationSpec = tween(240),
+                label = "ChipIconTint"
+            )
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = chipFill,
+                border = BorderStroke(1.dp, chipBorder),
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .graphicsLayer {
+                        scaleX = chipLift
+                        scaleY = chipLift
+                    }
                     .animatedPressScale { onSelect(item) }
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .width(54.dp)
-                        .height(32.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(pillBg)
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     Icon(
                         imageVector = itemIcon(item),
                         contentDescription = itemLabel(item),
-                        tint = if (selected) SkyBlueAccent else MutedSubtitleText,
-                        modifier = Modifier.size(20.dp)
+                        tint = iconTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = itemLabel(item),
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selected) Color.White else MutedSubtitleText,
+                        maxLines = 1
                     )
                 }
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = itemLabel(item),
-                    fontSize = 11.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (selected) Color.White else MutedSubtitleText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
             }
         }
     }
@@ -1600,20 +1615,8 @@ fun ZalithCleanLauncherScreen(
         }
     }
 
-    // Smooth Morph / Connected Width Animation for the Right Launch Sidebar:
-    // Includes the 10.dp gap INSIDE the animated 192.dp width (10.dp start padding + 182.dp card)
-    // so when it morphs to 0.dp on Store/Files/Skins/Settings, there is ZERO Row gap jump ("jedug")!
-    val showRightSidebar = selectedTab == ZalithNavTab.HOME || selectedTab == ZalithNavTab.VERSIONS
-    val sidebarMorphWidth by animateDpAsState(
-        targetValue = if (showRightSidebar) 192.dp else 0.dp,
-        animationSpec = tween(durationMillis = 270, easing = FastOutSlowInEasing),
-        label = "SidebarMorphWidth"
-    )
-    val sidebarMorphAlpha by animateFloatAsState(
-        targetValue = if (showRightSidebar) 1f else 0f,
-        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-        label = "SidebarMorphAlpha"
-    )
+    // The launch dock (account + version + PLAY) floats at the bottom on Home and Game pages only.
+    val showLaunchDock = selectedTab == ZalithNavTab.HOME || selectedTab == ZalithNavTab.VERSIONS
 
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -1645,7 +1648,7 @@ fun ZalithCleanLauncherScreen(
                         .padding(top = 4.dp, bottom = 4.dp)
                 ) {
                     // Main Morphing Content Area:
-                    // Smoothly expands/contracts its width in sync with `sidebarMorphWidth` and morphs
+                    // Smoothly expands/contracts its width and morphs
                     // between pages with scale + slide + fade!
                     AnimatedContent(
                         targetState = selectedTab,
@@ -1747,29 +1750,27 @@ fun ZalithCleanLauncherScreen(
                             }
                         }
                     }
+                }
 
-                    // Smoothly Morphing Right Launch Sidebar Container (0.dp <-> 192.dp with zero layout jolt!)
-                    if (sidebarMorphWidth > 0.5.dp) {
-                        Box(
-                            modifier = Modifier
-                                .width(sidebarMorphWidth)
-                                .fillMaxHeight()
-                                .padding(start = 10.dp)
-                                .graphicsLayer {
-                                    alpha = sidebarMorphAlpha
-                                    translationX = (1f - sidebarMorphAlpha) * 36f
-                                }
-                        ) {
-                            ZalithLaunchSidebar(
-                                activeAccount = activeAccount,
-                                activeSkinBitmap = activeSkinBitmap,
-                                installStatus = installStatus,
-                                onOpenAccountScreen = { selectedTab = ZalithNavTab.ACCOUNTS },
-                                onOpenVersions = { selectedTab = ZalithNavTab.VERSIONS },
-                                onLaunchOrDownload = handleLaunchOrDownload
-                            )
-                        }
-                    }
+                AnimatedVisibility(
+                    visible = showLaunchDock,
+                    enter = fadeIn(tween(260)) + slideInVertically(
+                        animationSpec = tween(320, easing = FastOutSlowInEasing),
+                        initialOffsetY = { it }
+                    ),
+                    exit = fadeOut(tween(180)) + slideOutVertically(
+                        animationSpec = tween(220, easing = FastOutLinearInEasing),
+                        targetOffsetY = { it }
+                    )
+                ) {
+                    ZalithLaunchDock(
+                        activeAccount = activeAccount,
+                        activeSkinBitmap = activeSkinBitmap,
+                        installStatus = installStatus,
+                        onOpenAccountScreen = { selectedTab = ZalithNavTab.ACCOUNTS },
+                        onOpenVersions = { selectedTab = ZalithNavTab.VERSIONS },
+                        onLaunchOrDownload = handleLaunchOrDownload
+                    )
                 }
             }
         }
@@ -2872,9 +2873,9 @@ private fun CleanAccountsAndSkinsViewport(
         )
     }
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ZalithSubCategoryRail(
             items = AccountSubCategory.entries,
@@ -2894,7 +2895,7 @@ private fun CleanAccountsAndSkinsViewport(
             },
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight(),
+                .fillMaxWidth(),
             label = "AccountSubTabTransition"
         ) { subTab ->
             when (subTab) {
@@ -3733,9 +3734,9 @@ private fun CleanLogsViewport(
         }
     }
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ZalithSubCategoryRail(
             items = LogCategoryFilter.entries,
@@ -3758,7 +3759,7 @@ private fun CleanLogsViewport(
             border = horizonGlassBorder(),
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight()
+                .fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier
@@ -3976,7 +3977,7 @@ private fun CleanVersionsViewport(
             },
             dismissButton = {
                 TextButton(onClick = { showCancelConfirmDialog = false }) {
-                    Text("Lanjutkan", fontSize = 12.sp, color = SkyBlueAccent)
+                    Text("Continue", fontSize = 12.sp, color = SkyBlueAccent)
                 }
             }
         )
@@ -4202,7 +4203,7 @@ private fun CleanVersionsViewport(
                             ) {
                                 Text("Asset Status", fontSize = 10.sp, color = MutedSubtitleText)
                                 Text(
-                                    text = if (installStatus.ready) "Lengkap (100%)" else "${installStatus.percent}% Terunduh",
+                                    text = if (installStatus.ready) "Complete (100%)" else "${installStatus.percent}% Downloaded",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (installStatus.ready) Color(0xFF81C784) else Color.White,
@@ -4220,7 +4221,7 @@ private fun CleanVersionsViewport(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
-                                Text("Komponen", fontSize = 10.sp, color = MutedSubtitleText)
+                                Text("Components", fontSize = 10.sp, color = MutedSubtitleText)
                                 Text(
                                     text = "Worldgen + 60 Touch",
                                     fontSize = 12.sp,
@@ -4339,7 +4340,7 @@ private fun CleanVersionsViewport(
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(
-                                        text = if (installStatus.paused) "Lanjutkan Download" else "Jeda (Pause)",
+                                        text = if (installStatus.paused) "Resume Download" else "Pause",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = SkyBlueDarkText,
@@ -4739,15 +4740,15 @@ private fun CleanStoreViewport(
             },
             dismissButton = {
                 TextButton(onClick = { showCancelStoreDialog = false }) {
-                    Text("Lanjutkan", fontSize = 12.sp)
+                    Text("Continue", fontSize = 12.sp)
                 }
             }
         )
     }
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // 1. Left Sub-Navigation Rail matching playhorizon.dev/mods (`All`, `Mods`, `Native Mods`, `Modpacks`, `Resource Packs`, `Shader Packs`)
         ZalithSubCategoryRail(
@@ -4782,7 +4783,7 @@ private fun CleanStoreViewport(
             },
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight(),
+                .fillMaxWidth(),
             label = "StoreMasterDetailTransition"
         ) { detailProj ->
             if (detailProj == null) {
@@ -6377,9 +6378,9 @@ private fun CleanFilesViewport(
         )
     }
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Left Sub-Navigation Rail (`Mods`, `Saves`, `Resource Packs`, `Shader Packs`, `Screenshots`)
         ZalithSubCategoryRail(
@@ -6397,7 +6398,7 @@ private fun CleanFilesViewport(
             border = horizonGlassBorder(),
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight()
+                .fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier
@@ -7123,9 +7124,9 @@ private fun CleanSettingsViewport(
     val context = LocalContext.current
     var selectedSection by remember { mutableStateOf(SettingsSubCategory.RENDERER) }
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ZalithSubCategoryRail(
             items = SettingsSubCategory.entries,
@@ -7145,7 +7146,7 @@ private fun CleanSettingsViewport(
             },
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight(),
+                .fillMaxWidth(),
             label = "SettingsSubSectionTransition"
         ) { section ->
             Column(
@@ -8017,7 +8018,7 @@ private fun ZalithRamAllocationCard(
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            text = "Bebas / Limit OS Android (Default)",
+                            text = "Unrestricted / Android OS Limit (Default)",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isUnlimited) SkyBlueDarkText else Color.White,
@@ -8101,7 +8102,7 @@ private fun ZalithRamAllocationCard(
 }
 
 @Composable
-private fun ZalithLaunchSidebar(
+private fun ZalithLaunchDock(
     activeAccount: ZalithAccount,
     activeSkinBitmap: Bitmap,
     installStatus: AssetInstallStatus,
@@ -8109,171 +8110,206 @@ private fun ZalithLaunchSidebar(
     onOpenVersions: () -> Unit,
     onLaunchOrDownload: () -> Unit
 ) {
+    val playTransition = rememberInfiniteTransition(label = "DockPlayPulse")
+    val playGlow by playTransition.animateFloat(
+        initialValue = 0.20f,
+        targetValue = 0.70f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "DockPlayGlow"
+    )
+    val playShimmer by playTransition.animateFloat(
+        initialValue = -0.3f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart),
+        label = "DockPlayShimmer"
+    )
+    val playBreath by playTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.035f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "DockPlayBreath"
+    )
+    val progress by animateFloatAsState(
+        targetValue = (installStatus.percent / 100f).coerceIn(0f, 1f),
+        animationSpec = tween(420, easing = FastOutSlowInEasing),
+        label = "DockProgress"
+    )
+    val statusColor by animateColorAsState(
+        targetValue = if (installStatus.ready) Color(0xFF81C784)
+        else if (installStatus.paused) Color(0xFFFFB74D)
+        else SkyBlueAccent,
+        animationSpec = tween(300),
+        label = "DockStatusColor"
+    )
+
     Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = CardSlateBg.copy(alpha = 0.90f),
+        shape = RoundedCornerShape(30.dp),
+        color = CardSlateBg.copy(alpha = 0.86f),
         border = horizonGlassBorder(),
         modifier = Modifier
-            .fillMaxHeight()
-            .width(182.dp)
+            .fillMaxWidth()
+            .padding(top = 6.dp, bottom = 4.dp)
+            .height(64.dp)
     ) {
-        val playTransition = rememberInfiniteTransition(label = "PlayPulse")
-        val playGlow by playTransition.animateFloat(
-            initialValue = 0.20f,
-            targetValue = 0.65f,
-            animationSpec = infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "PlayGlow"
-        )
-        val playShimmer by playTransition.animateFloat(
-            initialValue = -0.3f,
-            targetValue = 1.3f,
-            animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart),
-            label = "PlayShimmer"
-        )
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(11.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = CardRowBg,
+            // Account chip (left)
+            Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(CardRowBg.copy(alpha = 0.75f))
                     .animatedPressScale(onClick = onOpenAccountScreen)
+                    .padding(start = 6.dp, end = 16.dp)
+                    .fillMaxHeight(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    MinecraftSkinHeadAvatar(
-                        skinBitmap = activeSkinBitmap,
-                        size = 34.dp,
-                        cornerRadius = 9.dp
+                MinecraftSkinHeadAvatar(
+                    skinBitmap = activeSkinBitmap,
+                    size = 34.dp,
+                    cornerRadius = 17.dp
+                )
+                Column(verticalArrangement = Arrangement.Center) {
+                    Text(
+                        text = activeAccount.username,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = activeAccount.username,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = if (activeAccount.slimSkinModel) "${activeAccount.accountType.badge} • Slim"
-                            else "${activeAccount.accountType.badge} • Wide",
-                            fontSize = 10.sp,
-                            color = SkyBlueAccent,
-                            maxLines = 1
-                        )
-                    }
+                    Text(
+                        text = if (activeAccount.slimSkinModel) "${activeAccount.accountType.badge} • Slim"
+                        else "${activeAccount.accountType.badge} • Wide",
+                        fontSize = 10.sp,
+                        color = SkyBlueAccent,
+                        maxLines = 1
+                    )
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = CardRowBg,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animatedPressScale(onClick = onOpenVersions)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Minecraft 26.3", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color.White)
-                            Text(
-                                text = if (installStatus.ready) "Ready"
-                                else if (installStatus.paused) "Paused (${installStatus.percent}%)"
-                                else if (installStatus.running) "${installStatus.percent}% (${installStatus.speedText.ifBlank { "Downloading" }})"
-                                else "Needs Download",
-                                fontSize = 11.sp,
-                                color = if (installStatus.ready) Color(0xFF81C784)
-                                else if (installStatus.paused) Color(0xFFFFB74D)
-                                else SkyBlueAccent,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+            // Version chip (centre, takes the free space)
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(CardRowBg.copy(alpha = 0.75f))
+                    .animatedPressScale(onClick = onOpenVersions)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(verticalArrangement = Arrangement.Center) {
+                    Text("Minecraft 26.3", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White, maxLines = 1)
+                    Text(
+                        text = if (installStatus.ready) "Ready"
+                        else if (installStatus.paused) "Paused (${installStatus.percent}%)"
+                        else if (installStatus.running) "${installStatus.percent}% (${installStatus.speedText.ifBlank { "Downloading" }})"
+                        else "Needs Download",
+                        fontSize = 11.sp,
+                        color = statusColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MutedSubtitleText,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            // PLAY button (right) - keeps the glow + shimmer, adds breathing and a live progress fill
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .width(170.dp)
+                    .fillMaxHeight()
+                    .graphicsLayer {
+                        val k = if (installStatus.ready && !installStatus.running) playBreath else 1f
+                        scaleX = k
+                        scaleY = k
+                    }
+                    .animatedPressScale(onClick = onLaunchOrDownload)
+                    .drawBehind {
+                        if (!installStatus.running) {
+                            drawRoundRect(
+                                color = SkyBlueAccent.copy(alpha = playGlow * 0.38f),
+                                topLeft = Offset(-5.dp.toPx(), -3.dp.toPx()),
+                                size = Size(size.width + 10.dp.toPx(), size.height + 6.dp.toPx()),
+                                cornerRadius = CornerRadius(26.dp.toPx())
                             )
                         }
-                        Icon(
-                            Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = MutedSubtitleText,
-                            modifier = Modifier.size(18.dp)
-                        )
                     }
-                }
-
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .animatedPressScale(onClick = onLaunchOrDownload)
-                        .drawBehind {
-                            if (!installStatus.running) {
-                                drawRoundRect(
-                                    color = SkyBlueAccent.copy(alpha = playGlow * 0.35f),
-                                    topLeft = Offset(-5.dp.toPx(), -3.dp.toPx()),
-                                    size = Size(size.width + 10.dp.toPx(), size.height + 6.dp.toPx()),
-                                    cornerRadius = CornerRadius(20.dp.toPx())
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(
+                        if (installStatus.running) {
+                            Brush.horizontalGradient(listOf(SubRailCapsuleActive, SubRailCapsuleActive))
+                        } else {
+                            Brush.horizontalGradient(
+                                listOf(
+                                    SkyBlueAccent,
+                                    androidx.compose.ui.graphics.lerp(SkyBlueAccent, Color.White, 0.40f)
                                 )
-                            }
+                            )
                         }
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            if (installStatus.running) {
-                                Brush.horizontalGradient(listOf(SubRailCapsuleActive, SubRailCapsuleActive))
-                            } else {
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        SkyBlueAccent,
-                                        androidx.compose.ui.graphics.lerp(SkyBlueAccent, Color.White, 0.40f)
-                                    )
-                                )
-                            }
-                        )
-                        .drawWithContent {
-                            drawContent()
-                            if (installStatus.ready && !installStatus.running) {
-                                val x = size.width * playShimmer
-                                drawRect(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.32f), Color.Transparent),
-                                        startX = x - 70f,
-                                        endX = x + 70f
-                                    )
-                                )
-                            }
+                    )
+                    .drawWithContent {
+                        if (installStatus.running) {
+                            drawRect(
+                                color = SkyBlueAccent.copy(alpha = 0.28f),
+                                size = Size(size.width * progress, size.height)
+                            )
                         }
+                        drawContent()
+                        if (installStatus.ready && !installStatus.running) {
+                            val x = size.width * playShimmer
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.32f), Color.Transparent),
+                                    startX = x - 80f,
+                                    endX = x + 80f
+                                )
+                            )
+                        }
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    AnimatedContent(
+                        targetState = installStatus.ready,
+                        transitionSpec = {
+                            (fadeIn(tween(220)) + scaleIn(initialScale = 0.6f, animationSpec = tween(220)))
+                                .togetherWith(fadeOut(tween(140)) + scaleOut(targetScale = 0.6f, animationSpec = tween(140)))
+                        },
+                        label = "DockPlayIcon"
+                    ) { ready ->
                         Icon(
-                            imageVector = if (installStatus.ready) Icons.Default.PlayArrow else Icons.Default.Download,
+                            imageVector = if (ready) Icons.Default.PlayArrow else Icons.Default.Download,
                             contentDescription = null,
                             tint = if (installStatus.running) SkyBlueAccent else SkyBlueDarkText
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = if (installStatus.paused) "PAUSED"
-                            else if (installStatus.running) "${installStatus.percent}%"
-                            else if (installStatus.ready) "PLAY"
-                            else "INSTALL",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 15.sp,
-                            color = if (installStatus.running) SkyBlueAccent else SkyBlueDarkText
-                        )
                     }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (installStatus.paused) "PAUSED"
+                        else if (installStatus.running) "${installStatus.percent}%"
+                        else if (installStatus.ready) "PLAY"
+                        else "INSTALL",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp,
+                        color = if (installStatus.running) SkyBlueAccent else SkyBlueDarkText
+                    )
                 }
             }
         }
