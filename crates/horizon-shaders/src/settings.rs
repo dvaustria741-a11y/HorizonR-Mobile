@@ -11,7 +11,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::{Lang, Pack};
+use crate::{Lang, Macros, Pack, Properties};
 
 const SOURCES: [&str; 8] = ["vsh", "fsh", "gsh", "csh", "tcs", "tes", "glsl", "inc"];
 /// Files that are never sources, whatever they contain.
@@ -134,6 +134,105 @@ pub fn apply_overrides(text: &str, overrides: &BTreeMap<String, String>) -> Stri
     out
 }
 
+/// One entry of a screen in the pack's `shaders.properties` (`screen=`, `screen.NAME=`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum LayoutEntry {
+    /// An option by name.
+    Option(String),
+    /// `[NAME]`: a button to the screen `screen.NAME`.
+    Screen(String),
+    /// `<empty>`: a gap.
+    Space,
+    /// `*`: every option no screen lists.
+    Rest,
+}
+
+/// A screen the pack lays out: the main one (`id` empty) or one `[NAME]` links to.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScreenDef {
+    pub id: String,
+    /// The pack's `screen.NAME` name for it, else the id.
+    pub title: String,
+    pub entries: Vec<LayoutEntry>,
+}
+
+/// How a pack arranges its options: the screens it defines and the options it wants as sliders.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Layout {
+    pub screens: Vec<ScreenDef>,
+    pub sliders: BTreeSet<String>,
+}
+
+impl Layout {
+    /// Every option name the layout mentions.
+    fn names(&self) -> impl Iterator<Item = &str> {
+        let listed = self
+            .screens
+            .iter()
+            .flat_map(|s| &s.entries)
+            .filter_map(|e| match e {
+                LayoutEntry::Option(n) => Some(n.as_str()),
+                _ => None,
+            });
+        listed.chain(self.sliders.iter().map(String::as_str))
+    }
+}
+
+/// The screens and sliders of `shaders.properties`. A pack without `screen=` has no screens: its
+/// options are shown in the order its files declare them.
+pub fn layout(pack: &Pack, locale: &str) -> Layout {
+    let Some(text) = pack.read_text("shaders.properties") else {
+        return Layout::default();
+    };
+    let properties = Properties::parse(&text, &Macros::standard());
+    let lang = Lang::load(pack, locale);
+    let entries = |value: &str| -> Vec<LayoutEntry> {
+        value
+            .split_whitespace()
+            .map(|t| match t {
+                "<empty>" => LayoutEntry::Space,
+                "*" => LayoutEntry::Rest,
+                t if t.starts_with('[') && t.ends_with(']') && t.len() > 2 => {
+                    LayoutEntry::Screen(t[1..t.len() - 1].to_owned())
+                }
+                t => LayoutEntry::Option(t.to_owned()),
+            })
+            // `<profile>` and `<comment>` lines are not options.
+            .filter(|e| !matches!(e, LayoutEntry::Option(n) if n.starts_with('<')))
+            .collect()
+    };
+    let mut out = Layout::default();
+    if let Some(main) = properties.get("screen") {
+        out.screens.push(ScreenDef {
+            id: String::new(),
+            title: String::new(),
+            entries: entries(main),
+        });
+    }
+    for entry in &properties.entries {
+        let Some(id) = entry.key.strip_prefix("screen.") else {
+            continue;
+        };
+        if id.is_empty() || id.ends_with(".columns") {
+            continue;
+        }
+        let title = lang
+            .get(&format!("screen.{id}"))
+            .map(strip_formatting)
+            .filter(|t| !t.trim().is_empty())
+            .unwrap_or_else(|| id.to_owned());
+        out.screens.push(ScreenDef {
+            id: id.to_owned(),
+            title,
+            entries: entries(&entry.value),
+        });
+    }
+    if let Some(sliders) = properties.get("sliders") {
+        out.sliders = sliders.split_whitespace().map(str::to_owned).collect();
+    }
+    out
+}
+
 /// One option of a pack the player can change.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ClassicOption {
@@ -206,6 +305,9 @@ pub fn options(pack: &Pack, locale: &str) -> Vec<ClassicOption> {
             }
         }
     }
+    // An option the pack lists on a screen or as a slider is one even if no condition tests it.
+    let layout = layout(pack, locale);
+    tested.extend(layout.names().map(str::to_owned));
     let mut seen = BTreeSet::new();
     let mut found = Vec::new();
     for (_, text) in &texts {
@@ -362,6 +464,38 @@ mod tests {
         assert_eq!((found[0].default, found[1].default), (1, 0));
         assert_eq!(found[2].values, ["1", "2", "3"]);
         assert_eq!(found[2].default, 1);
+    }
+
+    #[test]
+    fn reads_screens_sliders_and_titles() {
+        let pack = Pack::from_zip_bytes(
+            "P.zip",
+            zip(&[
+                (
+                    "shaders/shaders.properties",
+                    "screen=AO <empty> [LIGHT] <profile> *\nscreen.LIGHT=BRIGHT LEVEL\n\
+                     screen.LIGHT.columns=1\nsliders=LEVEL\n",
+                ),
+                ("shaders/lang/en_us.lang", "screen.LIGHT=Lighting\n"),
+            ]),
+        )
+        .unwrap();
+        let l = layout(&pack, "en_us");
+        assert_eq!(l.screens.len(), 2);
+        assert_eq!(
+            l.screens[0].entries,
+            [
+                LayoutEntry::Option("AO".into()),
+                LayoutEntry::Space,
+                LayoutEntry::Screen("LIGHT".into()),
+                LayoutEntry::Rest
+            ]
+        );
+        assert_eq!(
+            (l.screens[1].id.as_str(), l.screens[1].title.as_str()),
+            ("LIGHT", "Lighting")
+        );
+        assert!(l.sliders.contains("LEVEL"));
     }
 
     #[test]

@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::shader_pack_list::{Entry, Kind};
+use crate::shader_pack_list::{Entry as PackEntry, Kind};
 
 /// Most values a number option steps through.
 const MAX_STEPS: usize = 33;
@@ -23,9 +23,51 @@ pub struct Item {
     pub shown: Vec<String>,
     pub default: usize,
     pub current: usize,
+    /// Shown as a slider over `values` instead of a button that steps through them.
+    pub slider: bool,
+}
+
+/// What a screen of the settings page holds.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Entry {
+    /// `Options.items[i]`.
+    Option(usize),
+    /// A button to `Options.screens[i]`.
+    Screen(usize),
+    Space,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Screen {
+    /// Empty for the main screen, which the page titles itself.
+    pub title: String,
+    pub entries: Vec<Entry>,
+}
+
+/// The picked pack's options and how its screens arrange them; screen 0 is the main one.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Options {
+    pub items: Vec<Item>,
+    pub screens: Vec<Screen>,
 }
 
 impl Item {
+    /// The slider's position, 0 to 1.
+    pub fn position(&self) -> f32 {
+        let last = self.values.len().saturating_sub(1);
+        if last == 0 {
+            0.0
+        } else {
+            self.current as f32 / last as f32
+        }
+    }
+
+    /// Moves to the value nearest a slider position, 0 to 1.
+    pub fn set_position(&mut self, v: f32) {
+        let last = self.values.len().saturating_sub(1);
+        self.current = (v.clamp(0.0, 1.0) * last as f32).round() as usize;
+    }
+
     /// The next value (or the one before, going back), wrapping around.
     pub fn cycle(&mut self, back: bool) {
         let n = self.values.len();
@@ -69,12 +111,13 @@ fn numbers(min: f64, max: f64, step: f64, default: f64) -> Vec<f64> {
     values
 }
 
-fn classic(dir: &Path, entry: &Entry, locale: &str) -> Vec<Item> {
+fn classic(dir: &Path, entry: &PackEntry, locale: &str) -> Options {
     let Ok(pack) = horizon_shaders::Pack::open(&dir.join(&entry.file)) else {
-        return Vec::new();
+        return Options::default();
     };
     let chosen = horizon_shaders::read_overrides(dir, &entry.file);
-    horizon_shaders::classic_options(&pack, locale)
+    let layout = horizon_shaders::classic_layout(&pack, locale);
+    let items: Vec<Item> = horizon_shaders::classic_options(&pack, locale)
         .into_iter()
         .map(|o| {
             let switch = o.values.len() == 2 && o.values[0] == "false" && o.values[1] == "true";
@@ -87,6 +130,7 @@ fn classic(dir: &Path, entry: &Entry, locale: &str) -> Vec<Item> {
                 .get(&o.name)
                 .and_then(|v| o.values.iter().position(|x| x == v))
                 .unwrap_or(o.default);
+            let slider = !switch && o.values.len() > 2 && layout.sliders.contains(&o.name);
             Item {
                 id: o.name,
                 label: o.label,
@@ -94,12 +138,82 @@ fn classic(dir: &Path, entry: &Entry, locale: &str) -> Vec<Item> {
                 shown,
                 default: o.default,
                 current,
+                slider,
             }
         })
-        .collect()
+        .collect();
+    let screens = screens(&layout, &items);
+    Options { items, screens }
 }
 
-fn horizon(dir: &Path, entry: &Entry) -> Vec<Item> {
+/// The screens of the page: the pack's own layout, or one screen with every option.
+fn screens(layout: &horizon_shaders::Layout, items: &[Item]) -> Vec<Screen> {
+    use horizon_shaders::LayoutEntry;
+    let by_name: BTreeMap<&str, usize> = items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| (item.id.as_str(), i))
+        .collect();
+    let all = || (0..items.len()).map(Entry::Option).collect::<Vec<_>>();
+    let def = |id: &str| layout.screens.iter().find(|s| s.id == id);
+    if def("").is_none() {
+        return vec![Screen {
+            title: String::new(),
+            entries: all(),
+        }];
+    }
+    // Options no screen lists, which a `*` shows.
+    let listed: std::collections::BTreeSet<&str> = layout
+        .screens
+        .iter()
+        .flat_map(|s| &s.entries)
+        .filter_map(|e| match e {
+            LayoutEntry::Option(n) => Some(n.as_str()),
+            _ => None,
+        })
+        .collect();
+    let rest: Vec<usize> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| !listed.contains(item.id.as_str()))
+        .map(|(i, _)| i)
+        .collect();
+    let mut ids = vec![String::new()];
+    let mut screens = Vec::new();
+    let mut k = 0;
+    while k < ids.len() {
+        let id = ids[k].clone();
+        let mut entries = Vec::new();
+        if let Some(d) = def(&id) {
+            for e in &d.entries {
+                match e {
+                    LayoutEntry::Option(n) => {
+                        if let Some(&i) = by_name.get(n.as_str()) {
+                            entries.push(Entry::Option(i));
+                        }
+                    }
+                    LayoutEntry::Screen(n) => {
+                        let at = ids.iter().position(|x| x == n).unwrap_or_else(|| {
+                            ids.push(n.clone());
+                            ids.len() - 1
+                        });
+                        entries.push(Entry::Screen(at));
+                    }
+                    LayoutEntry::Space => entries.push(Entry::Space),
+                    LayoutEntry::Rest => entries.extend(rest.iter().map(|&i| Entry::Option(i))),
+                }
+            }
+        }
+        screens.push(Screen {
+            title: def(&id).map_or_else(|| id.clone(), |d| d.title.clone()),
+            entries,
+        });
+        k += 1;
+    }
+    screens
+}
+
+fn horizon(dir: &Path, entry: &PackEntry) -> Options {
     use horizon_shader_api::OptionKind;
     let path = dir.join(&entry.file);
     let manifest = if path.is_dir() {
@@ -112,10 +226,10 @@ fn horizon(dir: &Path, entry: &Entry) -> Vec<Item> {
             .map(|p| p.manifest)
     };
     let Some(manifest) = manifest else {
-        return Vec::new();
+        return Options::default();
     };
     let chosen = horizon_shaders::read_overrides(dir, &entry.file);
-    manifest
+    let items: Vec<Item> = manifest
         .options
         .iter()
         .map(|o| {
@@ -175,17 +289,24 @@ fn horizon(dir: &Path, entry: &Entry) -> Vec<Item> {
                 } else {
                     o.name.clone()
                 },
+                slider: matches!(o.kind, OptionKind::Int { .. } | OptionKind::Float { .. })
+                    && values.len() > 2,
                 values,
                 shown,
                 default,
                 current,
             }
         })
-        .collect()
+        .collect();
+    let screens = vec![Screen {
+        title: String::new(),
+        entries: (0..items.len()).map(Entry::Option).collect(),
+    }];
+    Options { items, screens }
 }
 
 /// The options of `entry`, with the values saved for it.
-pub fn load(dir: &Path, entry: &Entry, locale: &str) -> Vec<Item> {
+pub fn load(dir: &Path, entry: &PackEntry, locale: &str) -> Options {
     match entry.kind {
         Kind::Classic => classic(dir, entry, locale),
         Kind::Horizon => horizon(dir, entry),
@@ -193,7 +314,7 @@ pub fn load(dir: &Path, entry: &Entry, locale: &str) -> Vec<Item> {
 }
 
 /// Saves the values that differ from the pack's own; all at their defaults removes the file.
-pub fn save(dir: &Path, entry: &Entry, items: &[Item]) {
+pub fn save(dir: &Path, entry: &PackEntry, items: &[Item]) {
     let chosen: BTreeMap<String, String> = items
         .iter()
         .filter(|i| i.current != i.default)
@@ -217,6 +338,7 @@ mod tests {
             shown: vec!["OFF".into(), "ON".into(), "x".into()],
             default: 0,
             current: 0,
+            slider: false,
         };
         i.cycle(true);
         assert_eq!(i.value_text(), "x");
@@ -229,5 +351,73 @@ mod tests {
         let v = numbers(0.0, 1.0, 0.25, 0.3);
         assert!(v.iter().any(|x| (x - 0.3).abs() < 1e-9));
         assert!(numbers(0.0, 1000.0, 1.0, 500.0).len() <= MAX_STEPS + 1);
+    }
+
+    fn item(id: &str) -> Item {
+        Item {
+            id: id.into(),
+            label: id.into(),
+            values: vec!["a".into(), "b".into(), "c".into()],
+            shown: vec!["a".into(), "b".into(), "c".into()],
+            default: 0,
+            current: 0,
+            slider: false,
+        }
+    }
+
+    #[test]
+    fn screens_follow_the_pack_layout_and_star_takes_the_rest() {
+        use horizon_shaders::{Layout, LayoutEntry, ScreenDef};
+        let items = [item("A"), item("B"), item("C"), item("D")];
+        let layout = Layout {
+            screens: vec![
+                ScreenDef {
+                    id: String::new(),
+                    title: String::new(),
+                    entries: vec![
+                        LayoutEntry::Option("B".into()),
+                        LayoutEntry::Space,
+                        LayoutEntry::Screen("MORE".into()),
+                        LayoutEntry::Rest,
+                    ],
+                },
+                ScreenDef {
+                    id: "MORE".into(),
+                    title: "More".into(),
+                    entries: vec![LayoutEntry::Option("A".into())],
+                },
+            ],
+            ..Layout::default()
+        };
+        let screens = screens(&layout, &items);
+        assert_eq!(screens.len(), 2);
+        assert_eq!(
+            screens[0].entries,
+            [
+                Entry::Option(1),
+                Entry::Space,
+                Entry::Screen(1),
+                Entry::Option(2),
+                Entry::Option(3)
+            ]
+        );
+        assert_eq!(screens[1].title, "More");
+        assert_eq!(screens[1].entries, [Entry::Option(0)]);
+        // No layout: one screen with everything.
+        assert_eq!(
+            super::screens(&Layout::default(), &items)[0].entries.len(),
+            4
+        );
+    }
+
+    #[test]
+    fn a_slider_maps_positions_to_values() {
+        let mut i = item("A");
+        i.slider = true;
+        i.set_position(1.0);
+        assert_eq!(i.current, 2);
+        i.set_position(0.4);
+        assert_eq!(i.current, 1);
+        assert!((i.position() - 0.5).abs() < 1e-6);
     }
 }

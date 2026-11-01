@@ -205,7 +205,7 @@ pub struct Settings {
     /// `horizon.shader_pack`.
     pub shader_packs: Vec<crate::shader_pack_list::Entry>,
     /// The options of the picked shader pack, listed when Shader Pack Settings opens.
-    pub shader_pack_options: Vec<crate::shader_pack_options::Item>,
+    pub shader_pack_options: crate::shader_pack_options::Options,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -291,7 +291,7 @@ impl Default for Settings {
             extras: Default::default(),
             mods: Default::default(),
             shader_packs: Vec::new(),
-            shader_pack_options: Vec::new(),
+            shader_pack_options: Default::default(),
         }
     }
 }
@@ -482,7 +482,7 @@ impl Settings {
             extras: Default::default(),
             mods: Default::default(),
             shader_packs: Vec::new(),
-            shader_pack_options: Vec::new(),
+            shader_pack_options: Default::default(),
             auto_jump: f.bool("autoJump"),
             language: f.string("lang"),
             force_unicode: f.bool("forceUnicodeFont"),
@@ -839,6 +839,8 @@ pub enum Opt {
     SharePresence,
     DirectionalAudio,
     MusicToast,
+    /// Option `.0` of the picked shader pack (`shader_pack_options`), as a slider.
+    PackOption(usize),
     /// `Options.exclusiveFullscreen`.
     ExclusiveFullscreen,
     /// VideoSettingsScreen's "Exclusive Fullscreen Mode": the monitor's mode to take.

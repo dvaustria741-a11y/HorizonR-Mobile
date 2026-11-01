@@ -88,7 +88,7 @@ impl Game<'_> {
     /// The options of the picked shader pack, with the values saved for it.
     pub(super) fn list_shader_pack_options(
         settings: &horizon_client::settings::Settings,
-    ) -> Vec<horizon_client::shader_pack_options::Item> {
+    ) -> horizon_client::shader_pack_options::Options {
         let dir = Self::shader_packs_dir();
         let packs = horizon_client::shader_pack_list::scan(&dir);
         packs
@@ -102,7 +102,11 @@ impl Game<'_> {
         let dir = Self::shader_packs_dir();
         let packs = horizon_client::shader_pack_list::scan(&dir);
         if let Some(pack) = packs.iter().find(|p| p.file == settings.horizon.shader_pack) {
-            horizon_client::shader_pack_options::save(&dir, pack, &settings.shader_pack_options);
+            horizon_client::shader_pack_options::save(
+                &dir,
+                pack,
+                &settings.shader_pack_options.items,
+            );
         }
     }
     pub(super) fn shader_packs_dir() -> std::path::PathBuf {
