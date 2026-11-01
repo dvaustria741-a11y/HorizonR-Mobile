@@ -4571,6 +4571,18 @@ private fun CleanVersionsViewport(
     }
 }
 
+/** Modrinth and CurseForge are offered for resource packs, shader packs, mods and native mods. */
+private fun storeCategorySupportsExternalSources(category: StoreCategory): Boolean =
+    category == StoreCategory.RESOURCE_PACK || category == StoreCategory.SHADER_PACK ||
+        category == StoreCategory.MOD || category == StoreCategory.NATIVE_MOD
+
+private fun storeExternalKindWord(category: StoreCategory): String = when (category) {
+    StoreCategory.SHADER_PACK -> "shader packs"
+    StoreCategory.MOD -> "mods"
+    StoreCategory.NATIVE_MOD -> "native mods"
+    else -> "resource packs"
+}
+
 @Composable
 private fun StoreSourceSelector(
     selected: StoreSource,
@@ -4839,7 +4851,7 @@ private fun CleanStoreViewport(
             },
             onSelect = {
                 selectedCategory = it
-                if (it != StoreCategory.RESOURCE_PACK && it != StoreCategory.SHADER_PACK && selectedSource != StoreSource.HORIZON) {
+                if (!storeCategorySupportsExternalSources(it) && selectedSource != StoreSource.HORIZON) {
                     selectedSource = StoreSource.HORIZON
                 }
                 selectedProject = null
@@ -5064,7 +5076,7 @@ private fun CleanStoreViewport(
                                     Text(
                                         text = searchMessage.ifBlank {
                                             if (selectedSource == StoreSource.HORIZON) "No projects found on playhorizon.dev/mods matching your filter."
-                                            else "No ${selectedSource.label} ${if (selectedCategory == StoreCategory.SHADER_PACK) "shader" else "resource"} packs matched your filter."
+                                            else "No ${selectedSource.label} ${storeExternalKindWord(selectedCategory)} matched your filter."
                                         },
                                         fontSize = 12.sp,
                                         color = MutedSubtitleText,
@@ -5295,7 +5307,7 @@ private fun CleanStoreViewport(
                             selected = selectedSource,
                             onSelect = { src ->
                                 selectedSource = src
-                                if (src != StoreSource.HORIZON && selectedCategory != StoreCategory.SHADER_PACK) {
+                                if (src != StoreSource.HORIZON && !storeCategorySupportsExternalSources(selectedCategory)) {
                                     selectedCategory = StoreCategory.RESOURCE_PACK
                                 }
                                 selectedProject = null
@@ -5305,7 +5317,7 @@ private fun CleanStoreViewport(
 
                         StoreRightSearchPill(
                             value = searchQuery,
-                            placeholder = if (selectedSource == StoreSource.HORIZON) "Search Horizon mods..." else "Search ${selectedSource.label} ${if (selectedCategory == StoreCategory.SHADER_PACK) "shader" else "resource"} packs...",
+                            placeholder = if (selectedSource == StoreSource.HORIZON) "Search Horizon mods..." else "Search ${selectedSource.label} ${storeExternalKindWord(selectedCategory)}...",
                             onValueChange = {
                                 searchQuery = it
                                 currentPage = 1

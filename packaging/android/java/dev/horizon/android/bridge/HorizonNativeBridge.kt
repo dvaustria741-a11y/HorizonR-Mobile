@@ -3395,7 +3395,7 @@ object HorizonNativeBridge {
             val externalBases = listOf(home, profileHome).distinctBy { it.absolutePath }
             externalBases.map { readRecordedStoreFile(it, item.id) }.filter { it.isNotBlank() }.distinct().forEach { name ->
                 val externalFolder = externalInstallFolder(item)
-                runCatching { setContentItemEnabled(context, externalFolder, name, false, profileSlot, logEnabled) }
+                runCatching { setContentItemEnabled(context, externalEnableKey(item), name, false, profileSlot, logEnabled) }
                 externalBases.forEach { base ->
                     val packFile = File(File(base, externalFolder), name)
                     if (packFile.exists() && packFile.delete()) deletedAny = true
@@ -4075,7 +4075,10 @@ object HorizonNativeBridge {
         source: StoreSource = StoreSource.HORIZON
     ): StoreSearchPageResult {
         if (source != StoreSource.HORIZON) {
-            val externalCategory = if (category == StoreCategory.SHADER_PACK) StoreCategory.SHADER_PACK else StoreCategory.RESOURCE_PACK
+            val externalCategory = when (category) {
+                StoreCategory.SHADER_PACK, StoreCategory.MOD, StoreCategory.NATIVE_MOD -> category
+                else -> StoreCategory.RESOURCE_PACK
+            }
             return searchExternalResourcePacks(context, profileSlot, source, externalCategory, searchQuery, gameVersionFilter, sortOption, statusFilter, page)
         }
         val allProjects = fetchLivePlayHorizonCatalog()
@@ -4599,8 +4602,19 @@ object HorizonNativeBridge {
         return runCatching { JSONObject(regFile.readText()).optString("${projectId}__file", "") }.getOrDefault("")
     }
 
-    private fun externalInstallFolder(item: StoreCatalogItem): String =
-        if (item.category == StoreCategory.SHADER_PACK) "shaderpacks" else "resourcepacks"
+    private fun isExternalModItem(item: StoreCatalogItem): Boolean =
+        item.category == StoreCategory.MOD || item.category == StoreCategory.NATIVE_MOD
+
+    /** Directory (inside the home / profile home) that holds files installed from Modrinth or CurseForge. */
+    private fun externalInstallFolder(item: StoreCatalogItem): String = when {
+        item.category == StoreCategory.SHADER_PACK -> "shaderpacks"
+        isExternalModItem(item) -> "horizon-mods"
+        else -> "resourcepacks"
+    }
+
+    /** Key [setContentItemEnabled] uses for that directory (`mods` toggles `.hmod` files in `horizon-mods/`). */
+    private fun externalEnableKey(item: StoreCatalogItem): String =
+        if (isExternalModItem(item)) "mods" else externalInstallFolder(item)
 
     private fun removeRecordedExternalPack(
         context: Context,
@@ -4617,7 +4631,7 @@ object HorizonNativeBridge {
             .filter { it.isNotBlank() && it != keepName }
             .distinct()
         oldNames.forEach { old ->
-            runCatching { setContentItemEnabled(context, folder, old, false, profileSlot, logEnabled) }
+            runCatching { setContentItemEnabled(context, externalEnableKey(item), old, false, profileSlot, logEnabled) }
             bases.forEach { base ->
                 val f = File(File(base, folder), old)
                 if (f.exists()) f.delete()
@@ -4639,6 +4653,10 @@ object HorizonNativeBridge {
         onProgress: (StoreDownloadProgress) -> Unit,
         onComplete: (Boolean, String) -> Unit
     ) {
+        if (isExternalModItem(item)) {
+            installExternalMod(context, item, profileSlot, logEnabled, onProgress, onComplete)
+            return
+        }
         Thread({
             var partFile: File? = null
             try {
@@ -4793,6 +4811,200 @@ object HorizonNativeBridge {
                 onComplete(false, "Failed to install ${item.title}: ${e.message}")
             }
         }, "HorizonR-ExternalPackInstaller").start()
+    }
+
+    /**
+     * Installs a Modrinth or CurseForge mod / native mod. Horizon cannot run Java, so the jar is downloaded to the app
+     * cache, inspected by [ModConverter] and only installed when it holds nothing but data and assets, in which case it
+     * is repackaged as `horizon-mods/<id>.hmod` and enabled. Jars with Java code are rejected with a clear reason and
+     * nothing is written to the game folders.
+     */
+    private fun installExternalMod(
+        context: Context,
+        item: StoreCatalogItem,
+        profileSlot: Int,
+        logEnabled: Boolean,
+        onProgress: (StoreDownloadProgress) -> Unit,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        Thread({
+            var jarFile: File? = null
+            var hmodTmp: File? = null
+            try {
+                val home = ensureHomeDirectories(context)
+                val profileHome = getProfileHome(home, profileSlot)
+                val sourceLabel = item.source.label
+                val cleanId = sanitizeModId(item.id)
+                val canonicalName = "$cleanId.hmod"
+
+                onProgress(
+                    StoreDownloadProgress(
+                        activeItemId = item.id,
+                        activeTitle = item.title,
+                        running = true,
+                        percent = 3,
+                        speedText = "Connecting...",
+                        statusText = "$sourceLabel • resolving file"
+                    )
+                )
+
+                val target = ContentSources.resolveInstallTarget(item)
+                val remoteName = target.fileName.lowercase(Locale.US)
+                if (!remoteName.endsWith(".jar") && !remoteName.endsWith(".zip")) {
+                    throw ContentSourceException("${item.title} is not a mod jar (${target.fileName.ifBlank { "unknown file" }}).")
+                }
+
+                val workDir = File(context.cacheDir, "hr-mod-convert").apply { mkdirs() }
+                val jar = File(workDir, "$cleanId.jar.part")
+                jarFile = jar
+                if (jar.exists()) jar.delete()
+                appendSystemLog("Downloading mod '${item.title}' from $sourceLabel: ${target.downloadUrl}", logEnabled, context)
+
+                val conn = (URL(target.downloadUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 10000
+                    readTimeout = 20000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "dvaustria741-a11y/HorizonR-Mobile/$INSTALLED_LAUNCHER_VERSION (mod converter)")
+                }
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    conn.disconnect()
+                    val hint = if (item.source == StoreSource.CURSEFORGE && (code == 403 || code == 404)) {
+                        " The author may have disabled third-party downloads. Open ${item.pageUrl} to download it manually."
+                    } else ""
+                    throw ContentSourceException("$sourceLabel download failed (HTTP $code).$hint")
+                }
+
+                val digest = java.security.MessageDigest.getInstance("SHA-1")
+                val totalBytes = conn.contentLengthLong.takeIf { it > 0L } ?: target.sizeBytes.coerceAtLeast(1L)
+                var downloaded = 0L
+                val t0 = System.currentTimeMillis()
+                conn.inputStream.use { input ->
+                    FileOutputStream(jar).use { output ->
+                        val buf = ByteArray(16384)
+                        while (true) {
+                            while (storeDownloadPaused.get() && !storeDownloadCancelled.get()) {
+                                onProgress(
+                                    StoreDownloadProgress(
+                                        activeItemId = item.id,
+                                        activeTitle = item.title,
+                                        running = true,
+                                        paused = true,
+                                        percent = ((downloaded * 100L) / totalBytes).toInt().coerceIn(0, 99),
+                                        speedText = "Paused",
+                                        statusText = "Paused (${downloaded / 1024} KB)"
+                                    )
+                                )
+                                Thread.sleep(200L)
+                            }
+                            if (storeDownloadCancelled.get()) break
+                            val read = input.read(buf)
+                            if (read <= 0) break
+                            output.write(buf, 0, read)
+                            digest.update(buf, 0, read)
+                            downloaded += read
+
+                            val elapsedSec = ((System.currentTimeMillis() - t0) / 1000.0).coerceAtLeast(0.05)
+                            val kbps = (downloaded / 1024.0) / elapsedSec
+                            val speedStr = if (kbps >= 1024.0) String.format(Locale.US, "%.2f MB/s", kbps / 1024.0)
+                            else String.format(Locale.US, "%.1f KB/s", kbps)
+                            onProgress(
+                                StoreDownloadProgress(
+                                    activeItemId = item.id,
+                                    activeTitle = item.title,
+                                    running = true,
+                                    paused = false,
+                                    percent = ((downloaded * 100L) / totalBytes).toInt().coerceIn(1, 90),
+                                    speedText = speedStr,
+                                    statusText = "${downloaded / 1024} / ${totalBytes / 1024} KB • $sourceLabel"
+                                )
+                            )
+                        }
+                    }
+                }
+                conn.disconnect()
+
+                if (storeDownloadCancelled.get()) {
+                    onProgress(StoreDownloadProgress())
+                    onComplete(false, "Download of '${item.title}' cancelled & temporary file deleted.")
+                    return@Thread
+                }
+                if (downloaded <= 0L) throw ContentSourceException("The server returned an empty file")
+
+                val expectedSha1 = target.sha1.trim().lowercase(Locale.US)
+                if (expectedSha1.isNotEmpty()) {
+                    val actualSha1 = digest.digest().joinToString("") { b -> String.format(Locale.US, "%02x", b) }
+                    if (actualSha1 != expectedSha1) {
+                        throw ContentSourceException("Checksum mismatch, the download was corrupted. Please try again.")
+                    }
+                }
+
+                onProgress(
+                    StoreDownloadProgress(
+                        activeItemId = item.id,
+                        activeTitle = item.title,
+                        running = true,
+                        percent = 95,
+                        speedText = "",
+                        statusText = "Checking what the mod contains..."
+                    )
+                )
+                val converted = File(workDir, "$cleanId.hmod.new")
+                hmodTmp = converted
+                val outcome = ModConverter.convert(
+                    jar = jar,
+                    out = converted,
+                    hmodId = cleanId,
+                    title = item.title,
+                    version = target.version,
+                    summary = item.summary,
+                    author = item.author
+                )
+
+                when (outcome) {
+                    is ModConverter.Outcome.NeedsPort -> {
+                        appendSystemLog("Mod '${item.title}' not installed: ${ModConverter.describe(outcome.analysis)}", logEnabled, context)
+                        onProgress(StoreDownloadProgress())
+                        onComplete(false, "${item.title} can't be installed yet. ${outcome.reason}")
+                    }
+                    is ModConverter.Outcome.Invalid -> {
+                        appendSystemLog("Mod '${item.title}' not installed: ${outcome.reason}", logEnabled, context)
+                        onProgress(StoreDownloadProgress())
+                        onComplete(false, "${item.title} can't be installed. ${outcome.reason}")
+                    }
+                    is ModConverter.Outcome.Converted -> {
+                        removeRecordedExternalPack(context, profileSlot, item, canonicalName, logEnabled)
+                        listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
+                            val hmodDir = File(base, "horizon-mods").apply { mkdirs() }
+                            converted.copyTo(File(hmodDir, canonicalName), overwrite = true)
+                            // Only `horizon-mods/<id>.hmod` should exist for this project.
+                            File(base, "mods").listFiles()?.forEach { f ->
+                                if (sanitizeModId(f.name) == cleanId) f.delete()
+                            }
+                        }
+                        setContentItemEnabled(context, "mods", canonicalName, true, profileSlot, logEnabled)
+                        recordInstalledStoreItem(context, profileSlot, item.id, target.version, canonicalName)
+                        invalidateContentCaches()
+                        onProgress(StoreDownloadProgress())
+                        appendSystemLog(
+                            "Converted '${item.title}' (${ModConverter.describe(outcome.analysis)}) to $canonicalName, ${outcome.copiedEntries} files.",
+                            logEnabled, context
+                        )
+                        onComplete(
+                            true,
+                            "Converted ${item.title} to a Horizon mod (${outcome.copiedEntries} asset/data files) and enabled it in Mods."
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                onProgress(StoreDownloadProgress())
+                appendSystemLog("Mod install error for ${item.title}: ${e.message}", logEnabled, context)
+                onComplete(false, "Failed to install ${item.title}: ${e.message}")
+            } finally {
+                jarFile?.delete()
+                hmodTmp?.delete()
+            }
+        }, "HorizonR-ExternalModConverter").start()
     }
 
     // ========================================================================
