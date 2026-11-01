@@ -4576,38 +4576,61 @@ private fun StoreSourceSelector(
     selected: StoreSource,
     onSelect: (StoreSource) -> Unit
 ) {
+    var expanded by remember { mutableStateOf(false) }
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = CardSlateBg,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text("Source", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                StoreSource.entries.forEach { src ->
-                    val isSelected = src == selected
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) SkyBlueAccent else Color(0xFF1B2125),
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { onSelect(src) }
-                    ) {
-                        Text(
-                            text = src.label,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSelected) SkyBlueDarkText else Color.White,
-                            maxLines = 1,
-                            textAlign = TextAlign.Center,
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Source", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    LavenderTagBadge(text = selected.label)
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    StoreSource.entries.forEach { src ->
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 7.dp)
-                        )
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    onSelect(src)
+                                    expanded = false
+                                }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selected == src,
+                                onClick = {
+                                    onSelect(src)
+                                    expanded = false
+                                },
+                                colors = RadioButtonDefaults.colors(selectedColor = SkyBlueAccent),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(src.label, fontSize = 11.sp, color = Color.White)
+                        }
                     }
                 }
             }
