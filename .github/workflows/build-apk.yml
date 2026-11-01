@@ -129,6 +129,9 @@ jobs:
           rm -rf /tmp/horizon-upstream
           git clone --depth 1 --branch android https://github.com/Vasysik/horizon-android.git /tmp/horizon-upstream
           rsync -a --delete --exclude='packaging/android' --exclude='scripts' --exclude='Update' --exclude='docs' --exclude='README.md' --exclude='.local' --exclude='.git' --exclude='.github' /tmp/horizon-upstream/ ./
+          # The engine reads docs/modpacks/*.csv at compile time (include_str!); docs/ is excluded from the sync above.
+          mkdir -p docs/modpacks
+          cp -rf /tmp/horizon-upstream/docs/modpacks/. docs/modpacks/ || true
           if [ -f "/tmp/horizon-upstream/packaging/android/bedrock-controls.json" ]; then
             cp -f "/tmp/horizon-upstream/packaging/android/bedrock-controls.json" packaging/android/bedrock-controls.json
           fi
