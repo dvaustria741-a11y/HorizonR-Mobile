@@ -141,6 +141,7 @@ jobs:
             cp -f "/tmp/horizon-upstream/packaging/android/bedrock-controls.json" packaging/android/bedrock-controls.json
           fi
           python3 scripts/patch_horizon_direct_boot.py
+          python3 scripts/patch_sodium_lite.py
           rm -rf /tmp/horizon-upstream
           rm -f packaging/android/assets/bedrock-controls.json
 
