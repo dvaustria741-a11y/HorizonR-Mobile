@@ -5624,6 +5624,10 @@ object HorizonNativeBridge {
             putExtra("HORIZON_SHADER_PACK", activeShaderPack)
             quickPlayServer?.let { putExtra("HORIZON_QUICK_PLAY_SERVER", it) }
             quickPlayWorld?.let { putExtra("HORIZON_QUICK_PLAY_WORLD", it) }
+            putExtra(
+                "HORIZON_SPLASH_START_MS",
+                HorizonSplashClock.startMs.takeIf { it > 0L } ?: System.currentTimeMillis()
+            )
             putExtra("HORIZON_AI_AGENT_ENABLED", config.aiAgentEnabled)
             putExtra("HORIZON_AI_AGENT_PROVIDER", config.aiAgentProvider.serdeKey)
             putExtra("HORIZON_GEMINI_MODEL", config.geminiModel)

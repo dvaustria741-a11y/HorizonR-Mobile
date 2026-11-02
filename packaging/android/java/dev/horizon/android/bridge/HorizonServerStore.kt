@@ -296,3 +296,12 @@ object HorizonServerStore {
         return raw.replace(Regex("\u00A7."), "").replace('\n', ' ').trim()
     }
 }
+
+/**
+ * When the launcher's splash started (wall clock, shared with the game process through an intent extra)
+ * so the HorizonZ intro animation carries on from the same moment instead of restarting.
+ */
+object HorizonSplashClock {
+    @Volatile
+    var startMs: Long = 0L
+}

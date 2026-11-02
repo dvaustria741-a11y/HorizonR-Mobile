@@ -112,6 +112,7 @@ public final class HorizonActivity extends NativeActivity {
             splashOverlayView = new HorizonSplashOverlayView(this, homeDir, () -> {
                 dismissSplashDialogSafely();
             });
+            splashOverlayView.setStartTimeMs(getIntent().getLongExtra("HORIZON_SPLASH_START_MS", 0L));
             splashDialog.setContentView(
                 splashOverlayView,
                 new ViewGroup.LayoutParams(
@@ -715,7 +716,7 @@ public final class HorizonActivity extends NativeActivity {
      * - Stays visible on its own Dialog Window surface above NativeActivity until the Rust engine
      *   signals `100|Main Menu Ready` AND the swapchain has presented the Main Menu frame!
      */
-    private static final class HorizonSplashOverlayView extends View {
+    public static final class HorizonSplashOverlayView extends View {
         private final File bootFile;
         private final Runnable onDismissCallback;
         private final Handler handler = new Handler(Looper.getMainLooper());
@@ -735,6 +736,9 @@ public final class HorizonActivity extends NativeActivity {
         private long engineReadyFirstSeenMs = 0L;
         private float overlayAlpha = 1.0f;
         private boolean active = true;
+        // Launcher mode: the same splash drawn behind PLAY in the launcher process. It animates from the
+        // shared start time but never reads the boot file and never dismisses itself.
+        private boolean launcherMode = false;
 
         // Compact 8x8 Chunky Minecraft Title Block Glyphs (1 = foreground block, 2 = Creeper face feature)
         private static final int[][] GLYPH_H = {
@@ -827,7 +831,7 @@ public final class HorizonActivity extends NativeActivity {
             }
         };
 
-        HorizonSplashOverlayView(Context context, File homeDir, Runnable onDismissCallback) {
+        public HorizonSplashOverlayView(Context context, File homeDir, Runnable onDismissCallback) {
             super(context);
             this.bootFile = new File(homeDir, "zalith-game-boot.txt");
             this.onDismissCallback = onDismissCallback;
@@ -853,13 +857,64 @@ public final class HorizonActivity extends NativeActivity {
             handler.post(frameLoop);
         }
 
+        public void setLauncherMode(boolean enabled) {
+            launcherMode = enabled;
+        }
+
+        /** Continue the animation from a moment another process already started it (wall clock). */
+        public void setStartTimeMs(long ms) {
+            long now = System.currentTimeMillis();
+            if (ms <= 0L || ms > now || now - ms > 30000L) return;
+            createdTimeMs = ms;
+            float p = timerProgress(now - ms);
+            displayedProgress = p;
+            targetProgress = Math.max(targetProgress, p);
+        }
+
+        private static float timerProgress(long elapsedMs) {
+            if (elapsedMs > 3100L) return 0.88f + Math.min(0.09f, (elapsedMs - 3100L) / 40000.0f * 0.09f);
+            if (elapsedMs > 2200L) return 0.88f;
+            if (elapsedMs > 1200L) return 0.70f;
+            if (elapsedMs > 400L) return 0.46f;
+            return 0.28f;
+        }
+
+        private void resumeLoop() {
+            if (!active) return;
+            handler.removeCallbacks(frameLoop);
+            handler.post(frameLoop);
+        }
+
+        @Override
+        protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            resumeLoop();
+        }
+
+        @Override
+        protected void onDetachedFromWindow() {
+            handler.removeCallbacks(frameLoop);
+            super.onDetachedFromWindow();
+        }
+
+        @Override
+        protected void onWindowVisibilityChanged(int visibility) {
+            super.onWindowVisibilityChanged(visibility);
+            if (visibility == View.VISIBLE) {
+                resumeLoop();
+            } else {
+                // Hidden behind the running game: stop drawing frames nobody can see.
+                handler.removeCallbacks(frameLoop);
+            }
+        }
+
         void stopPolling() {
             active = false;
             handler.removeCallbacksAndMessages(null);
         }
 
         private void pollBootMilestone() {
-            if (!bootFile.exists()) return;
+            if (launcherMode || !bootFile.exists()) return;
             try (BufferedReader br = new BufferedReader(
                 new InputStreamReader(new FileInputStream(bootFile), StandardCharsets.UTF_8)
             )) {
@@ -890,7 +945,7 @@ public final class HorizonActivity extends NativeActivity {
             long now = System.currentTimeMillis();
             long elapsed = now - createdTimeMs;
 
-            if (!engineReady) {
+            if (launcherMode || !engineReady) {
                 if (elapsed > 400L && targetProgress < 0.46f) {
                     targetProgress = 0.46f;
                     stageLabel = "Creating Vulkan / WGPU Surface...";
@@ -907,7 +962,7 @@ public final class HorizonActivity extends NativeActivity {
                     stageLabel = "Preparing Panorama & Main Menu...";
                 }
                 // Safety net only: the engine writes "100|Main Menu Ready" when the menu exists.
-                if (elapsed >= 60000L) {
+                if (!launcherMode && elapsed >= 60000L) {
                     engineReady = true;
                     engineReadyFirstSeenMs = now;
                 }

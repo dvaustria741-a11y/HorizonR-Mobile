@@ -93,6 +93,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import dev.horizon.android.R
+import dev.horizon.android.HorizonActivity
 import dev.horizon.android.bridge.*
 import dev.horizon.android.model.*
 import dev.horizon.android.ui.theme.HorizonZalithTheme
@@ -455,16 +456,30 @@ fun Modifier.animatedPressScale(
 }
 
 /**
- * Plain black cover shown the instant PLAY is pressed (and while the game runs on top). The animated
- * HorizonZ splash lives in HorizonActivity's native overlay and takes over from here, so the logo
- * reveal plays once, from the start, instead of a second static logo appearing first.
+ * The animated HorizonZ splash, shown the instant PLAY is pressed (and while the game runs on top).
+ * It is the same view HorizonActivity shows in the game process, started from a shared wall-clock
+ * time, so the logo reveal plays once and carries straight over instead of restarting.
  */
 @Composable
 fun HorizonZBlackSplashOverlay() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
+    val startMs = remember {
+        val now = System.currentTimeMillis()
+        val old = HorizonSplashClock.startMs
+        val start = if (old > 0L && now - old < 30000L) old else now
+        HorizonSplashClock.startMs = start
+        start
+    }
+    DisposableEffect(Unit) {
+        onDispose { HorizonSplashClock.startMs = 0L }
+    }
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+            HorizonActivity.HorizonSplashOverlayView(ctx, ctx.filesDir, null).apply {
+                setLauncherMode(true)
+                setStartTimeMs(startMs)
+            }
+        }
     )
 }
 
