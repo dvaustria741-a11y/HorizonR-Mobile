@@ -99,6 +99,7 @@ import dev.horizon.android.model.*
 import dev.horizon.android.ui.theme.HorizonZalithTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -6462,12 +6463,15 @@ private fun CleanFilesViewport(
         Triple("screenshots", "Screenshots", Icons.Default.Image)
     )
 
-    var rawList by remember { mutableStateOf<List<File>>(emptyList()) }
-    var filteredList by remember { mutableStateOf<List<ManagerRowUiItem>>(emptyList()) }
+    val folderCache = remember(profileSlot) { mutableStateMapOf<String, List<ManagerRowUiItem>>() }
+    val folderItems: List<ManagerRowUiItem>? = folderCache[currentFolder]
+    val isFolderLoading = folderItems == null
 
     LaunchedEffect(currentFolder, refreshCount, profileSlot) {
-        val loaded = withContext(Dispatchers.IO) {
-            if (currentFolder == "mods") {
+        val folder = currentFolder
+        val built = withContext(Dispatchers.IO) {
+            val isToggleableFolder = folder in listOf("mods", "shaderpacks", "resourcepacks")
+            val files = if (folder == "mods") {
                 HorizonNativeBridge.syncAndRepairModsStorage(context, profileSlot)
                 val hmodDir = File(home, "horizon-mods").apply { mkdirs() }
                 hmodDir.listFiles()
@@ -6475,22 +6479,17 @@ private fun CleanFilesViewport(
                     ?.distinctBy { HorizonNativeBridge.sanitizeModId(it.name) }
                     .orEmpty()
             } else {
-                val dirFile = File(home, currentFolder).apply { mkdirs() }
+                val dirFile = File(home, folder).apply { mkdirs() }
                 dirFile.listFiles()?.filter { !it.name.endsWith(".part") && !it.name.endsWith(".tmp") }.orEmpty()
             }
-        }
-        rawList = loaded
-    }
-
-    LaunchedEffect(rawList, searchQuery, filterEnabledOnly, currentFolder, sortMode, refreshCount) {
-        val computed = withContext(Dispatchers.IO) {
-            val isToggleableFolder = currentFolder in listOf("mods", "shaderpacks", "resourcepacks")
-            val prebuilt = rawList.mapNotNull { file ->
-                val modDetail = if (currentFolder == "mods") HorizonNativeBridge.inspectModPackage(file) else null
-                val saveDetail = if (currentFolder == "saves") HorizonNativeBridge.inspectWorldSave(file) else null
-                val packDetail = if (currentFolder in listOf("resourcepacks", "shaderpacks")) HorizonNativeBridge.inspectResourcePack(file) else null
+            val installedVersions by lazy { HorizonNativeBridge.getInstalledStoreVersionsMap(context, profileSlot) }
+            files.map { file ->
+                ensureActive()
+                val modDetail = if (folder == "mods") HorizonNativeBridge.inspectModPackage(file) else null
+                val saveDetail = if (folder == "saves") HorizonNativeBridge.inspectWorldSave(file) else null
+                val packDetail = if (folder in listOf("resourcepacks", "shaderpacks")) HorizonNativeBridge.inspectResourcePack(file) else null
                 val enabled = if (isToggleableFolder) {
-                    HorizonNativeBridge.isContentItemEnabled(context, currentFolder, file.name, profileSlot)
+                    HorizonNativeBridge.isContentItemEnabled(context, folder, file.name, profileSlot)
                 } else true
 
                 val displayTitle = when {
@@ -6505,54 +6504,55 @@ private fun CleanFilesViewport(
                     packDetail != null -> packDetail.description
                     else -> "File Name: ${file.name}"
                 }
-
-                val matchesQuery = searchQuery.isBlank() ||
-                    file.name.contains(searchQuery, ignoreCase = true) ||
-                    displayTitle.contains(searchQuery, ignoreCase = true) ||
-                    subtitleText.contains(searchQuery, ignoreCase = true)
-                val matchesEnabled = !filterEnabledOnly || !isToggleableFolder || enabled
-
-                if (!matchesQuery || !matchesEnabled) {
-                    null
-                } else {
-                    val iconBmp = HorizonNativeBridge.loadLocalContentIconBitmap(file)?.asImageBitmap()
-                    val detailSummary = when {
-                        modDetail != null -> "ID: ${modDetail.modId} • API ${modDetail.apiLine} • Side: ${modDetail.side} • Size: ${modDetail.fileSizeFormatted}"
-                        packDetail != null -> "${packDetail.packType} • Format v${packDetail.formatVersion} • Size: ${packDetail.fileSizeFormatted}"
-                        saveDetail != null -> "${saveDetail.difficulty} • ${saveDetail.playTimeFormatted} • Seed: ${saveDetail.worldSeed}"
-                        else -> "File: ${file.name} (${file.length() / 1024} KB)"
-                    }
-                    val catMatch = HorizonNativeBridge.findCatalogItemForLocalFile(file, currentFolder)
-                    val curVer = modDetail?.version ?: HorizonNativeBridge.getInstalledStoreVersionsMap(context, profileSlot)[HorizonNativeBridge.sanitizeModId(file.name)] ?: "1.0.0"
-                    val curTuple = HorizonNativeBridge.parseVersionNumbers(curVer)
-                    val latestTuple = catMatch?.let { HorizonNativeBridge.parseVersionNumbers(it.version) }
-                    val updateAvailable = catMatch != null && curTuple != null && latestTuple != null &&
-                        HorizonNativeBridge.compareVersionLists(latestTuple, curTuple) > 0
-                    ManagerRowUiItem(
-                        key = "${file.absolutePath}:${file.lastModified()}:$curVer",
-                        file = file,
-                        folder = currentFolder,
-                        displayTitle = displayTitle,
-                        subtitleText = subtitleText,
-                        detailSummary = detailSummary,
-                        isEnabled = enabled,
-                        lastModified = file.lastModified(),
-                        modDetail = modDetail,
-                        saveDetail = saveDetail,
-                        packDetail = packDetail,
-                        iconImage = iconBmp,
-                        storeCatalogMatch = catMatch,
-                        hasStoreUpdate = updateAvailable
-                    )
+                val iconBmp = HorizonNativeBridge.loadLocalContentIconBitmap(file)?.asImageBitmap()
+                val detailSummary = when {
+                    modDetail != null -> "ID: ${modDetail.modId} • API ${modDetail.apiLine} • Side: ${modDetail.side} • Size: ${modDetail.fileSizeFormatted}"
+                    packDetail != null -> "${packDetail.packType} • Format v${packDetail.formatVersion} • Size: ${packDetail.fileSizeFormatted}"
+                    saveDetail != null -> "${saveDetail.difficulty} • ${saveDetail.playTimeFormatted} • Seed: ${saveDetail.worldSeed}"
+                    else -> "File: ${file.name} (${file.length() / 1024} KB)"
                 }
-            }
-            when (sortMode) {
-                FilesSortMode.BY_NAME -> prebuilt.sortedBy { it.displayTitle.lowercase(Locale.US) }
-                FilesSortMode.BY_FILE_NAME -> prebuilt.sortedBy { it.file.name.lowercase(Locale.US) }
-                FilesSortMode.BY_LAST_MODIFIED -> prebuilt.sortedByDescending { it.lastModified }
+                val catMatch = HorizonNativeBridge.findCatalogItemForLocalFile(file, folder)
+                val curVer = modDetail?.version ?: installedVersions[HorizonNativeBridge.sanitizeModId(file.name)] ?: "1.0.0"
+                val curTuple = HorizonNativeBridge.parseVersionNumbers(curVer)
+                val latestTuple = catMatch?.let { HorizonNativeBridge.parseVersionNumbers(it.version) }
+                val updateAvailable = catMatch != null && curTuple != null && latestTuple != null &&
+                    HorizonNativeBridge.compareVersionLists(latestTuple, curTuple) > 0
+                ManagerRowUiItem(
+                    key = "${file.absolutePath}:${file.lastModified()}:$curVer",
+                    file = file,
+                    folder = folder,
+                    displayTitle = displayTitle,
+                    subtitleText = subtitleText,
+                    detailSummary = detailSummary,
+                    isEnabled = enabled,
+                    lastModified = file.lastModified(),
+                    modDetail = modDetail,
+                    saveDetail = saveDetail,
+                    packDetail = packDetail,
+                    iconImage = iconBmp,
+                    storeCatalogMatch = catMatch,
+                    hasStoreUpdate = updateAvailable
+                )
             }
         }
-        filteredList = computed
+        folderCache[folder] = built
+    }
+
+    val filteredList = remember(folderItems, searchQuery, filterEnabledOnly, currentFolder, sortMode) {
+        val isToggleableFolder = currentFolder in listOf("mods", "shaderpacks", "resourcepacks")
+        val matched = folderItems.orEmpty().filter { item ->
+            val matchesQuery = searchQuery.isBlank() ||
+                item.file.name.contains(searchQuery, ignoreCase = true) ||
+                item.displayTitle.contains(searchQuery, ignoreCase = true) ||
+                item.subtitleText.contains(searchQuery, ignoreCase = true)
+            val matchesEnabled = !filterEnabledOnly || !isToggleableFolder || item.isEnabled
+            matchesQuery && matchesEnabled
+        }
+        when (sortMode) {
+            FilesSortMode.BY_NAME -> matched.sortedBy { it.displayTitle.lowercase(Locale.US) }
+            FilesSortMode.BY_FILE_NAME -> matched.sortedBy { it.file.name.lowercase(Locale.US) }
+            FilesSortMode.BY_LAST_MODIFIED -> matched.sortedByDescending { it.lastModified }
+        }
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -6787,7 +6787,7 @@ private fun CleanFilesViewport(
                         color = CardRowBg
                     ) {
                         Text(
-                            text = "${filteredList.size} items",
+                            text = if (isFolderLoading) "…" else "${filteredList.size} items",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = SkyBlueAccent,
@@ -6887,7 +6887,15 @@ private fun CleanFilesViewport(
                     label = "FilesFolderAnimatedTransition"
                 ) { folder ->
                     val folderLabel = categories.firstOrNull { it.first == folder }?.second ?: folder
-                    if (filteredList.isEmpty()) {
+                    if (isFolderLoading) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                color = SkyBlueAccent,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    } else if (filteredList.isEmpty()) {
                         val emptyLabel = when (folder) {
                             "mods" -> "No mods installed for this profile yet (tap 'Store' to download from playhorizon.dev/mods)"
                             "saves" -> "No worlds (World Saves) for version 26.3 yet"
