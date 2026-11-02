@@ -466,6 +466,32 @@ object ContentSources {
     }
 
     /**
+     * Lists the OptiFine / MCPatcher-only parts of a resource pack that the engine does not read
+     * (custom entity models, custom item textures, connected textures, random entity textures, custom
+     * animations, colormaps / skies / lightmaps), with how many of each. Returns null when the pack
+     * has none, or when the archive cannot be read. Such a pack still installs: the vanilla textures
+     * in it work, and Horizon falls back to vanilla for these parts.
+     */
+    fun describeUnsupportedPackFeatures(zip: File): String? {
+        val names: List<String> = try {
+            ZipFile(zip).use { zf -> zf.entries().asSequence().map { it.name.replace('\\', '/').lowercase(Locale.US) }.toList() }
+        } catch (e: Exception) {
+            return null
+        }
+        fun count(pattern: Regex): Int = names.count { pattern.containsMatchIn(it) }
+        val found = listOf(
+            count(Regex("(^|/)optifine/cem/.+\\.jem$")) to "custom entity models",
+            count(Regex("(^|/)(optifine|mcpatcher)/cit/.+\\.properties$")) to "custom item texture rules",
+            count(Regex("(^|/)(optifine|mcpatcher)/ctm/.+\\.properties$")) to "connected texture rules",
+            count(Regex("(^|/)optifine/random/.+\\.properties$")) to "random entity texture rules",
+            count(Regex("(^|/)(optifine|mcpatcher)/anim/.+\\.properties$")) to "custom animation rules",
+            count(Regex("(^|/)(optifine|mcpatcher)/(colormap|sky|lightmap)/.+\\.(properties|png)$")) to "custom colour, sky or lighting files"
+        ).filter { it.first > 0 }
+        if (found.isEmpty()) return null
+        return found.joinToString(", ") { "${it.first} ${it.second}" }
+    }
+
+    /**
      * Shader packs (Iris / OptiFine layout) keep their GLSL under `shaders/` at the archive root. Archives zipped
      * with one extra top-level folder (`Pack/shaders/...`) are rewritten so the loader finds `shaders/` at the root.
      * Returns null when the archive is loadable, otherwise a human readable reason.

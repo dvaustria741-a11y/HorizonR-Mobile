@@ -4845,6 +4845,7 @@ object HorizonNativeBridge {
                 val packProblem = if (isShader) ContentSources.validateAndNormalizeShaderZip(part)
                 else ContentSources.validateAndNormalizePackZip(part)
                 packProblem?.let { throw ContentSourceException(it) }
+                val unsupportedNote = if (isShader) null else ContentSources.describeUnsupportedPackFeatures(part)
 
                 removeRecordedExternalPack(context, profileSlot, item, canonicalName, logEnabled)
 
@@ -4866,7 +4867,11 @@ object HorizonNativeBridge {
                 invalidateContentCaches()
                 onProgress(StoreDownloadProgress())
                 appendSystemLog("Installed '${item.title}' ($canonicalName) from $sourceLabel.", logEnabled, context)
-                onComplete(true, "Installed ${item.title} and enabled it in ${if (isShader) "Shader Packs" else "Resource Packs"}.")
+                onComplete(
+                    true,
+                    "Installed ${item.title} and enabled it in ${if (isShader) "Shader Packs" else "Resource Packs"}." +
+                        (unsupportedNote?.let { " Horizon does not apply these OptiFine-only parts yet, so vanilla is used for them: $it." } ?: "")
+                )
             } catch (e: Exception) {
                 partFile?.delete()
                 onProgress(StoreDownloadProgress())
@@ -4913,6 +4918,16 @@ object HorizonNativeBridge {
         ).also { saveDetailCache[cacheKey] = it }
     }
 
+    private fun readPackFormat(packObj: JSONObject): Int {
+        val legacy = packObj.optInt("pack_format", 0)
+        if (legacy > 0) return legacy
+        return when (val min = packObj.opt("min_format")) {
+            is Number -> min.toInt()
+            is JSONArray -> min.optInt(0, 75)
+            else -> 75
+        }
+    }
+
     fun inspectResourcePack(packFile: File): ResourcePackDetailInfo {
         val cacheKey = "${packFile.absolutePath}:${packFile.lastModified()}:${packFile.length()}"
         packDetailCache[cacheKey]?.let { return it }
@@ -4930,7 +4945,7 @@ object HorizonNativeBridge {
                         val obj = JSONObject(txt)
                         val packObj = obj.optJSONObject("pack")
                         if (packObj != null) {
-                            formatVer = packObj.optInt("pack_format", 75)
+                            formatVer = readPackFormat(packObj)
                             val rawDesc = packObj.opt("description")
                             val parsedDesc = when (rawDesc) {
                                 is String -> rawDesc
@@ -4960,7 +4975,7 @@ object HorizonNativeBridge {
                     val obj = JSONObject(mcmeta.readText())
                     val packObj = obj.optJSONObject("pack")
                     if (packObj != null) {
-                        formatVer = packObj.optInt("pack_format", 75)
+                        formatVer = readPackFormat(packObj)
                         val rawDesc = packObj.optString("description", desc)
                         val stripped = rawDesc.replace(Regex("§[0-9a-fk-orA-FK-OR]"), "").replace("\n", " ").trim()
                         if (stripped.isNotBlank()) desc = stripped
@@ -5279,6 +5294,17 @@ object HorizonNativeBridge {
                 }
                 appendSystemLog("Imported shader pack to shaderpacks/${shaderFile.name} (${shaderFile.length() / 1024} KB)", logEnabled, context)
                 return shaderFile
+            }
+            if (finalSubFolder == "resourcepacks" && finalFileName.endsWith(".zip", ignoreCase = true)) {
+                val packProblem = ContentSources.validateAndNormalizePackZip(outFile)
+                if (packProblem != null) {
+                    outFile.delete()
+                    appendSystemLog("Import rejected: $packProblem", logEnabled, context)
+                    return null
+                }
+                ContentSources.describeUnsupportedPackFeatures(outFile)?.let {
+                    appendSystemLog("Imported resource pack uses OptiFine-only parts Horizon does not apply yet (vanilla is used for them): $it", logEnabled, context)
+                }
             }
             if (isModTarget) {
                 val modId = sanitizeModId(finalFileName)
