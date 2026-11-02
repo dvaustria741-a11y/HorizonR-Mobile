@@ -8,6 +8,8 @@ import android.content.pm.ActivityInfo;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RadialGradient;
+import android.graphics.Shader;
 import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
@@ -929,6 +931,148 @@ public final class HorizonActivity extends NativeActivity {
             }
         }
 
+        // ---- Intro animation (inspired by the Mojang-style "scramble, then settle" logo reveal) ----
+        private static final int COL_WHITE_TOP = 0xFFFFFFFF;
+        private static final int COL_WHITE_MID = 0xFFF2F6F8;
+        private static final int COL_WHITE_LOW = 0xFFD0D8DE;
+        private static final int COL_WHITE_SHADOW = 0xFF2A3238;
+        private static final int COL_CREEPER_EYE = 0xFF111712;
+        private static final int COL_CREEPER_HI = 0xFF72E052;
+        private static final int COL_CREEPER_TOP = 0xFF6CE04E;
+        private static final int COL_CREEPER_BODY = 0xFF49AC30;
+        private static final int COL_CREEPER_SHADOW = 0xFF1B4D14;
+        private static final int COL_Z_TOP = 0xFFC2F0FF;
+        private static final int COL_Z_BODY = 0xFF8BE0FF;
+        private static final int COL_Z_SHADOW = 0xFF1D4E63;
+
+        private static final long LETTER_START_MS = 140L;   // first letter begins scrambling
+        private static final long LETTER_STAGGER_MS = 105L; // delay between letters
+        private static final long SCRAMBLE_MS = 330L;       // how long a letter shows shuffled fragments
+        private static final long POP_MS = 300L;            // settle pop + flash
+        private static final int PARTICLE_COUNT = 30;
+
+        private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private RadialGradient glowShader;
+        private int glowShaderW = -1;
+        private int glowShaderH = -1;
+
+        private static float clamp01(float v) {
+            return v < 0f ? 0f : (v > 1f ? 1f : v);
+        }
+
+        /** Deterministic 0..1 hash, so the "random" fragments are stable within one animation tick. */
+        private static float hash01(int a, int b) {
+            int h = a * 73856093 ^ b * 19349663;
+            h ^= (h >>> 13);
+            h *= 0x5bd1e995;
+            h ^= (h >>> 15);
+            return (h & 0xFFFF) / 65535.0f;
+        }
+
+        private static int lerpColor(int from, int to, float f) {
+            f = clamp01(f);
+            int r = (int) (Color.red(from) + (Color.red(to) - Color.red(from)) * f);
+            int g = (int) (Color.green(from) + (Color.green(to) - Color.green(from)) * f);
+            int b = (int) (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * f);
+            return Color.rgb(r, g, b);
+        }
+
+        private void drawBackdrop(Canvas canvas, int w, int h, float t, int alphaInt, float cx, float cy) {
+            // Soft pulsing glow behind the logo (rebuilt only when the size changes).
+            if (glowShader == null || glowShaderW != w || glowShaderH != h) {
+                float radius = Math.max(w, h) * 0.55f;
+                glowShader = new RadialGradient(
+                    cx, cy, radius,
+                    new int[]{0x553A8DBE, 0x221F5A3A, 0x00000000},
+                    new float[]{0f, 0.45f, 1f},
+                    Shader.TileMode.CLAMP
+                );
+                glowShaderW = w;
+                glowShaderH = h;
+                glowPaint.setShader(glowShader);
+            }
+            float fadeIn = clamp01(t / 700f);
+            float pulse = 0.82f + 0.18f * (float) Math.sin(t / 900.0);
+            glowPaint.setAlpha((int) (alphaInt * fadeIn * pulse));
+            canvas.drawRect(0, 0, w, h, glowPaint);
+
+            // Drifting voxel specks (a hint of the camera diving through terrain in the intro).
+            float density = getResources().getDisplayMetrics().density;
+            for (int i = 0; i < PARTICLE_COUNT; i++) {
+                float seedX = hash01(i, 11);
+                float seedS = hash01(i, 23);
+                float seedV = hash01(i, 37);
+                float size = (2.5f + seedS * 5.5f) * density;
+                float speed = 0.012f + seedV * 0.03f; // screens per second
+                float life = ((t / 1000f) * speed + hash01(i, 5)) % 1f;
+                float py = h * (1.05f - life * 1.15f);
+                float px = w * seedX + (float) Math.sin(t / 1400.0 + i) * 6f * density;
+                float edge = (float) Math.sin(Math.PI * life); // fade at both ends
+                int base = (i % 5 == 0) ? 0xFF72E052 : ((i % 4 == 0) ? 0xFF8BE0FF : 0xFFFFFFFF);
+                pixelPaint.setColor(base);
+                pixelPaint.setAlpha((int) (alphaInt * fadeIn * edge * (0.05f + 0.13f * seedS)));
+                canvas.drawRect(px, py, px + size, py + size, pixelPaint);
+            }
+        }
+
+        /** Draws one glyph at (lx, ly). `shine` is the x of the sweeping highlight band (or <0 for none). */
+        private void drawLetter(Canvas canvas, int l, int[][] glyph, float lx, float ly, float pxSize,
+                                float depthOff, int alphaInt, float flash, float shineX, boolean scrambled,
+                                int bucket) {
+            int letterCols = 8;
+            int letterRows = 8;
+            boolean isCreeper = (l == 1);
+            boolean isLast = (l == WORD_HORIZONZ.length - 1);
+            int shadow = isCreeper ? COL_CREEPER_SHADOW : (isLast ? COL_Z_SHADOW : COL_WHITE_SHADOW);
+
+            // Extrusion pass
+            pixelPaint.setColor(shadow);
+            pixelPaint.setAlpha(alphaInt);
+            for (int r = 0; r < letterRows; r++) {
+                for (int c = 0; c < letterCols; c++) {
+                    if (glyph[r][c] == 0) continue;
+                    if (scrambled && hash01(l * 64 + r * 8 + c, bucket) < 0.30f) continue;
+                    float px = lx + c * pxSize;
+                    float py = ly + r * pxSize;
+                    canvas.drawRect(px + depthOff * 0.6f, py + depthOff,
+                        px + pxSize + depthOff * 0.6f + 0.5f, py + pxSize + depthOff + 0.5f, pixelPaint);
+                }
+            }
+            // Face pass
+            float band = pxSize * 7f;
+            for (int r = 0; r < letterRows; r++) {
+                for (int c = 0; c < letterCols; c++) {
+                    int cell = glyph[r][c];
+                    if (cell == 0) continue;
+                    if (scrambled && hash01(l * 64 + r * 8 + c, bucket) < 0.30f) continue;
+                    int color;
+                    if (isCreeper && !scrambled) {
+                        color = (cell == 2) ? COL_CREEPER_EYE
+                            : (cell == 3) ? COL_CREEPER_HI
+                            : (r == 0) ? COL_CREEPER_TOP : COL_CREEPER_BODY;
+                    } else if (isLast) {
+                        color = (r == 0) ? COL_Z_TOP : COL_Z_BODY;
+                    } else if (isCreeper) {
+                        color = (r == 0) ? COL_CREEPER_TOP : COL_CREEPER_BODY;
+                    } else {
+                        color = (r == 0) ? COL_WHITE_TOP : (r >= 6) ? COL_WHITE_LOW : COL_WHITE_MID;
+                    }
+                    float px = lx + c * pxSize;
+                    float py = ly + r * pxSize;
+                    float boost = flash;
+                    if (shineX >= 0f) {
+                        // Diagonal sweep: leaning band travelling left to right.
+                        float d = Math.abs((px + pxSize * 0.5f) + (py - ly) * 0.6f - shineX);
+                        if (d < band) boost = Math.max(boost, 0.75f * (1f - d / band));
+                    }
+                    if (boost > 0f) color = lerpColor(color, 0xFFFFFFFF, boost);
+                    pixelPaint.setColor(color);
+                    pixelPaint.setAlpha(alphaInt);
+                    canvas.drawRect(px, py, px + pxSize + 0.5f, py + pxSize + 0.5f, pixelPaint);
+                }
+            }
+        }
+
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
@@ -936,6 +1080,7 @@ public final class HorizonActivity extends NativeActivity {
             int h = getHeight();
             if (w <= 0 || h <= 0) return;
 
+            float t = (float) (System.currentTimeMillis() - createdTimeMs);
             int alphaInt = Math.max(0, Math.min(255, (int) (overlayAlpha * 255.0f)));
             bgPaint.setAlpha(alphaInt);
             canvas.drawRect(0, 0, w, h, bgPaint);
@@ -944,125 +1089,128 @@ public final class HorizonActivity extends NativeActivity {
             int letterCols = 8;
             int letterRows = 8;
             int gapCols = 1;
-            int totalCols = WORD_HORIZONZ.length * letterCols + (WORD_HORIZONZ.length - 1) * gapCols;
+            int count = WORD_HORIZONZ.length;
+            int totalCols = count * letterCols + (count - 1) * gapCols;
 
-            // Compact, standard Minecraft title proportions (never stretched vertically!)
             float pxSize = Math.max(4f, Math.min(w * 0.50f / totalCols, 6.2f * density));
             float logoWidth = totalCols * pxSize;
             float logoHeight = letterRows * pxSize;
             float startX = (w - logoWidth) / 2f;
             float startY = (h * 0.41f) - (logoHeight / 2f);
             float depthOff = Math.max(2f, pxSize * 0.48f);
+            float cx = w / 2f;
+            float cy = startY + logoHeight / 2f;
 
-            // Pass 1: 3D Blocky Bottom/Side Extrusion Shadow for all letters
-            for (int l = 0; l < WORD_HORIZONZ.length; l++) {
-                int[][] glyph = WORD_HORIZONZ[l];
-                float lx = startX + l * (letterCols + gapCols) * pxSize;
-                int shadowColor = (l == 1) ? Color.parseColor("#1B4D14")
-                    : (l == WORD_HORIZONZ.length - 1) ? Color.parseColor("#1D4E63")
-                    : Color.parseColor("#2A3238");
-                pixelPaint.setColor(shadowColor);
-                pixelPaint.setAlpha(alphaInt);
+            drawBackdrop(canvas, w, h, t, alphaInt, cx, cy);
 
-                for (int r = 0; r < letterRows; r++) {
-                    for (int c = 0; c < letterCols; c++) {
-                        if (glyph[r][c] != 0) {
-                            float px = lx + c * pxSize;
-                            float py = startY + r * pxSize;
-                            canvas.drawRect(
-                                px + depthOff * 0.6f,
-                                py + depthOff,
-                                px + pxSize + depthOff * 0.6f + 0.5f,
-                                py + pxSize + depthOff + 0.5f,
-                                pixelPaint
-                            );
-                        }
-                    }
+            // Exit: the whole scene pushes toward the viewer while it fades (like the intro's dive).
+            float exit = 1f - overlayAlpha;
+            canvas.save();
+            if (exit > 0f) {
+                float zoom = 1f + 0.12f * exit * exit;
+                canvas.scale(zoom, zoom, cx, cy);
+            }
+
+            long lastSettled = LETTER_START_MS + (count - 1) * LETTER_STAGGER_MS + SCRAMBLE_MS + POP_MS;
+            // Shine sweeps every ~2.6s once the whole word has settled.
+            float shineX = -1f;
+            if (t > lastSettled) {
+                float cyc = ((t - lastSettled) % 2600f) / 2600f;
+                if (cyc < 0.45f) {
+                    float u = cyc / 0.45f;
+                    shineX = startX - pxSize * 8f + u * (logoWidth + pxSize * 16f);
                 }
             }
 
-            // Pass 2: Crisp Foreground Pixel Blocks (with Creeper Face on O and Top Bevel Highlight)
-            for (int l = 0; l < WORD_HORIZONZ.length; l++) {
-                int[][] glyph = WORD_HORIZONZ[l];
+            for (int l = 0; l < count; l++) {
+                float lStart = LETTER_START_MS + l * LETTER_STAGGER_MS;
+                if (t < lStart) continue;
                 float lx = startX + l * (letterCols + gapCols) * pxSize;
-
-                for (int r = 0; r < letterRows; r++) {
-                    for (int c = 0; c < letterCols; c++) {
-                        int cell = glyph[r][c];
-                        if (cell == 0) continue;
-                        int blockColor;
-                        if (l == 1) {
-                            // Creeper Face 'O' letter!
-                            if (cell == 2) {
-                                blockColor = Color.parseColor("#111712"); // Creeper black eyes & mouth
-                            } else if (cell == 3) {
-                                blockColor = Color.parseColor("#72E052"); // Bright Creeper green pixel
-                            } else {
-                                blockColor = (r == 0) ? Color.parseColor("#6CE04E") : Color.parseColor("#49AC30");
-                            }
-                        } else if (l == WORD_HORIZONZ.length - 1) {
-                            // Final 'Z' in Sky-Blue accent with bright top edge
-                            blockColor = (r == 0) ? Color.parseColor("#C2F0FF") : Color.parseColor("#8BE0FF");
-                        } else {
-                            // Standard Minecraft Title White/Stone with bright top edge & subtle lower shade
-                            blockColor = (r == 0) ? Color.WHITE
-                                : (r >= 6) ? Color.parseColor("#D0D8DE")
-                                : Color.parseColor("#F2F6F8");
-                        }
-                        pixelPaint.setColor(blockColor);
-                        pixelPaint.setAlpha(alphaInt);
-                        float px = lx + c * pxSize;
-                        float py = startY + r * pxSize;
-                        canvas.drawRect(px, py, px + pxSize + 0.5f, py + pxSize + 0.5f, pixelPaint);
-                    }
+                float ly = startY;
+                int letterAlpha = alphaInt;
+                if (t < lStart + SCRAMBLE_MS) {
+                    // Scramble: shuffled glyph fragments flicker in place, then fade up.
+                    int bucket = (int) (t / 70f);
+                    int pick = (int) (hash01(l + 3, bucket) * count) % count;
+                    float fade = clamp01((t - lStart) / 140f);
+                    letterAlpha = (int) (alphaInt * (0.35f + 0.5f * fade));
+                    float jitter = (hash01(l, bucket + 99) - 0.5f) * pxSize * 0.8f;
+                    drawLetter(canvas, l, WORD_HORIZONZ[pick], lx, ly + jitter, pxSize, depthOff,
+                        letterAlpha, 0f, -1f, true, bucket);
+                } else {
+                    float p = clamp01((t - lStart - SCRAMBLE_MS) / POP_MS);
+                    float scale = (p < 1f)
+                        ? 1f + 0.20f * (1f - p) * (1f - p) + 0.04f * (float) Math.sin(p * Math.PI)
+                        : 1f;
+                    float flash = (1f - p) * (1f - p);
+                    float lcx = lx + letterCols * pxSize / 2f;
+                    float lcy = ly + letterRows * pxSize / 2f;
+                    canvas.save();
+                    canvas.scale(scale, scale, lcx, lcy);
+                    drawLetter(canvas, l, WORD_HORIZONZ[l], lx, ly, pxSize, depthOff,
+                        letterAlpha, flash, shineX, false, 0);
+                    canvas.restore();
                 }
             }
 
-            // Subtitle under HORIZONZ logo
+            // Subtitle fades up after the word settles.
+            float subIn = clamp01((t - (lastSettled - 150f)) / 450f);
             subTextPaint.setTextSize(10.5f * density);
-            subTextPaint.setAlpha((int) (alphaInt * 0.85f));
+            subTextPaint.setAlpha((int) (alphaInt * 0.85f * subIn));
             canvas.drawText(
                 "MINECRAFT 26.3  •  RUST EDITION",
                 w / 2f,
-                startY + logoHeight + depthOff + (18f * density),
+                startY + logoHeight + depthOff + (18f * density) + (1f - subIn) * 6f * density,
                 subTextPaint
             );
 
-            // Classic Minecraft Java Edition Progress Bar
+            // Progress bar slides up and fades in after the logo.
+            float barIn = clamp01((t - (lastSettled - 300f)) / 500f);
+            float barSlide = (1f - barIn) * 14f * density;
+            int barAlpha = (int) (alphaInt * barIn);
             float barWidth = Math.min(w * 0.54f, 400f * density);
             float barHeight = 14f * density;
             float barLeft = (w - barWidth) / 2f;
-            float barTop = h * 0.72f;
+            float barTop = h * 0.72f + barSlide;
             float borderStroke = Math.max(2f, 1.8f * density);
             float innerPad = Math.max(3f, 2.8f * density);
 
             barBorderPaint.setStrokeWidth(borderStroke);
-            barBorderPaint.setAlpha(alphaInt);
+            barBorderPaint.setAlpha(barAlpha);
             tmpRect.set(barLeft, barTop, barLeft + barWidth, barTop + barHeight);
             canvas.drawRect(tmpRect, barBorderPaint);
 
             float maxFillWidth = (barWidth - innerPad * 2f);
             float fillWidth = Math.max(0f, Math.min(maxFillWidth, maxFillWidth * displayedProgress));
             if (fillWidth > 0f) {
-                barFillPaint.setAlpha(alphaInt);
-                tmpRect.set(
-                    barLeft + innerPad,
-                    barTop + innerPad,
-                    barLeft + innerPad + fillWidth,
-                    barTop + barHeight - innerPad
-                );
+                barFillPaint.setAlpha(barAlpha);
+                float fl = barLeft + innerPad;
+                float ft = barTop + innerPad;
+                float fb = barTop + barHeight - innerPad;
+                tmpRect.set(fl, ft, fl + fillWidth, fb);
                 canvas.drawRect(tmpRect, barFillPaint);
+                // Moving shine stripe across the filled part.
+                float stripeW = Math.max(10f * density, fillWidth * 0.18f);
+                float sx = fl + ((t % 1400f) / 1400f) * (fillWidth + stripeW) - stripeW;
+                float sl = Math.max(fl, sx);
+                float sr = Math.min(fl + fillWidth, sx + stripeW);
+                if (sr > sl) {
+                    pixelPaint.setColor(0xFF8BE0FF);
+                    pixelPaint.setAlpha((int) (barAlpha * 0.8f));
+                    canvas.drawRect(sl, ft, sr, fb, pixelPaint);
+                }
             }
 
             int pctInt = Math.max(1, Math.min(100, Math.round(displayedProgress * 100f)));
             textPaint.setTextSize(11f * density);
-            textPaint.setAlpha((int) (alphaInt * 0.85f));
+            textPaint.setAlpha((int) (barAlpha * 0.85f));
             canvas.drawText(
                 stageLabel + " (" + pctInt + "%)",
                 w / 2f,
                 barTop + barHeight + (18f * density),
                 textPaint
             );
+            canvas.restore();
         }
     }
 }
