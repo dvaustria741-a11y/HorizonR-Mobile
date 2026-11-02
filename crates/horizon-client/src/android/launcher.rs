@@ -549,10 +549,10 @@ impl ApplicationHandler for Launcher {
             if !GAME_LAUNCHED_ONCE.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "78|Loading Minecraft 26.3 Resources & Custom Skin...");
                 apply_horizonz_custom_skin(&self.home);
+                // "100|Main Menu Ready" is written by the game itself once its menu resources exist
+                // (game.rs `signal_menu_ready`), not here, where nothing has loaded yet.
                 if let Err(error) = self.action(events) {
                     self.fail(error);
-                } else {
-                    let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "100|Main Menu Ready");
                 }
             }
         }

@@ -18636,6 +18636,8 @@ impl Loading {
         );
         self.menu.set_root(root, &self.settings);
         self.gui = Some(gui);
+        #[cfg(target_os = "android")]
+        signal_menu_ready();
         horizon_client::ui_theme::reset_atlas();
         self.apply_menu_settings();
         let Some(window) = self.window.clone() else {
@@ -19012,6 +19014,22 @@ fn loading_app(
 }
 
 #[cfg(target_os = "android")]
+/// Android: the menu's resources exist, so the launcher's loading splash may fade out onto the
+/// game instead of onto the engine's plain boot screen. Written once per process.
+#[cfg(target_os = "android")]
+fn signal_menu_ready() {
+    static SENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if SENT.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    if let Some(home) = std::env::var_os("HORIZON_HOME") {
+        let _ = std::fs::write(
+            std::path::Path::new(&home).join("zalith-game-boot.txt"),
+            "100|Main Menu Ready",
+        );
+    }
+}
+
 pub(crate) fn android_game(arguments: Vec<String>) -> Result<Box<dyn ApplicationHandler>> {
     horizon_client::auth::clear_current();
     let mut options = Options::read_arguments(arguments)?.ok_or("missing Android options")?;

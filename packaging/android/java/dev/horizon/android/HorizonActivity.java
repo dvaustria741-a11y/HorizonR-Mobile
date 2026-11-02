@@ -900,11 +900,14 @@ public final class HorizonActivity extends NativeActivity {
                 } else if (elapsed > 2200L && targetProgress < 0.88f) {
                     targetProgress = 0.88f;
                     stageLabel = "Applying Custom Player Skin & Audio Engine...";
-                } else if (elapsed > 3100L && targetProgress < 0.96f) {
-                    targetProgress = Math.min(0.96f, targetProgress + 0.004f);
+                } else if (elapsed > 3100L) {
+                    // Slow creep while the engine really loads; never claims to be done early.
+                    float creep = 0.88f + Math.min(0.09f, (elapsed - 3100L) / 40000.0f * 0.09f);
+                    targetProgress = Math.max(targetProgress, creep);
                     stageLabel = "Preparing Panorama & Main Menu...";
                 }
-                if (elapsed >= 4000L) {
+                // Safety net only: the engine writes "100|Main Menu Ready" when the menu exists.
+                if (elapsed >= 60000L) {
                     engineReady = true;
                     engineReadyFirstSeenMs = now;
                 }
