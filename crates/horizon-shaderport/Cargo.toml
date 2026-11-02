@@ -1,0 +1,22 @@
+[package]
+name = "horizon-shaderport"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Rewrites Iris/OptiFine shader packs so every program Horizon's loader would skip loads, and fixes how Horizon draws them (used by the Android Store on install)"
+
+# Adapted from merenotnoonereal/Horizon-Translator (shader-converter); see THIRD_PARTY_NOTICES.md.
+# No workspace lints on purpose: this is imported code, kept close to upstream so fixes can be merged.
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "horizon-shaderport"
+path = "src/bin/shaderport.rs"
+
+[dependencies]
+horizon-shaders = { path = "../horizon-shaders" }
+naga = { version = "30.0.1", features = ["glsl-in", "wgsl-in", "spv-out"] }
+png = "0.17"
+zip = { version = "2", default-features = false, features = ["deflate"] }

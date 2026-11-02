@@ -33,6 +33,8 @@ horizon-protocol = { path = "../horizon-protocol" }
 # server.properties, eula.txt and the user lists, shared with horizon-server.
 horizon-server-files = { path = "../horizon-server-files" }
 horizon-shaders = { path = "../horizon-shaders" }
+# Rewrites a downloaded Iris/OptiFine shader pack so every program loads (Store install).
+horizon-shaderport = { path = "../horizon-shaderport" }
 horizon-friends = { path = "../horizon-friends" }
 # Native mod discovery shares the upstream index. Java mods are not supported.
 horizon-mods = { path = "../horizon-mods", default-features = false, features = ["index"] }

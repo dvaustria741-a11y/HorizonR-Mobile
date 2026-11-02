@@ -95,6 +95,7 @@ public final class HorizonActivity extends NativeActivity {
         appendCrossProcessLog(homeDir, "[GameProcess] Starting HorizonActivity (:game process) for Minecraft 26.3.");
         ensureEngineDataExtracted();
         applyZalithLaunchEnvironment(getIntent());
+        startLogMirror();
         applyRequestedOrientationFromIntent(getIntent());
         enableImmersiveFullscreen();
 
@@ -520,9 +521,62 @@ public final class HorizonActivity extends NativeActivity {
 
     @Override
     protected void onDestroy() {
+        logMirrorRunning = false;
+        mirrorLogsOnce();
         watchdogRunning = false;
         dismissSplashDialogSafely();
         super.onDestroy();
+    }
+
+    private volatile boolean logMirrorRunning;
+
+    /**
+     * Copies the game's log and crash reports (private storage) to
+     * /storage/emulated/0/Android/data/dev.horizonr.mobile/files/ so a person can open them with a file
+     * manager. The engine keeps writing to its own folder: its log lock may not work on shared storage.
+     */
+    private void startLogMirror() {
+        if (logMirrorRunning) return;
+        logMirrorRunning = true;
+        Thread t = new Thread(() -> {
+            while (logMirrorRunning) {
+                mirrorLogsOnce();
+                try { Thread.sleep(3000); } catch (InterruptedException e) { return; }
+            }
+        }, "log-mirror");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void mirrorLogsOnce() {
+        try {
+            File ext = getExternalFilesDir(null);
+            File home = getFilesDir();
+            if (ext == null || home == null) return;
+            mirrorFile(new File(home, "logs/latest.log"), new File(ext, "logs/latest.log"));
+            File[] reports = new File(home, "crash-reports").listFiles();
+            if (reports != null) {
+                for (File r : reports) {
+                    if (r.isFile()) mirrorFile(r, new File(ext, "crash-reports/" + r.getName()));
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void mirrorFile(File from, File to) {
+        try {
+            if (!from.isFile()) return;
+            if (to.isFile() && to.length() == from.length() && to.lastModified() >= from.lastModified()) return;
+            File dir = to.getParentFile();
+            if (dir != null && !dir.exists()) dir.mkdirs();
+            try (InputStream in = new FileInputStream(from); OutputStream out = new FileOutputStream(to)) {
+                byte[] buf = new byte[65536];
+                int len;
+                while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private void applyRequestedOrientationFromIntent(Intent intent) {

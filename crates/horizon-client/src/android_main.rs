@@ -428,6 +428,41 @@ pub extern "system" fn Java_dev_horizon_android_bridge_HorizonNativeBridge_nativ
     1
 }
 
+/// Runs the shader translator over a downloaded pack. Returns one tab-separated line:
+/// `ok <zip> <loaded before> <skipped before> <loaded after> <skipped after> <rules>` or
+/// `err <message>`. The pack on disk is not touched; the caller decides what to do with the result.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_horizon_android_bridge_HorizonNativeBridge_nativeConvertShaderPack(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    input: jni::objects::JString,
+    out_dir: jni::objects::JString,
+) -> jni::sys::jstring {
+    let input_str: String = env.get_string(&input).map(|s| s.into()).unwrap_or_default();
+    let out_str: String = env.get_string(&out_dir).map(|s| s.into()).unwrap_or_default();
+    // naga recurses deeply on big packs: run on a thread with a large stack, and turn a crash into an error.
+    let worker = std::thread::Builder::new()
+        .name("horizon-shaderport".into())
+        .stack_size(128 * 1024 * 1024)
+        .spawn(move || horizon_shaderport::port_pack(std::path::Path::new(&input_str), std::path::Path::new(&out_str)));
+    let reply = match worker.map(|h| h.join()) {
+        Ok(Ok(Ok(o))) => format!(
+            "ok\t{}\t{}\t{}\t{}\t{}\t{}",
+            o.zip.display(),
+            o.before_loaded,
+            o.before_skipped,
+            o.after_loaded,
+            o.after_skipped,
+            o.rules_kept
+        ),
+        Ok(Ok(Err(e))) => format!("err\t{e}"),
+        Ok(Err(_)) => "err\tthe shader translator crashed on this pack".to_string(),
+        Err(e) => format!("err\tcould not start the shader translator: {e}"),
+    };
+    log::info!("[HorizonR-ShaderPort] {}", reply.replace('\t', " | "));
+    env.new_string(reply).map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut())
+}
+
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_horizon_android_bridge_HorizonNativeBridge_nativeGetInstallProgress(
     mut env: jni::JNIEnv,

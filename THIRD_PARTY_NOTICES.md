@@ -65,3 +65,12 @@ with Microsoft accounts
 The four-square Microsoft symbol in `launcher/src/microsoft.rs` reproduces the squares, positions and
 colours of Microsoft's official `ms-symbollockup_mssymbol_19.svg` from that page, unmodified. Microsoft
 and its logo are trademarks of the Microsoft group of companies; Horizon is not endorsed by Microsoft.
+
+## Horizon Translator (shader converter)
+
+`crates/horizon-shaderport` is adapted from the shader converter in
+[Horizon-Translator](https://github.com/merenotnoonereal/Horizon-Translator) by merenotnoonereal
+(`shader-converter/`). The upstream repository has no LICENSE file; the author has said publicly
+that the code is open source and free to use. It was turned into a library and given a Store
+entry point (`port_pack`); the rewrite rules are otherwise unchanged. Credit for the rules belongs
+to the upstream project.
