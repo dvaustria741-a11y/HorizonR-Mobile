@@ -472,6 +472,29 @@ pub fn reach_range() -> Option<f32> {
     Some(s.modules.float_setting("reach", "max").unwrap_or(3.5))
 }
 
+/// Whether a module is enabled (the client's tick hook reads this).
+pub fn module_on(name: &str) -> bool {
+    let s = state();
+    s.enabled && s.modules.is_on(name)
+}
+
+/// A module's float setting, if it has one.
+pub fn module_float(module: &str, key: &str) -> Option<f32> {
+    state().modules.float_setting(module, key)
+}
+
+/// A module's bool setting, if it has one.
+pub fn module_bool(module: &str, key: &str) -> Option<bool> {
+    state()
+        .modules
+        .modules
+        .iter()
+        .find(|m| m.name.eq_ignore_ascii_case(module))?
+        .bools
+        .get(key)
+        .copied()
+}
+
 /// Whether modules with server-side movement effects are on.
 pub fn velocity_on() -> bool {
     let s = state();

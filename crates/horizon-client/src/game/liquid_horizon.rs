@@ -14,7 +14,7 @@ const ID: &str = "liquid_horizon";
 
 impl Game<'_> {
     pub(super) fn lh_frame(&mut self, elapsed: Duration) {
-        let _ = lh::on_frame(elapsed.as_millis() as u64);
+        let _ = lh::on_frame(elapsed.as_millis() as u64, false, None, None);
     }
     pub(super) fn lh_key(&mut self, key: &str, pressed: bool) {
         let _ = lh::on_key(key, pressed);
@@ -33,8 +33,8 @@ impl Game<'_> {
         let key = |name: &str, label: &str, key: &str| [name.to_owned(), label.to_owned(), key.to_owned()];
         mods.push(NativeMod {
             id: ID.to_owned(),
-            title,
-            description,
+            title: title.to_owned(),
+            description: description.to_owned(),
             keys: vec![
                 key("gui", "LiquidHorizon GUI", "key.keyboard.right.shift"),
                 key("toggle", "Toggle All", "key.keyboard.insert"),
@@ -83,7 +83,10 @@ impl Game<'_> {
         const TEXT: u32 = 0x00E8_FFFF;
         if self.native_playing() {
             let mut y = 4.0_f32;
-            for (name, tag) in lh::hud_modules() {
+            for (_, name, tag, enabled, _) in lh::hud_modules() {
+                if !enabled {
+                    continue;
+                }
                 let label = if tag.is_empty() {
                     name
                 } else {
@@ -125,6 +128,7 @@ impl Game<'_> {
             health: 20.0,
             food: 20,
             on_ground: p.ground.on_ground,
+            delta_y: p.velocity.y,
         };
         let entities: Vec<lh::EntitySnapshot> = self
             .mobs
@@ -137,6 +141,7 @@ impl Game<'_> {
                 y: m.position.y,
                 z: m.position.z,
                 health: m.health,
+                is_player: false,
             })
             .collect();
         let out = lh::on_player_tick(snapshot, entities);
