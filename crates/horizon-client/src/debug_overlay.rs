@@ -224,7 +224,16 @@ pub fn touch_scale(
     unicode: bool,
     gui_size: [i32; 2],
 ) -> (f32, [i32; 2]) {
-    if option <= 0 {
+    if option == 0 {
+        // Auto: vanilla's half-of-GUI-scale is unreadable on a phone, so the
+        // touch overlay draws at three quarters of the HUD scale instead.
+        let pixels = ((gui_scale * 3 + 2) / 4).max(1);
+        return (
+            pixels as f32 / gui_scale.max(1) as f32,
+            [framebuffer[0] / pixels, framebuffer[1] / pixels],
+        );
+    }
+    if option < 0 {
         return scale(framebuffer, gui_scale, option, unicode, gui_size);
     }
     let pixels = option.clamp(1, 6);
@@ -379,6 +388,22 @@ mod tests {
         assert_eq!(
             scale([1920, 1080], 3, -1, false, [640, 360]),
             (1.0, [640, 360])
+        );
+    }
+
+    #[test]
+    fn auto_touch_debug_scale_is_three_quarters_of_the_hud() {
+        assert_eq!(
+            touch_scale([1040, 540], 4, 0, false, [260, 135]),
+            (0.75, [346, 180])
+        );
+        assert_eq!(
+            touch_scale([1040, 540], 2, 0, false, [520, 270]),
+            (1.0, [520, 270])
+        );
+        assert_eq!(
+            touch_scale([1040, 540], 1, 0, false, [1040, 540]),
+            (1.0, [1040, 540])
         );
     }
 
