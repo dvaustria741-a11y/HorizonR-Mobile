@@ -72,8 +72,7 @@ jobs:
 
       - name: Compute App Version
         run: |
-          BASE="$(tr -d '[:space:]' < VERSION)"
-          echo "APP_VERSION=${BASE}.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$(sh scripts/app-version.sh ${{ github.run_number }})" >> "$GITHUB_ENV"
           echo "APP_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
 
       - name: Ensure Any Remaining Update/ ZIP is Applied in Build Workspace
@@ -250,8 +249,7 @@ jobs:
 
       - name: Compute App Version
         run: |
-          BASE="$(tr -d '[:space:]' < VERSION)"
-          echo "APP_VERSION=${BASE}.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$(sh scripts/app-version.sh ${{ github.run_number }})" >> "$GITHUB_ENV"
 
       - name: Download All Built APK Artifacts
         uses: actions/download-artifact@v4
