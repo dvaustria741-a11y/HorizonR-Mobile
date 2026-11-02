@@ -9,6 +9,7 @@
 //! Adapted from Horizon-Translator by merenotnoonereal
 //! (https://github.com/merenotnoonereal/Horizon-Translator), shader-converter/.
 
+mod alphacut;
 mod bufsize;
 mod cloudsoff;
 mod compute;
@@ -68,6 +69,7 @@ fn port_inner(path: &Path, out: &Path) -> Result<PortOutcome, String> {
     uniforms::fix(&mut files, &mut log);
     uniforms::matrix_order(&mut files, &mut log);
     pbr::fix(&mut files, &mut log);
+    alphacut::fix(&mut files, &mut log);
     postkeep::fix(&mut files, &mut log);
     fragdepth::fix(&mut files, &mut log);
     tex3d::fix(&mut files, &mut log);
