@@ -426,3 +426,27 @@ fn angle_diff(a: f32, b: f32) -> f32 {
     while d < -180.0 { d += 360.0; }
     d
 }
+
+// ── module queries for the client's tick ─────────────────────────────────────
+
+/// Whether the module `name` is on (and LiquidHorizon as a whole).
+pub fn module_on(name: &str) -> bool {
+    let s = state();
+    s.enabled && s.modules.is_on(name)
+}
+
+/// A float setting of a module.
+pub fn module_float(name: &str, key: &str) -> Option<f32> {
+    state().modules.float_setting(name, key)
+}
+
+/// A bool setting of a module.
+pub fn module_bool(name: &str, key: &str) -> Option<bool> {
+    state()
+        .modules
+        .all()
+        .find(|m| m.name.eq_ignore_ascii_case(name))?
+        .bools
+        .get(key)
+        .copied()
+}

@@ -658,7 +658,9 @@ impl Game<'_> {
     /// Once a tick, in every `Game`: the window's (in single player, on LAN
     /// and on servers), and the server's own (`native_window` is false
     /// there: the single player server thread, a dedicated server).
-    pub(super) fn native_tick(&mut self) {}
+    pub(super) fn native_tick(&mut self) {
+        self.lh_tick();
+    }
     /// The world's phases, read-only; `error_text` carries the engine's
     /// own open-failure text, empty otherwise. Server-side; the deprecated
     /// in-frame path delivers no lifecycle events. A server loop or final
