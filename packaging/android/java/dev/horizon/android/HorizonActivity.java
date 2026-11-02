@@ -735,11 +735,11 @@ public final class HorizonActivity extends NativeActivity {
         private final RectF spriteDst = new RectF();
 
         // Small animated props, one 4-frame strip each, sized in the 1536x1024 layer space and drawn
-        // inside their layer so they follow its dive zoom and sway. Order: creeper, torch, bat.
+        // inside their layer so they follow its dive zoom and sway. Order: creeper, bat.
         private static final String[] SPRITE_FILES = {
-            "splash_sprite_creeper.png", "splash_sprite_torch.png", "splash_sprite_bat.png"
+            "splash_sprite_creeper.png", "splash_sprite_bat.png"
         };
-        private static final int[] SPRITE_LAYER = {2, 2, 0};
+        private static final int[] SPRITE_LAYER = {2, 0};
         private static final float BAT_FIRST_MS = 4200f;
         private static final float BAT_PERIOD_MS = 12000f;
         private volatile boolean released = false;
@@ -943,11 +943,6 @@ public final class HorizonActivity extends NativeActivity {
                     frame = ((int) (t / 280f)) % 4;
                     cx = 316f;
                     cy = 754f;
-                    bottomAnchor = true;
-                } else if (s == 1) {
-                    frame = (int) (hash01(31, (int) (t / 120f)) * 4f) % 4;
-                    cx = 1215f;
-                    cy = 795f;
                     bottomAnchor = true;
                 } else {
                     float since = t - BAT_FIRST_MS;

@@ -2546,6 +2546,49 @@ object HorizonNativeBridge {
         }
     }
 
+    private const val STORE_ICON_DIR = "zalith-store-icons"
+
+    private fun storeIconSidecar(base: File, installedFileName: String): File =
+        File(File(base, STORE_ICON_DIR), "$installedFileName.png")
+
+    /**
+     * Downloads the store icon of a freshly installed Modrinth / CurseForge / registry item and keeps it
+     * next to the install so the Files & Mods lists can show it later (the packs themselves usually
+     * contain no icon). Best effort: a failure never fails the install.
+     */
+    private fun saveStoreItemIcon(
+        context: Context,
+        profileSlot: Int,
+        item: StoreCatalogItem,
+        installedFileName: String
+    ) {
+        if (item.iconUrl.isBlank() || installedFileName.isBlank()) return
+        runCatching {
+            val conn = (URL(item.iconUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 8000
+                readTimeout = 10000
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "dvaustria741-a11y/HorizonR-Mobile/$INSTALLED_LAUNCHER_VERSION (icon fetch)")
+            }
+            val bytes = try {
+                if (conn.responseCode != 200) return@runCatching
+                conn.inputStream.use { it.readBytes() }
+            } finally {
+                conn.disconnect()
+            }
+            val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@runCatching
+            val scaled = Bitmap.createScaledBitmap(decoded, 192, 192, true)
+            val home = ensureHomeDirectories(context)
+            val profileHome = getProfileHome(home, profileSlot)
+            listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
+                val out = storeIconSidecar(base, installedFileName)
+                out.parentFile?.mkdirs()
+                FileOutputStream(out).use { scaled.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            if (scaled !== decoded) decoded.recycle()
+        }
+    }
+
     fun getFavoriteProjectIds(context: Context): Set<String> {
         val file = File(ensureHomeDirectories(context), "zalith-favorites.json")
         if (!file.exists()) return emptySet()
@@ -3149,6 +3192,9 @@ object HorizonNativeBridge {
 
         if (targetFile.exists()) {
             if (targetFile.deleteRecursively()) deletedAny = true
+        }
+        listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
+            runCatching { storeIconSidecar(base, fileName).delete() }
         }
 
         listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
@@ -4582,6 +4628,7 @@ object HorizonNativeBridge {
                     else -> {}
                 }
 
+                saveStoreItemIcon(context, profileSlot, item, canonicalFileName)
                 recordInstalledStoreItem(context, profileSlot, item.id, item.version, canonicalFileName)
                 invalidateContentCaches()
                 onProgress(StoreDownloadProgress())
@@ -4814,6 +4861,7 @@ object HorizonNativeBridge {
                     }
                 }
                 setContentItemEnabled(context, folder, canonicalName, true, profileSlot, logEnabled)
+                saveStoreItemIcon(context, profileSlot, item.takeIf { it.iconUrl.isNotBlank() } ?: target, canonicalName)
                 recordInstalledStoreItem(context, profileSlot, item.id, target.version, canonicalName)
                 invalidateContentCaches()
                 onProgress(StoreDownloadProgress())
@@ -4935,7 +4983,9 @@ object HorizonNativeBridge {
         val cacheKey = "local:${file.absolutePath}:${file.lastModified()}"
         iconMemoryCache[cacheKey]?.let { return it }
         return try {
+            val sidecar = file.parentFile?.parentFile?.let { storeIconSidecar(it, file.name) }
             val bmp: Bitmap? = when {
+                sidecar != null && sidecar.isFile -> BitmapFactory.decodeFile(sidecar.absolutePath)
                 file.isDirectory -> {
                     val iconFile = File(file, "icon.png").takeIf { it.isFile } ?: File(file, "pack.png").takeIf { it.isFile }
                     if (iconFile != null) BitmapFactory.decodeFile(iconFile.absolutePath) else null
