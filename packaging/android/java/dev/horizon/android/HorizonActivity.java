@@ -730,6 +730,18 @@ public final class HorizonActivity extends NativeActivity {
         private final Paint bgImagePaint = new Paint(Paint.FILTER_BITMAP_FLAG);
         private final RectF bgDst = new RectF();
         private volatile Bitmap[] sceneLayers = new Bitmap[0];
+        private volatile Bitmap[] spriteSheets = new Bitmap[0];
+        private final Rect spriteSrc = new Rect();
+        private final RectF spriteDst = new RectF();
+
+        // Small animated props, one 4-frame strip each, sized in the 1536x1024 layer space and drawn
+        // inside their layer so they follow its dive zoom and sway. Order: creeper, torch, bat.
+        private static final String[] SPRITE_FILES = {
+            "splash_sprite_creeper.png", "splash_sprite_torch.png", "splash_sprite_bat.png"
+        };
+        private static final int[] SPRITE_LAYER = {2, 2, 0};
+        private static final float BAT_FIRST_MS = 4200f;
+        private static final float BAT_PERIOD_MS = 12000f;
         private volatile boolean released = false;
 
         private float displayedProgress = 0.22f;
@@ -875,16 +887,21 @@ public final class HorizonActivity extends NativeActivity {
                     if (b != null) count++;
                 }
                 if (count == 0) return;
-                Bitmap[] packed = new Bitmap[count];
-                int k = 0;
-                for (Bitmap b : raw) {
-                    if (b != null) packed[k++] = b;
+                Bitmap[] sprites = new Bitmap[SPRITE_FILES.length];
+                for (int i = 0; i < sprites.length; i++) {
+                    sprites[i] = decodeSplashAsset(am, SPRITE_FILES[i], false);
                 }
                 if (released) {
-                    for (Bitmap b : packed) b.recycle();
+                    for (Bitmap b : raw) {
+                        if (b != null) b.recycle();
+                    }
+                    for (Bitmap b : sprites) {
+                        if (b != null) b.recycle();
+                    }
                     return;
                 }
-                sceneLayers = packed;
+                spriteSheets = sprites;
+                sceneLayers = raw;
             }, "splash-layers");
             th.setDaemon(true);
             th.start();
@@ -907,6 +924,49 @@ public final class HorizonActivity extends NativeActivity {
                 return BitmapFactory.decodeByteArray(data, 0, data.length, opts);
             } catch (Exception ignored) {
                 return null;
+            }
+        }
+
+        private void drawSprites(Canvas canvas, int layer, float left, float top, float unit,
+                                 float t, int alphaInt, float dive) {
+            Bitmap[] sheets = spriteSheets;
+            for (int s = 0; s < sheets.length; s++) {
+                Bitmap sh = sheets[s];
+                if (sh == null || sh.isRecycled() || SPRITE_LAYER[s] != layer) continue;
+                int cw = sh.getWidth() / 4;
+                int ch = sh.getHeight();
+                int frame;
+                float cx;
+                float cy;
+                boolean bottomAnchor;
+                if (s == 0) {
+                    frame = ((int) (t / 280f)) % 4;
+                    cx = 316f;
+                    cy = 754f;
+                    bottomAnchor = true;
+                } else if (s == 1) {
+                    frame = (int) (hash01(31, (int) (t / 120f)) * 4f) % 4;
+                    cx = 1215f;
+                    cy = 795f;
+                    bottomAnchor = true;
+                } else {
+                    float since = t - BAT_FIRST_MS;
+                    if (since < 0f) continue;
+                    float local = (since % BAT_PERIOD_MS) / BAT_PERIOD_MS;
+                    cx = -cw + local * (1536f + cw * 2f);
+                    cy = 330f + (float) Math.sin(t / 650.0) * 22f;
+                    int f = ((int) (t / 110f)) % 6;
+                    frame = f < 4 ? f : 6 - f;
+                    bottomAnchor = false;
+                }
+                float dw = cw * unit;
+                float dh = ch * unit;
+                float x = left + (cx - cw / 2f) * unit;
+                float y = top + (bottomAnchor ? (cy - ch) : (cy - ch / 2f)) * unit;
+                spriteSrc.set(frame * cw, 0, (frame + 1) * cw, ch);
+                spriteDst.set(x, y, x + dw, y + dh);
+                bgImagePaint.setAlpha((int) (alphaInt * clamp01(dive * 1.4f)));
+                canvas.drawBitmap(sh, spriteSrc, spriteDst, bgImagePaint);
             }
         }
 
@@ -934,6 +994,7 @@ public final class HorizonActivity extends NativeActivity {
                 bgDst.set(left, top, left + dw, top + dh);
                 bgImagePaint.setAlpha((int) (alphaInt * clamp01(dive * 1.4f)));
                 canvas.drawBitmap(b, null, bgDst, bgImagePaint);
+                drawSprites(canvas, i, left, top, scale * (b.getWidth() / 1536f), t, alphaInt, dive);
             }
             pixelPaint.setColor(0xFF000000);
             pixelPaint.setAlpha((int) (alphaInt * 0.18f * dive));
@@ -995,8 +1056,13 @@ public final class HorizonActivity extends NativeActivity {
             active = false;
             released = true;
             Bitmap[] old = sceneLayers;
+            Bitmap[] oldSprites = spriteSheets;
             sceneLayers = new Bitmap[0];
+            spriteSheets = new Bitmap[0];
             for (Bitmap b : old) {
+                if (b != null) b.recycle();
+            }
+            for (Bitmap b : oldSprites) {
                 if (b != null) b.recycle();
             }
             handler.removeCallbacksAndMessages(null);
