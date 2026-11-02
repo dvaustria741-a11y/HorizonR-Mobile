@@ -318,12 +318,6 @@ pub struct ClassicOption {
     pub name: String,
     /// The pack's `option.NAME` name for it, else the name itself.
     pub label: String,
-    /// The pack's `option.NAME` text with its `§` codes, else the name itself.
-    pub caption: String,
-    /// The pack's `option.NAME.comment`, `\n` as a line break.
-    pub comment: String,
-    /// What each value reads as (`value.NAME.V`, with `prefix.NAME` and `suffix.NAME`).
-    pub shown: Vec<String>,
     /// What it can be, as written to the overrides: `false`, `true` for a switch.
     pub values: Vec<String>,
     /// Index into `values` of what the pack ships with.
@@ -442,30 +436,9 @@ pub fn options(pack: &Pack, locale: &str) -> Vec<ClassicOption> {
                     .map(strip_formatting)
                     .filter(|l| !l.trim().is_empty())
                     .unwrap_or_else(|| d.name.to_owned());
-                let caption = lang
-                    .get(&format!("option.{}", d.name))
-                    .filter(|l| !l.trim().is_empty())
-                    .unwrap_or(d.name)
-                    .to_owned();
-                let comment = lang
-                    .get(&format!("option.{}.comment", d.name))
-                    .map(|c| c.replace("\\n", "\n"))
-                    .unwrap_or_default();
-                let prefix = lang.get(&format!("prefix.{}", d.name)).unwrap_or("");
-                let suffix = lang.get(&format!("suffix.{}", d.name)).unwrap_or("");
-                let shown = values
-                    .iter()
-                    .map(|v| {
-                        let text = lang.get(&format!("value.{}.{v}", d.name)).unwrap_or(v);
-                        format!("{prefix}{text}{suffix}")
-                    })
-                    .collect();
                 found.push(ClassicOption {
                     name: d.name.to_owned(),
                     label,
-                    caption,
-                    comment,
-                    shown,
                     values,
                     default,
                 });

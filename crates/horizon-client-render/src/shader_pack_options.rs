@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::shader_pack_list::{Entry as PackEntry, Kind};
-use crate::text::Text;
 
 /// Most values a number option steps through.
 const MAX_STEPS: usize = 33;
@@ -18,10 +17,6 @@ pub struct Item {
     /// The name the options file keeps it under.
     pub id: String,
     pub label: String,
-    /// The pack's own name for it with its `§` codes (the label when it has none).
-    pub caption: String,
-    /// What the pack says of it, shown while hovered.
-    pub comment: String,
     /// The values, as the options file writes them.
     pub values: Vec<String>,
     /// What the button shows for each value.
@@ -135,62 +130,6 @@ impl Item {
     pub fn value_text(&self) -> &str {
         self.shown.get(self.current).map_or("", String::as_str)
     }
-
-    /// Back at the pack's default.
-    pub fn reset(&mut self) {
-        self.current = self.default;
-    }
-
-    /// `Name: value` in the pack's words, the value yellow once it is not the default.
-    pub fn label_text(&self) -> Text {
-        let value = Text::legacy(self.value_text());
-        let value = if self.current == self.default {
-            value
-        } else {
-            value.with_color(crate::text::YELLOW)
-        };
-        Text::legacy(&self.caption).append(": ").append(value)
-    }
-
-    /// `label_text` cut to `width` as `measure` sizes it (`Bloom Up...: 2`), and whether it was.
-    pub fn label_within(&self, width: f32, measure: impl Fn(&Text) -> f32) -> (Text, bool) {
-        let full = self.label_text();
-        if measure(&full) <= width {
-            return (full, false);
-        }
-        let value = Text::legacy(self.value_text());
-        let value = if self.current == self.default {
-            value
-        } else {
-            value.with_color(crate::text::YELLOW)
-        };
-        let mut chars: Vec<char> = self.caption.chars().collect();
-        loop {
-            while chars.len() >= 2 && chars[chars.len() - 2] == '§' {
-                chars.truncate(chars.len() - 2);
-            }
-            if chars.pop().is_none() {
-                return (full, true);
-            }
-            let mut end = chars.len();
-            loop {
-                if end >= 2 && chars[end - 2] == '§' {
-                    end -= 2;
-                } else if end > 0 && chars[end - 1].is_whitespace() {
-                    end -= 1;
-                } else {
-                    break;
-                }
-            }
-            let cut: String = chars[..end].iter().collect();
-            let label = Text::legacy(&format!("{cut}..."))
-                .append(": ")
-                .append(value.clone());
-            if measure(&label) <= width {
-                return (label, true);
-            }
-        }
-    }
 }
 
 fn number(v: f64) -> String {
@@ -232,7 +171,7 @@ fn classic(dir: &Path, entry: &PackEntry, locale: &str) -> Options {
             let shown = if switch {
                 vec!["OFF".to_owned(), "ON".to_owned()]
             } else {
-                o.shown.clone()
+                o.values.clone()
             };
             let current = chosen
                 .get(&o.name)
@@ -242,8 +181,6 @@ fn classic(dir: &Path, entry: &PackEntry, locale: &str) -> Options {
             Item {
                 id: o.name,
                 label: o.label,
-                caption: o.caption,
-                comment: o.comment,
                 values: o.values,
                 shown,
                 default: o.default,
@@ -424,16 +361,13 @@ fn horizon(dir: &Path, entry: &PackEntry) -> Options {
                     })
                 })
                 .unwrap_or(default);
-            let label = if o.name.trim().is_empty() {
-                o.id.clone()
-            } else {
-                o.name.clone()
-            };
             Item {
                 id: o.id.clone(),
-                caption: label.clone(),
-                comment: String::new(),
-                label,
+                label: if o.name.trim().is_empty() {
+                    o.id.clone()
+                } else {
+                    o.name.clone()
+                },
                 slider: matches!(o.kind, OptionKind::Int { .. } | OptionKind::Float { .. })
                     && values.len() > 2,
                 values,
@@ -485,8 +419,6 @@ mod tests {
         let mut i = Item {
             id: "A".into(),
             label: "A".into(),
-            caption: "A".into(),
-            comment: String::new(),
             values: vec!["false".into(), "true".into(), "x".into()],
             shown: vec!["OFF".into(), "ON".into(), "x".into()],
             default: 0,
@@ -510,8 +442,6 @@ mod tests {
         Item {
             id: id.into(),
             label: id.into(),
-            caption: id.into(),
-            comment: String::new(),
             values: vec!["a".into(), "b".into(), "c".into()],
             shown: vec!["a".into(), "b".into(), "c".into()],
             default: 0,
