@@ -1,6 +1,7 @@
 package dev.horizon.android.bridge
 
 import org.json.JSONObject
+import android.util.Base64
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -23,7 +24,8 @@ data class ServerStatus(
     val playersOnline: Int = 0,
     val playersMax: Int = 0,
     val version: String = "",
-    val pingMs: Long = -1L
+    val pingMs: Long = -1L,
+    val favicon: ByteArray? = null
 )
 
 object HorizonServerStore {
@@ -262,12 +264,20 @@ object HorizonServerStore {
                     playersOnline = players?.optInt("online", 0) ?: 0,
                     playersMax = players?.optInt("max", 0) ?: 0,
                     version = versionName,
-                    pingMs = latency
+                    pingMs = latency,
+                    favicon = decodeFavicon(json.optString("favicon"))
                 )
             }
         } catch (e: Exception) {
             ServerStatus(false)
         }
+    }
+
+    /** The status reply's "data:image/png;base64,..." icon (also the servers.dat "icon" form, without the prefix). */
+    fun decodeFavicon(raw: String?): ByteArray? {
+        val data = raw?.substringAfter("base64,")?.trim().orEmpty()
+        if (data.isEmpty()) return null
+        return runCatching { Base64.decode(data, Base64.DEFAULT) }.getOrNull()?.takeIf { it.isNotEmpty() }
     }
 
     private fun extractMotd(desc: Any?): String {

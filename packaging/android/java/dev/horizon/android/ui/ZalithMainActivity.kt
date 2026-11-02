@@ -3851,75 +3851,97 @@ private fun CleanServersViewport(
                     items(servers.toList(), key = { System.identityHashCode(it) }) { entry ->
                         val status = statuses[entry.address]
                         val known = statuses.containsKey(entry.address)
+                        val iconBytes = status?.favicon
+                            ?: (entry.raw["icon"]?.value as? String)?.let { HorizonServerStore.decodeFavicon(it) }
+                        var showMenu by remember { mutableStateOf(false) }
+                        val online = known && status != null && status.online
+                        val dot = when {
+                            !known || status == null -> Color(0xFFFFD54F)
+                            status.online -> Color(0xFF66BB6A)
+                            else -> Color(0xFFEF5350)
+                        }
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = CardRowBg,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                ServerIcon(iconBytes, entry.name.ifBlank { entry.address }, online)
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Surface(shape = RoundedCornerShape(50), color = dot, modifier = Modifier.size(8.dp)) {}
                                         Text(
                                             entry.name.ifBlank { "Minecraft Server" },
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
                                         )
-                                        Text(entry.address, fontSize = 11.sp, color = MutedSubtitleText, maxLines = 1)
+                                        Text(
+                                            entry.address,
+                                            fontSize = 11.sp,
+                                            color = MutedSubtitleText,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
-                                    val dot = when {
-                                        !known || status == null -> Color(0xFFFFD54F)
-                                        status.online -> Color(0xFF66BB6A)
-                                        else -> Color(0xFFEF5350)
-                                    }
-                                    Surface(shape = RoundedCornerShape(50), color = dot, modifier = Modifier.size(10.dp)) {}
-                                }
-                                val detail = when {
-                                    !known || status == null -> "Checking..."
-                                    !status.online -> "Offline or unreachable"
-                                    else -> buildString {
-                                        append("${status.playersOnline}/${status.playersMax} players")
-                                        if (status.pingMs >= 0) append("  |  ${status.pingMs} ms")
-                                        if (status.version.isNotBlank()) append("  |  ${status.version}")
-                                    }
-                                }
-                                Text(detail, fontSize = 11.sp, color = Color(0xFFD5DEE5), maxLines = 1)
-                                if (status != null && status.online && status.motd.isNotBlank()) {
-                                    Text(status.motd, fontSize = 11.sp, color = MutedSubtitleText, maxLines = 2)
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = SkyBlueAccent,
-                                        modifier = Modifier.clickable { onQuickPlayServer(entry.address) }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                            Text("Quick Play", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    val detail = when {
+                                        !known || status == null -> "Checking..."
+                                        !status.online -> "Offline or unreachable"
+                                        else -> buildString {
+                                            append("${status.playersOnline}/${status.playersMax} players")
+                                            if (status.pingMs >= 0) append("  \u2022  ${status.pingMs} ms")
+                                            if (status.version.isNotBlank()) append("  \u2022  ${status.version}")
                                         }
                                     }
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = Color(0xFF283036),
-                                        modifier = Modifier.clickable { editing = entry; showEditor = true }
-                                    ) {
-                                        Text("Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SkyBlueAccent, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                                    Text(detail, fontSize = 11.sp, color = Color(0xFFD5DEE5), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    if (online && status!!.motd.isNotBlank()) {
+                                        Text(status.motd, fontSize = 11.sp, color = MutedSubtitleText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = Color(0xFF283036),
-                                        modifier = Modifier.clickable { pendingDelete = entry }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = SkyBlueAccent,
+                                    modifier = Modifier.clickable { onQuickPlayServer(entry.address) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Text("Remove", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF8A80), modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                        Text("Play", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                                Box {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = Color(0xFF283036),
+                                        modifier = Modifier.clickable { showMenu = true }
+                                    ) {
+                                        Icon(Icons.Default.MoreHoriz, contentDescription = "More options", tint = Color(0xFFD5DEE5), modifier = Modifier.padding(8.dp).size(18.dp))
+                                    }
+                                    DropdownMenu(
+                                        expanded = showMenu,
+                                        onDismissRequest = { showMenu = false },
+                                        modifier = Modifier.background(Color(0xFF283036))
+                                    ) {
+                                        DropdownMenuItem(
+                                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Edit", fontSize = 12.sp, color = Color.White) },
+                                            onClick = { showMenu = false; editing = entry; showEditor = true }
+                                        )
+                                        DropdownMenuItem(
+                                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Remove", fontSize = 12.sp, color = Color(0xFFFF8A80)) },
+                                            onClick = { showMenu = false; pendingDelete = entry }
+                                        )
                                     }
                                 }
                             }
@@ -3927,6 +3949,38 @@ private fun CleanServersViewport(
                     }
                 }
             }
+        }
+    }
+}
+
+/** A server's icon (its status favicon), or a lettered tile while it has none. */
+@Composable
+private fun ServerIcon(bytes: ByteArray?, label: String, online: Boolean) {
+    val bitmap = remember(bytes) {
+        bytes?.let { runCatching { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }.getOrNull() }
+    }
+    Box(
+        modifier = Modifier
+            .size(52.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF283036)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.None,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Text(
+                label.trim().firstOrNull()?.uppercase() ?: "?",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (online) SkyBlueAccent else MutedSubtitleText
+            )
         }
     }
 }
