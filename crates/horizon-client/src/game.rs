@@ -16439,6 +16439,8 @@ impl ApplicationHandler for Game<'_> {
                         }
                         if self.title.is_some() {
                             self.perf.title_shown();
+                            #[cfg(target_os = "android")]
+                            note_title_frame();
                         } else if self.screen == Screen::Playing && self.player.is_some() {
                             self.perf.frame(elapsed.as_secs_f32() * 1000.0);
                             self.world_frames += 1;
@@ -18636,8 +18638,6 @@ impl Loading {
         );
         self.menu.set_root(root, &self.settings);
         self.gui = Some(gui);
-        #[cfg(target_os = "android")]
-        signal_menu_ready();
         horizon_client::ui_theme::reset_atlas();
         self.apply_menu_settings();
         let Some(window) = self.window.clone() else {
@@ -18722,7 +18722,9 @@ impl Loading {
         if let Some(renderer) = &mut self.renderer {
             match renderer.render(&frame) {
                 Ok(true) if self.gui.is_some() && self.menu.pending.is_none() => {
-                    self.menu.perf.title_shown()
+                    self.menu.perf.title_shown();
+                    #[cfg(target_os = "android")]
+                    note_title_frame();
                 }
                 Ok(_) => {}
                 Err(e) => log::warn!("Horizon: loading screen frame failed: {e}"),
@@ -19027,6 +19029,17 @@ fn signal_menu_ready() {
             std::path::Path::new(&home).join("zalith-game-boot.txt"),
             "100|Main Menu Ready",
         );
+    }
+}
+
+/// Android: counts presented frames of the real title screen (after the renderer was rebuilt with
+/// the menu atlas). The launcher splash may only fade once the menu is really on screen, otherwise
+/// the window shows black while the swapchain is rebuilt.
+#[cfg(target_os = "android")]
+fn note_title_frame() {
+    static FRAMES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    if FRAMES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1 >= 8 {
+        signal_menu_ready();
     }
 }
 

@@ -526,7 +526,6 @@ impl ApplicationHandler for Launcher {
     fn resumed(&mut self, events: &ActiveEventLoop) {
         self.configure_screen();
         if let Some(game) = &mut self.game {
-            let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "100|Main Menu Ready");
             return game.resumed(events);
         }
         if GAME_LAUNCHED_ONCE.load(std::sync::atomic::Ordering::SeqCst) {

@@ -278,7 +278,7 @@ pub(super) struct Launcher {'''
 
     # (b) Brace-balanced patch of `fn resumed(&mut self, events: &ActiveEventLoop)` (100% compatible with v0.7.5+)
     sig = "fn resumed(&mut self, events: &ActiveEventLoop) {"
-    if sig in txt and "45|Creating Vulkan / WGPU Surface..." not in txt:
+    if sig in txt and "45|Creating Vulkan / WGPU Surface..." not in txt and "55|Creating Vulkan / WGPU Surface..." not in txt:
         start_idx = txt.index(sig)
         brace_start = start_idx + len(sig) - 1
         depth = 0
@@ -298,7 +298,6 @@ pub(super) struct Launcher {'''
             "fn resumed(&mut self, events: &ActiveEventLoop) {\n"
             + cfg_line
             + "        if let Some(game) = &mut self.game {\n"
-            + "            let _ = std::fs::write(self.home.join(\"zalith-game-boot.txt\"), \"100|Main Menu Ready\");\n"
             + "            return game.resumed(events);\n"
             + "        }\n"
             + "        if GAME_LAUNCHED_ONCE.load(std::sync::atomic::Ordering::SeqCst) {\n"
@@ -324,7 +323,6 @@ pub(super) struct Launcher {'''
             + "                if let Err(error) = self.action(events) {\n"
             + "                    self.fail(error);\n"
             + "                } else {\n"
-            + "                    let _ = std::fs::write(self.home.join(\"zalith-game-boot.txt\"), \"100|Main Menu Ready\");\n"
             + "                }\n"
             + "            }\n"
             + "        }\n"
@@ -349,7 +347,6 @@ pub(super) struct Launcher {'''
                     if let Err(error) = self.action(events) {
                         self.fail(error);
                     } else {
-                        let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "100|Main Menu Ready");
                     }
                 }
                 Err(error) => self.fail(error),

@@ -87,6 +87,8 @@ public final class HorizonActivity extends NativeActivity {
         tokenFile.delete();
         exitFlag.delete();
 
+        showHorizonSplashDialog(homeDir);
+
         writeBootMilestone(homeDir, "15|Initializing HorizonZ Native Runtime...");
 
         appendCrossProcessLog(homeDir, "[GameProcess] Starting HorizonActivity (:game process) for Minecraft 26.3.");
@@ -94,9 +96,6 @@ public final class HorizonActivity extends NativeActivity {
         applyZalithLaunchEnvironment(getIntent());
         applyRequestedOrientationFromIntent(getIntent());
         enableImmersiveFullscreen();
-
-        // Show the Separate-Window Splash Dialog BEFORE super.onCreate so there is zero black flash!
-        showHorizonSplashDialog(homeDir);
 
         startExitWatchdog(homeDir);
         startGeminiAiAgentBridgeIfEnabled(homeDir, getIntent());
@@ -975,9 +974,9 @@ public final class HorizonActivity extends NativeActivity {
                 displayedProgress += (1.0f - displayedProgress) * 0.10f;
                 stageLabel = "Minecraft 26.3 Ready";
 
-                if (sinceEngineReady >= 650L && displayedProgress >= 0.97f && elapsed >= 2200L) {
+                if (sinceEngineReady >= 800L && displayedProgress >= 0.97f && elapsed >= 2200L) {
                     displayedProgress = 1.0f;
-                    float fadeProgress = (sinceEngineReady - 650L) / 320.0f;
+                    float fadeProgress = (sinceEngineReady - 800L) / 400.0f;
                     overlayAlpha = Math.max(0.0f, 1.0f - fadeProgress);
                     if (overlayAlpha <= 0.01f) {
                         active = false;
@@ -1003,10 +1002,10 @@ public final class HorizonActivity extends NativeActivity {
         private static final int COL_Z_BODY = 0xFF8BE0FF;
         private static final int COL_Z_SHADOW = 0xFF1D4E63;
 
-        private static final long LETTER_START_MS = 140L;   // first letter begins scrambling
-        private static final long LETTER_STAGGER_MS = 105L; // delay between letters
-        private static final long SCRAMBLE_MS = 330L;       // how long a letter shows shuffled fragments
-        private static final long POP_MS = 300L;            // settle pop + flash
+        private static final long LETTER_START_MS = 180L;   // first letter begins scrambling
+        private static final long LETTER_STAGGER_MS = 150L; // delay between letters
+        private static final long SCRAMBLE_MS = 450L;       // how long a letter shows shuffled fragments
+        private static final long POP_MS = 400L;            // settle pop + flash
         private static final int PARTICLE_COUNT = 30;
 
         private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1188,7 +1187,7 @@ public final class HorizonActivity extends NativeActivity {
                 int letterAlpha = alphaInt;
                 if (t < lStart + SCRAMBLE_MS) {
                     // Scramble: shuffled glyph fragments flicker in place, then fade up.
-                    int bucket = (int) (t / 70f);
+                    int bucket = (int) (t / 90f);
                     int pick = (int) (hash01(l + 3, bucket) * count) % count;
                     float fade = clamp01((t - lStart) / 140f);
                     letterAlpha = (int) (alphaInt * (0.35f + 0.5f * fade));
