@@ -1443,6 +1443,7 @@ dependencies = [
  "horizon-world",
  "image",
  "jni 0.21.1",
+ "liquid_horizon_engine",
  "log",
  "miniz_oxide 0.8.9",
  "naga",
