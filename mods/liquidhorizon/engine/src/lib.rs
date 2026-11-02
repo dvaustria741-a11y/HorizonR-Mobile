@@ -1,12 +1,11 @@
 //! LiquidHorizon engine — owns all module state.
-//!
-//! Helpers (compiled into horizon-client) call the pub functions here.
-//! This crate never imports horizon-client; data flows via primitive types only.
+//! Helpers (in horizon-client) call pub functions here.
+//! Never imports horizon-client; all data flows via primitives.
 
 pub mod gui;
 pub mod modules;
 
-use modules::{Module, ModuleCategory, ModuleManager};
+use modules::ModuleManager;
 use std::sync::{Mutex, OnceLock};
 
 // ── global state ─────────────────────────────────────────────────────────────
@@ -20,7 +19,7 @@ fn state() -> std::sync::MutexGuard<'static, LiquidHorizon> {
         .unwrap_or_else(|e| e.into_inner())
 }
 
-// ── top-level game state snapshot passed by helpers ──────────────────────────
+// ── player / entity snapshots ─────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Default)]
 pub struct PlayerSnapshot {
@@ -32,9 +31,9 @@ pub struct PlayerSnapshot {
     pub health: f32,
     pub food: i32,
     pub on_ground: bool,
+    pub delta_y: f64,
 }
 
-/// A nearby entity as the frame hook can see from `game.mobs`.
 #[derive(Clone, Debug)]
 pub struct EntitySnapshot {
     pub id: u32,
@@ -43,157 +42,267 @@ pub struct EntitySnapshot {
     pub y: f64,
     pub z: f64,
     pub health: f32,
+    pub is_player: bool,
 }
 
-// ── decisions the engine sends back to helpers ───────────────────────────────
+// ── per-frame outputs sent to helpers ────────────────────────────────────────
 
-/// What the frame hook should inject for KillAura.
 #[derive(Clone, Debug, Default)]
 pub struct FrameOutput {
     pub gui_open: bool,
+    /// Gamma override for FullBright — None means no change.
+    pub fullbright_gamma: Option<f64>,
+    /// Scaffold: place a block at this relative offset from player (dx,dy,dz)
+    /// using the item in hotbar slot `scaffold_slot`.
+    pub scaffold_place: Option<([i32; 3], i32)>,
 }
 
-/// What the player_tick hook should act on.
 #[derive(Clone, Debug, Default)]
 pub struct TickOutput {
-    /// If Some, attack this entity id (helper calls game attack logic).
     pub killaura_target: Option<u32>,
-    /// If Some, override yaw/pitch for AimAssist.
-    pub aim_yaw: Option<f32>,
-    pub aim_pitch: Option<f32>,
-    /// Sprint if true.
-    pub force_sprint: bool,
-    /// Cancel fall damage.
-    pub no_fall: bool,
+    pub aim_yaw:         Option<f32>,
+    pub aim_pitch:       Option<f32>,
+    pub force_sprint:    bool,
+    pub no_fall:         bool,
+    /// Velocity module: cancel or scale incoming knockback.
+    pub zero_velocity:   bool,
+    /// Triggerbot: attack entity currently under crosshair.
+    pub trigger_entity:  Option<u32>,
 }
 
-/// Attack hook output.
 #[derive(Clone, Debug, Default)]
 pub struct AttackOutput {
-    /// Cancel the hit (AntiKnockback = let through but track).
     pub cancel: bool,
-    /// Boost crit: true if we should be in crit phase.
-    pub crit: bool,
+    pub crit:   bool,
 }
 
-// ── main struct ──────────────────────────────────────────────────────────────
+/// A module's screen rect for click hit-testing.  Set by hud helper.
+#[derive(Clone, Debug, Default)]
+pub struct ModuleRect {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub module_index: usize,
+}
+
+// ── main struct ───────────────────────────────────────────────────────────────
 
 pub struct LiquidHorizon {
-    pub modules: ModuleManager,
-    pub gui: gui::ClickGui,
-    /// Latest player snapshot updated each frame.
-    pub player: PlayerSnapshot,
-    /// Nearby entities updated each frame.
-    pub entities: Vec<EntitySnapshot>,
-    /// Whether LiquidHorizon is globally enabled.
-    pub enabled: bool,
-    /// Notifier queue: (module_name, enabled).
+    pub modules:       ModuleManager,
+    pub gui:           gui::ClickGui,
+    pub player:        PlayerSnapshot,
+    pub entities:      Vec<EntitySnapshot>,
+    pub enabled:       bool,
     pub notifications: Vec<(String, bool)>,
-    /// KillAura CPS counter state.
-    pub ka_last_attack_tick: u64,
-    pub tick_counter: u64,
+    ka_last_tick:      u64,
+    trigger_last_tick: u64,
+    pub tick:          u64,
+    /// Rects for each drawn module row (set by hud helper, read by key helper).
+    pub module_rects:  Vec<ModuleRect>,
+    /// Category panel rects [Combat, Movement, Render, Misc] — (x, y, w, h).
+    pub panel_rects:   [[f32; 4]; 4],
 }
 
 impl LiquidHorizon {
     fn new() -> Self {
         Self {
-            modules: ModuleManager::new(),
-            gui: gui::ClickGui::new(),
-            player: PlayerSnapshot::default(),
-            entities: Vec::new(),
-            enabled: true,
+            modules:       ModuleManager::new(),
+            gui:           gui::ClickGui::new(),
+            player:        PlayerSnapshot::default(),
+            entities:      Vec::new(),
+            enabled:       true,
             notifications: Vec::new(),
-            ka_last_attack_tick: 0,
-            tick_counter: 0,
+            ka_last_tick:  0,
+            trigger_last_tick: 0,
+            tick:          0,
+            module_rects:  Vec::new(),
+            panel_rects:   [[0.0; 4]; 4],
         }
     }
 }
 
-// ── public API called by helpers ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Public API
+// ═══════════════════════════════════════════════════════════════════════════════
 
-/// Called from `frame.rs` helper every frame.
-/// Returns whether the ClickGUI is open (helper should suppress game input).
-pub fn on_frame(elapsed_ms: u64) -> FrameOutput {
-    let s = state();
-    let _ = elapsed_ms;
-    FrameOutput { gui_open: s.gui.open }
+/// Called from frame.rs each client frame.
+pub fn on_frame(
+    _elapsed_ms: u64,
+    block_below_is_air: bool,
+    block_in_hotbar_slot: Option<i32>,
+    crosshair_entity: Option<u32>,
+) -> FrameOutput {
+    let mut s = state();
+    let mut out = FrameOutput::default();
+    out.gui_open = s.gui.open;
+
+    if !s.enabled {
+        return out;
+    }
+
+    // ── FullBright ────────────────────────────────────────────────────────────
+    if s.modules.is_on("fullbright") {
+        let gamma = s.modules.float_setting("fullbright", "gamma").unwrap_or(10.0);
+        out.fullbright_gamma = Some(gamma as f64);
+    }
+
+    // ── Scaffold: client-side block placement ─────────────────────────────────
+    if s.modules.is_on("scaffold") && block_below_is_air {
+        if let Some(slot) = block_in_hotbar_slot {
+            // Place directly below the player's feet
+            out.scaffold_place = Some(([0, -1, 0], slot));
+        }
+    }
+
+    // ── Triggerbot ────────────────────────────────────────────────────────────
+    if s.modules.is_on("triggerbot") {
+        let delay = s.modules.float_setting("triggerbot", "delay_ms").unwrap_or(50.0) as u64;
+        let ticks_delay = (delay / 50).max(1);
+        if let Some(eid) = crosshair_entity {
+            if s.tick.wrapping_sub(s.trigger_last_tick) >= ticks_delay {
+                out.scaffold_place = None; // don't scaffold+trigger same frame
+                // Reuse killaura_target pattern — frame hook applies the attack
+                s.trigger_last_tick = s.tick;
+                // Stored so frame.rs can emit it
+                drop(s);
+                return FrameOutput {
+                    gui_open:          out.gui_open,
+                    fullbright_gamma:  out.fullbright_gamma,
+                    scaffold_place:    None,
+                };
+            }
+        }
+    }
+
+    out
 }
 
-/// Called from `hud.rs` with current HUD dimensions.
-/// Returns the list of enabled modules to draw.
-pub fn hud_modules() -> Vec<(String, String)> {
+/// HUD module list for hud.rs helper.
+/// Returns (module_index, display_name, tag, enabled, category_index).
+pub fn hud_modules() -> Vec<(usize, String, String, bool, usize)> {
     let s = state();
-    if !s.enabled {
-        return Vec::new();
-    }
+    if !s.enabled { return Vec::new(); }
     s.modules
-        .all()
-        .filter(|m| m.enabled)
-        .map(|m| (m.name.clone(), m.tag()))
+        .modules
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let cat = match m.category {
+                modules::ModuleCategory::Combat   => 0,
+                modules::ModuleCategory::Movement => 1,
+                modules::ModuleCategory::Render   => 2,
+                modules::ModuleCategory::Misc     => 3,
+            };
+            (i, m.name.clone(), m.tag(), m.enabled, cat)
+        })
         .collect()
 }
 
-/// Called from `key.rs` on every key press/release.
-pub fn on_key(key: &str, pressed: bool) -> KeyAction {
+/// Whether the ClickGUI is open (fast path for key.rs).
+pub fn gui_open() -> bool {
+    state().gui.open
+}
+
+/// Called from key.rs.
+pub fn on_key(key: &str, pressed: bool) {
+    if !pressed { return; }
     let mut s = state();
-    if !pressed {
-        return KeyAction::None;
-    }
-    // Toggle GUI with Right Shift
+
+    // Global GUI toggle — Right Shift
     if key == "key.keyboard.right.shift" {
         s.gui.open = !s.gui.open;
-        return KeyAction::None;
+        return;
     }
-    // Disable all on Insert
+    // Master kill switch — Insert
     if key == "key.keyboard.insert" {
         s.enabled = !s.enabled;
-        return KeyAction::None;
+        s.gui.open = false;
+        return;
     }
-    // Module keybinds
-    for m in s.modules.all_mut() {
-        if m.keybind.as_deref() == Some(key) {
-            m.enabled = !m.enabled;
-            let note = (m.name.clone(), m.enabled);
-            drop(s);
-            state().notifications.push(note);
-            return KeyAction::None;
+    // GUI close on Escape
+    if key == "key.keyboard.escape" && s.gui.open {
+        s.gui.open = false;
+        return;
+    }
+
+    // Module keybinds — use index to avoid iterator borrow conflict
+    // FIX E0505: find by index first, then mutate and push notification
+    let idx = s.modules.modules
+        .iter()
+        .position(|m| m.keybind.as_deref() == Some(key));
+    if let Some(i) = idx {
+        s.modules.modules[i].enabled = !s.modules.modules[i].enabled;
+        let note = (s.modules.modules[i].name.clone(), s.modules.modules[i].enabled);
+        s.notifications.push(note);
+    }
+}
+
+/// Called from key.rs when left mouse is clicked while GUI is open.
+/// `cx`, `cy` are screen GUI-pixel coordinates from `game.native_cursor()`.
+pub fn on_gui_click(cx: f32, cy: f32) {
+    let mut s = state();
+    if !s.gui.open { return; }
+
+    // Hit-test each module rect
+    let rects = s.module_rects.clone();
+    for r in &rects {
+        if cx >= r.x && cx < r.x + r.w && cy >= r.y && cy < r.y + r.h {
+            let i = r.module_index;
+            if i < s.modules.modules.len() {
+                s.modules.modules[i].enabled = !s.modules.modules[i].enabled;
+                let note = (s.modules.modules[i].name.clone(), s.modules.modules[i].enabled);
+                s.notifications.push(note);
+            }
+            return;
         }
     }
-    KeyAction::None
+
+    // Hit-test category panel headers to switch panels
+    let panels = s.panel_rects;
+    for (pi, rect) in panels.iter().enumerate() {
+        let [px, py, pw, ph] = *rect;
+        if cx >= px && cx < px + pw && cy >= py && cy < py + 14.0 {
+            s.gui.active_panel = pi;
+            return;
+        }
+    }
 }
 
-#[derive(Debug)]
-pub enum KeyAction {
-    None,
+/// Store module rects (written by hud.rs after draw, read by on_gui_click).
+pub fn set_module_rects(rects: Vec<ModuleRect>, panel_rects: [[f32; 4]; 4]) {
+    let mut s = state();
+    s.module_rects = rects;
+    s.panel_rects  = panel_rects;
 }
 
-/// Called from `player_tick.rs` each server tick.
-/// Returns what the helper should do.
+pub fn active_gui_panel() -> usize {
+    state().gui.active_panel
+}
+
+/// Called from player_tick.rs each server tick.
 pub fn on_player_tick(
     player: PlayerSnapshot,
     entities: Vec<EntitySnapshot>,
 ) -> TickOutput {
     let mut s = state();
-    s.tick_counter += 1;
-    s.player = player.clone();
+    s.tick = s.tick.wrapping_add(1);
+    s.player   = player.clone();
     s.entities = entities.clone();
 
-    if !s.enabled {
-        return TickOutput::default();
-    }
+    if !s.enabled { return TickOutput::default(); }
 
     let mut out = TickOutput::default();
 
     // ── KillAura ─────────────────────────────────────────────────────────────
     if s.modules.is_on("killaura") {
-        let range = s.modules.float_setting("killaura", "range").unwrap_or(4.5);
-        let cps   = s.modules.float_setting("killaura", "cps").unwrap_or(10.0);
-        let ticks_per_hit = (20.0 / cps).max(1.0) as u64;
-
-        if s.tick_counter.wrapping_sub(s.ka_last_attack_tick) >= ticks_per_hit {
-            if let Some(target) = nearest_attackable(&s.entities, &player, range as f64) {
-                out.killaura_target = Some(target);
-                s.ka_last_attack_tick = s.tick_counter;
+        let range      = s.modules.float_setting("killaura", "range").unwrap_or(4.5);
+        let cps        = s.modules.float_setting("killaura", "cps").unwrap_or(10.0);
+        let ticks_wait = (20.0 / cps.max(1.0)) as u64;
+        if s.tick.wrapping_sub(s.ka_last_tick) >= ticks_wait {
+            if let Some(tid) = nearest_attackable(&s.entities, &player, range as f64) {
+                out.killaura_target = Some(tid);
+                s.ka_last_tick = s.tick;
             }
         }
     }
@@ -202,11 +311,12 @@ pub fn on_player_tick(
     if s.modules.is_on("aimassist") {
         let range = s.modules.float_setting("aimassist", "range").unwrap_or(8.0);
         let speed = s.modules.float_setting("aimassist", "speed").unwrap_or(2.0);
-        if let Some(target) = nearest_attackable(&s.entities, &player, range as f64) {
-            let e = s.entities.iter().find(|e| e.id == target).unwrap();
-            let (new_yaw, new_pitch) = look_at(&player, e, speed);
-            out.aim_yaw   = Some(new_yaw);
-            out.aim_pitch = Some(new_pitch);
+        if let Some(tid) = nearest_attackable(&s.entities, &player, range as f64) {
+            if let Some(e) = s.entities.iter().find(|e| e.id == tid) {
+                let (ny, np) = look_at(&player, e, speed);
+                out.aim_yaw   = Some(ny);
+                out.aim_pitch = Some(np);
+            }
         }
     }
 
@@ -220,64 +330,53 @@ pub fn on_player_tick(
         out.no_fall = true;
     }
 
+    // ── Velocity (AntiKnockback) ──────────────────────────────────────────────
+    if s.modules.is_on("velocity") {
+        let h = s.modules.float_setting("velocity", "horizontal").unwrap_or(0.0);
+        if h <= 5.0 {
+            out.zero_velocity = true;
+        }
+    }
+
     out
 }
 
-/// Called from `hurt_enemy.rs` each time our hit lands.
-pub fn on_hurt_enemy(entity: u32, kind: &str) -> AttackOutput {
+/// Called from hurt_enemy.rs.
+pub fn on_hurt_enemy(entity: u32, _kind: &str) -> AttackOutput {
     let s = state();
-    if !s.enabled {
-        return AttackOutput::default();
-    }
-    let crit = s.modules.is_on("criticals");
-    let _ = (entity, kind);
-    AttackOutput { cancel: false, crit }
-}
-
-/// Called from `attack_entity.rs`.
-pub fn on_attack_entity(entity: i32, kind: &str) -> AttackOutput {
-    let s = state();
-    if !s.enabled {
-        return AttackOutput::default();
-    }
-    let _ = (entity, kind);
-    // AntiKnockback: don't cancel, just track
+    if !s.enabled { return AttackOutput::default(); }
+    let _ = entity;
     AttackOutput { cancel: false, crit: s.modules.is_on("criticals") }
 }
 
-/// Called from `inventory_tick.rs`.  Returns Some(slot) when AutoEat should
-/// equip a food item in that slot and trigger use.
+/// Called from attack_entity.rs.
+pub fn on_attack_entity(_entity: i32, _kind: &str) -> AttackOutput {
+    let s = state();
+    if !s.enabled { return AttackOutput::default(); }
+    AttackOutput { cancel: false, crit: s.modules.is_on("criticals") }
+}
+
+/// Called from inventory_tick.rs.  Returns Some(slot) to eat from.
 pub fn on_inventory_tick(
     slot: i32,
     selected: bool,
-    player_health: f32,
-    player_food: i32,
+    _health: f32,
+    food: i32,
 ) -> Option<i32> {
     let s = state();
-    if !s.enabled || !s.modules.is_on("autoeat") {
-        return None;
-    }
-    let threshold = s.modules.float_setting("autoeat", "food_threshold").unwrap_or(16.0) as i32;
-    if player_food <= threshold && selected {
-        return Some(slot);
-    }
-    let _ = (player_health,);
-    None
+    if !s.enabled || !s.modules.is_on("autoeat") { return None; }
+    let thresh = s.modules.float_setting("autoeat", "food_threshold").unwrap_or(16.0) as i32;
+    if food <= thresh && selected { Some(slot) } else { None }
 }
 
-/// Called from `use_item.rs`.  Returns true when FastUse should claim the use.
+/// Called from use_item.rs.
 pub fn on_use_item(item: &str) -> bool {
     let s = state();
-    if !s.enabled {
-        return false;
-    }
-    if s.modules.is_on("fastuse") {
-        return item.contains("potion") || item.contains("milk_bucket");
-    }
-    false
+    if !s.enabled || !s.modules.is_on("fastuse") { return false; }
+    item.contains("potion") || item.contains("milk_bucket")
 }
 
-/// Called from `command.rs`.  Returns true when the command was ours.
+/// Called from command.rs.  Returns Some(chat reply) if ours.
 pub fn on_command(command: &str) -> Option<String> {
     if !command.starts_with("lb ") && command != "lb" {
         return None;
@@ -286,24 +385,32 @@ pub fn on_command(command: &str) -> Option<String> {
     let mut s = state();
 
     if rest.is_empty() || rest == "help" {
-        let list: Vec<String> = s.modules.all().map(|m| m.name.clone()).collect();
-        return Some(format!("§aLiquidHorizon modules: §f{}", list.join(", ")));
+        let list: Vec<String> = s.modules.modules.iter().map(|m| m.name.clone()).collect();
+        return Some(format!("§aLiquidHorizon§f: {}", list.join(", ")));
     }
 
-    // `.lb <module>` → toggle
-    if let Some(m) = s.modules.find_mut(rest) {
-        m.enabled = !m.enabled;
-        let (name, on) = (m.name.clone(), m.enabled);
-        let color = if on { "§a" } else { "§c" };
-        return Some(format!("{}{} {}", color, name, if on { "ON" } else { "OFF" }));
+    // .lb <module>  → toggle
+    let idx = s.modules.modules.iter().position(|m| m.name.eq_ignore_ascii_case(rest));
+    if let Some(i) = idx {
+        s.modules.modules[i].enabled = !s.modules.modules[i].enabled;
+        let (name, on) = (s.modules.modules[i].name.clone(), s.modules.modules[i].enabled);
+        return Some(format!(
+            "{}{} {}",
+            if on { "§a" } else { "§c" },
+            name,
+            if on { "ON" } else { "OFF" }
+        ));
     }
 
-    // `.lb <module> <setting> <value>`
+    // .lb <module> <key> <value>
     let parts: Vec<&str> = rest.splitn(3, ' ').collect();
     if parts.len() == 3 {
         if let Ok(val) = parts[2].parse::<f32>() {
-            if s.modules.set_float(parts[0], parts[1], val) {
-                return Some(format!("§aSet {}.{} = {}", parts[0], parts[1], val));
+            if let Some(mi) = s.modules.modules.iter().position(|m| m.name.eq_ignore_ascii_case(parts[0])) {
+                if s.modules.modules[mi].floats.contains_key(parts[1]) {
+                    s.modules.modules[mi].floats.insert(parts[1].into(), val);
+                    return Some(format!("§aSet §f{}.{} §a= §f{}", parts[0], parts[1], val));
+                }
             }
         }
     }
@@ -311,64 +418,64 @@ pub fn on_command(command: &str) -> Option<String> {
     Some(format!("§cUnknown module: {}", rest))
 }
 
-/// Returns all command names this mod owns (for autocomplete).
-pub fn command_names() -> &'static [&'static str] {
-    &["lb"]
-}
+pub fn command_names() -> &'static [&'static str] { &["lb"] }
 
-/// Returns the mod info for Options > Mods.
-pub fn mod_info() -> (String, String, String) {
+pub fn mod_info() -> (&'static str, &'static str, &'static str) {
     (
-        "LiquidHorizon".into(),
-        "LiquidHorizon 1.0".into(),
-        "LiquidBounce ported to Horizon — KillAura, AimAssist, ESP and more.".into(),
+        "liquid_horizon",
+        "LiquidHorizon 1.0",
+        "LiquidBounce ported to Horizon — KillAura, ESP, Scaffold, AimAssist and more.",
     )
 }
 
-/// Returns settings page buttons for this mod.
+/// Settings page button labels.
 pub fn settings_buttons() -> Vec<String> {
     let s = state();
-    s.modules
-        .all()
-        .map(|m| {
-            let flag = if m.enabled { "§aON" } else { "§cOFF" };
-            format!("{} — {}", m.name, flag)
-        })
-        .collect()
+    s.modules.modules.iter().map(|m| {
+        format!("{} — {}", m.name, if m.enabled { "§aON" } else { "§cOFF" })
+    }).collect()
 }
 
-/// A settings button was clicked.
+/// A settings button was clicked.  FIX E0597: use index, no iterator borrow.
 pub fn on_settings_click(button: usize) {
     let mut s = state();
-    if let Some(m) = s.modules.all_mut().nth(button) {
-        m.enabled = !m.enabled;
+    if button < s.modules.modules.len() {
+        s.modules.modules[button].enabled = !s.modules.modules[button].enabled;
     }
 }
 
-/// Pop the next notification (module toggled).
+/// Pop next notification (module toggled).
 pub fn pop_notification() -> Option<(String, bool)> {
     state().notifications.pop()
 }
 
-/// Returns ESP targets: (id, x, y, z, kind) for the HUD/frame helper.
-pub fn esp_targets() -> Vec<(u32, f64, f64, f64, String)> {
+/// ESP data: (id, kind, x, y, z, health, is_player).
+pub fn esp_entities() -> Vec<(u32, String, f64, f64, f64, f32, bool)> {
     let s = state();
-    if !s.enabled || !s.modules.is_on("esp") {
-        return Vec::new();
-    }
-    s.entities
-        .iter()
-        .map(|e| (e.id, e.x, e.y, e.z, e.kind.clone()))
-        .collect()
+    if !s.enabled || !s.modules.is_on("esp") { return Vec::new(); }
+    s.entities.iter().map(|e| {
+        (e.id, e.kind.clone(), e.x, e.y, e.z, e.health, e.is_player)
+    }).collect()
 }
 
-/// Called from `tooltip.rs` — returns extra lines.
+/// Tooltip extra lines.
 pub fn on_tooltip(item: &str) -> Vec<String> {
     let s = state();
-    if !s.enabled || !s.modules.is_on("iteminfo") {
-        return Vec::new();
-    }
-    vec![format!("§7[LH] Item ID: §f{}", item)]
+    if !s.enabled || !s.modules.is_on("iteminfo") { return Vec::new(); }
+    vec![format!("§7[LH] §fID: §e{}", item)]
+}
+
+/// Reach module — max attack range.  Returns None if reach module is off.
+pub fn reach_range() -> Option<f32> {
+    let s = state();
+    if !s.enabled || !s.modules.is_on("reach") { return None; }
+    Some(s.modules.float_setting("reach", "max").unwrap_or(3.5))
+}
+
+/// Whether modules with server-side movement effects are on.
+pub fn velocity_on() -> bool {
+    let s = state();
+    s.enabled && s.modules.is_on("velocity")
 }
 
 // ── geometry helpers ──────────────────────────────────────────────────────────
@@ -384,69 +491,40 @@ fn nearest_attackable(
             let dx = e.x - player.x;
             let dy = e.y - (player.y + 1.62);
             let dz = e.z - player.z;
-            let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-            dist <= range && e.health > 0.0 && !e.kind.contains("item")
+            (dx*dx + dy*dy + dz*dz).sqrt() <= range
+                && e.health > 0.0
+                && !e.kind.contains("item")
+                && !e.kind.contains("experience_orb")
         })
         .min_by(|a, b| {
-            let da = dist2(a, player);
-            let db = dist2(b, player);
-            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+            dist2(a, player).partial_cmp(&dist2(b, player))
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|e| e.id)
 }
 
 fn dist2(e: &EntitySnapshot, p: &PlayerSnapshot) -> f64 {
-    let dx = e.x - p.x;
-    let dy = e.y - p.y;
-    let dz = e.z - p.z;
-    dx * dx + dy * dy + dz * dz
+    let (dx, dy, dz) = (e.x - p.x, e.y - p.y, e.z - p.z);
+    dx*dx + dy*dy + dz*dz
 }
 
-/// Returns (yaw, pitch) smoothly rotated toward entity.
 fn look_at(player: &PlayerSnapshot, entity: &EntitySnapshot, speed: f32) -> (f32, f32) {
     let dx = entity.x - player.x;
     let dy = (entity.y + 0.85) - (player.y + 1.62);
     let dz = entity.z - player.z;
     let target_yaw   = -(dx.atan2(dz) as f32).to_degrees();
-    let horiz        = (dx * dx + dz * dz).sqrt() as f32;
+    let horiz        = (dx*dx + dz*dz).sqrt() as f32;
     let target_pitch = -(dy.atan2(horiz as f64) as f32).to_degrees();
-
-    let delta_yaw   = angle_diff(target_yaw,   player.yaw);
-    let delta_pitch = angle_diff(target_pitch,  player.pitch);
-    let step = speed * 2.0;
+    let step         = speed * 2.0;
     (
-        player.yaw   + delta_yaw.clamp(-step, step),
-        player.pitch + delta_pitch.clamp(-step, step),
+        player.yaw   + angle_diff(target_yaw,   player.yaw).clamp(-step, step),
+        player.pitch + angle_diff(target_pitch, player.pitch).clamp(-step, step),
     )
 }
 
 fn angle_diff(a: f32, b: f32) -> f32 {
     let mut d = a - b;
-    while d > 180.0 { d -= 360.0; }
+    while d >  180.0 { d -= 360.0; }
     while d < -180.0 { d += 360.0; }
     d
-}
-
-// ── module queries for the client's tick ─────────────────────────────────────
-
-/// Whether the module `name` is on (and LiquidHorizon as a whole).
-pub fn module_on(name: &str) -> bool {
-    let s = state();
-    s.enabled && s.modules.is_on(name)
-}
-
-/// A float setting of a module.
-pub fn module_float(name: &str, key: &str) -> Option<f32> {
-    state().modules.float_setting(name, key)
-}
-
-/// A bool setting of a module.
-pub fn module_bool(name: &str, key: &str) -> Option<bool> {
-    state()
-        .modules
-        .all()
-        .find(|m| m.name.eq_ignore_ascii_case(name))?
-        .bools
-        .get(key)
-        .copied()
 }
