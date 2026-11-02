@@ -315,6 +315,7 @@ impl Game<'_> {
             .spawn(move || {
                 // MinecraftServer.spin's Thread.setPriority(8).
                 horizon_threads::favour_current();
+                horizon_threads::prefer_big_cores();
                 let result = serve(
                     &res,
                     pack,

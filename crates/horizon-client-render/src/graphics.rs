@@ -373,6 +373,8 @@ pub struct Graphics {
     pub overlay: Overlay,
     /// World resolution as a percentage of the window's (50..=200).
     pub resolution_scale: u32,
+    /// Lower the world's resolution while frames run slow, up to `resolution_scale` again once they don't.
+    pub dynamic_resolution: bool,
     /// FXAA over the world.
     pub fxaa: bool,
     /// TAA over the world (FXAA is off while it is on).
@@ -413,7 +415,8 @@ impl Default for Graphics {
             lod_distance: 0,
             far_detail: FarDetail::Full,
             cave_culling: true,
-            entity_culling: false,
+            // Phones are GPU- and CPU-bound: skip entities that are far or behind the camera.
+            entity_culling: cfg!(target_os = "android"),
             chunk_updates: 0,
             upload_budget_kib: 0,
             sky: true,
@@ -425,6 +428,8 @@ impl Default for Graphics {
             workers: 0,
             overlay: Overlay::Off,
             resolution_scale: 100,
+            // Phones are GPU-bound more often than not; elsewhere it is opt-in.
+            dynamic_resolution: cfg!(target_os = "android"),
             fxaa: false,
             taa: false,
             upscaling: Upscaling::Native,
@@ -494,6 +499,7 @@ impl Graphics {
                 }
                 "workers" => g.workers = number(g.workers).min(64),
                 "resolutionScale" => g.resolution_scale = number(g.resolution_scale).clamp(50, 200),
+                "dynamicResolution" => g.dynamic_resolution = flag(g.dynamic_resolution),
                 "fxaa" => g.fxaa = flag(g.fxaa),
                 "taa" => g.taa = flag(g.taa),
                 "upscaling" => g.upscaling = Upscaling::parse(value),
@@ -532,7 +538,7 @@ impl Graphics {
     }
     pub fn serialize(&self) -> String {
         format!(
-            "preset:{}\nlodDistance:{}\nfarDetail:{}\ncaveCulling:{}\nentityCulling:{}\nchunkUpdates:{}\nuploadBudgetKiB:{}\nsky:{}\nfog:{}\nweather:{}\nanimatedTextures:{}\npresentMode:{}\nframePacing:{}\nworkers:{}\noverlay:{}\nresolutionScale:{}\nfxaa:{}\ntaa:{}\nupscaling:{}\nhdr:{}\nhdrPaperWhite:{}\nhdrPeak:{}\nhdrBlackLevel:{}\nhdrUiBrightness:{}\nhdrKey:{}\nbatteryMode:{}\ngraphicsApi:{}\npickedShaderPack:{}\n",
+            "preset:{}\nlodDistance:{}\nfarDetail:{}\ncaveCulling:{}\nentityCulling:{}\nchunkUpdates:{}\nuploadBudgetKiB:{}\nsky:{}\nfog:{}\nweather:{}\nanimatedTextures:{}\npresentMode:{}\nframePacing:{}\nworkers:{}\noverlay:{}\nresolutionScale:{}\ndynamicResolution:{}\nfxaa:{}\ntaa:{}\nupscaling:{}\nhdr:{}\nhdrPaperWhite:{}\nhdrPeak:{}\nhdrBlackLevel:{}\nhdrUiBrightness:{}\nhdrKey:{}\nbatteryMode:{}\ngraphicsApi:{}\npickedShaderPack:{}\n",
             self.preset.name(),
             self.lod_distance,
             self.far_detail.name(),
@@ -556,6 +562,7 @@ impl Graphics {
                 Overlay::Graph => "graph",
             },
             self.resolution_scale,
+            bool_text(self.dynamic_resolution),
             bool_text(self.fxaa),
             bool_text(self.taa),
             self.upscaling.name(),
@@ -701,6 +708,7 @@ mod tests {
             workers: 6,
             overlay: Overlay::Graph,
             resolution_scale: 75,
+            dynamic_resolution: true,
             fxaa: true,
             taa: true,
             upscaling: Upscaling::Balanced,

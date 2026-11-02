@@ -38,6 +38,7 @@ pub enum H {
     Workers,
     Overlay,
     ResolutionScale,
+    DynamicResolution,
     Antialiasing,
     Upscaling,
     Hdr,
@@ -267,6 +268,11 @@ pub fn rows(level: Level) -> Vec<Row> {
                 H::ResolutionScale,
                 High,
                 "World pixels per screen pixel. Below 100% is faster on the GPU.",
+            ),
+            h(
+                H::DynamicResolution,
+                High,
+                "Lowers the resolution while frames run slow, then restores it.",
             ),
             h(
                 H::Antialiasing,
@@ -516,6 +522,7 @@ impl H {
                 n => labelled("Worker Threads", n),
             },
             H::ResolutionScale => labelled("Resolution Scale", format!("{}%", g.resolution_scale)),
+            H::DynamicResolution => labelled("Dynamic Resolution", on_off(g.dynamic_resolution)),
             H::Antialiasing => labelled(
                 "Anti-aliasing",
                 match (g.fxaa, g.taa) {
@@ -613,6 +620,7 @@ impl H {
             }
             H::CaveCulling => g.cave_culling = !g.cave_culling,
             H::EntityCulling => g.entity_culling = !g.entity_culling,
+            H::DynamicResolution => g.dynamic_resolution = !g.dynamic_resolution,
             H::Sky => g.sky = !g.sky,
             H::Fog => g.fog = !g.fog,
             H::Weather => g.weather = !g.weather,
@@ -699,6 +707,7 @@ impl Item {
         Some(match self {
             Item::Horizon(H::CaveCulling) => g.cave_culling,
             Item::Horizon(H::EntityCulling) => g.entity_culling,
+            Item::Horizon(H::DynamicResolution) => g.dynamic_resolution,
             Item::Horizon(H::Sky) => g.sky,
             Item::Horizon(H::Fog) => g.fog,
             Item::Horizon(H::Weather) => g.weather,

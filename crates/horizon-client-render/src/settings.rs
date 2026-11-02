@@ -211,8 +211,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             fov: 70.0,
-            render_distance: 12,
-            simulation_distance: 12,
+            render_distance: if cfg!(target_os = "android") { 8 } else { 12 },
+            simulation_distance: if cfg!(target_os = "android") { 6 } else { 12 },
             sensitivity: 0.5,
             master_volume: 1.0,
             volumes: [1.0; 11],

@@ -1062,6 +1062,9 @@ pub struct ParticleEngine {
     pub camera: [f64; 3],
     /// The Particles option (`ParticleStatus`): 0 all, 1 decreased, 2 minimal.
     pub particle_level: u8,
+    /// Leave out particles wholly behind the camera. Off while a shader pack
+    /// runs: its shadow pass draws what the camera cannot see.
+    pub cull_behind: bool,
     /// FireworkParticles.Starter instances.
     starters: Vec<Starter>,
     /// Local sounds requested by particles (dripstone drips, firework bursts):
@@ -1095,6 +1098,7 @@ impl ParticleEngine {
             starters: Vec::new(),
             camera: [0.0; 3],
             particle_level: 0,
+            cull_behind: false,
             sounds: Vec::new(),
             made: Default::default(),
             item_sprites: HashMap::new(),
@@ -3994,6 +3998,8 @@ impl ParticleEngine {
         // Camera.setRotation: rotationYXZ(PI - yRot, -xRot, 0).
         let base = Quat::from_rotation_y(std::f32::consts::PI - yaw.to_radians())
             * Quat::from_rotation_x(-pitch.to_radians());
+        // The camera looks down its own -Z (quads face +Z, toward it).
+        let forward = base * FVec3::NEG_Z;
         for p in &self.particles {
             if p.no_render {
                 continue;
@@ -4032,6 +4038,10 @@ impl ParticleEngine {
                 base
             };
             let size = p.quad_size(partial);
+            // Wholly behind the camera's plane: no field of view under 180 degrees sees it.
+            if self.cull_behind && center.dot(forward) < -(size * 2.0 + 0.5) {
+                continue;
+            }
             let mut alpha = p.rgba[3];
             // OverlayParticle.extract: the flash fades as it pulses.
             if p.ty == ParticleType::Flash {
