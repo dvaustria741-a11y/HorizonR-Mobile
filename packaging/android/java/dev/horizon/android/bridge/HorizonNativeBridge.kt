@@ -5346,7 +5346,14 @@ object HorizonNativeBridge {
         }
     }
 
-    fun importUriToDestination(context: Context, uri: Uri, subFolder: String, targetFileName: String, logEnabled: Boolean = true): File? {
+    fun importUriToDestination(
+        context: Context,
+        uri: Uri,
+        subFolder: String,
+        targetFileName: String,
+        logEnabled: Boolean = true,
+        shaderTranslator: ShaderTranslator = ShaderTranslator.current(context)
+    ): File? {
         return try {
             val home = ensureHomeDirectories(context)
             val isModTarget = subFolder in listOf("mods", "horizon-mods", "horizon-native-mods")
@@ -5366,7 +5373,8 @@ object HorizonNativeBridge {
                     appendSystemLog("Import rejected: not a shader pack (needs a `shaders/` folder or horizon-shaders.toml)", logEnabled, context)
                     return null
                 }
-                appendSystemLog("Imported shader pack to shaderpacks/${shaderFile.name} (${shaderFile.length() / 1024} KB)", logEnabled, context)
+                if (shaderTranslator == ShaderTranslator.V2 && shaderFile.name.endsWith(".zip", ignoreCase = true)) translateShaderZip(context, shaderFile, logEnabled)
+                appendSystemLog("Imported shader pack to shaderpacks/${shaderFile.name} (${shaderFile.length() / 1024} KB, ${shaderTranslator.label})", logEnabled, context)
                 return shaderFile
             }
             if (finalSubFolder == "resourcepacks" && finalFileName.endsWith(".zip", ignoreCase = true)) {

@@ -6666,6 +6666,9 @@ private fun CleanFilesViewport(
         }
     }
 
+    var showImportTranslatorDialog by remember { mutableStateOf(false) }
+    var importTranslator by remember { mutableStateOf(ShaderTranslator.current(context)) }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             val ext = when (currentFolder) {
@@ -6679,10 +6682,56 @@ private fun CleanFilesViewport(
                 uri,
                 currentFolder,
                 "imported_${System.currentTimeMillis()}$ext",
-                logEnabled
+                logEnabled,
+                importTranslator
             )
             refreshCount += 1
         }
+    }
+
+    // Shader pack import: choose Translator v1 / v2 first
+    if (showImportTranslatorDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportTranslatorDialog = false },
+            icon = { Icon(Icons.Default.Add, contentDescription = null, tint = SkyBlueAccent) },
+            title = { Text("Import shader pack", style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Choose a translator for this import", fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+                    ShaderTranslator.entries.forEach { option ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { importTranslator = option }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = importTranslator == option,
+                                onClick = { importTranslator = option },
+                                colors = RadioButtonDefaults.colors(selectedColor = SkyBlueAccent)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Column {
+                                Text(option.label, fontSize = 13.sp, color = Color.White)
+                                Text(option.summary, fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    ShaderTranslator.save(context, importTranslator)
+                    showImportTranslatorDialog = false
+                    picker.launch("*/*")
+                }) { Text("Choose file") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportTranslatorDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 
     // Rename Modal Dialog
@@ -6930,7 +6979,14 @@ private fun CleanFilesViewport(
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = CardRowBg,
-                        modifier = Modifier.animatedPressScale { picker.launch("*/*") }
+                        modifier = Modifier.animatedPressScale {
+                            if (currentFolder == "shaderpacks") {
+                                importTranslator = ShaderTranslator.current(context)
+                                showImportTranslatorDialog = true
+                            } else {
+                                picker.launch("*/*")
+                            }
+                        }
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
