@@ -1887,42 +1887,62 @@ object HorizonNativeBridge {
         return base.take(64)
     }
 
+    /**
+     * The id the engine knows an installed mod by: `id` in the `horizon-mod.toml` inside a `.hmod`,
+     * the file name without `.hnmod` for a native mod. `horizon-mods.txt` keys its `mod.<id>:` lines
+     * by it, so the Mods tab has to use the same id, not one guessed from the file name.
+     */
+    private fun resolveModId(home: File, profileHome: File, fileName: String): String {
+        runCatching {
+            if (fileName.endsWith(".hnmod", ignoreCase = true)) {
+                return fileName.substring(0, fileName.length - ".hnmod".length)
+            }
+            for (base in listOf(profileHome, home).distinctBy { it.absolutePath }) {
+                for (sub in listOf("horizon-mods", "mods")) {
+                    val f = File(File(base, sub), fileName)
+                    if (!f.isFile) continue
+                    java.util.zip.ZipFile(f).use { zip ->
+                        val entry = zip.getEntry("horizon-mod.toml") ?: return@use
+                        val text = zip.getInputStream(entry).bufferedReader().readText()
+                        val id = Regex("(?m)^\\s*id\\s*=\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
+                        if (!id.isNullOrBlank()) return id
+                    }
+                }
+            }
+        }
+        return sanitizeModId(fileName)
+    }
+
+    /** Whether `options.txt`'s `resourcePacks` list holds the pack `fileName` (as `"file/<name>"`). */
+    private fun resourcePackListed(optFile: File, fileName: String): Boolean = runCatching {
+        val line = optFile.readLines().firstOrNull { it.startsWith("resourcePacks:") } ?: return@runCatching false
+        val arr = JSONArray(line.substringAfter("resourcePacks:").trim())
+        (0 until arr.length()).any { arr.optString(it) == "file/$fileName" }
+    }.getOrDefault(false)
+
     fun isContentItemEnabled(context: Context, folder: String, fileName: String, profileSlot: Int = 0): Boolean {
         val home = ensureHomeDirectories(context)
         val profileHome = getProfileHome(home, profileSlot)
         return when (folder) {
             "mods" -> {
-                val modId = sanitizeModId(fileName)
-                val canonicalName = "$modId.hmod"
-                // Check `horizon-mods.txt` first (`mod.<id>:true` / `false`)
+                // `horizon-mods.txt` (`mod.<id>:true` / `false`) is the only thing the engine reads. A mod
+                // with no line is off, as the engine has it, except a native mod, which is on until
+                // turned off.
+                val modId = resolveModId(home, profileHome, fileName)
                 val hmodsTxt = File(profileHome, "horizon-mods.txt").takeIf { it.exists() } ?: File(home, "horizon-mods.txt")
-                if (hmodsTxt.exists()) {
-                    val prefix = "mod.$modId:"
-                    val matchLine = hmodsTxt.readLines().firstOrNull { it.trim().startsWith(prefix) }
-                    if (matchLine != null) {
-                        val valueStr = matchLine.substringAfter(':').trim()
-                        return valueStr.equals("true", ignoreCase = true)
-                    }
+                val prefix = "mod.$modId:"
+                val matchLine = if (hmodsTxt.exists()) hmodsTxt.readLines().firstOrNull { it.trim().startsWith(prefix) } else null
+                if (matchLine != null) {
+                    matchLine.substringAfter(':').trim().equals("true", ignoreCase = true)
+                } else {
+                    fileName.endsWith(".hnmod", ignoreCase = true)
                 }
-                val hmodFile = File(profileHome, "hmod_list.json").takeIf { it.exists() } ?: File(home, "hmod_list.json")
-                if (!hmodFile.exists()) return true
-                runCatching {
-                    val obj = JSONObject(hmodFile.readText())
-                    val disabled = obj.optJSONArray("disabled") ?: return true
-                    for (i in 0 until disabled.length()) {
-                        val entry = disabled.optString(i)
-                        if (entry == fileName || entry == canonicalName || sanitizeModId(entry) == modId) {
-                            return false
-                        }
-                    }
-                    true
-                }.getOrDefault(true)
             }
             "shaderpacks" -> readPickedShaderPack(home, profileHome) == fileName
             "resourcepacks" -> {
                 val optFile = File(profileHome, "options.txt").takeIf { it.exists() } ?: File(home, "options.txt")
                 if (!optFile.exists()) return false
-                optFile.readLines().any { it.startsWith("resourcePacks:") && it.contains(fileName) }
+                resourcePackListed(optFile, fileName)
             }
             else -> true
         }
@@ -1948,8 +1968,8 @@ object HorizonNativeBridge {
         listOf(home, profileHome).forEach { dir ->
             when (folder) {
                 "mods" -> {
-                    val modId = sanitizeModId(fileName)
-                    val canonicalName = "$modId.hmod"
+                    val modId = resolveModId(home, profileHome, fileName)
+                    val canonicalName = "${sanitizeModId(fileName)}.hmod"
                     val hmodFile = File(dir, "hmod_list.json")
                     val obj = if (hmodFile.exists()) runCatching { JSONObject(hmodFile.readText()) }.getOrElse { JSONObject() } else JSONObject()
                     val disabledArr = obj.optJSONArray("disabled") ?: JSONArray()
