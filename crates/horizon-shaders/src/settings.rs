@@ -322,6 +322,8 @@ pub struct ClassicOption {
     pub values: Vec<String>,
     /// Index into `values` of what the pack ships with.
     pub default: usize,
+    /// What the pack says of it (`option.NAME.comment`), `\n` as line breaks; empty when nothing.
+    pub comment: String,
 }
 
 fn strip_formatting(s: &str) -> String {
@@ -436,11 +438,16 @@ pub fn options(pack: &Pack, locale: &str) -> Vec<ClassicOption> {
                     .map(strip_formatting)
                     .filter(|l| !l.trim().is_empty())
                     .unwrap_or_else(|| d.name.to_owned());
+                let comment = lang
+                    .get(&format!("option.{}.comment", d.name))
+                    .map(|c| strip_formatting(&c.replace("\\n", "\n")))
+                    .unwrap_or_default();
                 found.push(ClassicOption {
                     name: d.name.to_owned(),
                     label,
                     values,
                     default,
+                    comment,
                 });
                 if found.len() >= MAX_OPTIONS {
                     return found;

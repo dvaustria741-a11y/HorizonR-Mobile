@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::shader_pack_list::{Entry as PackEntry, Kind};
+use crate::text::Text;
 
 /// Most values a number option steps through.
 const MAX_STEPS: usize = 33;
@@ -25,6 +26,8 @@ pub struct Item {
     pub current: usize,
     /// Shown as a slider over `values` instead of a button that steps through them.
     pub slider: bool,
+    /// What the pack says of the option, shown as its tooltip; empty when nothing.
+    pub comment: String,
 }
 
 /// What a screen of the settings page holds.
@@ -130,6 +133,46 @@ impl Item {
     pub fn value_text(&self) -> &str {
         self.shown.get(self.current).map_or("", String::as_str)
     }
+
+    /// The value as the button shows it, yellow once it differs from the pack's default.
+    fn value_label(&self) -> Text {
+        let value = Text::literal(self.value_text().to_owned());
+        if self.current == self.default {
+            value
+        } else {
+            value.with_color(crate::text::YELLOW)
+        }
+    }
+
+    /// `Name: value`.
+    pub fn label_text(&self) -> Text {
+        Text::literal(format!("{}: ", self.label)).append(self.value_label())
+    }
+
+    /// `label_text` within `width` as `measure` sizes it: the name shortened (`Bloom Up...: 2`)
+    /// when the whole doesn't fit, and whether it was.
+    pub fn label_within(&self, width: f32, measure: impl Fn(&Text) -> f32) -> (Text, bool) {
+        let full = self.label_text();
+        if measure(&full) <= width {
+            return (full, false);
+        }
+        let mut chars: Vec<char> = self.label.chars().collect();
+        while chars.pop().is_some() {
+            let cut = self
+                .label_prefix(&chars)
+                .trim_end()
+                .to_owned();
+            let label = Text::literal(format!("{cut}...: ")).append(self.value_label());
+            if measure(&label) <= width {
+                return (label, true);
+            }
+        }
+        (full, true)
+    }
+
+    fn label_prefix(&self, chars: &[char]) -> String {
+        chars.iter().collect()
+    }
 }
 
 fn number(v: f64) -> String {
@@ -186,6 +229,7 @@ fn classic(dir: &Path, entry: &PackEntry, locale: &str) -> Options {
                 default: o.default,
                 current,
                 slider,
+                comment: o.comment,
             }
         })
         .collect();
@@ -374,6 +418,7 @@ fn horizon(dir: &Path, entry: &PackEntry) -> Options {
                 shown,
                 default,
                 current,
+                comment: o.description.trim().to_owned(),
             }
         })
         .collect();
@@ -424,6 +469,7 @@ mod tests {
             default: 0,
             current: 0,
             slider: false,
+            comment: String::new(),
         };
         i.cycle(true);
         assert_eq!(i.value_text(), "x");
@@ -447,6 +493,7 @@ mod tests {
             default: 0,
             current: 0,
             slider: false,
+            comment: String::new(),
         }
     }
 

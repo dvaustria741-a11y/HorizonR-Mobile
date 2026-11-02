@@ -469,7 +469,7 @@ impl Opt {
     pub fn label(self, s: &Settings) -> Text {
         if let Opt::PackOption(i) = self {
             return match s.shader_pack_options.items.get(i) {
-                Some(item) => Text::literal(format!("{}: {}", item.label, item.value_text())),
+                Some(item) => item.label_text(),
                 None => Text::empty(),
             };
         }
@@ -2514,12 +2514,7 @@ impl OptionsUi {
                             } else {
                                 // Shader Options: `Name: value`, the value yellow once it
                                 // differs from the pack's default.
-                                let mut value = Text::literal(item.value_text().to_owned());
-                                if item.current != item.default {
-                                    value = value.with_color(text::YELLOW);
-                                }
-                                let label = Text::literal(format!("{}: ", item.label)).append(value);
-                                button(0.0, 0.0, width, label, Act::PackOption(i))
+                                button(0.0, 0.0, width, item.label_text(), Act::PackOption(i))
                             })
                         }
                         crate::shader_pack_options::Entry::Screen(i) => {
@@ -3299,6 +3294,38 @@ impl OptionsUi {
             let start = batch.vertices.len();
             let hover = ui::hovered(cursor, wd.x, wd.y, wd.w, wd.h)
                 && (!wd.list || cursor.1 >= top && cursor.1 < bottom);
+            // A pack's option: its label within the widget (the name shortened), and on hover the
+            // whole label when it was, then what the pack says of it.
+            let pack_item = match &wd.kind {
+                WKind::Button {
+                    act: Act::PackOption(i),
+                    ..
+                }
+                | WKind::Slider {
+                    opt: Opt::PackOption(i),
+                    ..
+                } => s.shader_pack_options.items.get(*i),
+                _ => None,
+            };
+            let fitted = pack_item.map(|item| {
+                item.label_within(wd.w - 8.0, |t| atlas.font.width_text(t))
+            });
+            if hover && let Some(item) = pack_item {
+                let whole = fitted
+                    .as_ref()
+                    .filter(|f| f.1)
+                    .map(|_| item.label_text());
+                let comment = (!item.comment.is_empty())
+                    .then(|| Text::literal(item.comment.clone()));
+                let lines: Vec<Text> = whole
+                    .into_iter()
+                    .chain(comment)
+                    .flat_map(|t| atlas.font.split(&t, 200.0))
+                    .collect();
+                if !lines.is_empty() {
+                    tooltip = Some(lines);
+                }
+            }
             if hover {
                 if let WKind::Button {
                     act: Act::Extra(item),
@@ -3389,6 +3416,7 @@ impl OptionsUi {
                             true,
                         );
                     } else {
+                        let label = fitted.as_ref().map_or(label, |f| &f.0);
                         ui::button(batch, atlas, wd.x, wd.y, wd.w, wd.h, label, *active, hover);
                     }
                     if hover && let Act::Key(name) = act {
@@ -3413,6 +3441,7 @@ impl OptionsUi {
                     }
                 }
                 WKind::Slider { label, value, opt } => {
+                    let label = fitted.as_ref().map_or(label, |f| &f.0);
                     let dragging = self.dragging == Some(*opt);
                     let shown = self.slider_shown(*opt, *value);
                     ui::slider(
