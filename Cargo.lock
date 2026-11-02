@@ -1436,6 +1436,7 @@ dependencies = [
  "horizon-protocol",
  "horizon-server-files",
  "horizon-shader-api",
+ "horizon-shaderport",
  "horizon-shaders",
  "horizon-telemetry",
  "horizon-theme",
