@@ -936,7 +936,7 @@ public final class HorizonActivity extends NativeActivity {
                 canvas.drawBitmap(b, null, bgDst, bgImagePaint);
             }
             pixelPaint.setColor(0xFF000000);
-            pixelPaint.setAlpha((int) (alphaInt * 0.42f * dive));
+            pixelPaint.setAlpha((int) (alphaInt * 0.18f * dive));
             canvas.drawRect(0, 0, w, h, pixelPaint);
         }
 
