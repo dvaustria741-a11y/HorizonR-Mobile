@@ -413,7 +413,8 @@ impl Default for Graphics {
             lod_distance: 0,
             far_detail: FarDetail::Full,
             cave_culling: true,
-            entity_culling: false,
+            // Phones are GPU- and CPU-bound: skip entities that are far or behind the camera.
+            entity_culling: cfg!(target_os = "android"),
             chunk_updates: 0,
             upload_budget_kib: 0,
             sky: true,

@@ -79,6 +79,7 @@ mod cull;
 mod end_sky;
 mod flat;
 #[cfg(target_os = "android")]
+mod dyn_scale;
 mod frame_scale;
 mod frame_timing;
 
@@ -656,6 +657,12 @@ pub struct Renderer {
     layout: crate::chunk::ColumnLayout,
     /// Resolution scale, FXAA and TAA (Horizon settings).
     world_post: world_post::Post,
+    /// Automatic render scale (Android): the Resolution Scale setting times the
+    /// factor that frame times pick. `HORIZON_DYN_SCALE=0` turns it off.
+    dyn_scale: dyn_scale::DynScale,
+    /// The Resolution Scale setting, before `dyn_scale`'s factor.
+    scale_base: f32,
+    last_draw: Option<Instant>,
     #[cfg(target_os = "android")]
     frame_scale: Option<frame_scale::FrameScale>,
     #[cfg(target_os = "android")]
@@ -3138,6 +3145,12 @@ impl Renderer {
             occlusion: occlusion::Occlusion::new(crate::chunk::MIN_Y, crate::chunk::HEIGHT / 16),
             layout: crate::chunk::ColumnLayout::VANILLA,
             world_post,
+            dyn_scale: dyn_scale::DynScale::new(
+                cfg!(target_os = "android")
+                    && std::env::var("HORIZON_DYN_SCALE").as_deref() != Ok("0"),
+            ),
+            scale_base: 1.0,
+            last_draw: None,
             #[cfg(target_os = "android")]
             frame_scale: None,
             #[cfg(target_os = "android")]
@@ -4000,7 +4013,8 @@ impl Renderer {
     /// `upscale`: output pixels per rendered pixel, for TAA to rebuild (1: native).
     pub fn set_world_post(&mut self, scale: f32, antialias: bool, taa: bool, upscale: f32) {
         let taa = taa && self.world_post.supports_taa();
-        self.world_post.scale = scale.clamp(0.25, 2.0);
+        self.scale_base = scale;
+        self.world_post.scale = (scale * self.dyn_scale.factor()).clamp(0.25, 2.0);
         self.world_post.antialias = antialias && !taa;
         self.world_post.taa = taa;
         self.world_post.upscale = if taa { upscale.clamp(1.0, 4.0) } else { 1.0 };
@@ -4379,6 +4393,13 @@ impl Renderer {
             return Ok(false);
         }
         let started = Instant::now();
+        if let Some(previous) = self.last_draw.replace(started)
+            && self
+                .dyn_scale
+                .update(started.duration_since(previous).as_secs_f32() * 1000.0)
+        {
+            self.world_post.scale = (self.scale_base * self.dyn_scale.factor()).clamp(0.25, 2.0);
+        }
         if self.first_frame == FirstFrame::Acquire {
             // Once: a minimized window acquires nothing for a while.
             startup_step(format_args!("acquiring the first frame"));
