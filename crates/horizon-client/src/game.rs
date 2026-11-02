@@ -176,7 +176,6 @@ mod moved_extras;
 mod moving_pistons;
 mod music;
 mod names;
-mod liquid_horizon;
 mod native_hooks;
 mod native_lifecycle;
 mod native_menus;

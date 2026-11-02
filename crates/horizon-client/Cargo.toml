@@ -8,7 +8,6 @@ rust-version = "1.90"
 description = "Horizon native development client"
 
 [dependencies]
-liquid_horizon_engine = { path = "../../mods/liquidhorizon/engine" }
 horizon-assets = { path = "../horizon-assets" }
 horizon-client-core = { path = "../horizon-client-core" }
 horizon-client-input = { path = "../horizon-client-input" }

@@ -1,7 +1,6 @@
 [workspace]
 exclude = ["launcher", "crates/horizon-telemetry-server", "crates/horizon-mod-registry", "third_party/wgpu-hal", "third_party/winit"]
 members = [
-    "mods/liquidhorizon/engine",
     "crates/horizon-android",
     "crates/horizon-core",
     "crates/horizon-dualsense",

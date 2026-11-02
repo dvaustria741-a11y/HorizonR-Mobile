@@ -12,9 +12,6 @@ crate-type = ["cdylib"]
 horizon-client-input = { path = "../horizon-client-input" }
 horizon-anticheat = { path = "../horizon-anticheat" }
 horizon-client = { path = "../horizon-client", default-features = false }
-# horizon-android compiles horizon-client's sources as its own lib (android_main.rs), so it needs
-# every crate those sources `use`, including the built-in LiquidHorizon engine.
-liquid_horizon_engine = { path = "../../mods/liquidhorizon/engine" }
 android_logger = "0.15"
 regex = "1"
 horizon-hdr = { path = "../horizon-hdr" }
