@@ -152,6 +152,8 @@ pub struct Settings {
     pub crosshair_gestures: bool,
     pub gyroscope: bool,
     pub gyro_sensitivity: f32,
+    /// F3 text scale in GUI pixels (0.5 steps); 0 is Auto.
+    pub debug_text_scale: f32,
     pub attack_indicator_left: bool,
     #[serde(deserialize_with = "deserialize_visibility")]
     pub button_visibility: [u8; 14],
@@ -231,6 +233,7 @@ impl Default for Settings {
             crosshair_gestures: false,
             gyroscope: false,
             gyro_sensitivity: 1.0,
+            debug_text_scale: 0.0,
             attack_indicator_left: true,
             button_visibility: [0; 14],
             horizontal_margin: 0.0,
@@ -297,6 +300,11 @@ impl Settings {
             self.gyro_sensitivity.clamp(0.1, 3.0)
         } else {
             1.0
+        };
+        self.debug_text_scale = if self.debug_text_scale.is_finite() {
+            (self.debug_text_scale.clamp(0.0, 6.0) * 2.0).round() / 2.0
+        } else {
+            0.0
         };
         for value in [&mut self.horizontal_margin, &mut self.vertical_margin] {
             *value = if value.is_finite() {

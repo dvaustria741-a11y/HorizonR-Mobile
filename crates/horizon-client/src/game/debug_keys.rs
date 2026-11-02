@@ -300,10 +300,16 @@ impl Game<'_> {
         let on = |path: &str| self.debug_entries.enabled(path, self.debug, reduced);
         let framebuffer = size.map(|v| v as i32);
         #[cfg(target_os = "android")]
-        let scale_debug = debug_overlay::touch_scale;
+        let (scale, [width, height]) = debug_overlay::touch_scale(
+            framebuffer,
+            batch.scale as i32,
+            self.settings.file.int("debugGuiScale"),
+            self.settings.touch.debug_text_scale,
+            self.settings.force_unicode,
+            [batch.width as i32, batch.height as i32],
+        );
         #[cfg(not(target_os = "android"))]
-        let scale_debug = debug_overlay::scale;
-        let (scale, [width, height]) = scale_debug(
+        let (scale, [width, height]) = debug_overlay::scale(
             framebuffer,
             batch.scale as i32,
             self.settings.file.int("debugGuiScale"),

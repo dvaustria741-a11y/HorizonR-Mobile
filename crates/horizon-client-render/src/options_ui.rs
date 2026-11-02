@@ -122,6 +122,16 @@ pub(crate) const MOUSE_OPTIONS: &[Opt] = &[
     Opt::AllowCursorChanges,
 ];
 
+/// The F3 text scale shown by the slider: the touch setting, else a scale set
+/// before half steps existed (the vanilla `debugGuiScale` integer).
+fn debug_text_scale(s: &Settings) -> f32 {
+    if s.touch.debug_text_scale > 0.0 {
+        s.touch.debug_text_scale
+    } else {
+        s.file.int("debugGuiScale").max(0) as f32
+    }
+}
+
 impl Opt {
     /// Keep controls visible while their underlying systems are still missing.
     pub(crate) fn available(self) -> bool {
@@ -361,7 +371,7 @@ impl Opt {
             Opt::TouchCircleSize => unit(s.touch.circle_size, 16.0, 64.0),
             Opt::TouchHorizontalMargin => unit(s.touch.horizontal_margin, 0.0, 0.12),
             Opt::TouchVerticalMargin => unit(s.touch.vertical_margin, 0.0, 0.12),
-            Opt::DebugGuiScale => unit(s.file.int("debugGuiScale").max(0) as f32, 0.0, 6.0),
+            Opt::DebugGuiScale => unit(debug_text_scale(s), 0.0, 6.0),
             Opt::AndroidGyroSensitivity => unit(s.touch.gyro_sensitivity, 0.1, 3.0),
             Opt::TouchSensitivity => unit(s.touch.sensitivity, 0.1, 3.0),
             Opt::TouchSensitivityHorizontal => unit(s.touch.sensitivity_horizontal, 0.1, 3.0),
@@ -489,8 +499,8 @@ impl Opt {
                 Some(format!("{:.1}%", s.touch.horizontal_margin * 100.0))
             }
             Opt::TouchVerticalMargin => Some(format!("{:.1}%", s.touch.vertical_margin * 100.0)),
-            Opt::DebugGuiScale => Some(match s.file.int("debugGuiScale") {
-                n if n <= 0 => "Auto".into(),
+            Opt::DebugGuiScale => Some(match debug_text_scale(s) {
+                n if n <= 0.0 => "Auto".into(),
                 n => format!("{n}x"),
             }),
             Opt::AndroidGyroscope => Some(if s.touch.gyroscope { "ON" } else { "OFF" }.into()),
@@ -930,10 +940,11 @@ impl Opt {
             Opt::TouchCircleSize => s.touch.circle_size = step(16.0, 64.0),
             Opt::TouchHorizontalMargin => s.touch.horizontal_margin = (v * 120.0).round() / 1000.0,
             Opt::TouchVerticalMargin => s.touch.vertical_margin = (v * 120.0).round() / 1000.0,
-            Opt::DebugGuiScale => s.file.set(
-                "debugGuiScale",
-                crate::options_file::V::Int(step(0.0, 6.0) as i32),
-            ),
+            Opt::DebugGuiScale => {
+                // Auto, then 0.5x steps up to 6x.
+                s.touch.debug_text_scale = (v * 12.0).round() / 2.0;
+                s.file.set("debugGuiScale", crate::options_file::V::Int(0));
+            }
             Opt::AndroidGyroSensitivity => s.touch.gyro_sensitivity = 0.1 + v * 2.9,
             Opt::TouchSensitivity => s.touch.sensitivity = 0.1 + v * 2.9,
             Opt::TouchSensitivityHorizontal => s.touch.sensitivity_horizontal = 0.1 + v * 2.9,
@@ -6085,7 +6096,9 @@ mod tests {
         assert_eq!(settings.touch.horizontal_margin, 0.06);
         assert_eq!(settings.touch.vertical_margin, 0.12);
         Opt::DebugGuiScale.set_slider(&mut settings, 0.5);
-        assert_eq!(settings.file.int("debugGuiScale"), 3);
+        assert_eq!(settings.touch.debug_text_scale, 3.0);
+        Opt::DebugGuiScale.set_slider(&mut settings, 0.25);
+        assert_eq!(settings.touch.debug_text_scale, 1.5);
         Opt::TouchSensitivity.set_slider(&mut settings, 0.0);
         assert!((settings.touch.sensitivity - 0.1).abs() < 0.0001);
         let mut ui = OptionsUi::default();

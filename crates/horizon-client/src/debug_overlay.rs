@@ -221,9 +221,21 @@ pub fn touch_scale(
     framebuffer: [i32; 2],
     gui_scale: i32,
     option: i32,
+    text_scale: f32,
     unicode: bool,
     gui_size: [i32; 2],
 ) -> (f32, [i32; 2]) {
+    if text_scale.is_finite() && text_scale > 0.0 {
+        // The touch slider: any multiple of 0.5, e.g. 1.5x or 2.5x.
+        let pixels = text_scale.clamp(0.5, 6.0);
+        return (
+            pixels / gui_scale.max(1) as f32,
+            [
+                (framebuffer[0] as f32 / pixels) as i32,
+                (framebuffer[1] as f32 / pixels) as i32,
+            ],
+        );
+    }
     if option == 0 {
         // Auto: vanilla's half-of-GUI-scale is unreadable on a phone, so the
         // touch overlay draws at three quarters of the HUD scale instead.
@@ -394,31 +406,43 @@ mod tests {
     #[test]
     fn auto_touch_debug_scale_is_three_quarters_of_the_hud() {
         assert_eq!(
-            touch_scale([1040, 540], 4, 0, false, [260, 135]),
+            touch_scale([1040, 540], 4, 0, 0.0, false, [260, 135]),
             (0.75, [346, 180])
         );
         assert_eq!(
-            touch_scale([1040, 540], 2, 0, false, [520, 270]),
+            touch_scale([1040, 540], 2, 0, 0.0, false, [520, 270]),
             (1.0, [520, 270])
         );
         assert_eq!(
-            touch_scale([1040, 540], 1, 0, false, [1040, 540]),
+            touch_scale([1040, 540], 1, 0, 0.0, false, [1040, 540]),
             (1.0, [1040, 540])
+        );
+    }
+
+    #[test]
+    fn touch_debug_scale_allows_half_steps() {
+        assert_eq!(
+            touch_scale([2560, 1182], 2, 0, 1.5, false, [1280, 591]),
+            (0.75, [1706, 788])
+        );
+        assert_eq!(
+            touch_scale([2560, 1182], 2, 0, 2.5, false, [1280, 591]),
+            (1.25, [1024, 472])
         );
     }
 
     #[test]
     fn explicit_touch_debug_scale_can_grow_independently_of_the_hud() {
         assert_eq!(
-            touch_scale([2560, 1182], 2, 6, false, [1280, 591]),
+            touch_scale([2560, 1182], 2, 6, 0.0, false, [1280, 591]),
             (3.0, [426, 197])
         );
         assert_eq!(
-            touch_scale([2560, 1182], 2, 4, false, [1280, 591]),
+            touch_scale([2560, 1182], 2, 4, 0.0, false, [1280, 591]),
             (2.0, [640, 295])
         );
         assert_eq!(
-            touch_scale([2560, 1182], 2, 1, false, [1280, 591]),
+            touch_scale([2560, 1182], 2, 1, 0.0, false, [1280, 591]),
             (0.5, [2560, 1182])
         );
     }
