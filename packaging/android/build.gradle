@@ -20,8 +20,8 @@ android {
         applicationId 'dev.horizonr.mobile'
         minSdk customMinSdk
         targetSdk 35
-        versionCode 58
-        versionName '1.8.0-HorizonZ'
+        versionCode Integer.parseInt((project.findProperty('appVersionCode') ?: '58').toString().trim())
+        versionName (project.findProperty('appVersionName') ?: '1.8.0-HorizonZ').toString().trim()
         buildConfigField 'String', 'CURSEFORGE_API_KEY', "\"${curseForgeKeyLiteral}\""
 
         ndk {

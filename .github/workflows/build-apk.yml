@@ -48,7 +48,7 @@ jobs:
           exit 0
 
   build-horizonz-apk:
-    name: Build HorizonZ 1.8 APK (${{ matrix.abi }})
+    name: Build HorizonZ APK (${{ matrix.abi }})
     needs: apply-update-zip
     if: always() && !cancelled()
     runs-on: ubuntu-latest
@@ -69,6 +69,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
+
+      - name: Compute App Version
+        run: |
+          BASE="$(tr -d '[:space:]' < VERSION)"
+          echo "APP_VERSION=${BASE}.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
 
       - name: Ensure Any Remaining Update/ ZIP is Applied in Build Workspace
         run: |
@@ -212,7 +218,7 @@ jobs:
             keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
           set +e
-          gradle assembleRelease -Pabi=${{ matrix.abi }} -PminSdk=28 --no-daemon --stacktrace 2>&1 | tee gradle_build.log
+          gradle assembleRelease -Pabi=${{ matrix.abi }} -PminSdk=28 -PappVersionName="$APP_VERSION" -PappVersionCode="$APP_VERSION_CODE" --no-daemon --stacktrace 2>&1 | tee gradle_build.log
           GRADLE_EXIT=${PIPESTATUS[0]}
           if [ "$GRADLE_EXIT" -ne 0 ]; then
             tail -n 120 gradle_build.log >> "$GITHUB_STEP_SUMMARY"
@@ -220,22 +226,33 @@ jobs:
           fi
           mkdir -p ../../dist
           APK_FOUND="$(find build/outputs/apk/release ../../.local/android/gradle-build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)"
-          cp -f "$APK_FOUND" "../../dist/HorizonZ-Launcher-1.8-${{ matrix.abi }}.apk"
+          cp -f "$APK_FOUND" "../../dist/HorizonZ-Launcher-${APP_VERSION}-${{ matrix.abi }}.apk"
           ls -lh ../../dist/
 
       - name: Upload APK Artifact (${{ matrix.abi }})
         uses: actions/upload-artifact@v4
         with:
-          name: HorizonZ-Launcher-1.8-${{ matrix.abi }}
-          path: dist/HorizonZ-Launcher-1.8-${{ matrix.abi }}.apk
+          name: HorizonZ-Launcher-${{ env.APP_VERSION }}-${{ matrix.abi }}
+          path: dist/HorizonZ-Launcher-${{ env.APP_VERSION }}-${{ matrix.abi }}.apk
           if-no-files-found: error
 
   publish-release:
-    name: Publish HorizonZ 1.8 Release APKs
+    name: Publish HorizonZ Release APKs
     needs: build-horizonz-apk
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
+      - name: Checkout Source & History
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Compute App Version
+        run: |
+          BASE="$(tr -d '[:space:]' < VERSION)"
+          echo "APP_VERSION=${BASE}.${{ github.run_number }}" >> "$GITHUB_ENV"
+
       - name: Download All Built APK Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -248,17 +265,41 @@ jobs:
           sha256sum *.apk > SHA256SUMS.txt
           ls -lh
 
-      - name: Create or Update Latest GitHub Release
+      - name: Generate Release Notes From Commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --tags --force || true
+          PREV_TAG="$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || true)"
+          if [ -n "$PREV_TAG" ] && git rev-parse -q --verify "refs/tags/${PREV_TAG}" > /dev/null; then
+            RANGE="${PREV_TAG}..HEAD"
+          else
+            RANGE="-n 15"
+          fi
+          git log $RANGE --no-merges --pretty='%s' \
+            | grep -v -i -E '^(chore\(auto-update\)|ci(\(|:))' \
+            | sed -E 's/^(feat|feature|add|update)(\([^)]*\))?: *//I' > all_subjects.txt || true
+          grep -i -E '^(fix|bugfix|hotfix)' all_subjects.txt > fixed.txt || true
+          grep -v -i -E '^(fix|bugfix|hotfix)' all_subjects.txt > new.txt || true
+          {
+            echo "## What's New in v${APP_VERSION}"
+            if [ -s new.txt ]; then sed 's/^/- /' new.txt; else echo "- No new features in this build."; fi
+            echo
+            echo "## Fixed"
+            if [ -s fixed.txt ]; then sed 's/^/- /' fixed.txt; else echo "- No fixes in this build."; fi
+            echo
+            echo "SHA256 checksums for the APKs are in SHA256SUMS.txt."
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: horizonz-v1.8.0-build-${{ github.run_number }}
-          name: "HorizonZ - Launcher v1.8 (Build #${{ github.run_number }} • Android Fork Release • ARM64 & ARM32)"
-          body: |
-            ## What's New in v1.8
-            - Expanded the in-app Gemini model picker with additional presets and manual model-ID entry.
-            - Added ordered Gemini API fallback attempts, trying the selected model ID before fallback endpoints.
-            - Randomized Dashboard cinematic/trailer playback and expanded the fallback trailer list.
+          tag_name: horizonz-v${{ env.APP_VERSION }}
+          name: "HorizonZ - Launcher v${{ env.APP_VERSION }}"
+          body_path: release-notes.md
           files: |
             release-apks/*.apk
             release-apks/SHA256SUMS.txt
           prerelease: false
+          make_latest: true
