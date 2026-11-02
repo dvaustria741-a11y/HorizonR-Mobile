@@ -455,38 +455,52 @@ object ContentSources {
             ZipFile(zip).use { zf -> zf.entries().toList().map { it.name } }
         } catch (e: Exception) {
             return "The downloaded file is not a valid ZIP archive"
-        }
+        }.filterNot { it.startsWith("__MACOSX/") }
         if (names.any { it.equals("pack.mcmeta", ignoreCase = true) }) return null
 
-        val nested = names.filter { it.count { c -> c == '/' } == 1 && it.endsWith("/pack.mcmeta", ignoreCase = true) }
-        if (nested.size != 1) {
+        // Archives are often zipped with one or two wrapper folders (`Pack/Pack/pack.mcmeta`): use the shallowest
+        // pack.mcmeta, and refuse only when two sit at the same depth (then it is unclear which pack is meant).
+        val nested = names.filter { it.endsWith("/pack.mcmeta", ignoreCase = true) && it.count { c -> c == '/' } <= 3 }
+        if (nested.isEmpty()) {
             return "The archive has no pack.mcmeta, so it is not a Minecraft resource pack"
         }
-        return repackWithoutPrefix(zip, nested[0].removeSuffix("pack.mcmeta"))
+        val shallowest = nested.minOf { it.count { c -> c == '/' } }
+        val best = nested.filter { it.count { c -> c == '/' } == shallowest }
+        if (best.size != 1) {
+            return "The archive holds several resource packs, so it is unclear which one to install"
+        }
+        return repackWithoutPrefix(zip, best[0].dropLast("pack.mcmeta".length))
     }
 
     /**
      * Shader packs (Iris / OptiFine layout) keep their GLSL under `shaders/` at the archive root. Archives zipped
-     * with one extra top-level folder (`Pack/shaders/...`) are rewritten so the loader finds `shaders/` at the root.
-     * Returns null when the archive is loadable, otherwise a human readable reason.
+     * with wrapper folders (`Pack/shaders/...`, `Pack/Pack/shaders/...`) are rewritten so the loader finds `shaders/`
+     * at the root. Returns null when the archive is loadable, otherwise a human readable reason.
      */
     fun validateAndNormalizeShaderZip(zip: File): String? {
         val names: List<String> = try {
             ZipFile(zip).use { zf -> zf.entries().toList().map { it.name } }
         } catch (e: Exception) {
             return "The downloaded file is not a valid ZIP archive"
-        }
+        }.filterNot { it.startsWith("__MACOSX/") }
         if (names.any { it.startsWith("shaders/", ignoreCase = true) }) return null
         if (names.any { it.equals("horizon-shaders.toml", ignoreCase = true) }) return null
 
-        val folders = names.filter { it.count { c -> c == '/' } >= 2 }
-            .filter { it.substringAfter('/').startsWith("shaders/", ignoreCase = true) }
-            .map { it.substringBefore('/') + "/" }
-            .distinct()
-        if (folders.size != 1) {
+        // The folder prefix in front of `shaders/`, at most two wrapper folders deep.
+        val prefixes = names.mapNotNull { name ->
+            val parts = name.split('/')
+            val at = parts.indexOfFirst { it.equals("shaders", ignoreCase = true) }
+            if (at in 1..2 && parts.size > at + 1) parts.take(at).joinToString("/") + "/" else null
+        }.distinct()
+        if (prefixes.isEmpty()) {
             return "The archive has no shaders folder, so it is not a shader pack"
         }
-        return repackWithoutPrefix(zip, folders[0])
+        val shallowest = prefixes.minOf { it.count { c -> c == '/' } }
+        val best = prefixes.filter { it.count { c -> c == '/' } == shallowest }
+        if (best.size != 1) {
+            return "The archive holds several shader packs, so it is unclear which one to install"
+        }
+        return repackWithoutPrefix(zip, best[0])
     }
 
     private fun repackWithoutPrefix(zip: File, prefix: String): String? {

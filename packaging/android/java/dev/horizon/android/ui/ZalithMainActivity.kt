@@ -4768,6 +4768,76 @@ private fun CleanVersionsViewport(
 }
 
 @Composable
+private fun StoreTranslatorSelector(
+    selected: ShaderTranslator,
+    onSelect: (ShaderTranslator) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = CardSlateBg,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Translator", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    LavenderTagBadge(text = selected.label)
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    ShaderTranslator.entries.forEach { option ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    onSelect(option)
+                                    expanded = false
+                                }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selected == option,
+                                onClick = {
+                                    onSelect(option)
+                                    expanded = false
+                                },
+                                colors = RadioButtonDefaults.colors(selectedColor = SkyBlueAccent),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Column {
+                                Text(option.label, fontSize = 11.sp, color = Color.White)
+                                Text(option.summary, fontSize = 9.sp, color = Color.White.copy(alpha = 0.6f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun StoreSourceSelector(
     selected: StoreSource,
     onSelect: (StoreSource) -> Unit
@@ -4846,6 +4916,7 @@ private fun CleanStoreViewport(
     val context = LocalContext.current
     var selectedCategory by remember(initialCategory) { mutableStateOf(initialCategory) }
     var selectedSource by remember { mutableStateOf(StoreSource.HORIZON) }
+    var shaderTranslator by remember { mutableStateOf(ShaderTranslator.current(context)) }
     var searchMessage by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var gameVersionQuery by remember { mutableStateOf("") }
@@ -5498,6 +5569,16 @@ private fun CleanStoreViewport(
                                 currentPage = 1
                             }
                         )
+
+                        if (selectedCategory == StoreCategory.SHADER_PACK) {
+                            StoreTranslatorSelector(
+                                selected = shaderTranslator,
+                                onSelect = {
+                                    shaderTranslator = it
+                                    ShaderTranslator.save(context, it)
+                                }
+                            )
+                        }
 
                         StoreRightSearchPill(
                             value = searchQuery,

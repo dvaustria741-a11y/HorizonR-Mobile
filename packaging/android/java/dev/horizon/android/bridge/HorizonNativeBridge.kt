@@ -4884,7 +4884,7 @@ object HorizonNativeBridge {
                 else ContentSources.validateAndNormalizePackZip(part)
                 packProblem?.let { throw ContentSourceException(it) }
 
-                if (isShader) {
+                if (isShader && ShaderTranslator.current(context) == ShaderTranslator.V2) {
                     onProgress(
                         StoreDownloadProgress(
                             activeItemId = item.id,
