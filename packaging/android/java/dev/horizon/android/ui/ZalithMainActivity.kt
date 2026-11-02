@@ -101,6 +101,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
@@ -6555,6 +6557,34 @@ private fun CleanFilesViewport(
         }
     }
 
+    val toggleScope = rememberCoroutineScope()
+    val toggleMutex = remember { Mutex() }
+    val toggleItem: (ManagerRowUiItem) -> Unit = { target ->
+        val folder = target.folder
+        val desired = !target.isEnabled
+        folderCache[folder]?.let { rows ->
+            folderCache[folder] = rows.map { row ->
+                when {
+                    row.file == target.file -> row.copy(isEnabled = desired)
+                    folder == "shaderpacks" && desired && row.isEnabled -> row.copy(isEnabled = false)
+                    else -> row
+                }
+            }
+        }
+        toggleScope.launch(Dispatchers.IO) {
+            toggleMutex.withLock {
+                HorizonNativeBridge.setContentItemEnabled(context, folder, target.file.name, desired, profileSlot, logEnabled)
+                val rows = folderCache[folder].orEmpty()
+                val synced = rows.map { row ->
+                    row.copy(isEnabled = HorizonNativeBridge.isContentItemEnabled(context, folder, row.file.name, profileSlot))
+                }
+                withContext(Dispatchers.Main) {
+                    if (folderCache[folder] != null) folderCache[folder] = synced
+                }
+            }
+        }
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             val ext = when (currentFolder) {
@@ -6939,6 +6969,7 @@ private fun CleanFilesViewport(
                                     profileSlot = profileSlot,
                                     logEnabled = logEnabled,
                                     onTriggerRefresh = { refreshCount += 1 },
+                                    onToggleEnabled = { toggleItem(rowItem) },
                                     onRequestRename = { target ->
                                         renameInputText = target.nameWithoutExtension
                                         renameTargetFile = target
@@ -6969,6 +7000,7 @@ private fun FileManagerRowCard(
     profileSlot: Int,
     logEnabled: Boolean,
     onTriggerRefresh: () -> Unit,
+    onToggleEnabled: () -> Unit,
     onRequestRename: (File) -> Unit,
     onRequestDelete: (File, String) -> Unit,
     onQuickPlayWorld: (String) -> Unit
@@ -7134,12 +7166,7 @@ private fun FileManagerRowCard(
                         Checkbox(
                             checked = isEnabled,
                             onCheckedChange = {
-                                scope.launch(Dispatchers.IO) {
-                                    HorizonNativeBridge.toggleContentItem(context, folder, file.name, profileSlot, logEnabled)
-                                    withContext(Dispatchers.Main) {
-                                        onTriggerRefresh()
-                                    }
-                                }
+                                onToggleEnabled()
                             },
                             colors = CheckboxDefaults.colors(
                                 checkedColor = SkyBlueAccent,
@@ -7320,12 +7347,7 @@ private fun FileManagerRowCard(
                                                 text = { Text(if (isEnabled) "Disable Pack" else "Enable Pack", fontSize = 12.sp, color = Color.White) },
                                                 onClick = {
                                                     showMoreMenu = false
-                                                    scope.launch(Dispatchers.IO) {
-                                                        HorizonNativeBridge.toggleContentItem(context, folder, file.name, profileSlot, logEnabled)
-                                                        withContext(Dispatchers.Main) {
-                                                            onTriggerRefresh()
-                                                        }
-                                                    }
+                                                    onToggleEnabled()
                                                 }
                                             )
                                         }
@@ -7376,12 +7398,7 @@ private fun FileManagerRowCard(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isEnabled) Color(0xFF1E3E29) else SkyBlueAccent,
                                 modifier = Modifier.clickable {
-                                    scope.launch(Dispatchers.IO) {
-                                        HorizonNativeBridge.toggleContentItem(context, folder, file.name, profileSlot, logEnabled)
-                                        withContext(Dispatchers.Main) {
-                                            onTriggerRefresh()
-                                        }
-                                    }
+                                    onToggleEnabled()
                                 }
                             ) {
                                 Text(
