@@ -653,7 +653,7 @@ const MAPPINGS: [(&str, Option<KeyCode>); 9] = [
 impl Game<'_> {
     /// Once a frame, in a world or not, after Horizon's extras.
     pub(super) fn native_frame(&mut self, elapsed: Duration) {
-        let _ = elapsed;
+        self.lh_frame(elapsed);
     }
     /// Once a tick, in every `Game`: the window's (in single player, on LAN
     /// and on servers), and the server's own (`native_window` is false
@@ -717,7 +717,7 @@ impl Game<'_> {
     /// `native_fill` and `native_text`. Skip a corner `native_corner_shown`
     /// says is taken.
     pub(super) fn native_hud(&mut self, batch: &mut HudBatch, corners: &mut Corners) {
-        let _ = (batch, corners);
+        self.lh_hud(batch, corners);
     }
     /// A player right-clicks the entity `entity` (`Entity.getId`) of type
     /// `kind` (`minecraft:cow`) with `self.hand`, holding `stack` (none in an
@@ -778,7 +778,7 @@ impl Game<'_> {
     /// (`key.keyboard.z`, `key.mouse.left`): keys on any screen (check
     /// `native_playing`), mouse buttons while playing. Repeats are left out.
     pub(super) fn native_key(&mut self, key: &str, pressed: bool) {
-        let _ = (key, pressed);
+        self.lh_key(key, pressed);
     }
     /// Wheel steps while playing: set `claimed` to keep them from the hotbar.
     pub(super) fn native_wheel(&mut self, steps: f32, claimed: &mut bool) {
@@ -787,7 +787,7 @@ impl Game<'_> {
     /// A command typed or clicked in chat, without its slash, before the
     /// server and Horizon's commands see it: set `ran` when the mod ran it.
     pub(super) fn native_command(&mut self, command: &str, ran: &mut bool) {
-        let _ = (command, ran);
+        self.lh_command(command, ran);
     }
     /// The commands `native_command` runs, by name and without their slash:
     /// push the ones that are yours. Asked when a connection starts and
@@ -795,7 +795,7 @@ impl Game<'_> {
     /// completes and lists them as the game's own; a name the game already
     /// has keeps that command's behaviour. API 35.
     pub(super) fn native_commands(&mut self, commands: &mut Vec<&'static str>) {
-        let _ = commands;
+        self.lh_commands(commands);
     }
     /// The zoom a native mod asks for, applied while playing (the spyglass's
     /// own view wins): set `zoom` when it is none yet.
@@ -808,17 +808,17 @@ impl Game<'_> {
     }
     /// Options > Mods lists the native mods: push yours.
     pub(super) fn native_mods(&mut self, mods: &mut Vec<NativeMod>) {
-        let _ = mods;
+        self.lh_mods(mods);
     }
     /// The buttons of mod `mod_id`'s settings page, under its keys: push
     /// their labels when it is yours. Asked again each time the page opens
     /// and after each click.
     pub(super) fn native_settings(&mut self, mod_id: &str, buttons: &mut Vec<String>) {
-        let _ = (mod_id, buttons);
+        self.lh_settings(mod_id, buttons);
     }
     /// Button `button` of mod `mod_id`'s settings page was clicked.
     pub(super) fn native_settings_click(&mut self, mod_id: &str, button: usize) {
-        let _ = (mod_id, button);
+        self.lh_settings_click(mod_id, button);
     }
     /// The player did `event` on mod `mod_id`'s panel (`native_panel_items`):
     /// act on it when it is yours. API 2.
@@ -996,7 +996,7 @@ impl Game<'_> {
     /// codes. Asked each frame the tooltip shows, never for one the stack
     /// hides. API 12.
     pub(super) fn native_tooltip(&self, stack: &ItemStack, lines: &mut Vec<(Text, u32)>) {
-        let _ = (stack, lines);
+        self.lh_tooltip(stack, lines);
     }
     /// A player uses `stack` (right click) with `self.hand` on the block at
     /// `pos`, `face` the face clicked (`[0, 1, 0]` is the top), once the
@@ -1020,7 +1020,7 @@ impl Game<'_> {
     /// hand swings and the item's own use doesn't run. Server-side, for every
     /// player of the world; an item on cooldown is never used. API 13.
     pub(super) fn native_use_item(&mut self, stack: &ItemStack, claimed: &mut bool) {
-        let _ = (stack, claimed);
+        self.lh_use_item(stack, claimed);
     }
     /// A player breaks the block `state` at `pos`, once the game allowed it
     /// (the held item can break blocks, the debug stick didn't take the
@@ -1102,7 +1102,8 @@ impl Game<'_> {
         pos: [f64; 3],
         canceled: &mut bool,
     ) {
-        let _ = (entity, kind, pos, canceled);
+        let _ = pos;
+        self.lh_attack_entity(entity, kind, canceled);
     }
     /// A message from `player`'s client on `channel` (`mod_id:name`), within
     /// the caps (`native_net.rs`): check `channel`, and treat `data` as the
