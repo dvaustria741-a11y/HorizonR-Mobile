@@ -1,7 +1,7 @@
 MIT License (Horizon Rust Engine & Android Port) + GPL-3.0 License (ZalithLauncher2Plus UI Components)
 
 Copyright (c) 2026 Ludovic Marie (@ludovic111) and Horizon Contributors
-Copyright (c) 2026 Amadeus Vasysik (@Vasysik)
+Copyright (c) 2026 Zenkai (@dvaustria741-a11y)
 Copyright (c) 2026 ZalithLauncher Team & Star1xr (@Star1xr)
 Copyright (c) 2026 HorizonZ - Launcher Contributors
 
