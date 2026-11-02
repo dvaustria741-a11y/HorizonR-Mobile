@@ -122,8 +122,8 @@ enum class BuiltInSkinPreset(
     ),
     CLASSIC_STEVE(
         "classic_steve",
-        "Classic Steve",
-        "Wide 4px Arms • Standard Java 26.3",
+        "Steve",
+        "Wide 4px Arms • Default Skin",
         false,
         0xFFB58463.toInt(),
         0xFF422818.toInt(),
@@ -135,55 +135,68 @@ enum class BuiltInSkinPreset(
     ),
     SLIM_ALEX(
         "slim_alex",
-        "Slim Alex",
-        "Slim 3px Arms • Agile Explorer",
+        "Alex",
+        "Slim 3px Arms • Default Skin",
         true,
-        0xFFE8B998.toInt(),
-        0xFFC96A28.toInt(),
-        0xFF2E6F40.toInt(),
-        0xFF558B2F.toInt(),
-        0xFF33691E.toInt(),
-        0xFF5D4037.toInt(),
-        0xFF424242.toInt()
+        0xFFB58463.toInt(),
+        0xFF422818.toInt(),
+        0xFF3E4EB8.toInt(),
+        0xFF0099A8.toInt(),
+        0xFF007A87.toInt(),
+        0xFF38388E.toInt(),
+        0xFF4F4F4F.toInt()
     ),
-    HORIZON_KNIGHT(
-        "horizon_knight",
-        "HorizonZ Cyber Knight",
-        "Wide 4px Arms • Sky-Blue Neon Armor",
+    SUNNY(
+        "sunny",
+        "Sunny",
+        "Wide 4px Arms • Default Skin",
         false,
-        0xFFD7A98C.toInt(),
-        0xFF1A242B.toInt(),
-        0xFF00E5FF.toInt(),
-        0xFF1E323C.toInt(),
-        0xFF8BE0FF.toInt(),
-        0xFF152026.toInt(),
-        0xFF00ACC1.toInt()
+        0xFFB58463.toInt(),
+        0xFF422818.toInt(),
+        0xFF3E4EB8.toInt(),
+        0xFF0099A8.toInt(),
+        0xFF007A87.toInt(),
+        0xFF38388E.toInt(),
+        0xFF4F4F4F.toInt()
     ),
-    NETHERITE_SOVEREIGN(
-        "netherite_sovereign",
-        "Netherite Sovereign",
-        "Wide 4px Arms • Crimson & Gold Trim",
+    ZURI(
+        "zuri",
+        "Zuri",
+        "Wide 4px Arms • Default Skin",
         false,
-        0xFFC59372.toInt(),
-        0xFF2B1D1E.toInt(),
-        0xFFFF7043.toInt(),
-        0xFF372C30.toInt(),
-        0xFFFFB300.toInt(),
-        0xFF241D20.toInt(),
-        0xFF8D2828.toInt()
+        0xFFB58463.toInt(),
+        0xFF422818.toInt(),
+        0xFF3E4EB8.toInt(),
+        0xFF0099A8.toInt(),
+        0xFF007A87.toInt(),
+        0xFF38388E.toInt(),
+        0xFF4F4F4F.toInt()
     ),
-    EMERALD_RANGER(
-        "emerald_ranger",
-        "Emerald Ranger",
-        "Slim 3px Arms • Overworld Stealth Cloak",
+    MAKENA(
+        "makena",
+        "Makena",
+        "Slim 3px Arms • Default Skin",
         true,
-        0xFFE0B190.toInt(),
-        0xFF2E1E12.toInt(),
-        0xFF00E676.toInt(),
-        0xFF1B5E20.toInt(),
-        0xFF66BB6A.toInt(),
-        0xFF263238.toInt(),
-        0xFF3E2723.toInt()
+        0xFFB58463.toInt(),
+        0xFF422818.toInt(),
+        0xFF3E4EB8.toInt(),
+        0xFF0099A8.toInt(),
+        0xFF007A87.toInt(),
+        0xFF38388E.toInt(),
+        0xFF4F4F4F.toInt()
+    ),
+    NOOR(
+        "noor",
+        "Noor",
+        "Slim 3px Arms • Default Skin",
+        true,
+        0xFFB58463.toInt(),
+        0xFF422818.toInt(),
+        0xFF3E4EB8.toInt(),
+        0xFF0099A8.toInt(),
+        0xFF007A87.toInt(),
+        0xFF38388E.toInt(),
+        0xFF4F4F4F.toInt()
     )
 }
 
@@ -678,10 +691,19 @@ object HorizonNativeBridge {
     }
 
     fun generatePresetSkinBitmap(preset: BuiltInSkinPreset, context: Context? = null): Bitmap {
-        if (preset == BuiltInSkinPreset.GOTHIC_MONOCHROME && context != null) {
+        val presetRes = when (preset) {
+            BuiltInSkinPreset.GOTHIC_MONOCHROME -> dev.horizon.android.R.drawable.skin_user_gothic
+            BuiltInSkinPreset.CLASSIC_STEVE -> dev.horizon.android.R.drawable.skin_preset_steve
+            BuiltInSkinPreset.SLIM_ALEX -> dev.horizon.android.R.drawable.skin_preset_alex
+            BuiltInSkinPreset.SUNNY -> dev.horizon.android.R.drawable.skin_preset_sunny
+            BuiltInSkinPreset.ZURI -> dev.horizon.android.R.drawable.skin_preset_zuri
+            BuiltInSkinPreset.MAKENA -> dev.horizon.android.R.drawable.skin_preset_makena
+            BuiltInSkinPreset.NOOR -> dev.horizon.android.R.drawable.skin_preset_noor
+        }
+        if (context != null) {
             runCatching {
                 val opts = BitmapFactory.Options().apply { inScaled = false }
-                val raw = BitmapFactory.decodeResource(context.resources, dev.horizon.android.R.drawable.skin_user_gothic, opts)
+                val raw = BitmapFactory.decodeResource(context.resources, presetRes, opts)
                 if (raw != null) {
                     return normalizeAndCleanSkin64x64(Bitmap.createScaledBitmap(raw, 64, 64, false))
                 }
