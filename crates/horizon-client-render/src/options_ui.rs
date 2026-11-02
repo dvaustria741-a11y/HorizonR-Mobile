@@ -3326,6 +3326,24 @@ impl OptionsUi {
                     tooltip = Some(lines);
                 }
             }
+            // A pack's screen button or its Profile button: what the pack says of it.
+            if hover {
+                let packs = &s.shader_pack_options;
+                let said = match &wd.kind {
+                    WKind::Button {
+                        act: Act::PackScreen(k),
+                        ..
+                    } => packs.screens.get(*k).map(|screen| screen.comment.as_str()),
+                    WKind::Button {
+                        act: Act::PackProfile,
+                        ..
+                    } => Some(packs.profile_comment.as_str()),
+                    _ => None,
+                };
+                if let Some(text) = said.filter(|t| !t.is_empty()) {
+                    tooltip = Some(atlas.font.split(&Text::literal(text.to_owned()), 200.0));
+                }
+            }
             if hover {
                 if let WKind::Button {
                     act: Act::Extra(item),

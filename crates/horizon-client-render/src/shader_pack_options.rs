@@ -56,6 +56,8 @@ pub struct Screen {
     pub entries: Vec<Entry>,
     /// Options side by side: 1 or 2 (0, as a default value, is 2).
     pub columns: usize,
+    /// What the pack says of the screen, the tooltip of the button that opens it.
+    pub comment: String,
 }
 
 /// The picked pack's options and how its screens arrange them; screen 0 is the main one.
@@ -66,6 +68,8 @@ pub struct Options {
     pub items: Vec<Item>,
     pub screens: Vec<Screen>,
     pub profiles: Vec<Profile>,
+    /// What the pack says of its profiles, the tooltip of the Profile button.
+    pub profile_comment: String,
 }
 
 impl Options {
@@ -240,6 +244,7 @@ fn classic(dir: &Path, entry: &PackEntry, locale: &str) -> Options {
         items,
         screens,
         profiles,
+        profile_comment: layout.profile_comment.clone(),
     }
 }
 
@@ -278,6 +283,7 @@ fn screens(layout: &horizon_shaders::Layout, items: &[Item]) -> Vec<Screen> {
             title: String::new(),
             entries: all(),
             columns: 2,
+            comment: String::new(),
         }];
     }
     // Options no screen lists, which a `*` shows.
@@ -330,6 +336,7 @@ fn screens(layout: &horizon_shaders::Layout, items: &[Item]) -> Vec<Screen> {
             title: def(&id).map_or_else(|| id.clone(), |d| d.title.clone()),
             entries,
             columns: def(&id).map_or(2, |d| d.columns),
+            comment: def(&id).map_or_else(String::new, |d| d.comment.clone()),
         });
         k += 1;
     }
@@ -426,12 +433,14 @@ fn horizon(dir: &Path, entry: &PackEntry) -> Options {
         title: String::new(),
         entries: (0..items.len()).map(Entry::Option).collect(),
         columns: 2,
+        comment: String::new(),
     }];
     Options {
         pack: entry.file.clone(),
         items,
         screens,
         profiles: Vec::new(),
+        profile_comment: String::new(),
     }
 }
 
@@ -507,6 +516,7 @@ mod tests {
                     id: String::new(),
                     title: String::new(),
                     columns: 2,
+                    comment: String::new(),
                     entries: vec![
                         LayoutEntry::Option("B".into()),
                         LayoutEntry::Space,
@@ -518,6 +528,7 @@ mod tests {
                     id: "MORE".into(),
                     title: "More".into(),
                     columns: 2,
+                    comment: String::new(),
                     entries: vec![LayoutEntry::Option("A".into())],
                 },
             ],
@@ -571,6 +582,7 @@ mod tests {
                     settings: vec![(0, 2), (1, 2)],
                 },
             ],
+            profile_comment: String::new(),
         };
         assert_eq!(o.current_profile(), Some(0));
         o.next_profile();

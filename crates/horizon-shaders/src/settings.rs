@@ -158,6 +158,9 @@ pub struct ScreenDef {
     pub entries: Vec<LayoutEntry>,
     /// `screen.columns` / `screen.NAME.columns`: options side by side (1 or 2; the default is 2).
     pub columns: usize,
+    /// What the pack says of the screen (`screen.NAME.comment`), shown on the button that opens
+    /// it; empty when nothing.
+    pub comment: String,
 }
 
 /// A preset the pack ships (`profile.NAME=`): the option values it sets, with the profiles it
@@ -177,6 +180,8 @@ pub struct Layout {
     pub screens: Vec<ScreenDef>,
     pub sliders: BTreeSet<String>,
     pub profiles: Vec<ProfileDef>,
+    /// What the pack says of its profiles (`profile.comment`); empty when nothing.
+    pub profile_comment: String,
 }
 
 impl Layout {
@@ -231,13 +236,23 @@ pub fn layout(pack: &Pack, locale: &str) -> Layout {
             .and_then(|v| v.trim().parse::<usize>().ok())
             .map_or(2, |n| n.clamp(1, 2))
     };
-    let mut out = Layout::default();
+    // The pack's `KEY.comment` line, its `\n` as line breaks.
+    let comment = |key: &str| {
+        lang.get(&format!("{key}.comment"))
+            .map(|c| strip_formatting(&c.replace("\\n", "\n")))
+            .unwrap_or_default()
+    };
+    let mut out = Layout {
+        profile_comment: comment("profile"),
+        ..Layout::default()
+    };
     if let Some(main) = properties.get("screen") {
         out.screens.push(ScreenDef {
             id: String::new(),
             title: String::new(),
             entries: entries(main),
             columns: columns("screen.columns"),
+            comment: comment("screen"),
         });
     }
     for entry in &properties.entries {
@@ -257,6 +272,7 @@ pub fn layout(pack: &Pack, locale: &str) -> Layout {
             title,
             entries: entries(&entry.value),
             columns: columns(&format!("screen.{id}.columns")),
+            comment: comment(&format!("screen.{id}")),
         });
     }
     if let Some(sliders) = properties.get("sliders") {
