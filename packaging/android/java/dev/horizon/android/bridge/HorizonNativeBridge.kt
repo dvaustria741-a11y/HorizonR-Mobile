@@ -5600,6 +5600,10 @@ object HorizonNativeBridge {
             ?.also { HorizonServerStore.pendingQuickPlayServer = null }
             ?.trim()
             ?.takeIf { it.isNotBlank() }
+        val quickPlayWorld = HorizonServerStore.pendingQuickPlayWorld
+            ?.also { HorizonServerStore.pendingQuickPlayWorld = null }
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
         runCatching {
             syncNativeHorizonAccountAndCatalog(
                 ensureHomeDirectories(context),
@@ -5619,6 +5623,7 @@ object HorizonNativeBridge {
             putExtra("HORIZON_DEVICE_TOTAL_RAM_MB", totalRamMb)
             putExtra("HORIZON_SHADER_PACK", activeShaderPack)
             quickPlayServer?.let { putExtra("HORIZON_QUICK_PLAY_SERVER", it) }
+            quickPlayWorld?.let { putExtra("HORIZON_QUICK_PLAY_WORLD", it) }
             putExtra("HORIZON_AI_AGENT_ENABLED", config.aiAgentEnabled)
             putExtra("HORIZON_AI_AGENT_PROVIDER", config.aiAgentProvider.serdeKey)
             putExtra("HORIZON_GEMINI_MODEL", config.geminiModel)

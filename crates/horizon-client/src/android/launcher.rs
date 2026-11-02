@@ -426,7 +426,7 @@ impl Launcher {
             }
             self.session_ready = false;
             std::fs::create_dir_all(&game_home)?;
-            let extra_arguments = if crate::PUBLIC_BUILD {
+            let mut extra_arguments = if crate::PUBLIC_BUILD {
                 Vec::new()
             } else {
                 match std::fs::read(self.home.join("android-launch.json")) {
@@ -435,6 +435,13 @@ impl Launcher {
                     Err(e) => return Err(e.into()),
                 }
             };
+            // Quick Play on a world: the Android UI hands over the saves/ folder name.
+            if let Some(world) = std::env::var("HORIZON_QUICK_PLAY_WORLD")
+                .ok()
+                .filter(|w| !w.is_empty())
+            {
+                extra_arguments.extend(["--quickPlaySingleplayer".into(), world]);
+            }
 
             self.audio = None;
             self.error = None;

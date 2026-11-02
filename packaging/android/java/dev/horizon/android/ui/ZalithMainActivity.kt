@@ -1717,7 +1717,8 @@ fun ZalithCleanLauncherScreen(
                                         storeInitialCategory = targetCat
                                         selectedTab = ZalithNavTab.STORE
                                     },
-                                    onQuickPlayWorld = {
+                                    onQuickPlayWorld = { worldName ->
+                                        HorizonServerStore.pendingQuickPlayWorld = worldName
                                         handleLaunchOrDownload()
                                     }
                                 )
@@ -6511,7 +6512,7 @@ private fun CleanFilesViewport(
     profileSlot: Int,
     logEnabled: Boolean,
     onNavigateToStoreCategory: (StoreCategory) -> Unit,
-    onQuickPlayWorld: () -> Unit
+    onQuickPlayWorld: (String) -> Unit
 ) {
     val context = LocalContext.current
     val home = remember(profileSlot) {
@@ -7040,7 +7041,7 @@ private fun FileManagerRowCard(
     onTriggerRefresh: () -> Unit,
     onRequestRename: (File) -> Unit,
     onRequestDelete: (File, String) -> Unit,
-    onQuickPlayWorld: () -> Unit
+    onQuickPlayWorld: (String) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -7348,7 +7349,7 @@ private fun FileManagerRowCard(
                                             text = { Text("Quick Play", fontSize = 12.sp, color = Color.White) },
                                             onClick = {
                                                 showMoreMenu = false
-                                                onQuickPlayWorld()
+                                                onQuickPlayWorld(file.name)
                                             }
                                         )
                                         DropdownMenuItem(

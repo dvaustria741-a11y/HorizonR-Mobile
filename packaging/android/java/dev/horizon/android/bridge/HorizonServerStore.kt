@@ -31,6 +31,9 @@ object HorizonServerStore {
     @Volatile
     var pendingQuickPlayServer: String? = null
 
+    @Volatile
+    var pendingQuickPlayWorld: String? = null
+
     fun serversFile(profileHome: File): File = File(profileHome, "servers.dat")
 
     fun load(file: File): MutableList<ServerEntry> {
