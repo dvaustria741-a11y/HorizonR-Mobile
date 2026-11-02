@@ -536,6 +536,44 @@ object HorizonNativeBridge {
     @JvmStatic
     external fun nativeGetInstallProgress(home: String): String
 
+    /** Rust shader translator: `ok<TAB>zip<TAB>loadedBefore<TAB>skippedBefore<TAB>loadedAfter<TAB>skippedAfter<TAB>rules` or `err<TAB>message`. */
+    @JvmStatic
+    external fun nativeConvertShaderPack(inPath: String, outDir: String): String
+
+    /**
+     * Runs the translator over a downloaded Iris/OptiFine shader pack so every program Horizon would skip loads.
+     * On success [zip] is replaced by the converted pack and a one-line summary is returned; on any failure [zip] is
+     * left as it was (the pack still installs, just untranslated) and null is returned.
+     */
+    private fun translateShaderZip(context: Context, zip: File, logEnabled: Boolean): String? {
+        val outDir = File(context.cacheDir, "shaderport-${System.nanoTime()}")
+        return try {
+            if (!nativeLoaded) {
+                System.loadLibrary("horizon_android")
+                nativeLoaded = true
+            }
+            outDir.mkdirs()
+            val parts = nativeConvertShaderPack(zip.absolutePath, outDir.absolutePath).split('\t')
+            if (parts.firstOrNull() != "ok" || parts.size < 7) {
+                appendSystemLog("Shader translator skipped '${zip.name}': ${parts.getOrNull(1) ?: "no result"}", logEnabled, context)
+                return null
+            }
+            val converted = File(parts[1])
+            if (!converted.isFile || converted.length() <= 0L) return null
+            val afterSkipped = parts[5].toIntOrNull() ?: 0
+            val beforeSkipped = parts[3].toIntOrNull() ?: 0
+            converted.copyTo(zip, overwrite = true)
+            val summary = "${parts[2]} -> ${parts[4]} programs load, $beforeSkipped -> $afterSkipped skipped"
+            appendSystemLog("Shader translator on '${zip.name}': $summary (${parts[6]} rules).", logEnabled, context)
+            summary
+        } catch (e: Throwable) {
+            appendSystemLog("Shader translator unavailable for '${zip.name}': ${e.message}", logEnabled, context)
+            null
+        } finally {
+            outDir.deleteRecursively()
+        }
+    }
+
     private fun appendMemoryOnly(message: String) {
         val stamp = synchronized(timeFormat) { timeFormat.format(Date()) }
         val line = "[$stamp] $message"
@@ -4845,6 +4883,20 @@ object HorizonNativeBridge {
                 val packProblem = if (isShader) ContentSources.validateAndNormalizeShaderZip(part)
                 else ContentSources.validateAndNormalizePackZip(part)
                 packProblem?.let { throw ContentSourceException(it) }
+
+                if (isShader) {
+                    onProgress(
+                        StoreDownloadProgress(
+                            activeItemId = item.id,
+                            activeTitle = item.title,
+                            running = true,
+                            percent = 98,
+                            speedText = "",
+                            statusText = "Translating shaders for Horizon..."
+                        )
+                    )
+                    translateShaderZip(context, part, logEnabled)
+                }
 
                 removeRecordedExternalPack(context, profileSlot, item, canonicalName, logEnabled)
 
