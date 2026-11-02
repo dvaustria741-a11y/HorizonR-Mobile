@@ -5,6 +5,9 @@
 #[cfg(target_os = "windows")]
 pub mod boot_paint;
 
+#[cfg(any(target_os = "android", test))]
+mod cores;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Ask the OS to run the calling thread ahead of the process's other
@@ -40,9 +43,33 @@ fn favour() -> bool {
     unsafe { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL) != 0 }
 }
 
-#[cfg(not(any(target_vendor = "apple", windows)))]
+/// Android: the threads that ask to be favoured are helpers that may have
+/// inherited a pinned parent's cores (`prefer_big_cores`); they get every core back.
+#[cfg(target_os = "android")]
+fn favour() -> bool {
+    cores::release()
+}
+
+#[cfg(not(any(target_vendor = "apple", windows, target_os = "android")))]
 fn favour() -> bool {
     false
+}
+
+/// On a phone with fast and slow cores (Android), run the calling thread on
+/// the fast ones only: the render thread and the server thread, which a frame
+/// or a tick waits for. Threads it starts afterwards inherit the cores, so
+/// worker threads (`behind_server`) and `favour_current` get every core
+/// back. Nothing where the cores are alike or on other systems, and
+/// `HORIZON_BIG_CORES=0` turns it off. Whether the OS took it.
+pub fn prefer_big_cores() -> bool {
+    #[cfg(target_os = "android")]
+    {
+        cores::pin_to_big()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        false
+    }
 }
 
 /// The CPU time the calling thread has used, where only an OS call gives it
@@ -115,7 +142,7 @@ fn behind() -> bool {
     // SAFETY: these read and set the calling thread's own nice value or
     // policy (who 0, pid 0 is the calling thread on Linux and Android); `param` lives
     // across the call.
-    unsafe {
+    let took = unsafe {
         let nice = libc::getpriority(libc::PRIO_PROCESS as _, 0);
         if nice + BEHIND <= 19 {
             libc::setpriority(libc::PRIO_PROCESS as _, 0, nice + BEHIND) == 0
@@ -123,7 +150,11 @@ fn behind() -> bool {
             let param = libc::sched_param { sched_priority: 0 };
             libc::sched_setscheduler(0, libc::SCHED_IDLE, &param) == 0
         }
-    }
+    };
+    // A helper started by a pinned thread runs on every core, not its parent's.
+    #[cfg(target_os = "android")]
+    cores::release();
+    took
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android")))]

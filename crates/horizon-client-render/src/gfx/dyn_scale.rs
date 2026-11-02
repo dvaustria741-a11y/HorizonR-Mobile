@@ -2,8 +2,8 @@
 //! budget and raises it again once there is room, so a GPU-bound phone holds
 //! its frame rate. The Resolution Scale setting stays the ceiling.
 
-/// Frame budget the scale aims for (60 fps).
-const TARGET_MS: f32 = 1000.0 / 60.0;
+/// The frame rate the scale aims for unless a lower cap is set (60 fps).
+const TARGET_FPS: f32 = 60.0;
 /// Frames averaged per decision.
 const WINDOW: u32 = 30;
 /// The scale steps by this much, so a change (which rebuilds the world's
@@ -22,6 +22,8 @@ const HITCH_MS: f32 = 250.0;
 
 pub(super) struct DynScale {
     enabled: bool,
+    /// Frame budget in milliseconds.
+    target_ms: f32,
     factor: f32,
     sum_ms: f32,
     frames: u32,
@@ -36,6 +38,7 @@ impl DynScale {
     pub(super) fn new(enabled: bool) -> Self {
         Self {
             enabled,
+            target_ms: 1000.0 / TARGET_FPS,
             factor: 1.0,
             sum_ms: 0.0,
             frames: 0,
@@ -48,6 +51,27 @@ impl DynScale {
     /// The share of the chosen resolution scale to render at (1.0 when off).
     pub(super) fn factor(&self) -> f32 {
         if self.enabled { self.factor } else { 1.0 }
+    }
+
+    /// Switches the controller on or off and sets the frame rate it aims for
+    /// (the frame cap, within 20..=60: a capped frame is not a slow one);
+    /// true when `factor` changed.
+    pub(super) fn configure(&mut self, enabled: bool, target_fps: f32) -> bool {
+        let target_ms = 1000.0 / target_fps.clamp(20.0, TARGET_FPS);
+        if self.enabled == enabled && (self.target_ms - target_ms).abs() < 1e-3 {
+            return false;
+        }
+        let before = self.factor();
+        self.enabled = enabled;
+        self.target_ms = target_ms;
+        self.sum_ms = 0.0;
+        self.frames = 0;
+        self.calm = 0;
+        self.raised = false;
+        if !enabled {
+            self.factor = 1.0;
+        }
+        (self.factor() - before).abs() > f32::EPSILON
     }
 
     /// Takes one frame's time; true when `factor` changed.
@@ -69,7 +93,7 @@ impl DynScale {
         self.sum_ms = 0.0;
         self.frames = 0;
         let before = self.factor;
-        if average > TARGET_MS * OVER {
+        if average > self.target_ms * OVER {
             if self.raised {
                 // The last raise did not hold: wait longer before the next.
                 self.wait = (self.wait * 2).min(MAX_WAIT);
@@ -77,7 +101,7 @@ impl DynScale {
             }
             self.calm = 0;
             self.factor = (self.factor - STEP).max(FLOOR);
-        } else if average <= TARGET_MS * UNDER {
+        } else if average <= self.target_ms * UNDER {
             self.calm += 1;
             if self.calm >= self.wait && self.factor < 1.0 {
                 self.factor = (self.factor + STEP).min(1.0);
@@ -126,6 +150,29 @@ mod tests {
         assert!((scale.factor() - 1.0).abs() < 1e-4);
         run(&mut scale, 25.0, WINDOW);
         assert_eq!(scale.wait, 4);
+    }
+
+    #[test]
+    fn a_frame_cap_is_the_budget_not_a_slow_gpu() {
+        let mut scale = DynScale::new(true);
+        assert!(!scale.configure(true, 30.0));
+        // 33 ms frames are on budget at a 30 fps cap.
+        assert!(!run(&mut scale, 33.0, WINDOW * 4));
+        assert_eq!(scale.factor(), 1.0);
+        // Over a 60 fps cap's budget, the same frames are slow.
+        scale.configure(true, 60.0);
+        assert!(run(&mut scale, 33.0, WINDOW));
+    }
+
+    #[test]
+    fn turning_it_off_restores_the_full_scale() {
+        let mut scale = DynScale::new(true);
+        run(&mut scale, 25.0, WINDOW * 3);
+        assert!(scale.factor() < 1.0);
+        assert!(scale.configure(false, 60.0));
+        assert_eq!(scale.factor(), 1.0);
+        scale.configure(true, 60.0);
+        assert_eq!(scale.factor(), 1.0);
     }
 
     #[test]

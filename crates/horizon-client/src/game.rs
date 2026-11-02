@@ -9986,6 +9986,7 @@ impl Game<'_> {
         // Particles (ParticleEngine.extract): camera-facing quads.
         self.mark_stage(out.len(), "PARTICLES");
         let world = &self.world;
+        self.particles.cull_behind = self.pack_ids.is_none();
         self.particles.render(
             camera,
             self.yaw,
@@ -19053,6 +19054,8 @@ pub(crate) fn android_game(arguments: Vec<String>) -> Result<Box<dyn Application
     let settings = Settings::load(&std::env::current_dir()?.join("options.txt"));
     let root = options.resources.clone();
     horizon_threads::put_helpers_behind();
+    // The render thread on the phone's fast cores (a no-op where they are all alike).
+    horizon_threads::prefer_big_cores();
     Behaviours::set_cache_dir(std::env::current_dir()?.join(".horizon-cache"));
     Ok(Box::new(loading_app(
         options,
