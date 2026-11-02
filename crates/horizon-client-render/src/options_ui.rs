@@ -1443,6 +1443,14 @@ enum Act {
     /// Pick `s.shader_packs[i]`, or turn it off when it is the pick.
     PickShaderPack(usize),
     OpenShaderPackFolder,
+    /// Iris: `Shaders: Enabled/Off` toggle (staged until Apply/Done).
+    ShaderToggle,
+    /// Iris: Apply / Done / Cancel on the shader pack screens.
+    ShaderApply,
+    ShaderDone,
+    ShaderCancel,
+    /// Iris: `Shader Pack List...` on the settings screen.
+    ShaderPackList,
     /// Open the picked pack's options page.
     ShaderPackSettings,
     /// Open screen `.0` of the picked pack's options.
@@ -1590,6 +1598,9 @@ pub struct OptionsUi {
     /// Packs: the packs found and the selection the screen opens with.
     pub pack_infos: Vec<crate::pack_screen::PackInfo>,
     pub pack_selection: Vec<String>,
+    /// Shader Packs (Iris-style): the pick waiting for Apply/Done, and the last pack before Shaders: Off.
+    shader_staged: Option<String>,
+    shader_last: String,
     /// The open pack screen, made at its first frame.
     pub pack_screen: Option<crate::pack_screen::PackScreen>,
     /// The Packs page is Create World's Data Packs screen on this folder.
@@ -1643,6 +1654,8 @@ impl Default for OptionsUi {
             settings_search,
             pack_infos: Vec::new(),
             pack_selection: Vec::new(),
+            shader_staged: None,
+            shader_last: String::new(),
             pack_screen: None,
             data_pack_dir: None,
             data_pack_resources: Default::default(),
@@ -1860,6 +1873,9 @@ impl OptionsUi {
         if page == Page::Packs {
             self.pack_screen = None;
         }
+        if page == Page::ShaderPacks {
+            self.shader_staged = None;
+        }
         if matches!(
             page,
             Page::Graphics | Page::GraphicsAdvanced | Page::GraphicsHdr
@@ -2006,6 +2022,22 @@ impl OptionsUi {
         rows
     }
 
+    /// The shader pack the list shows as picked: the staged pick, else the applied one.
+    fn staged_pack(&self, s: &Settings) -> String {
+        self.shader_staged
+            .clone()
+            .unwrap_or_else(|| s.horizon.shader_pack.clone())
+    }
+    /// Apply the staged pick. Whether the applied pack changed.
+    fn commit_shader(&mut self, s: &mut Settings) -> bool {
+        match self.shader_staged.take() {
+            Some(pick) if pick != s.horizon.shader_pack => {
+                s.horizon.shader_pack = pick;
+                true
+            }
+            _ => false,
+        }
+    }
     fn list_rows(&self, s: &Settings) -> Vec<Row> {
         match self.page() {
             Page::Extras => {
@@ -2393,39 +2425,42 @@ impl OptionsUi {
             }
             Page::NativeMod(i) => self.native_rows(s, i),
             Page::ShaderPacks => {
+                let current = self.staged_pack(s);
+                let enabled = !current.is_empty();
+                let mut rows = vec![Row::Buttons(
+                    button(
+                        0.0,
+                        0.0,
+                        310.0,
+                        Text::literal(format!(
+                            "Shaders: {}",
+                            if enabled { "Enabled" } else { "Off" }
+                        )),
+                        Act::ShaderToggle,
+                    ),
+                    None,
+                )];
                 if s.shader_packs.is_empty() {
-                    return vec![Row::Header("horizon.shader_packs.empty")];
+                    rows.push(Row::Header("horizon.shader_packs.empty"));
+                    return rows;
                 }
-                let picked = s.shader_packs.iter().any(|p| p.file == s.horizon.shader_pack);
-                let mut rows = Vec::new();
-                if picked {
-                    rows.push(Row::Buttons(
-                        button(
-                            0.0,
-                            0.0,
-                            310.0,
-                            tr("horizon.shader_packs.settings"),
-                            Act::ShaderPackSettings,
-                        ),
+                rows.extend(s.shader_packs.iter().enumerate().map(|(i, pack)| {
+                    let kind = match pack.kind {
+                        crate::shader_pack_list::Kind::Horizon => {
+                            lang::get("horizon.shader_packs.kind_horizon")
+                        }
+                        crate::shader_pack_list::Kind::Classic => String::new(),
+                    };
+                    let label = if pack.file == current {
+                        format!("> {}{kind} <", pack.title)
+                    } else {
+                        format!("{}{kind}", pack.title)
+                    };
+                    Row::Buttons(
+                        button(0.0, 0.0, 310.0, Text::literal(label), Act::PickShaderPack(i)),
                         None,
-                    ));
-                }
-                rows.extend(
-                    s.shader_packs
-                    .iter()
-                    .enumerate()
-                    .map(|(i, pack)| {
-                        let kind = match pack.kind {
-                            crate::shader_pack_list::Kind::Horizon => {
-                                lang::get("horizon.shader_packs.kind_horizon")
-                            }
-                            crate::shader_pack_list::Kind::Classic => String::new(),
-                        };
-                        let label = Text::literal(format!("{}{kind}: ", pack.title))
-                            .append(on_off(s.horizon.shader_pack == pack.file));
-                        Row::Buttons(button(0.0, 0.0, 310.0, label, Act::PickShaderPack(i)), None)
-                    }),
-                );
+                    )
+                }));
                 rows
             }
             Page::ShaderPackSettings(k) => {
@@ -3076,19 +3111,44 @@ impl OptionsUi {
                 }
                 content = y + self.scroll - top + 2.0;
                 out[list_start..].iter_mut().for_each(|w| w.list = true);
-                let folder = match page {
-                    Page::Mods => Some(("horizon.mods.open_folder", Act::OpenModFolder)),
-                    Page::ShaderPacks => Some(("pack.openFolder", Act::OpenShaderPackFolder)),
-                    Page::ShaderPackSettings(_) => {
-                        Some(("horizon.shader_packs.reset", Act::PackReset))
-                    }
-                    _ => None,
-                };
-                if let Some((label, act)) = folder {
-                    out.push(button(cx - 154.0, h - 27.0, 150.0, tr(label), act));
-                    out.push(button(cx + 4.0, h - 27.0, 150.0, tr("gui.done"), Act::Done));
+                if matches!(page, Page::ShaderPacks | Page::ShaderPackSettings(_)) {
+                    // Iris: two rows of buttons under the list.
+                    bottom = h - 58.0;
+                    let (left, right) = if page == Page::ShaderPacks {
+                        (
+                            tr("pack.openFolder"),
+                            Text::literal("Shader Pack Settings...".to_owned()),
+                        )
+                    } else {
+                        (
+                            tr("pack.openFolder"),
+                            Text::literal("Shader Pack List...".to_owned()),
+                        )
+                    };
+                    let right_act = if page == Page::ShaderPacks {
+                        Act::ShaderPackSettings
+                    } else {
+                        Act::ShaderPackList
+                    };
+                    let no_pack = page == Page::ShaderPacks
+                        && !s.shader_packs.iter().any(|p| p.file == self.staged_pack(s));
+                    let settings_btn = button(cx + 4.0, h - 52.0, 150.0, right, right_act);
+                    out.push(button(cx - 154.0, h - 52.0, 150.0, left, Act::OpenShaderPackFolder));
+                    out.push(if no_pack { inactive(settings_btn) } else { settings_btn });
+                    out.push(button(cx - 154.0, h - 27.0, 100.0, tr("gui.cancel"), Act::ShaderCancel));
+                    out.push(button(cx - 50.0, h - 27.0, 100.0, Text::literal("Apply".to_owned()), Act::ShaderApply));
+                    out.push(button(cx + 54.0, h - 27.0, 100.0, tr("gui.done"), Act::ShaderDone));
                 } else {
-                    out.push(done(h - 27.0));
+                    let folder = match page {
+                        Page::Mods => Some(("horizon.mods.open_folder", Act::OpenModFolder)),
+                        _ => None,
+                    };
+                    if let Some((label, act)) = folder {
+                        out.push(button(cx - 154.0, h - 27.0, 150.0, tr(label), act));
+                        out.push(button(cx + 4.0, h - 27.0, 150.0, tr("gui.done"), Act::Done));
+                    } else {
+                        out.push(done(h - 27.0));
+                    }
                 }
             }
         }
@@ -3666,16 +3726,58 @@ impl OptionsUi {
                         Act::OpenModFolder => events.push(Event::OpenModFolder),
                         Act::PickShaderPack(i) => {
                             if let Some(pack) = s.shader_packs.get(i) {
-                                s.horizon.shader_pack = if s.horizon.shader_pack == pack.file {
+                                let now = self.staged_pack(s);
+                                self.shader_staged = Some(if now == pack.file {
                                     String::new()
                                 } else {
                                     pack.file.clone()
-                                };
+                                });
+                                if now == pack.file {
+                                    self.shader_last = pack.file.clone();
+                                }
+                            }
+                        }
+                        Act::ShaderToggle => {
+                            let now = self.staged_pack(s);
+                            if now.is_empty() {
+                                let back = s
+                                    .shader_packs
+                                    .iter()
+                                    .find(|p| p.file == self.shader_last)
+                                    .or_else(|| s.shader_packs.first())
+                                    .map(|p| p.file.clone());
+                                if let Some(file) = back {
+                                    self.shader_staged = Some(file);
+                                }
+                            } else {
+                                self.shader_last = now;
+                                self.shader_staged = Some(String::new());
+                            }
+                        }
+                        Act::ShaderApply => {
+                            if matches!(self.page(), Page::ShaderPackSettings(_)) {
+                                events.push(Event::ShaderPackOption(0));
+                            } else if self.commit_shader(s) {
                                 events.push(Event::ShaderPack);
                             }
                         }
+                        Act::ShaderDone => {
+                            if self.commit_shader(s) {
+                                events.push(Event::ShaderPack);
+                            }
+                            events.extend(self.back(s));
+                        }
+                        Act::ShaderCancel => {
+                            self.shader_staged = None;
+                            events.extend(self.back(s));
+                        }
+                        Act::ShaderPackList => events.extend(self.back(s)),
                         Act::OpenShaderPackFolder => events.push(Event::OpenShaderPackFolder),
                         Act::ShaderPackSettings => {
+                            // The pack's options belong to the applied pack: apply the pick first.
+                            if self.commit_shader(s) {
+                                events.push(Event::ShaderPack);
+                            }
                             events.push(Event::ListShaderPackOptions);
                             self.push(Page::ShaderPackSettings(0));
                         }
