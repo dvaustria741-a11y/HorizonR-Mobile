@@ -5,11 +5,12 @@ import android.app.NativeActivity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.RadialGradient;
-import android.graphics.Shader;
 import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
@@ -726,6 +727,10 @@ public final class HorizonActivity extends NativeActivity {
         private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint subTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF tmpRect = new RectF();
+        private final Paint bgImagePaint = new Paint(Paint.FILTER_BITMAP_FLAG);
+        private final Rect bgSrc = new Rect();
+        private final RectF bgDst = new RectF();
+        private Bitmap bgBitmap;
 
         private float displayedProgress = 0.22f;
         private float targetProgress = 0.28f;
@@ -853,7 +858,49 @@ public final class HorizonActivity extends NativeActivity {
             subTextPaint.setTextAlign(Paint.Align.CENTER);
             subTextPaint.setFakeBoldText(true);
 
+            loadBackgroundImage(context);
             handler.post(frameLoop);
+        }
+
+        private void loadBackgroundImage(Context context) {
+            try (java.io.InputStream in = context.getAssets().open("splash_bg.png")) {
+                BitmapFactory.Options opts = new BitmapFactory.Options();
+                opts.inSampleSize = 1;
+                byte[] data = new byte[in.available()];
+                int off = 0;
+                while (off < data.length) {
+                    int n = in.read(data, off, data.length - off);
+                    if (n < 0) break;
+                    off += n;
+                }
+                opts.inJustDecodeBounds = true;
+                BitmapFactory.decodeByteArray(data, 0, off, opts);
+                while (opts.outWidth / opts.inSampleSize > 2000) opts.inSampleSize *= 2;
+                opts.inJustDecodeBounds = false;
+                bgBitmap = BitmapFactory.decodeByteArray(data, 0, off, opts);
+            } catch (Exception ignored) {
+                bgBitmap = null;
+            }
+        }
+
+        /** Optional art behind the logo (assets/splash_bg.png), centre-cropped, darkened so the logo reads. */
+        private void drawBackground(Canvas canvas, int w, int h, float t, int alphaInt) {
+            if (bgBitmap == null) return;
+            int bw = bgBitmap.getWidth();
+            int bh = bgBitmap.getHeight();
+            float scale = Math.max(w / (float) bw, h / (float) bh);
+            int srcW = Math.min(bw, Math.round(w / scale));
+            int srcH = Math.min(bh, Math.round(h / scale));
+            int sx = (bw - srcW) / 2;
+            int sy = (bh - srcH) / 2;
+            bgSrc.set(sx, sy, sx + srcW, sy + srcH);
+            bgDst.set(0, 0, w, h);
+            float fadeIn = clamp01(t / 500f);
+            bgImagePaint.setAlpha((int) (alphaInt * fadeIn));
+            canvas.drawBitmap(bgBitmap, bgSrc, bgDst, bgImagePaint);
+            pixelPaint.setColor(0xFF000000);
+            pixelPaint.setAlpha((int) (alphaInt * 0.58f));
+            canvas.drawRect(0, 0, w, h, pixelPaint);
         }
 
         public void setLauncherMode(boolean enabled) {
@@ -1006,12 +1053,7 @@ public final class HorizonActivity extends NativeActivity {
         private static final long LETTER_STAGGER_MS = 150L; // delay between letters
         private static final long SCRAMBLE_MS = 450L;       // how long a letter shows shuffled fragments
         private static final long POP_MS = 400L;            // settle pop + flash
-        private static final int PARTICLE_COUNT = 30;
 
-        private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private RadialGradient glowShader;
-        private int glowShaderW = -1;
-        private int glowShaderH = -1;
 
         private static float clamp01(float v) {
             return v < 0f ? 0f : (v > 1f ? 1f : v);
@@ -1032,44 +1074,6 @@ public final class HorizonActivity extends NativeActivity {
             int g = (int) (Color.green(from) + (Color.green(to) - Color.green(from)) * f);
             int b = (int) (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * f);
             return Color.rgb(r, g, b);
-        }
-
-        private void drawBackdrop(Canvas canvas, int w, int h, float t, int alphaInt, float cx, float cy) {
-            // Soft pulsing glow behind the logo (rebuilt only when the size changes).
-            if (glowShader == null || glowShaderW != w || glowShaderH != h) {
-                float radius = Math.max(w, h) * 0.55f;
-                glowShader = new RadialGradient(
-                    cx, cy, radius,
-                    new int[]{0x553A8DBE, 0x221F5A3A, 0x00000000},
-                    new float[]{0f, 0.45f, 1f},
-                    Shader.TileMode.CLAMP
-                );
-                glowShaderW = w;
-                glowShaderH = h;
-                glowPaint.setShader(glowShader);
-            }
-            float fadeIn = clamp01(t / 700f);
-            float pulse = 0.82f + 0.18f * (float) Math.sin(t / 900.0);
-            glowPaint.setAlpha((int) (alphaInt * fadeIn * pulse));
-            canvas.drawRect(0, 0, w, h, glowPaint);
-
-            // Drifting voxel specks (a hint of the camera diving through terrain in the intro).
-            float density = getResources().getDisplayMetrics().density;
-            for (int i = 0; i < PARTICLE_COUNT; i++) {
-                float seedX = hash01(i, 11);
-                float seedS = hash01(i, 23);
-                float seedV = hash01(i, 37);
-                float size = (2.5f + seedS * 5.5f) * density;
-                float speed = 0.012f + seedV * 0.03f; // screens per second
-                float life = ((t / 1000f) * speed + hash01(i, 5)) % 1f;
-                float py = h * (1.05f - life * 1.15f);
-                float px = w * seedX + (float) Math.sin(t / 1400.0 + i) * 6f * density;
-                float edge = (float) Math.sin(Math.PI * life); // fade at both ends
-                int base = (i % 5 == 0) ? 0xFF72E052 : ((i % 4 == 0) ? 0xFF8BE0FF : 0xFFFFFFFF);
-                pixelPaint.setColor(base);
-                pixelPaint.setAlpha((int) (alphaInt * fadeIn * edge * (0.05f + 0.13f * seedS)));
-                canvas.drawRect(px, py, px + size, py + size, pixelPaint);
-            }
         }
 
         /** Draws one glyph at (lx, ly). `shine` is the x of the sweeping highlight band (or <0 for none). */
@@ -1158,7 +1162,7 @@ public final class HorizonActivity extends NativeActivity {
             float cx = w / 2f;
             float cy = startY + logoHeight / 2f;
 
-            drawBackdrop(canvas, w, h, t, alphaInt, cx, cy);
+            drawBackground(canvas, w, h, t, alphaInt);
 
             // Exit: the whole scene pushes toward the viewer while it fades (like the intro's dive).
             float exit = 1f - overlayAlpha;
