@@ -1462,8 +1462,6 @@ enum Act {
     ShaderApply,
     ShaderDone,
     ShaderCancel,
-    /// Iris: `Shader Pack List...` on the settings screen.
-    ShaderPackList,
     /// Open the picked pack's options page.
     ShaderPackSettings,
     /// Open screen `.0` of the picked pack's options.
@@ -1908,14 +1906,9 @@ impl OptionsUi {
             _ => None,
         }
     }
-    /// The page's title: a shader pack's own screens are named by the pack.
+    /// The page's title.
     fn page_title(page: Page, s: &Settings) -> Text {
-        if let Page::ShaderPackSettings(k) = page
-            && let Some(screen) = s.shader_pack_options.screens.get(k)
-            && !screen.title.is_empty()
-        {
-            return Text::literal(screen.title.clone());
-        }
+        let _ = s;
         tr(Self::title(page))
     }
     fn title(page: Page) -> &'static str {
@@ -2519,8 +2512,13 @@ impl OptionsUi {
                                     list: false,
                                 }
                             } else {
-                                let label =
-                                    Text::literal(format!("{}: {}", item.label, item.value_text()));
+                                // Shader Options: `Name: value`, the value yellow once it
+                                // differs from the pack's default.
+                                let mut value = Text::literal(item.value_text().to_owned());
+                                if item.current != item.default {
+                                    value = value.with_color(text::YELLOW);
+                                }
+                                let label = Text::literal(format!("{}: ", item.label)).append(value);
                                 button(0.0, 0.0, width, label, Act::PackOption(i))
                             })
                         }
@@ -2530,7 +2528,7 @@ impl OptionsUi {
                                 0.0,
                                 0.0,
                                 width,
-                                Text::literal(format!("{title} >")),
+                                Text::literal(format!("{title}...")),
                                 Act::PackScreen(i),
                             ))
                         }
@@ -2550,7 +2548,13 @@ impl OptionsUi {
                         crate::shader_pack_options::Entry::Space => Some(blank()),
                     })
                     .collect();
-                let mut rows = Vec::new();
+                // The grey line under the title: the pack's name, or the opened screen's.
+                let heading = if screen.title.is_empty() {
+                    options.pack.clone()
+                } else {
+                    screen.title.clone()
+                };
+                let mut rows = vec![Row::Note(heading)];
                 let mut cells = cells.into_iter();
                 while let Some(first) = cells.next() {
                     let second = if columns == 2 { cells.next() } else { None };
@@ -3039,10 +3043,10 @@ impl OptionsUi {
                 if matches!(page, Page::Video | Page::Controls) {
                     top = 38.0;
                 }
-                if matches!(page, Page::ShaderPacks | Page::ShaderPackSettings(_)) {
-                    top = if page == Page::ShaderPacks { 46.0 } else { 58.0 };
+                if page == Page::ShaderPacks {
+                    top = 46.0;
                     // Iris: the italic grey subtitle under the title.
-                    let sub = if page == Page::ShaderPacks { "Select" } else { "Configure" };
+                    let sub = "Select";
                     out.push(Widget {
                         x: 0.0,
                         y: 23.0,
@@ -3058,23 +3062,6 @@ impl OptionsUi {
                         },
                         list: false,
                     });
-                    if matches!(page, Page::ShaderPackSettings(_)) {
-                        out.push(button(cx + 95.0, 33.0, 60.0, Text::literal("Reset".to_owned()), Act::PackReset));
-                        if !s.shader_pack_options.pack.is_empty() {
-                            out.push(Widget {
-                                x: 0.0,
-                                y: 38.0,
-                                w,
-                                h: 9.0,
-                                kind: WKind::Text {
-                                    text: Text::literal(s.shader_pack_options.pack.clone()),
-                                    color: u32::MAX,
-                                    centered: true,
-                                },
-                                list: false,
-                            });
-                        }
-                    }
                 }
                 out.push(Widget {
                     x: 0.0,
@@ -3175,27 +3162,19 @@ impl OptionsUi {
                 }
                 content = y + self.scroll - top + 2.0;
                 out[list_start..].iter_mut().for_each(|w| w.list = true);
-                if matches!(page, Page::ShaderPacks | Page::ShaderPackSettings(_)) {
+                if matches!(page, Page::ShaderPackSettings(_)) {
+                    // Shader Options: Reset and Done in the one row under the list.
+                    out.push(button(cx - 154.0, h - 27.0, 150.0, tr("controls.reset"), Act::PackReset));
+                    out.push(button(cx + 4.0, h - 27.0, 150.0, tr("gui.done"), Act::ShaderDone));
+                } else if page == Page::ShaderPacks {
                     // Iris: two rows of buttons under the list.
                     bottom = h - 58.0;
-                    let (left, right) = if page == Page::ShaderPacks {
-                        (
-                            tr("pack.openFolder"),
-                            Text::literal("Shader Pack Settings...".to_owned()),
-                        )
-                    } else {
-                        (
-                            tr("pack.openFolder"),
-                            Text::literal("Shader Pack List...".to_owned()),
-                        )
-                    };
-                    let right_act = if page == Page::ShaderPacks {
-                        Act::ShaderPackSettings
-                    } else {
-                        Act::ShaderPackList
-                    };
-                    let no_pack = page == Page::ShaderPacks
-                        && !s.shader_packs.iter().any(|p| p.file == self.staged_pack(s));
+                    let (left, right) = (
+                        tr("pack.openFolder"),
+                        Text::literal("Shader Pack Settings...".to_owned()),
+                    );
+                    let right_act = Act::ShaderPackSettings;
+                    let no_pack = !s.shader_packs.iter().any(|p| p.file == self.staged_pack(s));
                     let settings_btn = button(cx + 4.0, h - 52.0, 150.0, right, right_act);
                     out.push(button(cx - 154.0, h - 52.0, 150.0, left, Act::OpenShaderPackFolder));
                     out.push(if no_pack { inactive(settings_btn) } else { settings_btn });
@@ -3859,7 +3838,6 @@ impl OptionsUi {
                             self.shader_staged = None;
                             events.extend(self.back(s));
                         }
-                        Act::ShaderPackList => events.extend(self.back(s)),
                         Act::OpenShaderPackFolder => events.push(Event::OpenShaderPackFolder),
                         Act::ShaderPackSettings => {
                             // The pack's options belong to the applied pack: apply the pick first.
