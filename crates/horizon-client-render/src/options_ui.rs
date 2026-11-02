@@ -1445,6 +1445,8 @@ enum Act {
     OpenShaderPackFolder,
     /// Iris: `Shaders: Enabled/Off` toggle (staged until Apply/Done).
     ShaderToggle,
+    /// Iris: the refresh button beside the toggle (rescan `shaderpacks/`).
+    ShaderRefresh,
     /// Iris: Apply / Done / Cancel on the shader pack screens.
     ShaderApply,
     ShaderDone,
@@ -2438,10 +2440,17 @@ impl OptionsUi {
                         )),
                         Act::ShaderToggle,
                     ),
-                    None,
+                    Some(button(
+                        0.0,
+                        0.0,
+                        20.0,
+                        Text::literal("\u{21BB}".to_owned()),
+                        Act::ShaderRefresh,
+                    )),
                 )];
                 if s.shader_packs.is_empty() {
                     rows.push(Row::Header("horizon.shader_packs.empty"));
+                    rows.push(Row::Note("+ Drag and Drop Shader Packs to add".to_owned()));
                     return rows;
                 }
                 rows.extend(s.shader_packs.iter().enumerate().map(|(i, pack)| {
@@ -2451,16 +2460,13 @@ impl OptionsUi {
                         }
                         crate::shader_pack_list::Kind::Classic => String::new(),
                     };
-                    let label = if pack.file == current {
-                        format!("> {}{kind} <", pack.title)
-                    } else {
-                        format!("{}{kind}", pack.title)
-                    };
+                    let label = format!("{}{kind}", pack.title);
                     Row::Buttons(
                         button(0.0, 0.0, 310.0, Text::literal(label), Act::PickShaderPack(i)),
                         None,
                     )
                 }));
+                rows.push(Row::Note("+ Drag and Drop Shader Packs to add".to_owned()));
                 rows
             }
             Page::ShaderPackSettings(k) => {
@@ -2534,9 +2540,6 @@ impl OptionsUi {
                     })
                     .collect();
                 let mut rows = Vec::new();
-                if k == 0 && !options.pack.is_empty() {
-                    rows.push(Row::Note(options.pack.clone()));
-                }
                 let mut cells = cells.into_iter();
                 while let Some(first) = cells.next() {
                     let second = if columns == 2 { cells.next() } else { None };
@@ -3025,6 +3028,43 @@ impl OptionsUi {
                 if matches!(page, Page::Video | Page::Controls) {
                     top = 38.0;
                 }
+                if matches!(page, Page::ShaderPacks | Page::ShaderPackSettings(_)) {
+                    top = if page == Page::ShaderPacks { 46.0 } else { 58.0 };
+                    // Iris: the italic grey subtitle under the title.
+                    let sub = if page == Page::ShaderPacks { "Select" } else { "Configure" };
+                    out.push(Widget {
+                        x: 0.0,
+                        y: 23.0,
+                        w,
+                        h: 9.0,
+                        kind: WKind::Text {
+                            text: Text::literal(sub.to_owned()).with_style(&Style {
+                                italic: Some(true),
+                                ..Style::default()
+                            }),
+                            color: 0xFFAAAAAA,
+                            centered: true,
+                        },
+                        list: false,
+                    });
+                    if matches!(page, Page::ShaderPackSettings(_)) {
+                        out.push(button(cx + 95.0, 33.0, 60.0, Text::literal("Reset".to_owned()), Act::PackReset));
+                        if !s.shader_pack_options.pack.is_empty() {
+                            out.push(Widget {
+                                x: 0.0,
+                                y: 38.0,
+                                w,
+                                h: 9.0,
+                                kind: WKind::Text {
+                                    text: Text::literal(s.shader_pack_options.pack.clone()),
+                                    color: u32::MAX,
+                                    centered: true,
+                                },
+                                list: false,
+                            });
+                        }
+                    }
+                }
                 out.push(Widget {
                     x: 0.0,
                     y: if matches!(page, Page::Video | Page::Controls) {
@@ -3099,9 +3139,22 @@ impl OptionsUi {
                         Row::Buttons(mut a, b) => {
                             a.x = cx - 155.0;
                             a.y = y + 2.0;
+                            let refresh = matches!(
+                                b,
+                                Some(Widget {
+                                    kind: WKind::Button {
+                                        act: Act::ShaderRefresh,
+                                        ..
+                                    },
+                                    ..
+                                })
+                            );
+                            if refresh {
+                                a.w = 286.0;
+                            }
                             out.push(a);
                             if let Some(mut b) = b {
-                                b.x = cx + 5.0;
+                                b.x = if refresh { cx + 135.0 } else { cx + 5.0 };
                                 b.y = y + 2.0;
                                 out.push(b);
                             }
@@ -3324,7 +3377,30 @@ impl OptionsUi {
             }
             match &wd.kind {
                 WKind::Button { label, active, act } => {
-                    ui::button(batch, atlas, wd.x, wd.y, wd.w, wd.h, label, *active, hover);
+                    if let Act::PickShaderPack(i) = act {
+                        // Iris: a plain centred row, the picked one black with yellow text.
+                        let picked = s
+                            .shader_packs
+                            .get(*i)
+                            .is_some_and(|p| p.file == self.staged_pack(s));
+                        if picked {
+                            batch.fill(atlas, wd.x, wd.y, wd.w, wd.h, 0xFF000000);
+                        } else if hover {
+                            batch.fill(atlas, wd.x, wd.y, wd.w, wd.h, 0x40FFFFFF);
+                        }
+                        let tw = atlas.font.width_text(label);
+                        let color = if picked { 0xFFFFFF55 } else { u32::MAX };
+                        batch.text_styled(
+                            atlas,
+                            label,
+                            wd.x + ((wd.w - tw) / 2.0).floor(),
+                            wd.y + ((wd.h - 8.0) / 2.0).floor(),
+                            color,
+                            true,
+                        );
+                    } else {
+                        ui::button(batch, atlas, wd.x, wd.y, wd.w, wd.h, label, *active, hover);
+                    }
                     if hover && let Act::Key(name) = act {
                         let conflicts = s.keys.conflicts(name);
                         if !conflicts.is_empty() {
@@ -3737,6 +3813,7 @@ impl OptionsUi {
                                 }
                             }
                         }
+                        Act::ShaderRefresh => events.push(Event::ListShaderPacks),
                         Act::ShaderToggle => {
                             let now = self.staged_pack(s);
                             if now.is_empty() {
