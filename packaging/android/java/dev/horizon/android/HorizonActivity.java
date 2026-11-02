@@ -728,9 +728,9 @@ public final class HorizonActivity extends NativeActivity {
         private final Paint subTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF tmpRect = new RectF();
         private final Paint bgImagePaint = new Paint(Paint.FILTER_BITMAP_FLAG);
-        private final Rect bgSrc = new Rect();
         private final RectF bgDst = new RectF();
-        private Bitmap bgBitmap;
+        private volatile Bitmap[] sceneLayers = new Bitmap[0];
+        private volatile boolean released = false;
 
         private float displayedProgress = 0.22f;
         private float targetProgress = 0.28f;
@@ -858,48 +858,85 @@ public final class HorizonActivity extends NativeActivity {
             subTextPaint.setTextAlign(Paint.Align.CENTER);
             subTextPaint.setFakeBoldText(true);
 
-            loadBackgroundImage(context);
+            loadSceneLayersAsync(context);
             handler.post(frameLoop);
         }
 
-        private void loadBackgroundImage(Context context) {
-            try (java.io.InputStream in = context.getAssets().open("splash_bg.png")) {
-                BitmapFactory.Options opts = new BitmapFactory.Options();
-                opts.inSampleSize = 1;
-                byte[] data = new byte[in.available()];
-                int off = 0;
-                while (off < data.length) {
-                    int n = in.read(data, off, data.length - off);
-                    if (n < 0) break;
-                    off += n;
+        /** Back-to-front art stack: assets/splash_layer_0.png (opaque) .. splash_layer_3.png (transparent). */
+        private void loadSceneLayersAsync(final Context context) {
+            final android.content.res.AssetManager am = context.getAssets();
+            Thread th = new Thread(() -> {
+                Bitmap[] raw = new Bitmap[4];
+                int count = 0;
+                for (int i = 0; i < raw.length; i++) {
+                    Bitmap b = decodeSplashAsset(am, "splash_layer_" + i + ".png", i == 0);
+                    if (b == null && i == 0) b = decodeSplashAsset(am, "splash_bg.png", true);
+                    raw[i] = b;
+                    if (b != null) count++;
                 }
+                if (count == 0) return;
+                Bitmap[] packed = new Bitmap[count];
+                int k = 0;
+                for (Bitmap b : raw) {
+                    if (b != null) packed[k++] = b;
+                }
+                if (released) {
+                    for (Bitmap b : packed) b.recycle();
+                    return;
+                }
+                sceneLayers = packed;
+            }, "splash-layers");
+            th.setDaemon(true);
+            th.start();
+        }
+
+        private static Bitmap decodeSplashAsset(android.content.res.AssetManager am, String name, boolean opaque) {
+            try (java.io.InputStream in = am.open(name)) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[16384];
+                int n;
+                while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                byte[] data = bos.toByteArray();
+                BitmapFactory.Options opts = new BitmapFactory.Options();
                 opts.inJustDecodeBounds = true;
-                BitmapFactory.decodeByteArray(data, 0, off, opts);
-                while (opts.outWidth / opts.inSampleSize > 2000) opts.inSampleSize *= 2;
+                BitmapFactory.decodeByteArray(data, 0, data.length, opts);
+                opts.inSampleSize = 1;
+                while (opts.outWidth / opts.inSampleSize > 1700) opts.inSampleSize *= 2;
                 opts.inJustDecodeBounds = false;
-                bgBitmap = BitmapFactory.decodeByteArray(data, 0, off, opts);
+                opts.inPreferredConfig = opaque ? Bitmap.Config.RGB_565 : Bitmap.Config.ARGB_8888;
+                return BitmapFactory.decodeByteArray(data, 0, data.length, opts);
             } catch (Exception ignored) {
-                bgBitmap = null;
+                return null;
             }
         }
 
-        /** Optional art behind the logo (assets/splash_bg.png), centre-cropped, darkened so the logo reads. */
-        private void drawBackground(Canvas canvas, int w, int h, float t, int alphaInt) {
-            if (bgBitmap == null) return;
-            int bw = bgBitmap.getWidth();
-            int bh = bgBitmap.getHeight();
-            float scale = Math.max(w / (float) bw, h / (float) bh);
-            int srcW = Math.min(bw, Math.round(w / scale));
-            int srcH = Math.min(bh, Math.round(h / scale));
-            int sx = (bw - srcW) / 2;
-            int sy = (bh - srcH) / 2;
-            bgSrc.set(sx, sy, sx + srcW, sy + srcH);
-            bgDst.set(0, 0, w, h);
-            float fadeIn = clamp01(t / 500f);
-            bgImagePaint.setAlpha((int) (alphaInt * fadeIn));
-            canvas.drawBitmap(bgBitmap, bgSrc, bgDst, bgImagePaint);
+        /**
+         * The world behind the logo. During the dive the layers start zoomed in (front ones most) and settle,
+         * so the camera seems to fall through the scene; afterwards they sway very slightly at different speeds.
+         */
+        private void drawScene(Canvas canvas, int w, int h, float t, int alphaInt, float dive) {
+            Bitmap[] layers = sceneLayers;
+            int n = layers.length;
+            if (n == 0 || dive <= 0f) return;
+            for (int i = 0; i < n; i++) {
+                Bitmap b = layers[i];
+                if (b == null || b.isRecycled()) continue;
+                float depth = n > 1 ? i / (float) (n - 1) : 0f;
+                float zoom = 1.06f + (1f - dive) * (0.30f + 0.55f * depth);
+                float swing = 0.4f + depth * 1.6f;
+                float driftX = (float) Math.sin(t / 5200.0 + i * 1.7) * w * 0.006f * swing;
+                float driftY = (float) Math.cos(t / 6400.0 + i * 1.1) * h * 0.004f * swing;
+                float scale = Math.max(w / (float) b.getWidth(), h / (float) b.getHeight()) * zoom;
+                float dw = b.getWidth() * scale;
+                float dh = b.getHeight() * scale;
+                float left = (w - dw) / 2f + driftX;
+                float top = (h - dh) / 2f + driftY - (1f - dive) * h * 0.12f * depth;
+                bgDst.set(left, top, left + dw, top + dh);
+                bgImagePaint.setAlpha((int) (alphaInt * clamp01(dive * 1.4f)));
+                canvas.drawBitmap(b, null, bgDst, bgImagePaint);
+            }
             pixelPaint.setColor(0xFF000000);
-            pixelPaint.setAlpha((int) (alphaInt * 0.58f));
+            pixelPaint.setAlpha((int) (alphaInt * 0.42f * dive));
             canvas.drawRect(0, 0, w, h, pixelPaint);
         }
 
@@ -956,6 +993,12 @@ public final class HorizonActivity extends NativeActivity {
 
         void stopPolling() {
             active = false;
+            released = true;
+            Bitmap[] old = sceneLayers;
+            sceneLayers = new Bitmap[0];
+            for (Bitmap b : old) {
+                if (b != null) b.recycle();
+            }
             handler.removeCallbacksAndMessages(null);
         }
 
@@ -1021,7 +1064,7 @@ public final class HorizonActivity extends NativeActivity {
                 displayedProgress += (1.0f - displayedProgress) * 0.10f;
                 stageLabel = "Minecraft 26.3 Ready";
 
-                if (sinceEngineReady >= 800L && displayedProgress >= 0.97f && elapsed >= 2200L) {
+                if (sinceEngineReady >= 800L && displayedProgress >= 0.97f && elapsed >= INTRO_HOLD_END_MS + DIVE_MS + 400L) {
                     displayedProgress = 1.0f;
                     float fadeProgress = (sinceEngineReady - 800L) / 400.0f;
                     overlayAlpha = Math.max(0.0f, 1.0f - fadeProgress);
@@ -1048,6 +1091,11 @@ public final class HorizonActivity extends NativeActivity {
         private static final int COL_Z_TOP = 0xFFC2F0FF;
         private static final int COL_Z_BODY = 0xFF8BE0FF;
         private static final int COL_Z_SHADOW = 0xFF1D4E63;
+
+        // Intro timeline: logo scrambles in on a flat colour, holds, then the camera dives into the scene.
+        private static final long INTRO_HOLD_END_MS = 2900L;
+        private static final long DIVE_MS = 1100L;
+        private static final int INTRO_BG_COLOR = 0xFFE5392B;
 
         private static final long LETTER_START_MS = 180L;   // first letter begins scrambling
         private static final long LETTER_STAGGER_MS = 150L; // delay between letters
@@ -1142,6 +1190,8 @@ public final class HorizonActivity extends NativeActivity {
             if (w <= 0 || h <= 0) return;
 
             float t = (float) (System.currentTimeMillis() - createdTimeMs);
+            float diveRaw = clamp01((t - INTRO_HOLD_END_MS) / (float) DIVE_MS);
+            float dive = diveRaw * diveRaw * (3f - 2f * diveRaw);
             int alphaInt = Math.max(0, Math.min(255, (int) (overlayAlpha * 255.0f)));
             bgPaint.setAlpha(alphaInt);
             canvas.drawRect(0, 0, w, h, bgPaint);
@@ -1157,12 +1207,20 @@ public final class HorizonActivity extends NativeActivity {
             float logoWidth = totalCols * pxSize;
             float logoHeight = letterRows * pxSize;
             float startX = (w - logoWidth) / 2f;
-            float startY = (h * 0.41f) - (logoHeight / 2f);
+            float normalStartY = (h * 0.41f) - (logoHeight / 2f);
+            float introStartY = (h * 0.50f) - (logoHeight / 2f);
+            float startY = introStartY + (normalStartY - introStartY) * dive;
             float depthOff = Math.max(2f, pxSize * 0.48f);
             float cx = w / 2f;
             float cy = startY + logoHeight / 2f;
 
-            drawBackground(canvas, w, h, t, alphaInt);
+            drawScene(canvas, w, h, t, alphaInt, dive);
+            float colorA = 1f - clamp01(dive * 1.6f);
+            if (colorA > 0f) {
+                pixelPaint.setColor(INTRO_BG_COLOR);
+                pixelPaint.setAlpha((int) (alphaInt * colorA));
+                canvas.drawRect(0, 0, w, h, pixelPaint);
+            }
 
             // Exit: the whole scene pushes toward the viewer while it fades (like the intro's dive).
             float exit = 1f - overlayAlpha;
@@ -1215,7 +1273,7 @@ public final class HorizonActivity extends NativeActivity {
             }
 
             // Subtitle fades up after the word settles.
-            float subIn = clamp01((t - (lastSettled - 150f)) / 450f);
+            float subIn = clamp01((t - (INTRO_HOLD_END_MS + DIVE_MS * 0.55f)) / 450f);
             subTextPaint.setTextSize(10.5f * density);
             subTextPaint.setAlpha((int) (alphaInt * 0.85f * subIn));
             canvas.drawText(
@@ -1226,7 +1284,7 @@ public final class HorizonActivity extends NativeActivity {
             );
 
             // Progress bar slides up and fades in after the logo.
-            float barIn = clamp01((t - (lastSettled - 300f)) / 500f);
+            float barIn = clamp01((t - (INTRO_HOLD_END_MS + DIVE_MS * 0.65f)) / 500f);
             float barSlide = (1f - barIn) * 14f * density;
             int barAlpha = (int) (alphaInt * barIn);
             float barWidth = Math.min(w * 0.54f, 400f * density);
