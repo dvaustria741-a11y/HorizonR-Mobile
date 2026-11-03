@@ -5349,6 +5349,29 @@ object HorizonNativeBridge {
         }
     }
 
+    private data class ImportedModIdentity(val id: String?, val name: String?, val version: String?)
+
+    /** Reads the mod's real id, name and version from `horizon-mod.toml` or `horizon-native.json` inside the picked file. */
+    private fun peekImportedModIdentity(file: File): ImportedModIdentity? = runCatching {
+        ZipFile(file).use { zf ->
+            val toml = zf.getEntry("horizon-mod.toml")?.let { e -> zf.getInputStream(e).bufferedReader().use { it.readText() } }
+            if (toml != null) {
+                fun field(key: String) = Regex("(?m)^\\s*$key\\s*=\\s*\"([^\"]*)\"").find(toml)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+                return@use ImportedModIdentity(field("id"), field("name"), field("version"))
+            }
+            val json = zf.getEntry("horizon-native.json")?.let { e -> zf.getInputStream(e).bufferedReader().use { it.readText() } }
+            if (json != null) {
+                val o = JSONObject(json)
+                return@use ImportedModIdentity(
+                    o.optString("id").takeIf { it.isNotBlank() },
+                    o.optString("name").takeIf { it.isNotBlank() },
+                    o.optString("version").takeIf { it.isNotBlank() }
+                )
+            }
+            null
+        }
+    }.getOrNull()
+
     fun importUriToDestination(
         context: Context,
         uri: Uri,
@@ -5361,10 +5384,10 @@ object HorizonNativeBridge {
             val home = ensureHomeDirectories(context)
             val isModTarget = subFolder in listOf("mods", "horizon-mods", "horizon-native-mods")
             val finalSubFolder = if (isModTarget) "horizon-mods" else subFolder
-            val finalFileName = if (isModTarget) "${sanitizeModId(targetFileName)}.hmod" else targetFileName
+            var finalFileName = if (isModTarget) "${sanitizeModId(targetFileName)}.hmod" else targetFileName
             val destDir = if (finalSubFolder.isEmpty()) home else File(home, finalSubFolder)
             destDir.mkdirs()
-            val outFile = File(destDir, finalFileName)
+            var outFile = File(destDir, finalFileName)
             context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(outFile).use { output ->
                     input.copyTo(output)
@@ -5392,8 +5415,26 @@ object HorizonNativeBridge {
                 }
             }
             if (isModTarget) {
+                val identity = peekImportedModIdentity(outFile)
+                val pickedName = queryDisplayName(context, uri)?.takeIf { it.isNotBlank() }
+                val realId = sanitizeModId(identity?.id ?: pickedName ?: finalFileName)
+                if (realId.isNotBlank()) {
+                    val named = File(destDir, "$realId.hmod")
+                    if (named.absolutePath != outFile.absolutePath) {
+                        named.delete()
+                        if (outFile.renameTo(named)) {
+                            outFile = named
+                            finalFileName = named.name
+                        }
+                    }
+                }
                 val modId = sanitizeModId(finalFileName)
-                ensureValidHorizonModZip(outFile, modId)
+                ensureValidHorizonModZip(
+                    outFile,
+                    modId,
+                    fallbackTitle = identity?.name.orEmpty(),
+                    fallbackVersion = identity?.version ?: "1.0.0"
+                )
                 val info = inspectModPackage(outFile)
                 setContentItemEnabled(context, "mods", finalFileName, true, 0, false)
                 recordInstalledStoreItem(context, 0, info.modId, info.version, finalFileName)
