@@ -662,6 +662,18 @@ pub fn setup(
     p: &mut Poses,
     w_anims: &HashMap<String, super::keyframes::Animation>,
 ) {
+    setup_vanilla(m, s, p, w_anims);
+    // A native mod's pose for the own player's body, set while that body is drawn.
+    if &*m.kind.id == "minecraft:player" {
+        super::native_pose::apply(p);
+    }
+}
+fn setup_vanilla(
+    m: &Mob,
+    s: &State,
+    p: &mut Poses,
+    w_anims: &HashMap<String, super::keyframes::Animation>,
+) {
     if super::body_anim::anim(m, s, p, w_anims) {
         return;
     }

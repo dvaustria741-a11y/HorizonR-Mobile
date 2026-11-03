@@ -9,6 +9,7 @@ pub mod ai;
 pub mod allay;
 pub mod ambient;
 pub mod anim;
+pub mod native_pose;
 pub mod animal_brain;
 pub mod aquatic;
 pub mod armadillo;

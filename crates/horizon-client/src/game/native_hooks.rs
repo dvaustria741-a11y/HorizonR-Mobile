@@ -1985,6 +1985,17 @@ pub(super) fn mob_kind(mob: &horizon_client::mobs::Mob) -> String {
 
 /// Where the game calls the hook points.
 impl Game<'_> {
+    /// Poses the own player's body, in the third-person and shadow views, once per drawn frame.
+    /// Add to the parts of `pose` (`head`, `body`, `right_arm`, `left_arm`, `right_leg`,
+    /// `left_leg`): position in model pixels, rotation in radians; the outer skin layers and the
+    /// armour follow. `partial` is the frame's position between two ticks. Client-side.
+    pub(super) fn native_player_pose(
+        &self,
+        partial: f32,
+        pose: &mut horizon_client::mobs::native_pose::NativePose,
+    ) {
+        let _ = (partial, pose);
+    }
     /// Before one first-person hand and its displayed stack are drawn (RenderHandEvent).
     /// Equip progress is the inverse arm height, including the item's swap animation scale.
     /// Cancel skips that hand's default geometry, including its map and arm geometry.
