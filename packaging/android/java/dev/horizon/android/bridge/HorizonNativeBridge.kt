@@ -68,7 +68,9 @@ data class StoreDownloadProgress(
     val paused: Boolean = false,
     val percent: Int = 0,
     val speedText: String = "",
-    val statusText: String = ""
+    val statusText: String = "",
+    /** True while the shader translator runs (the card says "Translating", Pause is hidden). */
+    val translating: Boolean = false
 )
 
 enum class LogCategoryFilter(val label: String) {
@@ -553,22 +555,57 @@ object HorizonNativeBridge {
     @JvmStatic
     external fun nativeConvertShaderPack(inPath: String, outDir: String): String
 
+    /** What the translator is doing now: `percent<TAB>stage<TAB>detail`. Poll it while [nativeConvertShaderPack] runs. */
+    @JvmStatic
+    external fun nativeShaderPortProgress(): String
+
+    /** Stops a running [nativeConvertShaderPack] at its next step; it then returns `err<TAB>cancelled`. */
+    @JvmStatic
+    external fun nativeCancelShaderPort()
+
     /**
      * Runs the translator over a downloaded Iris/OptiFine shader pack so every program Horizon would skip loads.
      * On success [zip] is replaced by the converted pack and a one-line summary is returned; on any failure [zip] is
      * left as it was (the pack still installs, just untranslated) and null is returned.
      */
-    private fun translateShaderZip(context: Context, zip: File, logEnabled: Boolean): String? {
+    private fun translateShaderZip(
+        context: Context,
+        zip: File,
+        logEnabled: Boolean,
+        onProgress: ((percent: Int, stage: String, detail: String, elapsedSec: Long) -> Unit)? = null
+    ): String? {
         val outDir = File(context.cacheDir, "shaderport-${System.nanoTime()}")
+        shaderTranslationCancelled = false
+        val running = java.util.concurrent.atomic.AtomicBoolean(true)
+        var poller: Thread? = null
         return try {
             if (!nativeLoaded) {
                 System.loadLibrary("horizon_android")
                 nativeLoaded = true
             }
             outDir.mkdirs()
+            if (onProgress != null) {
+                val t0 = System.currentTimeMillis()
+                onProgress(0, "Starting the shader translator", "", 0L)
+                poller = Thread({
+                    while (running.get()) {
+                        try {
+                            val raw = nativeShaderPortProgress()
+                            val p = raw.split('\t')
+                            val elapsed = (System.currentTimeMillis() - t0) / 1000L
+                            // Sent every poll even when nothing changed, so the elapsed time keeps moving.
+                            onProgress(p.getOrNull(0)?.toIntOrNull() ?: 0, p.getOrElse(1) { "" }, p.getOrElse(2) { "" }, elapsed)
+                        } catch (_: Throwable) {
+                        }
+                        try { Thread.sleep(400) } catch (_: InterruptedException) { break }
+                    }
+                }, "HorizonR-ShaderPortProgress").also { it.isDaemon = true; it.start() }
+            }
             val parts = nativeConvertShaderPack(zip.absolutePath, outDir.absolutePath).split('\t')
             if (parts.firstOrNull() != "ok" || parts.size < 7) {
-                appendSystemLog("Shader translator skipped '${zip.name}': ${parts.getOrNull(1) ?: "no result"}", logEnabled, context)
+                val why = parts.getOrNull(1) ?: "no result"
+                if (why == "cancelled") shaderTranslationCancelled = true
+                appendSystemLog("Shader translator skipped '${zip.name}': $why", logEnabled, context)
                 return null
             }
             val converted = File(parts[1])
@@ -583,7 +620,21 @@ object HorizonNativeBridge {
             appendSystemLog("Shader translator unavailable for '${zip.name}': ${e.message}", logEnabled, context)
             null
         } finally {
+            running.set(false)
+            poller?.interrupt()
             outDir.deleteRecursively()
+        }
+    }
+
+    /** Set when the person cancelled the translation that just ran (the pack is then not installed). */
+    @Volatile
+    var shaderTranslationCancelled = false
+
+    /** Stops a running shader translation at its next step. Does nothing when none is running. */
+    fun cancelShaderTranslation() {
+        shaderTranslationCancelled = true
+        if (nativeLoaded) {
+            try { nativeCancelShaderPort() } catch (_: Throwable) {}
         }
     }
 
@@ -4791,6 +4842,9 @@ object HorizonNativeBridge {
                 val isShader = item.category == StoreCategory.SHADER_PACK
                 val folder = externalInstallFolder(item)
                 val kindName = if (isShader) "shader pack" else "resource pack"
+                // With Translator v2 the bar has two parts: the download fills the first 30%, the translation the rest.
+                val translateV2 = isShader && ShaderTranslator.current(context) == ShaderTranslator.V2
+                val downloadCap = if (translateV2) 30 else 95
 
                 onProgress(
                     StoreDownloadProgress(
@@ -4869,7 +4923,7 @@ object HorizonNativeBridge {
                                     activeTitle = item.title,
                                     running = true,
                                     paused = false,
-                                    percent = ((downloaded * 100L) / totalBytes).toInt().coerceIn(1, 95),
+                                    percent = ((downloaded * downloadCap.toLong()) / totalBytes).toInt().coerceIn(1, downloadCap),
                                     speedText = speedStr,
                                     statusText = "${downloaded / 1024} / ${totalBytes / 1024} KB • $sourceLabel"
                                 )
@@ -4900,7 +4954,7 @@ object HorizonNativeBridge {
                         activeItemId = item.id,
                         activeTitle = item.title,
                         running = true,
-                        percent = 97,
+                        percent = if (translateV2) 31 else 97,
                         speedText = "",
                         statusText = if (isShader) "Checking shaders folder..." else "Checking pack.mcmeta..."
                     )
@@ -4910,18 +4964,37 @@ object HorizonNativeBridge {
                 packProblem?.let { throw ContentSourceException(it) }
                 val unsupportedNote = if (isShader) null else ContentSources.describeUnsupportedPackFeatures(part)
 
-                if (isShader && ShaderTranslator.current(context) == ShaderTranslator.V2) {
-                    onProgress(
-                        StoreDownloadProgress(
-                            activeItemId = item.id,
-                            activeTitle = item.title,
-                            running = true,
-                            percent = 98,
-                            speedText = "",
-                            statusText = "Translating shaders for Horizon..."
+                if (translateV2) {
+                    if (storeDownloadCancelled.get()) {
+                        part.delete()
+                        onProgress(StoreDownloadProgress())
+                        onComplete(false, "Download of '${item.title}' cancelled & temporary file deleted.")
+                        return@Thread
+                    }
+                    // The translation fills 31..99% of the bar, from the translator's own progress.
+                    fun translating(percent: Int, stage: String, detail: String, elapsedSec: Long) {
+                        val overall = (31 + percent.coerceIn(0, 100) * 68 / 100).coerceIn(31, 99)
+                        val clock = if (elapsedSec >= 60) "${elapsedSec / 60}m ${elapsedSec % 60}s" else "${elapsedSec}s"
+                        onProgress(
+                            StoreDownloadProgress(
+                                activeItemId = item.id,
+                                activeTitle = item.title,
+                                running = true,
+                                percent = overall,
+                                speedText = "$percent%",
+                                statusText = "Translating shaders for Horizon: ${stage.ifBlank { "working" }}" +
+                                    (if (detail.isNotBlank()) " ($detail)" else "") + " • $clock",
+                                translating = true
+                            )
                         )
-                    )
-                    translateShaderZip(context, part, logEnabled)
+                    }
+                    translateShaderZip(context, part, logEnabled, ::translating)
+                    if (shaderTranslationCancelled || storeDownloadCancelled.get()) {
+                        part.delete()
+                        onProgress(StoreDownloadProgress())
+                        onComplete(false, "Translation of '${item.title}' cancelled; nothing was installed.")
+                        return@Thread
+                    }
                 }
 
                 removeRecordedExternalPack(context, profileSlot, item, canonicalName, logEnabled)
@@ -5378,7 +5451,8 @@ object HorizonNativeBridge {
         subFolder: String,
         targetFileName: String,
         logEnabled: Boolean = true,
-        shaderTranslator: ShaderTranslator = ShaderTranslator.current(context)
+        shaderTranslator: ShaderTranslator = ShaderTranslator.current(context),
+        onTranslateProgress: ((percent: Int, stage: String, detail: String, elapsedSec: Long) -> Unit)? = null
     ): File? {
         return try {
             val home = ensureHomeDirectories(context)
@@ -5399,7 +5473,14 @@ object HorizonNativeBridge {
                     appendSystemLog("Import rejected: not a shader pack (needs a `shaders/` folder or horizon-shaders.toml)", logEnabled, context)
                     return null
                 }
-                if (shaderTranslator == ShaderTranslator.V2 && shaderFile.name.endsWith(".zip", ignoreCase = true)) translateShaderZip(context, shaderFile, logEnabled)
+                if (shaderTranslator == ShaderTranslator.V2 && shaderFile.name.endsWith(".zip", ignoreCase = true)) {
+                    translateShaderZip(context, shaderFile, logEnabled, onTranslateProgress)
+                    if (shaderTranslationCancelled) {
+                        shaderFile.delete()
+                        appendSystemLog("Shader pack import cancelled during translation; nothing was installed.", logEnabled, context)
+                        return null
+                    }
+                }
                 appendSystemLog("Imported shader pack to shaderpacks/${shaderFile.name} (${shaderFile.length() / 1024} KB, ${shaderTranslator.label})", logEnabled, context)
                 return shaderFile
             }

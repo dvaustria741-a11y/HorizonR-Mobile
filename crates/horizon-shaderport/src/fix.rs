@@ -152,7 +152,8 @@ pub fn fix(files: &mut Files, before: &Eval) -> (Vec<Change>, Eval) {
     // Twice: a rule can unblock code another rule then reaches.
     for round in 0..2 {
         let mut progressed = false;
-        for rule in RULES {
+        for (i, rule) in RULES.iter().enumerate() {
+            crate::progress::step(round * RULES.len() + i, 2 * RULES.len(), rule.name);
             let edits = (rule.apply)(files, &best);
             let edits: Edits = edits
                 .into_iter()

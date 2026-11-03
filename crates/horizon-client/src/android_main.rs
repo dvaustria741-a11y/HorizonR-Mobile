@@ -463,6 +463,27 @@ pub extern "system" fn Java_dev_horizon_android_bridge_HorizonNativeBridge_nativ
     env.new_string(reply).map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut())
 }
 
+/// What the shader translator is doing right now, for a progress bar:
+/// `<percent 0-100><TAB><stage><TAB><detail>`. Safe to poll while `nativeConvertShaderPack` runs.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_horizon_android_bridge_HorizonNativeBridge_nativeShaderPortProgress(
+    env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+) -> jni::sys::jstring {
+    let p = horizon_shaderport::progress::current();
+    let line = format!("{}\t{}\t{}", p.percent, p.stage, p.detail);
+    env.new_string(line).map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut())
+}
+
+/// Stops a running shader translation at its next step (`nativeConvertShaderPack` then returns `err<TAB>cancelled`).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_horizon_android_bridge_HorizonNativeBridge_nativeCancelShaderPort(
+    _env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+) {
+    horizon_shaderport::progress::cancel();
+}
+
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_horizon_android_bridge_HorizonNativeBridge_nativeGetInstallProgress(
     mut env: jni::JNIEnv,
