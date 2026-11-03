@@ -10,8 +10,24 @@ pub(super) fn terrain_shader(gl: bool) -> Cow<'static, str> {
     }
 }
 
+/// GLES 3.0 cannot declare arrays of arrays. Two adjacent vec4 entries
+/// retain the original uniform byte layout and every colored-light value.
+pub(super) fn gles_uniforms(source: &str) -> String {
+    source
+        .replace("array<array<vec4<f32>, 2>, 16>", "array<vec4<f32>, 32>")
+        .replace(
+            "globals.colored_lights[i][0]",
+            "globals.colored_lights[2u * i]",
+        )
+        .replace(
+            "globals.colored_lights[i][1]",
+            "globals.colored_lights[2u * i + 1u]",
+        )
+}
+
 fn gles_source(source: &str) -> String {
-    let source = source.replace("\r\n", "\n");
+    let source = gles_uniforms(source).replace("\r\n", "\n");
+    let source = unroll_emissive_lookup(source);
     let start = source
         .find("fn sprite_grad(")
         .expect("terrain sprite function");
@@ -46,12 +62,14 @@ fn gles_source(source: &str) -> String {
         + 3;
     let mut body = output[fields_end..end].to_owned();
     for (member, packed) in [
+        ("emissive_layer", "codes.w"),
         ("layer", "codes.x"),
         ("emission", "codes.y"),
         ("fade", "codes.z"),
         ("spherical", "distances.x"),
         ("cylindrical", "distances.y"),
         ("visibility", "distances.z"),
+        ("height", "distances.w"),
     ] {
         for variable in ["in", "out"] {
             body = body.replace(
@@ -64,12 +82,41 @@ fn gles_source(source: &str) -> String {
     output
 }
 
+// Adreno 710's compiler fails to link this dynamic uniform-array search in a
+// robust EGL context. Preserve the first match, every entry and the no-match
+// sentinel; constant-index branches also keep robust access enabled.
+fn unroll_emissive_lookup(mut source: String) -> String {
+    let start = source
+        .find("    for (var i = 0u; i < min(globals.emissive_count.x, 32u); i++) {")
+        .expect("terrain emissive lookup");
+    let body = source[start..].find('{').unwrap() + start;
+    let mut depth = 1;
+    let mut end = body + 1;
+    while depth != 0 {
+        match source.as_bytes()[end] {
+            b'{' => depth += 1,
+            b'}' => depth -= 1,
+            _ => {}
+        }
+        end += 1;
+    }
+    let mut branches = String::new();
+    for i in 0..32 {
+        let branch = if i == 0 { "if" } else { "else if" };
+        branches.push_str(&format!(
+            "    {branch} globals.emissive_count.x > {i}u && globals.emissive_layers[{i}].x == (layer & 0x7fffu) {{\n        out.emissive_layer = globals.emissive_layers[{i}].y;\n    }}\n"
+        ));
+    }
+    source.replace_range(start..end, &branches);
+    source
+}
+
 const PACKED_INTERFACE: &str = "struct TerrainOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    @location(1) @interpolate(flat) codes: vec3<u32>,
+    @location(1) @interpolate(flat) codes: vec4<u32>,
     @location(2) color: vec4<f32>,
-    @location(3) distances: vec3<f32>,
+    @location(3) distances: vec4<f32>,
     @location(4) local: vec3<f32>,
 }
 ";
@@ -93,14 +140,16 @@ mod tests {
             &original[original.find("struct SkyOut {").unwrap()..],
             "sky and outline shader bodies must remain unchanged"
         );
+        assert!(!source.contains("array<array<"));
         assert!(!source.contains("switch layer / SPRITE_SPLIT"));
         assert!(!source.contains("uv + offsets[i] * pixel"));
         for index in 0..7 {
             assert!(source.contains(&format!("array_index == {index}u")));
         }
-        assert!(source.contains(
-            "let emissive = select(1.0, 0.7 * f32(4u - min(in.codes.y, 4u)) / 4.0, in.codes.y > 0u)"
-        ));
+        assert!(source.contains("let whole = in.codes.y > 4u"));
+        assert!(source.contains("if in.codes.w != 0xffffffffu"));
+        assert!(!source.contains("in.height"));
+        assert!(!source.contains("out.emissive_layer"));
         let module = naga::front::wgsl::parse_str(&source).unwrap();
         naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),

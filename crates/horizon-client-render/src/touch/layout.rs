@@ -155,6 +155,13 @@ pub struct Settings {
     /// F3 text scale in GUI pixels (0.5 steps); 0 is Auto.
     pub debug_text_scale: f32,
     pub attack_indicator_left: bool,
+    pub dynamic_joystick: bool,
+    /// Fraction of the width, from the movement edge inward, where a dynamic
+    /// joystick may start.
+    pub dynamic_area_x: f32,
+    /// Fraction of the height the dynamic area spans, centred on the movement
+    /// control (1.0 is the full surface).
+    pub dynamic_area_y: f32,
     #[serde(deserialize_with = "deserialize_visibility")]
     pub button_visibility: [u8; 14],
     pub horizontal_margin: f32,
@@ -221,7 +228,7 @@ impl Default for Settings {
             sensitivity_horizontal: 1.0,
             sensitivity_vertical: 1.0,
             offhand_button: false,
-            shield_button: false,
+            shield_button: true,
             circle_size: 32.0,
             button_scale: 1.0,
             custom_buttons: Vec::new(),
@@ -235,6 +242,9 @@ impl Default for Settings {
             gyro_sensitivity: 1.0,
             debug_text_scale: 0.0,
             attack_indicator_left: true,
+            dynamic_joystick: false,
+            dynamic_area_x: 0.25,
+            dynamic_area_y: 1.0,
             button_visibility: [0; 14],
             horizontal_margin: 0.0,
             vertical_margin: 0.0,
@@ -332,6 +342,16 @@ impl Settings {
         } else {
             1.0
         };
+        self.dynamic_area_x = if self.dynamic_area_x.is_finite() {
+            self.dynamic_area_x.clamp(0.0, 1.0)
+        } else {
+            0.25
+        };
+        self.dynamic_area_y = if self.dynamic_area_y.is_finite() {
+            self.dynamic_area_y.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
         self.circle_size = if self.circle_size.is_finite() {
             self.circle_size.clamp(16.0, 64.0)
         } else {
@@ -368,7 +388,7 @@ impl Settings {
         }
         match c {
             Control::Offhand => self.offhand_button,
-            Control::Shield => self.shield_button,
+            Control::Shield => self.shield_button && !self.visible(Control::Use),
             Control::Attack | Control::Use => self.crosshair(),
             Control::Sprint => {
                 self.sprint_button && self.mode != Mode::Dpad && !self.sprint_with_joystick

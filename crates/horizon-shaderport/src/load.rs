@@ -61,6 +61,7 @@ pub(crate) fn inputs() -> GameInputs {
         clouds: Some(terrain.clone()),
         weather: Some(terrain.clone()),
         hand: Some(terrain),
+        terrain_geometry: None,
     }
 }
 

@@ -1,6 +1,7 @@
 //! Horizon's own shader packs in the game (docs/shaders.md): the pick in `shaderpacks/` (a
 //! folder with `horizon-shaders.toml`, or a `.hshader`; `game/shader_packs.rs`) runs once it
-//! passes `horizon_shader_api::check`. The pack is looked at twice a second: a saved file is checked and the pack rebuilt, and a
+//! passes `horizon_shader_api::check`. The pack is looked at twice a second: a saved file (or
+//! saved option values) is checked and the pack rebuilt, and a
 //! pack that fails is refused with its problems in the chat while the last good one keeps
 //! drawing.
 
@@ -84,10 +85,19 @@ impl Game<'_> {
                 .manifest
                 .sprite_tags(sprites.map(|(name, layer)| (name.as_str(), *layer)));
             let labels = renderer
-                .set_native_shader_pack(Some((report, constants, tags)))
+                .set_native_shader_pack(Some((report, constants, tags, materials, lights)))
                 .map_err(|e| vec![e])?;
             Ok((pack.manifest, labels))
         });
+        // The resources were loaded without a native pack, so without the resource packs'
+        // LabPBR maps its material stage reads: load them once, now that one runs.
+        if result.as_ref().is_ok_and(|(m, _)| m.material.is_some())
+            && !horizon_client::sprites::labpbr_maps()
+        {
+            horizon_client::sprites::set_labpbr_maps(true);
+            log::info!("Horizon: reloading resources for the LabPBR maps a native pack reads");
+            self.reload_packs();
+        }
         let name = path.file_name().unwrap_or_default().to_string_lossy();
         match result {
             Ok((m, labels)) => {
@@ -113,7 +123,8 @@ impl Game<'_> {
     }
 }
 
-/// A hash of the pack's file names, sizes and modification times (`None` when unreadable).
+/// A hash of the names, sizes and modification times of the pack's files and of its saved
+/// option values (`None` when the pack is unreadable).
 fn fingerprint(path: &Path) -> Option<u64> {
     fn walk(path: &Path, hasher: &mut std::hash::DefaultHasher) -> Option<()> {
         let meta = std::fs::metadata(path).ok()?;
@@ -136,5 +147,8 @@ fn fingerprint(path: &Path) -> Option<u64> {
     }
     let mut hasher = std::hash::DefaultHasher::new();
     walk(path, &mut hasher)?;
+    // The player's option values, when there are any.
+    let values = horizon_client::shader_pack_list::values_path(path);
+    let _ = walk(&values, &mut hasher);
     Some(hasher.finish())
 }

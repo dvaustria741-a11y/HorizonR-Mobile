@@ -19,9 +19,11 @@ use naga::{Expression as E, Statement as S};
 /// The reasons the game would skip this program, empty when it would draw.
 pub fn check(p: &PostProgram, config: &Config) -> Vec<String> {
     let mut out = Vec::new();
-    for (stage, m) in [("vertex", &p.program.vertex), ("fragment", &p.program.fragment)] {
-        if let Some(why) = spirv(m) {
-            out.push(format!("GPU compile ({stage}): {why}"));
+    if let Some(prog) = &p.program {
+        for (stage, m) in [("vertex", &prog.vertex), ("fragment", &prog.fragment)] {
+            if let Some(why) = spirv(m) {
+                out.push(format!("GPU compile ({stage}): {why}"));
+            }
         }
     }
     let unbuffered = unbuffered_outputs(p);
@@ -50,7 +52,8 @@ pub fn check(p: &PostProgram, config: &Config) -> Vec<String> {
 /// 3D textures a stage's entry point uses (declared but unused ones the game leaves alone).
 pub fn textures_3d(p: &PostProgram) -> Vec<String> {
     let mut names = std::collections::BTreeSet::new();
-    for m in [&p.program.vertex, &p.program.fragment] {
+    let stages: Vec<&naga::Module> = p.program.iter().flat_map(|g| [&g.vertex, &g.fragment]).collect();
+    for m in stages {
         let Ok(info) = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::all())
             .validate(m)
         else {
@@ -159,7 +162,10 @@ fn components(f: Format) -> u32 {
 
 /// Fragment outputs narrower than their buffer: (location, components, needed).
 fn narrow_outputs(p: &PostProgram, config: &Config) -> Vec<(u32, u32, u32)> {
-    let m = &p.program.fragment;
+    let Some(prog) = &p.program else {
+        return Vec::new();
+    };
+    let m = &prog.fragment;
     let Some(ep) = m.entry_points.iter().find(|e| e.stage == naga::ShaderStage::Fragment) else {
         return Vec::new();
     };
@@ -215,8 +221,10 @@ pub fn unbuffered_outputs(p: &PostProgram) -> Vec<u32> {
     if !matches!(p.group, Group::Gbuffers | Group::Translucent | Group::Shadow) {
         return Vec::new();
     }
-    p.program
-        .interface
+    let Some(prog) = &p.program else {
+        return Vec::new();
+    };
+    prog.interface
         .outputs
         .iter()
         .copied()

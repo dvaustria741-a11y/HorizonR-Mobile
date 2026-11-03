@@ -18,6 +18,8 @@ pub struct Pack {
     files: Files,
     /// Option values the player chose (`settings::apply_overrides`), applied to every source read.
     overrides: BTreeMap<String, String>,
+    /// Values chosen through the Shader Options page (`options::apply`).
+    chosen: BTreeMap<String, String>,
 }
 
 enum Files {
@@ -75,6 +77,7 @@ impl Pack {
             name,
             files,
             overrides: BTreeMap::new(),
+            chosen: BTreeMap::new(),
         })
     }
 
@@ -85,6 +88,7 @@ impl Pack {
             name: name.to_owned(),
             files,
             overrides: BTreeMap::new(),
+            chosen: BTreeMap::new(),
         })
     }
 
@@ -120,6 +124,17 @@ impl Pack {
         self
     }
 
+    /// The pack with options at the values in `chosen` (name to value) instead of their defaults.
+    /// A value the option doesn't list is left out.
+    pub fn with_chosen(mut self, chosen: BTreeMap<String, String>) -> Self {
+        let options = crate::options(&self);
+        self.chosen = chosen
+            .into_iter()
+            .filter(|(name, value)| options.get(name).is_some_and(|o| o.values.contains(value)))
+            .collect();
+        self
+    }
+
     /// The folder or file name the pack was opened from (`BSL.zip`).
     pub fn name(&self) -> &str {
         &self.name
@@ -142,15 +157,21 @@ impl Pack {
         }
     }
 
-    /// A text file, decoded as UTF-8 (invalid bytes replaced) without its byte-order mark.
+    /// A text file, decoded as UTF-8 (invalid bytes replaced) without its byte-order mark, with
+    /// the chosen option values in its sources.
     pub fn read_text(&self, path: &str) -> Option<String> {
         let bytes = self.read(path)?;
         let text = String::from_utf8_lossy(&bytes);
         let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-        if self.overrides.is_empty() || !crate::settings::is_source_name(path) {
-            return Some(text.to_owned());
+        let source = crate::settings::is_source_name(path);
+        let mut out = text.to_owned();
+        if source && !self.overrides.is_empty() {
+            out = crate::settings::apply_overrides(&out, &self.overrides);
         }
-        Some(crate::settings::apply_overrides(text, &self.overrides))
+        if source && !self.chosen.is_empty() {
+            out = crate::options::apply(&out, &self.chosen);
+        }
+        Some(out)
     }
 
     pub fn exists(&self, path: &str) -> bool {
@@ -250,13 +271,13 @@ pub(crate) mod tests {
     use std::io::Write;
 
     /// A zip of `(path, contents)` pairs, paths from the archive root.
-    pub(crate) fn zip(files: &[(&str, &str)]) -> Vec<u8> {
+    pub(crate) fn zip<C: AsRef<[u8]>>(files: &[(&str, C)]) -> Vec<u8> {
         let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
         for (path, contents) in files {
             w.start_file(*path, options).unwrap();
-            w.write_all(contents.as_bytes()).unwrap();
+            w.write_all(contents.as_ref()).unwrap();
         }
         w.finish().unwrap().into_inner()
     }
