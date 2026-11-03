@@ -166,7 +166,7 @@ impl Game<'_> {
                             &Self::shader_packs_dir(),
                             name,
                         ));
-                        let macros = Macros::standard();
+                        let mut macros = Macros::standard();
                         let text = pack.read_text("shaders.properties").unwrap_or_default();
                         // Its conditionals test the pack's options too.
                         let properties = Properties::parse(

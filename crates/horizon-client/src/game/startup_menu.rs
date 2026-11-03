@@ -639,6 +639,23 @@ impl Loading {
                     #[cfg(target_os = "android")]
                     self.menu.click_sound(self.settings.volumes);
                 }
+                Event::OpenShaderOptions => {
+                    self.settings.shader_options = super::shader_packs::read_shader_options(
+                        &self.settings.horizon.shader_pack,
+                        &self.settings.language,
+                        &horizon_shaders::Macros::standard(),
+                    );
+                }
+                Event::ShaderOptions => {
+                    if let Some(options) = self.settings.shader_options.take() {
+                        super::shader_packs::write_shader_options(&options);
+                    }
+                }
+                Event::NativePackOptions(i) => {
+                    if let Some(pack) = self.settings.shader_packs.get(i) {
+                        pack.save_values(&Game::shader_packs_dir());
+                    }
+                }
                 Event::CopyAgentDetails | Event::Volume(..) => {}
             }
         }
