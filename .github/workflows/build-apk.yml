@@ -140,6 +140,12 @@ jobs:
 
           rustup target add "${{ matrix.rust_target }}"
 
+      - name: Apply native mods (native-mods/*.hnmod)
+        run: |
+          # Mixin bundles patch the engine source before it is compiled. If the patched engine does
+          # not compile, the build step below reverts them and builds the plain engine.
+          python3 scripts/apply_native_mods.py apply
+
       - name: Cache Rust Engine Build
         uses: Swatinem/rust-cache@v2
         with:
@@ -189,6 +195,13 @@ jobs:
           set +e
           cargo build --release -p horizon-android --target ${{ matrix.rust_target }} $EXTRA_CARGO_ARGS 2>&1 | tee cargo_build.log
           CARGO_EXIT=${PIPESTATUS[0]}
+          if [ "$CARGO_EXIT" -ne 0 ] && [ -f /tmp/native-mods-backup/manifest.json ]; then
+            echo "::warning::Native mods did not compile; rebuilding the plain engine without them"
+            tail -n 60 cargo_build.log >> "$GITHUB_STEP_SUMMARY"
+            python3 scripts/apply_native_mods.py revert
+            cargo build --release -p horizon-android --target ${{ matrix.rust_target }} $EXTRA_CARGO_ARGS 2>&1 | tee cargo_build.log
+            CARGO_EXIT=${PIPESTATUS[0]}
+          fi
           if [ "$CARGO_EXIT" -ne 0 ]; then
             tail -n 120 cargo_build.log >> "$GITHUB_STEP_SUMMARY"
             exit "$CARGO_EXIT"

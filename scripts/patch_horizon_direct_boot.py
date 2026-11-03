@@ -628,62 +628,7 @@ def patch_ingame_ai_agent_and_native_mods():
             rs_path.write_text(content, encoding="utf-8")
             print(f"[HorizonZ Patch] Updated AI Agent / Gemini support in {rs_path}")
 
-    # (b) Try applying official Horizon native mods (`zoom`, `fps_overlay`, `keystrokes`, `minimap`, `coords_hud`, `recipes`)
-    #     via `horizon-mixins` with safe backup & rollback if upstream hook signatures differ
-    backup_dir = Path("/tmp/horizon-client-pre-mixins-backup")
-    shutil.rmtree(backup_dir, ignore_errors=True)
-    shutil.copytree(Path("crates/horizon-client"), backup_dir)
-
-    try:
-        mods_repo = Path("/tmp/horizon-official-mods")
-        mixins_repo = Path("/tmp/horizon-mixins-tool")
-        shutil.rmtree(mods_repo, ignore_errors=True)
-        shutil.rmtree(mixins_repo, ignore_errors=True)
-        r1 = subprocess.run(
-            ["git", "clone", "--depth", "1", "https://github.com/horizon-rust/horizon-mods.git", str(mods_repo)],
-            capture_output=True, text=True, timeout=60
-        )
-        r2 = subprocess.run(
-            ["git", "clone", "--depth", "1", "https://github.com/horizon-rust/horizon-mixins.git", str(mixins_repo)],
-            capture_output=True, text=True, timeout=60
-        )
-        if r1.returncode == 0 and r2.returncode == 0 and (mods_repo / "native").is_dir():
-            build_mx = subprocess.run(
-                ["cargo", "build", "--release", "--manifest-path", str(mixins_repo / "Cargo.toml")],
-                capture_output=True, text=True, timeout=180
-            )
-            mx_bin = mixins_repo / "target/release/horizon-mixins"
-            if build_mx.returncode == 0 and mx_bin.is_file():
-                bundle_dirs = []
-                for mod_name in ["zoom", "fps_overlay", "keystrokes", "minimap", "coords_hud", "recipes"]:
-                    cand = mods_repo / "native" / mod_name
-                    if (cand / "horizon-mixin.toml").is_file():
-                        bundle_dirs.append(str(cand))
-                if bundle_dirs:
-                    stage_out = Path("/tmp/horizon-mixins-stage")
-                    shutil.rmtree(stage_out, ignore_errors=True)
-                    apply_cmd = [str(mx_bin), "apply", "--game", ".", "--out", str(stage_out)] + bundle_dirs
-                    ap = subprocess.run(apply_cmd, capture_output=True, text=True, timeout=60)
-                    if ap.returncode == 0 and (stage_out / "crates/horizon-client").is_dir():
-                        shutil.rmtree(Path("crates/horizon-client"))
-                        shutil.copytree(stage_out / "crates/horizon-client", Path("crates/horizon-client"))
-                        chk = subprocess.run(
-                            ["cargo", "check", "-p", "horizon-android"],
-                            capture_output=True, text=True, timeout=240
-                        )
-                        if chk.returncode == 0:
-                            print(f"[HorizonZ Patch] Successfully compiled {len(bundle_dirs)} official native mods into horizon-client!")
-                        else:
-                            print("[HorizonZ Patch] Notice: horizon-mixins stage had hook version diff; restoring clean horizon-client.")
-                            shutil.rmtree(Path("crates/horizon-client"))
-                            shutil.copytree(backup_dir, Path("crates/horizon-client"))
-    except Exception as exc:
-        print(f"[HorizonZ Patch] Notice during optional native-mods mixin stage: {exc}")
-        if backup_dir.is_dir():
-            shutil.rmtree(Path("crates/horizon-client"), ignore_errors=True)
-            shutil.copytree(backup_dir, Path("crates/horizon-client"))
-    finally:
-        shutil.rmtree(backup_dir, ignore_errors=True)
+    # Native mods are applied by scripts/apply_native_mods.py (workflow step), not here.
 
 patch_ingame_ai_agent_and_native_mods()
 
