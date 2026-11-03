@@ -3299,6 +3299,9 @@ object HorizonNativeBridge {
                     if (sibling.exists() && sibling.deleteRecursively()) {
                         deletedAny = true
                     }
+                    if (folder == "shaderpacks") {
+                        File(File(base, folder), "$fileName.txt").takeIf { it.isFile }?.delete()
+                    }
                     if (folder in listOf("resourcepacks", "shaderpacks")) {
                         setContentItemEnabled(context, folder, fileName, false, profileSlot, false)
                     }

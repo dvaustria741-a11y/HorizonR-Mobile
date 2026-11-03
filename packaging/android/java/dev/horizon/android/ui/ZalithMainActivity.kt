@@ -6563,7 +6563,10 @@ private fun CleanFilesViewport(
                     .orEmpty()
             } else {
                 val dirFile = File(home, folder).apply { mkdirs() }
-                dirFile.listFiles()?.filter { !it.name.endsWith(".part") && !it.name.endsWith(".tmp") }.orEmpty()
+                dirFile.listFiles()?.filter { f ->
+                    !f.name.endsWith(".part") && !f.name.endsWith(".tmp") &&
+                        !(folder == "shaderpacks" && f.isFile && f.name.endsWith(".txt", true))
+                }.orEmpty()
             }
             val installedVersions by lazy { HorizonNativeBridge.getInstalledStoreVersionsMap(context, profileSlot) }
             files.map { file ->
