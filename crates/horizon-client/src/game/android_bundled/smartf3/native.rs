@@ -171,6 +171,7 @@ impl Game<'_> {
             framebuffer,
             batch.scale as i32,
             self.settings.file.int("debugGuiScale"),
+            self.settings.touch.debug_text_scale,
             self.settings.force_unicode,
             [batch.width as i32, batch.height as i32],
         );

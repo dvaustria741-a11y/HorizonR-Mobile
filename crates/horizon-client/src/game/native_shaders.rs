@@ -80,10 +80,24 @@ impl Game<'_> {
                     (o.id.clone(), value)
                 })
                 .collect();
-            let sprites = self.pack.render.sprite_layers.iter();
-            let tags = pack
-                .manifest
-                .sprite_tags(sprites.map(|(name, layer)| (name.as_str(), *layer)));
+            let sprites = || {
+                let layers = self.pack.render.sprite_layers.iter();
+                layers.map(|(name, layer)| (name.as_str(), *layer))
+            };
+            let tags = pack.manifest.sprite_tags(sprites());
+            let materials = pack.manifest.sprite_materials(sprites());
+            // Each light-giving block state's `[[lights]]` colour, with its level.
+            let mut lights = horizon_client::gfx::block_light::LightTable::default();
+            if !pack.manifest.lights.is_empty() {
+                for (id, state) in self.res.facts().states.iter().enumerate() {
+                    if state.emission == 0 {
+                        continue;
+                    }
+                    if let Some(color) = pack.manifest.light_of(&state.name) {
+                        lights.insert(id as u32, (color, state.emission));
+                    }
+                }
+            }
             let labels = renderer
                 .set_native_shader_pack(Some((report, constants, tags, materials, lights)))
                 .map_err(|e| vec![e])?;
