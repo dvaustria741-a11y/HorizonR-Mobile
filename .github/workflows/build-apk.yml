@@ -191,13 +191,6 @@ jobs:
           CARGO_EXIT=${PIPESTATUS[0]}
           if [ "$CARGO_EXIT" -ne 0 ]; then
             tail -n 120 cargo_build.log >> "$GITHUB_STEP_SUMMARY"
-            sed 's/\x1b\[[0-9;]*m//g' cargo_build.log | grep -n -A14 -E '^(error|warning: unused)' | head -700 > "$RUNNER_TEMP/errs.txt" || true
-            tail -n 60 cargo_build.log >> "$RUNNER_TEMP/errs.txt"
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git checkout -q --orphan ci-logs-tmp && git rm -rf -q . || true
-            cp "$RUNNER_TEMP/errs.txt" "build-error-${{ matrix.abi }}.txt"
-            git add "build-error-${{ matrix.abi }}.txt" && git commit -q -m "ci log ${{ matrix.abi }}" && git push -f origin HEAD:ci-logs || true
             exit "$CARGO_EXIT"
           fi
 
