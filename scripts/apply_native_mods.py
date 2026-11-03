@@ -50,14 +50,17 @@ def unpack_bundles(work: Path):
         with zipfile.ZipFile(hn) as z:
             z.extractall(out)
         found = sorted((out / "mixins").glob("*/horizon-mixin.toml"))
+        if not found and (out / "horizon-mixin.toml").is_file():
+            found = [out / "horizon-mixin.toml"]  # a bundle at the zip's root
         if not found:
             log(f"{hn.name}: no mixins/<id>/horizon-mixin.toml inside, skipped")
             continue
         for toml_path in found:
             bdir = toml_path.parent
-            dest = mods_in / bdir.name
-            shutil.copytree(bdir, dest)
             data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
+            name = data.get("mod", {}).get("id") or (bdir.name if bdir != out else hn.stem)
+            dest = mods_in / name
+            shutil.copytree(bdir, dest, ignore=shutil.ignore_patterns("mixins") if bdir == out else None)
             rev = (data.get("compatibility") or {}).get("horizon_revision")
             bundles.append((dest, rev, data.get("mod", {}).get("id", bdir.name)))
             log(f"{hn.name}: bundle {bdir.name} pinned to {rev}")
@@ -142,19 +145,29 @@ def apply():
             return 0
         ws = work / "ws"
         copy_workspace(ws)
-        revs = {r for _, r, _ in bundles if r}
-        if len(revs) > 1:
-            log("bundles pin different Horizon revisions: " + ", ".join(sorted(revs)))
-            return 0
-        if revs:
-            # The pin names the Horizon commit the mod was made for. This engine is a newer or
-            # patched copy of it, so tell the tool the pin matches ("Build anyway").
-            (ws / ".horizon-revision").write_text(next(iter(revs)) + "\n")
-        stage = work / "stage"
-        r = run([str(exe), "apply", "--workspace", str(ws), "--mods", str(mods_in), "--out", str(stage)])
-        if r.returncode:
-            log("apply failed (engine left unchanged):\n" + (r.stderr or r.stdout)[-2000:])
-            return 0
+        # Each group of bundles pinned to one Horizon revision is applied in turn, the next on top
+        # of the last one's output. The pin names the commit the mod was made for; this engine is
+        # a newer or patched copy of it, so the tool is told the pin matches ("build anyway").
+        groups = {}
+        for dest, rev, name in bundles:
+            groups.setdefault(rev, []).append(dest)
+        current = ws
+        stage = ws
+        for i, (rev, dests) in enumerate(sorted(groups.items(), key=lambda g: str(g[0]))):
+            group_mods = work / f"mods-group-{i}"
+            group_mods.mkdir()
+            for d in dests:
+                shutil.copytree(d, group_mods / d.name)
+            if rev:
+                (current / ".horizon-revision").write_text(rev + "\n")
+            stage = work / f"stage-{i}"
+            r = run([str(exe), "apply", "--workspace", str(current), "--mods", str(group_mods),
+                     "--out", str(stage)])
+            if r.returncode:
+                log(f"apply failed for {', '.join(d.name for d in dests)} "
+                    "(engine left unchanged):\n" + (r.stderr or r.stdout)[-2000:])
+                return 0
+            current = stage
         add_android_deps(stage, stage / "crates/horizon-android/Cargo.toml")
         files = changed_files(ws, stage)
         # Back up the originals so `revert` can undo this.
