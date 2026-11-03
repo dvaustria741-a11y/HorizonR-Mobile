@@ -106,7 +106,7 @@ public final class HorizonActivity extends NativeActivity {
 
     private void showHorizonSplashDialog(final File homeDir) {
         try {
-            splashDialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+            splashDialog = new Dialog(this, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);
             splashDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
             splashDialog.setCancelable(false);
 
@@ -124,7 +124,9 @@ public final class HorizonActivity extends NativeActivity {
 
             Window win = splashDialog.getWindow();
             if (win != null) {
-                win.setBackgroundDrawable(new ColorDrawable(Color.BLACK));
+                win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                win.setFormat(android.graphics.PixelFormat.TRANSLUCENT);
+                win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
                 win.setLayout(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT
