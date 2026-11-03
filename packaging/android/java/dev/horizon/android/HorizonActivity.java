@@ -554,6 +554,9 @@ public final class HorizonActivity extends NativeActivity {
             File home = getFilesDir();
             if (ext == null || home == null) return;
             mirrorFile(new File(home, "logs/latest.log"), new File(ext, "logs/latest.log"));
+            // The Android build logs to performance/diagnostic.log (and a rotated copy), not latest.log.
+            mirrorFile(new File(home, "performance/diagnostic.log"), new File(ext, "logs/diagnostic.log"));
+            mirrorFile(new File(home, "performance/diagnostic-rotated.log"), new File(ext, "logs/diagnostic-rotated.log"));
             File[] reports = new File(home, "crash-reports").listFiles();
             if (reports != null) {
                 for (File r : reports) {
