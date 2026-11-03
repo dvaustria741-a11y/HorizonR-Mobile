@@ -28,6 +28,7 @@ mod skyblend;
 mod tex2d;
 mod tex3d;
 mod uniforms;
+mod wavefix;
 
 use std::path::{Path, PathBuf};
 
@@ -70,6 +71,7 @@ fn port_inner(path: &Path, out: &Path) -> Result<PortOutcome, String> {
     uniforms::matrix_order(&mut files, &mut log);
     pbr::fix(&mut files, &mut log);
     alphacut::fix(&mut files, &mut log);
+    wavefix::fix(&mut files, &mut log);
     postkeep::fix(&mut files, &mut log);
     fragdepth::fix(&mut files, &mut log);
     tex3d::fix(&mut files, &mut log);
