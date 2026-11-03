@@ -155,6 +155,9 @@ private val LavenderBadgeBg: Color get() = activeUiPalette.lavenderBadgeBg
 private val LavenderBadgeText: Color get() = activeUiPalette.lavenderBadgeText
 private val MutedSubtitleText: Color get() = activeUiPalette.mutedSubtitleText
 
+/** Progress of a shader pack import that runs the translator (shown in a dialog). */
+private data class ShaderImportProgress(val percent: Int, val stage: String, val detail: String, val elapsedSec: Long)
+
 @Composable
 private fun SyncDynamicLauncherPalette(palette: ZalithThemePalette, useDynamicColor: Boolean) {
     val scheme = MaterialTheme.colorScheme
@@ -5074,6 +5077,7 @@ private fun CleanStoreViewport(
                         showCancelStoreDialog = false
                         HorizonNativeBridge.storeDownloadCancelled.set(true)
                         HorizonNativeBridge.storeDownloadPaused.set(false)
+                        if (storeProgress.translating) HorizonNativeBridge.cancelShaderTranslation()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
                 ) {
@@ -5255,14 +5259,14 @@ private fun CleanStoreViewport(
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Downloading ${storeProgress.activeTitle} (${storeProgress.percent}%)",
+                                                text = "${if (storeProgress.translating) "Translating" else "Downloading"} ${storeProgress.activeTitle} (${storeProgress.percent}%)",
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White,
                                                 maxLines = 1
                                             )
                                             Text(
-                                                text = "${storeProgress.speedText} • ${storeProgress.statusText}",
+                                                text = if (storeProgress.speedText.isBlank()) storeProgress.statusText else "${storeProgress.speedText} • ${storeProgress.statusText}",
                                                 fontSize = 10.sp,
                                                 color = MutedSubtitleText,
                                                 maxLines = 1,
@@ -5270,21 +5274,23 @@ private fun CleanStoreViewport(
                                             )
                                         }
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Surface(
-                                                shape = RoundedCornerShape(8.dp),
-                                                color = SkyBlueAccent,
-                                                modifier = Modifier.animatedPressScale {
-                                                    val nextPaused = !HorizonNativeBridge.storeDownloadPaused.get()
-                                                    HorizonNativeBridge.storeDownloadPaused.set(nextPaused)
+                                            if (!storeProgress.translating) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = SkyBlueAccent,
+                                                    modifier = Modifier.animatedPressScale {
+                                                        val nextPaused = !HorizonNativeBridge.storeDownloadPaused.get()
+                                                        HorizonNativeBridge.storeDownloadPaused.set(nextPaused)
+                                                    }
+                                                ) {
+                                                    Text(
+                                                        text = if (storeProgress.paused) "Resume" else "Pause",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = SkyBlueDarkText,
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                                    )
                                                 }
-                                            ) {
-                                                Text(
-                                                    text = if (storeProgress.paused) "Resume" else "Pause",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = SkyBlueDarkText,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                                )
                                             }
                                             Surface(
                                                 shape = RoundedCornerShape(8.dp),
@@ -6563,7 +6569,10 @@ private fun CleanFilesViewport(
                     .orEmpty()
             } else {
                 val dirFile = File(home, folder).apply { mkdirs() }
-                dirFile.listFiles()?.filter { !it.name.endsWith(".part") && !it.name.endsWith(".tmp") }.orEmpty()
+                dirFile.listFiles()?.filter { f ->
+                    !f.name.endsWith(".part") && !f.name.endsWith(".tmp") &&
+                        !(folder == "shaderpacks" && f.isFile && f.name.endsWith(".txt", true))
+                }.orEmpty()
             }
             val installedVersions by lazy { HorizonNativeBridge.getInstalledStoreVersionsMap(context, profileSlot) }
             files.map { file ->
@@ -6669,24 +6678,81 @@ private fun CleanFilesViewport(
     var showImportTranslatorDialog by remember { mutableStateOf(false) }
     var importTranslator by remember { mutableStateOf(ShaderTranslator.current(context)) }
 
+    // Shader import with Translator v2 runs for a minute or more: it happens off the main thread, behind this progress.
+    var shaderImportProgress by remember { mutableStateOf<ShaderImportProgress?>(null) }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            val ext = when (currentFolder) {
+            val folder = currentFolder
+            val ext = when (folder) {
                 "mods" -> ".hmod"
                 "shaderpacks" -> ".hshader"
                 "screenshots" -> ".png"
                 else -> ".zip"
             }
-            HorizonNativeBridge.importUriToDestination(
-                context,
-                uri,
-                currentFolder,
-                "imported_${System.currentTimeMillis()}$ext",
-                logEnabled,
-                importTranslator
-            )
-            refreshCount += 1
+            val translator = importTranslator
+            val translating = folder == "shaderpacks" && translator == ShaderTranslator.V2
+            if (translating) shaderImportProgress = ShaderImportProgress(0, "Starting the shader translator", "", 0L)
+            val onTranslateProgress: (Int, String, String, Long) -> Unit = { percent, stage, detail, elapsed ->
+                shaderImportProgress = ShaderImportProgress(percent, stage, detail, elapsed)
+            }
+            // Copying and translating never run on the main thread: it would freeze the launcher on a black screen.
+            toggleScope.launch(Dispatchers.IO) {
+                val imported = HorizonNativeBridge.importUriToDestination(
+                    context,
+                    uri,
+                    folder,
+                    "imported_${System.currentTimeMillis()}$ext",
+                    logEnabled,
+                    translator,
+                    if (translating) onTranslateProgress else null
+                )
+                withContext(Dispatchers.Main) {
+                    shaderImportProgress = null
+                    refreshCount += 1
+                    if (translating) {
+                        Toast.makeText(
+                            context,
+                            if (imported != null) "Imported and translated ${imported.name}"
+                            else if (HorizonNativeBridge.shaderTranslationCancelled) "Shader pack import cancelled"
+                            else "Could not import that shader pack",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
         }
+    }
+
+    shaderImportProgress?.let { prog ->
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Translating shader pack", style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LinearProgressIndicator(
+                        progress = { (prog.percent / 100f).coerceIn(0f, 1f) },
+                        color = SkyBlueAccent,
+                        trackColor = Color(0xFF263238),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(50))
+                    )
+                    Text("${prog.percent}% • ${prog.stage}", fontSize = 12.sp, color = Color.White)
+                    val clock = if (prog.elapsedSec >= 60) "${prog.elapsedSec / 60}m ${prog.elapsedSec % 60}s" else "${prog.elapsedSec}s"
+                    Text(
+                        (if (prog.detail.isNotBlank()) "${prog.detail} • " else "") + clock +
+                            " • Big packs can take a few minutes. Keep the launcher open.",
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { HorizonNativeBridge.cancelShaderTranslation() }) { Text("Cancel") }
+            }
+        )
     }
 
     // Shader pack import: choose Translator v1 / v2 first

@@ -6,6 +6,7 @@ use std::path::Path;
 
 use horizon_shaders::Pack;
 
+#[derive(Clone)]
 pub struct Files {
     /// The pack's file or folder name.
     pub name: String,

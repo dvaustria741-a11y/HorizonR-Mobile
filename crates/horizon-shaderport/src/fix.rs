@@ -142,16 +142,18 @@ const RULES: &[Rule] = &[
     },
 ];
 
-pub fn fix(files: &mut Files, before: &Eval) -> Vec<Change> {
+/// Returns what it changed and the evaluation the pack ended on.
+pub fn fix(files: &mut Files, before: &Eval) -> (Vec<Change>, Eval) {
     let mut log = Vec::new();
     if before.score() == 0 {
-        return log; // Horizon loads it all: leave the pack as it is.
+        return (log, before.clone()); // Horizon loads it all: leave the pack as it is.
     }
     let mut best = before.clone();
     // Twice: a rule can unblock code another rule then reaches.
     for round in 0..2 {
         let mut progressed = false;
-        for rule in RULES {
+        for (i, rule) in RULES.iter().enumerate() {
+            crate::progress::step(round * RULES.len() + i, 2 * RULES.len(), rule.name);
             let edits = (rule.apply)(files, &best);
             let edits: Edits = edits
                 .into_iter()
@@ -190,7 +192,7 @@ pub fn fix(files: &mut Files, before: &Eval) -> Vec<Change> {
             break;
         }
     }
-    log
+    (log, best)
 }
 
 /// Applies the rule `name` without checking it (the `apply` debugging command).
@@ -1489,7 +1491,11 @@ pub fn report(name: &str, before: &Eval, after: &Eval, log: &[Change]) -> String
                 if c.rule == crate::normals::NAME { crate::normals::WHY } else if c.rule == crate::uniforms::NAME { crate::uniforms::WHY } else { "" },
                 |r| r.why,
             );
-            s += &format!("- **{}**: {}. {}", c.rule, why, c.outcome);
+            if why.is_empty() {
+                s += &format!("- **{}**: {}", c.rule, c.outcome);
+            } else {
+                s += &format!("- **{}**: {}. {}", c.rule, why, c.outcome);
+            }
             if !c.files.is_empty() {
                 let shown: Vec<_> = c.files.iter().take(8).map(|f| format!("`{f}`")).collect();
                 s += &format!(" in {}{}", shown.join(", "), if c.files.len() > 8 { format!(" and {} more", c.files.len() - 8) } else { String::new() });
