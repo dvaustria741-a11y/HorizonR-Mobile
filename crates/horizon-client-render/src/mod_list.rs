@@ -18,6 +18,11 @@ pub const NATIVE_DIR: &str = "horizon-native-mods";
 /// Why a native mod installed in [`NATIVE_DIR`] doesn't run in this game.
 pub const NOT_BUILT: &str = "Installed, not built into this game: build the game with it in the launcher (Settings > Native mods), then play the instance that build is in.";
 
+/// Native mods that start off: they are in the Mods list from the first run, and the player turns
+/// them on there (an unfinished preview, say). A mod's line in `horizon-mods.txt` overrides this.
+/// Add a native mod's id here to ship it off by default.
+pub const DEFAULT_OFF: &[&str] = &["punchy"];
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModList {
     /// Ids of the mods the player turned on.
@@ -121,11 +126,19 @@ impl ModList {
         }
         let _ = fs::write(path, self.serialize());
     }
+    /// Whether native mod `id` runs: on until the player turns it off, unless it ships in
+    /// [`DEFAULT_OFF`] and the player has not turned it on.
+    pub fn native_on(&self, id: &str) -> bool {
+        if self.enabled.contains(id) {
+            return true;
+        }
+        !self.disabled.contains(id) && !DEFAULT_OFF.contains(&id)
+    }
     pub fn is_on(&self, i: usize) -> bool {
         self.installed.get(i).is_some_and(|m| {
             m.dev
                 || if m.native.is_some() {
-                    !self.disabled.contains(&m.id)
+                    self.native_on(&m.id)
                 } else {
                     self.enabled.contains(&m.id)
                 }
@@ -139,11 +152,12 @@ impl ModList {
             return;
         };
         if m.native.is_some() {
-            if self.disabled.remove(&m.id) {
-                self.enabled.insert(m.id.clone());
-            } else {
+            if self.native_on(&m.id) {
                 self.enabled.remove(&m.id);
                 self.disabled.insert(m.id.clone());
+            } else {
+                self.disabled.remove(&m.id);
+                self.enabled.insert(m.id.clone());
             }
         } else if !self.enabled.remove(&m.id) {
             self.enabled.insert(m.id.clone());
@@ -155,6 +169,25 @@ impl ModList {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_default_off_native_mod_starts_off_until_turned_on() {
+        let mut list = ModList::default();
+        assert!(!list.native_on("punchy"));
+        assert!(list.native_on("other"));
+        list.installed.push(Installed {
+            id: "punchy".into(),
+            title: "Punchy".into(),
+            description: String::new(),
+            problem: None,
+            dev: false,
+            has_settings: false,
+            native: Some(NativePage::default()),
+        });
+        list.toggle(0);
+        assert!(list.is_on(0));
+        list.toggle(0);
+        assert!(!list.is_on(0));
+    }
     #[test]
     fn round_trips_and_ignores_the_rest() {
         let list = ModList::parse("mod.coords_hud:true\nmod.other:false\nzoom:true\n");
