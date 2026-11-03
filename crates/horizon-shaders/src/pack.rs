@@ -163,9 +163,10 @@ impl Pack {
         let bytes = self.read(path)?;
         let text = String::from_utf8_lossy(&bytes);
         let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-        let source = crate::settings::is_source_name(path);
+        // Upstream's rule for the Shader Options values: every file but properties and lang.
+        let source = !path.ends_with(".properties") && !path.ends_with(".lang");
         let mut out = text.to_owned();
-        if source && !self.overrides.is_empty() {
+        if crate::settings::is_source_name(path) && !self.overrides.is_empty() {
             out = crate::settings::apply_overrides(&out, &self.overrides);
         }
         if source && !self.chosen.is_empty() {

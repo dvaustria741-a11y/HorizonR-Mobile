@@ -63,23 +63,10 @@ impl Game<'_> {
         let result = Pack::read(path).map_err(|e| vec![e]).and_then(|pack| {
             let report = check(&pack)
                 .map_err(|p| p.iter().map(ToString::to_string).collect::<Vec<String>>())?;
-            // The values the player chose in Shader Pack Settings, over the pack's defaults.
-            let chosen = path
-                .file_name()
-                .map(|n| horizon_shaders::read_overrides(&Game::shader_packs_dir(), &n.to_string_lossy()))
-                .unwrap_or_default();
-            let constants = pack
-                .manifest
-                .options
-                .iter()
-                .map(|o| {
-                    let value = chosen
-                        .get(&o.id)
-                        .and_then(|v| o.kind.constant_from(v))
-                        .unwrap_or_else(|| o.kind.default_constant());
-                    (o.id.clone(), value)
-                })
-                .collect();
+            // The player's values (the pack's Shader Options page), else the defaults.
+            let options = &pack.manifest.options;
+            let values = horizon_client::shader_pack_list::load_values(path, options);
+            let constants = options.iter().map(|o| o.id.clone()).zip(values).collect();
             let sprites = || {
                 let layers = self.pack.render.sprite_layers.iter();
                 layers.map(|(name, layer)| (name.as_str(), *layer))
