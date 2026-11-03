@@ -1788,7 +1788,16 @@ impl Game<'_> {
         let label = keybinds::display_name(self.settings.keys.get(name)).plain();
         let down = match key {
             Some(k) => self.keys.contains(&k),
-            None => self.mouse_reading().1[usize::from(name == "key.use")],
+            // The held attack/use button, from whatever pressed it: the mouse, a bound key, or
+            // the touch and gamepad controls, which reach `play_mouse` without the mouse reading.
+            None => {
+                let mouse = self.mouse_reading().1[usize::from(name == "key.use")];
+                match name {
+                    "key.attack" => mouse || self.left,
+                    "key.use" => mouse || self.right,
+                    _ => mouse,
+                }
+            }
         };
         Some((down, label))
     }
