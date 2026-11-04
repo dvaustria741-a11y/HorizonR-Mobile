@@ -10,7 +10,7 @@ use std::path::Path;
 pub const ID: &str = "luxium";
 pub const NAME: &str = "Luxium";
 pub const VERSION: &str = "0.1.0";
-pub const DESCRIPTION: &str = "Port of Luxium: plant wave, sky, lens flare, air distortion (/luxium warp), filmic tonemap, light shafts and wet surfaces.";
+pub const DESCRIPTION: &str = "Port of Luxium: water, plant wave, sky, lens flare, air distortion (/luxium warp), filmic tonemap, light shafts and wet surfaces.";
 /// The folder the bundled stages are written to inside `shaderpacks/`.
 pub const PACK_DIR: &str = "luxium";
 
@@ -49,7 +49,8 @@ pub fn ensure_pack(packs_dir: &Path) {
 }
 
 /// The options the mod's settings page cycles: pack option id, label, values, default.
-const SETTINGS: [(&str, &str, &[&str], &str); 10] = [
+const SETTINGS: [(&str, &str, &[&str], &str); 11] = [
+    ("water_on", "Water surface", &["true", "false"], "true"),
     ("wave_on", "Plant wave", &["true", "false"], "true"),
     (
         "wave_strength",

@@ -3,7 +3,7 @@ id = "luxium"
 name = "Luxium"
 version = "0.1.0"
 api = "0.1"
-description = "Luxium, built into HorizonR: plant wave, sky, lens flare, air distortion, filmic tonemap, light shafts and wet surfaces."
+description = "Luxium, built into HorizonR: water, plant wave, sky, lens flare, air distortion, filmic tonemap, light shafts and wet surfaces."
 authors = ["vinlanx", "HorizonR"]
 license = "Luxium Free Modification License"
 
@@ -41,6 +41,14 @@ sprites = ["block/*_leaves"]
 [[tags]]
 id = "flowers"
 sprites = ["block/dandelion", "block/poppy", "block/azure_bluet", "block/blue_orchid", "block/allium", "block/oxeye_daisy", "block/cornflower", "block/lily_of_the_valley", "block/*_tulip"]
+
+[[tags]]
+id = "water"
+sprites = ["block/water_still", "block/water_flow", "block/water_overlay"]
+
+[[tags]]
+id = "aquatic"
+sprites = ["block/seagrass", "block/tall_seagrass_top", "block/tall_seagrass_bottom", "block/kelp", "block/kelp_plant", "block/kelp_top"]
 
 [[options]]
 id = "shafts_on"
@@ -238,6 +246,21 @@ type = "float"
 default = 1.0
 min = 0.2
 max = 3.0
+step = 0.1
+
+[[options]]
+id = "water_on"
+name = "Water surface"
+type = "bool"
+default = true
+
+[[options]]
+id = "water_strength"
+name = "Water reflection strength"
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
 step = 0.1
 
 [budget]

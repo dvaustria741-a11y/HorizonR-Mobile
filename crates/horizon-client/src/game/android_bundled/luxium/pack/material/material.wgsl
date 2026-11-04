@@ -1,9 +1,39 @@
-// Rain-wet terrain, after Luxium's wet_surface: darker, slightly glossier in the lit sky.
+// Rain-wet terrain after Luxium's wet_surface, and Luxium's water surface (the analytic wave
+// normals, Fresnel and sun glint of water_surface.glsl; the screen-space reflections are not here).
 override wet_on: bool = true;
+override water_on: bool = true;
+override water_strength: f32 = 1.0;
+
+// Sprite tags (manifest): bit 3 water, bit 4 seagrass and kelp.
+fn water_normal(world: vec3<f32>, time: f32) -> vec3<f32> {
+    let d0 = vec2<f32>(0.9138, 0.4061);
+    let d1 = vec2<f32>(-0.5260, 0.8505);
+    var g = d0 * cos(dot(world.xz, d0) * 0.82 + time * 0.72) * 0.21;
+    g = g + d1 * cos(dot(world.xz, d1) * 1.37 - time * 0.57) * 0.14;
+    return normalize(vec3<f32>(-g.x, 1.0, -g.y));
+}
 
 fn material(input: MaterialInput) -> Surface {
+    // Derivatives first, where every pixel runs them.
+    let gn = normalize(cross(dpdx(input.position), dpdy(input.position)));
     var color = input.albedo * input.tint * vec4<f32>(input.lightmap, 1.0);
-    if wet_on && !input.translucent {
+    if water_on && (input.tags & 8u) != 0u {
+        let top = smoothstep(0.5, 0.9, abs(gn.y));
+        let world = input.position + frame.camera_position;
+        let n = water_normal(world, frame.time);
+        let v = normalize(-input.position);
+        let facing = clamp(dot(n, v), 0.0, 1.0);
+        let fresnel = 0.02 + 0.98 * pow(1.0 - facing, 5.0);
+        let r = reflect(-v, n);
+        let sky_up = smoothstep(-0.05, 0.5, r.y);
+        let sky = mix(frame.fog_color, frame.sky_color, sky_up);
+        let day = smoothstep(-0.1, 0.1, frame.sun_direction.y) * (1.0 - frame.rain * 0.8);
+        let glint = pow(max(dot(r, frame.sun_direction), 0.0), 300.0) * 6.0 * day;
+        let k = fresnel * 0.85 * top * water_strength;
+        let lit = mix(color.rgb, sky * (0.35 + 0.65 * input.light.y), k);
+        color = vec4<f32>(lit + vec3<f32>(1.0, 0.95, 0.85) * glint * top * water_strength,
+            mix(color.a, 1.0, k * 0.6));
+    } else if wet_on && !input.translucent {
         let wet = clamp(frame.wetness, 0.0, 1.0) * smoothstep(0.3, 0.9, input.light.y);
         let dark = 1.0 - 0.28 * wet;
         let sheen = wet * 0.05 * input.light.y;
@@ -89,9 +119,21 @@ fn leaf_wave(world: vec3<f32>, time: f32, strength: f32, gust: f32) -> vec3<f32>
     return vec3<f32>(primary + secondary * 0.25, lift * 0.16, secondary + primary * 0.18) * amplitude;
 }
 
-// Sprite tags (manifest): bit 0 grass and ferns, bit 1 leaves, bit 2 flowers.
+fn aquatic_wave(world: vec3<f32>, time: f32, weight: f32, strength: f32) -> vec3<f32> {
+    let phase = wave_hash(floor(world.xz * 0.16)) * WAVE_TAU;
+    let current = normalize(vec2<f32>(0.82 + sin(time * 0.09) * 0.18, 0.46 + cos(time * 0.07) * 0.16));
+    let side = vec2<f32>(-current.y, current.x);
+    let sway = sin(dot(world.xz, current) * 0.17 + world.y * 0.36 + time * 0.94 + phase);
+    let curl = sin(dot(world.xz, side) * 0.11 - world.y * 0.21 - time * 0.52 + phase * 0.43);
+    let response = weight * weight;
+    let lateral = (current * sway + side * curl * 0.42) * (0.067 * strength * response);
+    let lift = sin(time * 0.61 + world.y * 0.33 + phase) * 0.009 * strength * response;
+    return vec3<f32>(lateral.x, lift, lateral.y);
+}
+
+// Sprite tags (manifest): bit 0 grass and ferns, bit 1 leaves, bit 2 flowers, bit 3 water, bit 4 seagrass and kelp.
 fn displace(input: DisplaceInput) -> vec3<f32> {
-    if !wave_on || (input.tags & 7u) == 0u {
+    if !wave_on || (input.tags & 23u) == 0u {
         return input.position;
     }
     let max_distance = min(frame.render_distance, 128.0);
@@ -103,7 +145,11 @@ fn displace(input: DisplaceInput) -> vec3<f32> {
     let time = frame.time * wave_speed;
     let strength = wave_strength * fade;
     var offset = vec3<f32>(0.0);
-    if (input.tags & 2u) != 0u {
+    if (input.tags & 16u) != 0u {
+        // Seagrass and kelp drift with the current, rooted at the bottom of the sprite.
+        let weight = clamp(1.0 - input.uv.y, 0.0, 1.0);
+        offset = aquatic_wave(world, time, weight, strength);
+    } else if (input.tags & 2u) != 0u {
         offset = leaf_wave(world, time, strength, wave_gust(world, time, 0.65));
     } else {
         // Stalks bend from the root: the sprite's top is its tip.
