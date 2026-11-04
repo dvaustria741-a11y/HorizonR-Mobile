@@ -796,6 +796,15 @@ pub const OPAQUE_LAYER: u16 = 1 << 15;
 /// in HDR output (`gfx/hdr.rs`): 15 minus the tier, so the usual 0xFF means none. The
 /// byte's other four bits stay set.
 pub const EMISSION_BITS: u32 = 0x0F00_0000;
+/// The top nibble of `TerrainVertex::color`'s alpha byte: the face the vertex belongs to
+/// (0 down, 1 up, 2 north, 3 south, 4 west, 5 east, as `Direction`), or 15 (the usual 0xFF)
+/// when unknown. Shader packs draw terrain without the flat draws' per-quad vertex reads
+/// with it, so their vertex shaders see the real normal instead of a constant one.
+pub const FACE_BITS: u32 = 0xF000_0000;
+/// `color` marked as belonging to a face looking `facing` (a `Direction` index, 0 to 5).
+pub fn with_face(color: u32, facing: u32) -> u32 {
+    color & !FACE_BITS | (facing & 7) << 28
+}
 /// HDR tiers, by the kind of light rather than its level: a candle's flame is as bright as
 /// a torch's, it only lights less around it. 0 stays as in SDR.
 pub const LOW: u8 = 1;
@@ -1165,7 +1174,7 @@ impl Mesher<'_> {
                 } else {
                     face.layer as u16
                 },
-                emitting(pack_rgb(rgb), tier),
+                with_face(emitting(pack_rgb(rgb), tier), q.facing as u32),
                 pack_coords(lighting::with_emission(coords[i], q.light_emission)),
             ));
         }
