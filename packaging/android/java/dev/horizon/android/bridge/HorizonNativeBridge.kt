@@ -648,6 +648,8 @@ object HorizonNativeBridge {
         Log.i(TAG, message)
     }
 
+    @Volatile private var appContext: Context? = null
+
     fun appendSystemLog(message: String, enabled: Boolean = true, context: Context? = null) {
         if (!enabled) return
         val stamp = synchronized(timeFormat) { timeFormat.format(Date()) }
@@ -656,10 +658,20 @@ object HorizonNativeBridge {
         while (memoryLogs.size > MAX_LOG_LINES) {
             memoryLogs.pollFirst()
         }
-        if (context != null) {
+        val ctx = context ?: appContext
+        if (ctx != null) {
             try {
-                val logFile = File(context.filesDir, "zalith-system.log")
+                val logFile = File(ctx.filesDir, "zalith-system.log")
+                if (logFile.length() > 1_000_000L) {
+                    val keep = logFile.readLines().takeLast(400)
+                    logFile.writeText(keep.joinToString("\n") + "\n")
+                }
                 FileOutputStream(logFile, true).use { fos ->
+                    fos.write((line + "\n").toByteArray(Charsets.UTF_8))
+                }
+                val launcherLog = File(File(ctx.filesDir, "logs").apply { mkdirs() }, "launcher.log")
+                if (launcherLog.length() > 1_000_000L) launcherLog.delete()
+                FileOutputStream(launcherLog, true).use { fos ->
                     fos.write((line + "\n").toByteArray(Charsets.UTF_8))
                 }
             } catch (ignored: Exception) {
@@ -712,6 +724,7 @@ object HorizonNativeBridge {
 
     fun ensureHomeDirectories(context: Context): File {
         val home = context.filesDir
+        if (appContext == null) appContext = context.applicationContext
         listOf(
             "saves",
             "resourcepacks",
@@ -3041,9 +3054,27 @@ object HorizonNativeBridge {
      * existing pack (`golden_hour-0.1.0.hshader`, `glow-1.0.0.hshader`, etc.) that had singular
      * `horizon-shader.toml` is automatically upgraded in-place to plural `horizon-shaders.toml` (`schema = 1`)!
      */
+    /**
+     * A shader pack's own settings live in `shaderpacks/<pack file>.txt`. Removes the ones whose pack
+     * file is gone, whichever way it was deleted (Manager, Store, Files app, in-game).
+     */
+    fun purgeOrphanShaderConfigs(vararg bases: File) {
+        bases.distinctBy { it.absolutePath }.forEach { base ->
+            File(base, "shaderpacks").listFiles()?.forEach { f ->
+                if (!f.isFile || !f.name.endsWith(".txt", ignoreCase = true)) return@forEach
+                val packName = f.name.dropLast(4)
+                val isPackConfig = packName.endsWith(".zip", true) || packName.endsWith(".hshader", true)
+                if (isPackConfig && !File(f.parentFile, packName).exists()) {
+                    if (f.delete()) appendSystemLog("Removed settings of deleted shader pack $packName")
+                }
+            }
+        }
+    }
+
     fun syncAndRepairShadersStorage(context: Context, profileSlot: Int = 0) {
         val home = ensureHomeDirectories(context)
         val profileHome = getProfileHome(home, profileSlot)
+        purgeOrphanShaderConfigs(home, profileHome)
         listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
             val shaderDir = File(base, "shaderpacks").apply { mkdirs() }
             shaderDir.listFiles()?.forEach { f ->
@@ -3363,6 +3394,7 @@ object HorizonNativeBridge {
                     }
                 }
             }
+            if (folder == "shaderpacks") purgeOrphanShaderConfigs(base)
 
             // Also remove from `zalith-store-installed.json` so Store immediately shows `Install` again!
             val regFile = File(base, "zalith-store-installed.json")
@@ -3625,6 +3657,7 @@ object HorizonNativeBridge {
                     }
                 }
             }
+            purgeOrphanShaderConfigs(base)
             // Also clean `horizon-mods.txt`
             val hmodsTxt = File(base, "horizon-mods.txt")
             if (hmodsTxt.exists()) {
@@ -5787,6 +5820,8 @@ object HorizonNativeBridge {
             val body = tsMatch?.groupValues?.get(2) ?: trimmed
 
             val sev = when {
+                body.startsWith("[ERROR]") -> LogSeverityFilter.ERR
+                body.startsWith("[WARN]") -> LogSeverityFilter.WARN
                 body.contains("error", ignoreCase = true) || body.contains("fail", ignoreCase = true) || body.contains("panic", ignoreCase = true) -> LogSeverityFilter.ERR
                 body.contains("warn", ignoreCase = true) || body.contains("Paused", ignoreCase = true) || body.contains("Cancel", ignoreCase = true) -> LogSeverityFilter.WARN
                 body.contains("Speed:", ignoreCase = true) || body.contains("Download", ignoreCase = true) || body.contains("Stage:", ignoreCase = true) || defaultSource == "Downloader" -> LogSeverityFilter.DL
@@ -5829,7 +5864,7 @@ object HorizonNativeBridge {
                 File(home, ".local/horizon-client/26.3/logs/latest.log")
             )
             latestLogCandidates.firstOrNull { it.exists() }?.let { logFile ->
-                runCatching { logFile.readLines().takeLast(80).forEach { parseAndAdd(it, "Game Engine") } }
+                runCatching { logFile.readLines().takeLast(400).forEach { parseAndAdd(it, "Game Engine") } }
             }
         }
 

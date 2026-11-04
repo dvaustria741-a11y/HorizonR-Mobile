@@ -176,7 +176,11 @@ public final class HorizonDocumentsProvider extends DocumentsProvider {
     @Override
     public void deleteDocument(String documentId) throws FileNotFoundException {
         File target = resolveFallbackFile(documentId);
+        File parent = target.getParentFile();
         deleteRecursive(target);
+        if (parent != null && "shaderpacks".equals(parent.getName())) {
+            new File(parent, target.getName() + ".txt").delete();
+        }
     }
 
     @Override

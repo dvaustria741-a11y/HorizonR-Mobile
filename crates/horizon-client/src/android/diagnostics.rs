@@ -92,16 +92,34 @@ pub fn initialize(home: &Path, device: Value) -> io::Result<()> {
         "source_dirty":option_env!("HORIZON_ANDROID_BUILD_DIRTY"),"abi":std::env::consts::ARCH,
         "phase":"native_start","clean_exit":false,"device":device});
     atomic_json(&dir.join("current-session.json"), &session)?;
-    let (sender, receiver) = mpsc::sync_channel(128);
+    // The launcher's log screen and the `logs` folder read `logs/latest.log`: the same lines as
+    // diagnostic.log, with the wall-clock time the launcher parses (`[HH:MM:SS] [LEVEL] target: text`).
+    let logs = home.join("logs");
+    let _ = fs::create_dir_all(&logs);
+    if let Ok(data) = tail(&logs.join("latest.log"), LOG_LIMIT) {
+        let _ = fs::write(logs.join("previous.log"), data);
+    }
+    let (sender, receiver) = mpsc::sync_channel(2048);
     std::thread::Builder::new()
         .name("Local diagnostics".into())
         .spawn(move || {
             let mut log = File::create(dir.join("diagnostic.log")).ok();
             let mut size = 0u64;
+            let mut latest = File::create(logs.join("latest.log")).ok();
+            let mut latest_size = 0u64;
             for event in receiver {
                 match event {
                     Event::Log(line) => {
                         let line = redact(&line);
+                        let readable = readable_line(&line);
+                        if latest_size + readable.len() as u64 + 1 > LOG_LIMIT {
+                            latest = File::create(logs.join("latest.log")).ok();
+                            latest_size = 0;
+                        }
+                        if let Some(file) = latest.as_mut() {
+                            let _ = writeln!(file, "{readable}");
+                        }
+                        latest_size += readable.len() as u64 + 1;
                         if size + line.len() as u64 + 1 > LOG_LIMIT {
                             drop(log.take());
                             let _ = fs::rename(
@@ -124,6 +142,9 @@ pub fn initialize(home: &Path, device: Value) -> io::Result<()> {
                         if let Some(file) = log.as_mut() {
                             let _ = file.flush();
                         }
+                        if let Some(file) = latest.as_mut() {
+                            let _ = file.flush();
+                        }
                         let _ = done.send(());
                     }
                 }
@@ -138,6 +159,17 @@ pub fn initialize(home: &Path, device: Value) -> io::Result<()> {
         heartbeat: Instant::now(),
     });
     Ok(())
+}
+/// `<epoch ms> [LEVEL] target: text` as `[HH:MM:SS] [LEVEL] target: text` in local time.
+fn readable_line(line: &str) -> String {
+    let parsed = line.split_once(' ').and_then(|(ms, rest)| {
+        let time = chrono::DateTime::from_timestamp_millis(ms.parse().ok()?)?;
+        Some((time.with_timezone(&chrono::Local).format("%H:%M:%S").to_string(), rest))
+    });
+    match parsed {
+        Some((clock, rest)) => format!("[{clock}] {rest}"),
+        None => line.to_owned(),
+    }
 }
 /// Called by the logger; never waits for disk, the state lock or a full queue.
 pub fn log_line(level: log::Level, target: &str, message: &str) {
