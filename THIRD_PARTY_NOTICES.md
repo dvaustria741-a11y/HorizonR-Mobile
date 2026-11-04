@@ -85,3 +85,14 @@ copyright 2026 d3grando, MIT. Exact revisions and adaptation notes are recorded 
 module retains its full MIT LICENSE. Changes provide static Android hook
 adapters, opt-in configuration, profile-state reset and compatibility guards.
 These are a fixed compiled set, not support for loading arbitrary native mods.
+
+## Sodium Horizon (native mod)
+
+`native-mods/sodium_horizon-0.4.0.hnmod` is [Sodium Horizon](https://github.com/badmasti2/horizon-sodium)
+0.4.0 by badmasti2. The bundle's own code is MIT, but it carries material from Sodium, under the
+[PolyForm Shield License 1.0.0](https://polyformproject.org/licenses/shield/1.0.0), and from Sodium
+Extra, under the LGPL 3.0. The upstream license texts are in the bundle's repository
+(`SODIUM-LICENSE.md`, `SODIUM-EXTRA-LICENSE.txt`, `THIRD_PARTY_NOTICES.md`) and the notices are
+preserved in `mixins/sodium_horizon/third_party_notices.rs` inside the `.hnmod`. Horizon-derived
+helpers in it are under Horizon's MIT license. The names identify the reference interface and do
+not imply endorsement. Local changes are listed in `native-mods/PATCHES.md`.

@@ -18,3 +18,27 @@
   2.6 and IDLE_SPEED 2.0 formulas), fading in when the player stands still and out on movement or any action.
 
 Everything else is unchanged. Compare with the original `.hnmod` before updating it.
+
+## sodium_horizon-0.4.0.hnmod
+
+Packaged from [badmasti2/horizon-sodium](https://github.com/badmasti2/horizon-sodium) (Sodium Horizon
+0.4.0) the way its `tools/package.py` does, with one change:
+
+- The `ui_text` injection (target `game::control::Game::type_chars_into_screen`) and its helper
+  `mixins/sodium_horizon/ui_text.rs` are removed. That method does not exist in this engine. Typed
+  text still reaches Sodium's search box through `options_key` -> `ui_key` -> `exact_ui::key` ->
+  `type_text`.
+
+- `horizon_revision` in `horizon-mixin.toml` is `81ae4a7d8f27d38e5cabbdcda0a06b2c4b000045` (Punchy's pin) instead
+  of upstream's `c9d474dd…`. `scripts/apply_native_mods.py` applies each distinct pin as its own pass, and
+  horizon-mixins refuses a second pass over the first one's staged `native-crates/` (`E_INVALID_PATH`), which
+  would drop Punchy too. With equal pins both bundles apply in one pass. The pin is only a label here: the
+  script tells the tool it matches. `horizon-native.json` is unchanged.
+- `extra_animations`: our `SpriteAnimator::collect` has no `active` layer mask, so that binding and its filter
+  are removed.
+- `extra_particles`: our `ParticleOptions` has no `mod_particle`, so the "named particle" flag is `false`.
+- Video settings that don't exist in this engine are inert: Leaf Geometry (`leaf_culling`), Translucent
+  Batching, Texture Budget (`ui.rs` reads 0 and ignores writes; no row in the exact UI) and the
+  "Block broken" particles option (`exact_ui.rs` no longer exposes binding 188, so its row is unsupported).
+
+Everything else is unchanged. Compare with upstream before updating it.
