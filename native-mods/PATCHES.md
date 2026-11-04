@@ -18,3 +18,5 @@
   2.6 and IDLE_SPEED 2.0 formulas), fading in when the player stands still and out on movement or any action.
 
 Everything else is unchanged. Compare with the original `.hnmod` before updating it.
+
+- Movement sway: new `engine/sway.rs` ports Punchy's walk, sprint, jump/land and idle-breathing sway (spring/smoothing constants from the original MovementStateMachine). `runtime.rs` feeds it player motion each tick and applies the result to the arm and item pose in `begin()`. Idle sway now lives here. Unverified in-game: axis/sign conventions are approximations.
