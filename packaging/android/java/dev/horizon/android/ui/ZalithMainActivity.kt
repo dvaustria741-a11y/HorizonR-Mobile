@@ -277,7 +277,7 @@ class ZalithMainActivity : ComponentActivity() {
                 if (!hasCheckedUpdateThisSession) {
                     hasCheckedUpdateThisSession = true
                     val found = withContext(Dispatchers.IO) {
-                        HorizonNativeBridge.checkGithubLatestReleaseUpdate()
+                        HorizonNativeBridge.checkGithubLatestReleaseUpdate(HorizonNativeBridge.launcherVersionName(context))
                     }
                     if (found != null) {
                         releaseUpdateInfo = found
@@ -363,13 +363,13 @@ class ZalithMainActivity : ComponentActivity() {
                                 scope.launch {
                                     Toast.makeText(context, "Checking github.com/dvaustria741-a11y/HorizonR-Mobile/releases...", Toast.LENGTH_SHORT).show()
                                     val found = withContext(Dispatchers.IO) {
-                                        HorizonNativeBridge.checkGithubLatestReleaseUpdate()
+                                        HorizonNativeBridge.checkGithubLatestReleaseUpdate(HorizonNativeBridge.launcherVersionName(context))
                                     }
                                     if (found != null) {
                                         releaseUpdateInfo = found
                                         showUpdateBanner = true
                                     } else {
-                                        Toast.makeText(context, "HorizonR v${HorizonNativeBridge.INSTALLED_LAUNCHER_VERSION} is already up to date!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "HorizonR v${HorizonNativeBridge.launcherVersionName(context)} is already up to date!", Toast.LENGTH_SHORT).show()
                                         try {
                                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(HorizonNativeBridge.GITHUB_FORK_RELEASES_URL)))
                                         } catch (ignored: Exception) {
@@ -7642,6 +7642,108 @@ private fun FileManagerRowCard(
 }
 
 @Composable
+private fun LauncherVersionsDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val installed = remember { HorizonNativeBridge.launcherVersionName(context) }
+    val installedTuple = remember { HorizonNativeBridge.parseVersionNumbers("v$installed") ?: listOf(0, 0, 0) }
+    var loading by remember { mutableStateOf(true) }
+    var releases by remember { mutableStateOf<List<LauncherReleaseEntry>>(emptyList()) }
+    var pendingDowngrade by remember { mutableStateOf<LauncherReleaseEntry?>(null) }
+
+    LaunchedEffect(Unit) {
+        releases = withContext(Dispatchers.IO) { HorizonNativeBridge.listGithubLauncherReleases() }
+        loading = false
+    }
+
+    val openApk = { entry: LauncherReleaseEntry ->
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(entry.downloadUrl)))
+        } catch (ignored: Exception) {
+            Toast.makeText(context, "Could not open the download link.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    pendingDowngrade?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { pendingDowngrade = null },
+            icon = { Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFFFB74D)) },
+            title = { Text("Go back to v${entry.version}?", style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Text(
+                    "Android refuses to install an older build over a newer one. To go back, uninstall HorizonR first (its app data is removed with it), then install the downloaded v${entry.version} APK.\n\nBack up anything you need before continuing.",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pendingDowngrade = null
+                        openApk(entry)
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}")))
+                        } catch (ignored: Exception) {
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent)
+                ) {
+                    Text("Download and uninstall", fontSize = 12.sp, color = SkyBlueDarkText, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDowngrade = null }) { Text("Cancel", fontSize = 12.sp) }
+            }
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Launcher Versions (installed v$installed)", style = MaterialTheme.typography.titleMedium) },
+        text = {
+            if (loading) {
+                Text("Loading releases from GitHub...", fontSize = 13.sp)
+            } else if (releases.isEmpty()) {
+                Text("No releases could be loaded. Check your connection.", fontSize = 13.sp)
+            } else {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 320.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(releases) { entry ->
+                        val cmp = HorizonNativeBridge.compareVersionLists(entry.versionTuple, installedTuple)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("v${entry.version}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    when {
+                                        cmp == 0 -> "Installed"
+                                        cmp > 0 -> "Newer"
+                                        else -> "Older"
+                                    },
+                                    fontSize = 11.sp,
+                                    color = MutedSubtitleText
+                                )
+                            }
+                            if (cmp != 0) {
+                                TextButton(onClick = { if (cmp > 0) openApk(entry) else pendingDowngrade = entry }) {
+                                    Text(if (cmp > 0) "Update" else "Downgrade", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close", fontSize = 12.sp) }
+        }
+    )
+}
+
+@Composable
 private fun CleanSettingsViewport(
     config: HorizonConfigState,
     onConfigChange: (HorizonConfigState) -> Unit,
@@ -7650,6 +7752,11 @@ private fun CleanSettingsViewport(
 ) {
     val context = LocalContext.current
     var selectedSection by remember { mutableStateOf(SettingsSubCategory.RENDERER) }
+    var showLauncherVersions by remember { mutableStateOf(false) }
+
+    if (showLauncherVersions) {
+        LauncherVersionsDialog(onDismiss = { showLauncherVersions = false })
+    }
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -8349,7 +8456,7 @@ private fun CleanSettingsViewport(
                             ) {
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(
-                                        text = "Check for Launcher Updates (HorizonR v${HorizonNativeBridge.INSTALLED_LAUNCHER_VERSION})",
+                                        text = "Check for Launcher Updates (HorizonR v${HorizonNativeBridge.launcherVersionName(context)})",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Color.White
@@ -8361,6 +8468,37 @@ private fun CleanSettingsViewport(
                                     )
                                 }
                                 Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = SkyBlueAccent)
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = CardSlateBg,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animatedPressScale { showLauncherVersions = true }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(
+                                        text = "Launcher Versions",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "Update to or go back to any released version",
+                                        fontSize = 12.sp,
+                                        color = SkyBlueAccent
+                                    )
+                                }
+                                Icon(Icons.Default.History, contentDescription = null, tint = SkyBlueAccent)
                             }
                         }
 

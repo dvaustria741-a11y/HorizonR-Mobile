@@ -169,6 +169,14 @@ data class GithubReleaseUpdateInfo(
     val htmlUrl: String
 )
 
+data class LauncherReleaseEntry(
+    val version: String,
+    val versionTuple: List<Int>,
+    val title: String,
+    val downloadUrl: String,
+    val htmlUrl: String
+)
+
 enum class AccountType(val badge: String) {
     OFFLINE("Offline"),
     MICROSOFT("Microsoft")

@@ -5423,9 +5423,70 @@ object HorizonNativeBridge {
      *   installed is 1.9 and 1.10 + 1.20 exist, it always picks 1.20).
      * - Picks the `.apk` asset matching the phone's CPU ABI (`arm64-v8a` or `armeabi-v7a`).
      */
-    fun checkGithubLatestReleaseUpdate(): GithubReleaseUpdateInfo? {
+    fun launcherVersionName(context: Context): String {
+        val raw = try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+        } catch (e: Exception) {
+            ""
+        }
+        val t = Regex("(\\d+)\\.(\\d+)(?:\\.(\\d+))?").find(raw) ?: return INSTALLED_LAUNCHER_VERSION
+        return t.value
+    }
+
+    /**
+     * Every HorizonZ Android release of the fork, newest first, each with the APK matching this
+     * phone's CPU ABI. Used by the Launcher Versions screen to update or downgrade.
+     */
+    fun listGithubLauncherReleases(): List<LauncherReleaseEntry> {
+        val preferredAbi = Build.SUPPORTED_ABIS?.firstOrNull() ?: "arm64-v8a"
+        val out = mutableListOf<LauncherReleaseEntry>()
+        try {
+            val conn = (URL("https://api.github.com/repos/$GITHUB_FORK_REPO_SLUG/releases?per_page=100").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 7000
+                readTimeout = 10000
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", "HorizonZ-Launcher/$INSTALLED_LAUNCHER_VERSION ($GITHUB_FORK_REPO_SLUG)")
+            }
+            if (conn.responseCode != 200) return emptyList()
+            val arr = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
+            for (i in 0 until arr.length()) {
+                val rel = arr.optJSONObject(i) ?: continue
+                if (rel.optBoolean("draft", false)) continue
+                val tag = rel.optString("tag_name", "")
+                if (!tag.startsWith("horizonz-v", ignoreCase = true)) continue
+                val tuple = parseVersionNumbers(tag) ?: continue
+                val assets = rel.optJSONArray("assets") ?: JSONArray()
+                var apkUrl = ""
+                var fallback = ""
+                for (a in 0 until assets.length()) {
+                    val asset = assets.optJSONObject(a) ?: continue
+                    val n = asset.optString("name", "")
+                    val u = asset.optString("browser_download_url", "")
+                    if (!n.endsWith(".apk", true) || u.isBlank()) continue
+                    if (fallback.isEmpty()) fallback = u
+                    if (n.contains(preferredAbi, true)) apkUrl = u
+                }
+                val url = apkUrl.ifEmpty { fallback }
+                if (url.isEmpty()) continue
+                out.add(
+                    LauncherReleaseEntry(
+                        version = tag.substringAfter("horizonz-v", tag).trim(),
+                        versionTuple = tuple,
+                        title = rel.optString("name", "").ifBlank { "HorizonZ - Launcher $tag" },
+                        downloadUrl = url,
+                        htmlUrl = rel.optString("html_url", GITHUB_FORK_RELEASES_URL)
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Launcher release list failed: ${e.message}")
+        }
+        return out.sortedWith { x, y -> compareVersionLists(y.versionTuple, x.versionTuple) }
+    }
+
+    fun checkGithubLatestReleaseUpdate(installedVersion: String = INSTALLED_LAUNCHER_VERSION): GithubReleaseUpdateInfo? {
         return try {
-            val installedTuple = parseVersionNumbers("HorizonZ v$INSTALLED_LAUNCHER_VERSION") ?: listOf(1, 0, 0)
+            val installedTuple = parseVersionNumbers("HorizonZ v$installedVersion") ?: listOf(1, 0, 0)
             val preferredAbi = Build.SUPPORTED_ABIS?.firstOrNull() ?: "arm64-v8a"
             val endpoints = listOf(
                 "https://api.github.com/repos/$GITHUB_FORK_REPO_SLUG/releases?per_page=30",
