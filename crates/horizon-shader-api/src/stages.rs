@@ -124,6 +124,20 @@ struct HorizonMaterialIn {
 }
 ";
 
+/// The optional vertex hook of the material stage: a pack that defines
+/// `fn displace(input: DisplaceInput) -> vec3<f32>` moves each terrain vertex (plant sway, waves).
+/// `position` is camera-relative, in blocks; `uv` is the vertex's place in its sprite (0..1, top left
+/// first); `tags` are the manifest's sprite tags; `light` is block and sky light, 0..1. The function
+/// returns the new camera-relative position. Without it, vertices stay where the mesh put them.
+const DISPLACE_INPUT: &str = "\
+struct DisplaceInput {
+    position: vec3<f32>,
+    uv: vec2<f32>,
+    tags: u32,
+    light: vec2<f32>,
+}
+";
+
 /// Entry points with the sky stage's inputs: the renderer calls `sky` from
 /// its own sky shader in the same way.
 const SKY_ENTRIES: &str = "\
@@ -195,6 +209,7 @@ impl StageKind {
         out += &self.input().wgsl();
         if self == StageKind::Material {
             out += &SURFACE.wgsl();
+            out += DISPLACE_INPUT;
         }
         for r in self.resources() {
             out += &format!("@group({GROUP}) @binding({}) {};\n", r.binding, r.ty);

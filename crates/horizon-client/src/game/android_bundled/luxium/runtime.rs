@@ -10,7 +10,7 @@ use std::path::Path;
 pub const ID: &str = "luxium";
 pub const NAME: &str = "Luxium";
 pub const VERSION: &str = "0.1.0";
-pub const DESCRIPTION: &str = "Port of Luxium: sky, lens flare, air distortion (/luxium warp), filmic tonemap, light shafts and wet surfaces.";
+pub const DESCRIPTION: &str = "Port of Luxium: plant wave, sky, lens flare, air distortion (/luxium warp), filmic tonemap, light shafts and wet surfaces.";
 /// The folder the bundled stages are written to inside `shaderpacks/`.
 pub const PACK_DIR: &str = "luxium";
 
@@ -24,7 +24,7 @@ const FILES: [(&str, &str); 7] = [
     ("post/flare.wgsl", include_str!("pack/post/flare.wgsl")),
     ("post/shafts.wgsl", include_str!("pack/post/shafts.wgsl")),
     ("post/tonemap.wgsl", include_str!("pack/post/tonemap.wgsl")),
-    ("material/wet.wgsl", include_str!("pack/material/wet.wgsl")),
+    ("material/material.wgsl", include_str!("pack/material/material.wgsl")),
 ];
 
 /// Writes the bundled stages into `<shader packs dir>/luxium` when a file is missing or differs
@@ -49,7 +49,14 @@ pub fn ensure_pack(packs_dir: &Path) {
 }
 
 /// The options the mod's settings page cycles: pack option id, label, values, default.
-const SETTINGS: [(&str, &str, &[&str], &str); 8] = [
+const SETTINGS: [(&str, &str, &[&str], &str); 10] = [
+    ("wave_on", "Plant wave", &["true", "false"], "true"),
+    (
+        "wave_strength",
+        "Wave strength",
+        &["0.5", "1", "1.5"],
+        "1",
+    ),
     ("sky_on", "Sky", &["true", "false"], "true"),
     ("flare_on", "Lens flare", &["true", "false"], "true"),
     (

@@ -3,7 +3,7 @@ id = "luxium"
 name = "Luxium"
 version = "0.1.0"
 api = "0.1"
-description = "Luxium, built into HorizonR: sky, lens flare, air distortion, filmic tonemap, light shafts and wet surfaces."
+description = "Luxium, built into HorizonR: plant wave, sky, lens flare, air distortion, filmic tonemap, light shafts and wet surfaces."
 authors = ["vinlanx", "HorizonR"]
 license = "Luxium Free Modification License"
 
@@ -28,7 +28,19 @@ file = "post/tonemap.wgsl"
 name = "Filmic tonemap"
 
 [material]
-file = "material/wet.wgsl"
+file = "material/material.wgsl"
+
+[[tags]]
+id = "grass"
+sprites = ["block/short_grass", "block/grass", "block/tall_grass_top", "block/tall_grass_bottom", "block/fern", "block/large_fern_top", "block/large_fern_bottom"]
+
+[[tags]]
+id = "leaves"
+sprites = ["block/*_leaves"]
+
+[[tags]]
+id = "flowers"
+sprites = ["block/dandelion", "block/poppy", "block/azure_bluet", "block/blue_orchid", "block/allium", "block/oxeye_daisy", "block/cornflower", "block/lily_of_the_valley", "block/*_tulip"]
 
 [[options]]
 id = "shafts_on"
@@ -203,6 +215,30 @@ default = 8.0
 min = 2.0
 max = 64.0
 step = 0.5
+
+[[options]]
+id = "wave_on"
+name = "Plant wave"
+type = "bool"
+default = true
+
+[[options]]
+id = "wave_strength"
+name = "Plant wave strength"
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "wave_speed"
+name = "Plant wave speed"
+type = "float"
+default = 1.0
+min = 0.2
+max = 3.0
+step = 0.1
 
 [budget]
 gpu_ms = 2.0

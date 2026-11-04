@@ -31,7 +31,7 @@ struct HorizonMaterialOut {
 }
 fn horizon_material_vertex(position: vec3<f32>, uv: vec2<f32>, layer: u32, color: vec4<f32>,
     light: vec2<u32>, origin: vec3<f32>) -> HorizonMaterialOut {
-    let pos = position + origin;
+    let pos = horizon_displace(position + origin, uv, layer, light);
     var out: HorizonMaterialOut;
     out.clip = horizon_terrain_globals.view_proj * vec4(pos, 1.0);
     out.uv = uv;
@@ -129,12 +129,30 @@ fn sprite_tags(tags: &[(u32, u32)]) -> String {
     out + "        default: { return 0u; }\n    }\n}\n"
 }
 
+/// `horizon_displace`: the pack's `displace` vertex hook when it defines one, else the mesh's own
+/// position.
+fn displace(source: &str) -> &'static str {
+    if source.contains("fn displace(") {
+        "fn horizon_displace(p: vec3<f32>, uv: vec2<f32>, layer: u32, light: vec2<u32>) -> vec3<f32> {
+    let levels = min(vec2(f32(light.y), f32(light.x)) / 240.0, vec2(1.0));
+    return displace(DisplaceInput(p, uv, horizon_sprite_tags(layer & 0x7fffu), levels));
+}
+"
+    } else {
+        "fn horizon_displace(p: vec3<f32>, uv: vec2<f32>, layer: u32, light: vec2<u32>) -> vec3<f32> {
+    return p;
+}
+"
+    }
+}
+
 /// The terrain shader for the pack's material stage `source`, with its sprite `tags`.
 fn shader_source(source: &str, tags: &[(u32, u32)]) -> String {
     format!(
-        "{source}\n// Horizon's terrain (terrain.wgsl)\n{}{}{ENTRIES}",
+        "{source}\n// Horizon's terrain (terrain.wgsl)\n{}{}{}{ENTRIES}",
         vanilla_terrain(),
-        sprite_tags(tags)
+        sprite_tags(tags),
+        displace(source)
     )
 }
 

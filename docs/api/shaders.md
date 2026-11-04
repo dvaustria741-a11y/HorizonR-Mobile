@@ -100,6 +100,7 @@ stages.
 
 ## Changelog
 
+- 2026-11-04: material stage vertex hook: a pack that defines `fn displace(input: DisplaceInput) -> vec3<f32>` moves terrain vertices (plant sway, waves).
 - 2026-10-30: sprite tags (`[[tags]]`, `MaterialInput.tags`) and the frame's `precipitation`, `temperature`,
   `downfall` and `wetness`.
 - 2026-10-26: the material stage in the game: terrain's surfaces through the pack's `material`.
