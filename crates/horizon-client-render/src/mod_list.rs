@@ -11,7 +11,7 @@ use std::{
 
 pub const FILE: &str = "horizon-mods.txt";
 /// Fixed native modules compiled into Android APKs, all opt-in.
-pub const ANDROID_BUNDLED: [(&str, &str, &str); 4] = [
+pub const ANDROID_BUNDLED: [(&str, &str, &str); 5] = [
     (
         "zoom",
         "Zoom",
@@ -31,6 +31,11 @@ pub const ANDROID_BUNDLED: [(&str, &str, &str); 4] = [
         "smartf3",
         "SmartF3",
         "Configurable modules for the F3 debug screen",
+    ),
+    (
+        "luxium",
+        "Luxium",
+        "Port of Luxium: filmic tonemap, light shafts, wet surfaces",
     ),
 ];
 

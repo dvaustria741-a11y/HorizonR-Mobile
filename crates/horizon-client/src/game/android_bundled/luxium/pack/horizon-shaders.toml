@@ -3,7 +3,7 @@ id = "luxium"
 name = "Luxium"
 version = "0.1.0"
 api = "0.1"
-description = "Port of Luxium: Let there be light (by vinlanx): filmic tonemap, light shafts and wet surfaces. Stage 1 of the port; lighting, shadows, water and plant wave need engine stages that do not exist yet."
+description = "Luxium, built into HorizonR: filmic tonemap, light shafts and wet surfaces."
 authors = ["vinlanx", "HorizonR"]
 license = "Luxium Free Modification License"
 

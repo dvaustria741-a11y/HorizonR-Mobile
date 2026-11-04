@@ -39,6 +39,16 @@ impl Game<'_> {
         static DEV_PACK: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
         let dev = DEV_PACK.get_or_init(|| std::env::var("HORIZON_SHADER_PACK").ok());
         let picked = dev.as_deref().unwrap_or(&self.settings.horizon.shader_pack);
+        // The built-in Luxium mod runs its bundled stages unless a pack is picked.
+        #[cfg(target_os = "android")]
+        let picked = if picked.is_empty() && self.native_on(super::official_luxium::ID) {
+            if self.native_shaders.picked != super::official_luxium::PACK_DIR {
+                super::official_luxium::ensure_pack(&Self::shader_packs_dir());
+            }
+            super::official_luxium::PACK_DIR
+        } else {
+            picked
+        };
         if self.native_shaders.picked != picked {
             // Another pack, or none: drop what ran.
             self.native_shaders = super::native_shaders::NativeShaders::picking(picked);

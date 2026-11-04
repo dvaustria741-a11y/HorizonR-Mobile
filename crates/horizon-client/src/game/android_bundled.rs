@@ -5,6 +5,14 @@ use super::*;
 use super::native_hooks::*;
 
 #[cfg(target_os = "android")]
+#[path = "android_bundled/luxium/runtime.rs"]
+pub(super) mod official_luxium;
+
+#[cfg(target_os = "android")]
+#[path = "android_bundled/luxium/luxium_list.rs"]
+mod luxium_list;
+
+#[cfg(target_os = "android")]
 #[path = "android_bundled/zoom/runtime.rs"]
 pub(super) mod official_zoom;
 
@@ -136,6 +144,7 @@ pub(super) fn native_mods(game: &mut Game<'_>, mods: &mut Vec<NativeMod>) {
         minimap_list::run(&mut *mods);
         recipes_list::run(&mut *mods);
         smartf3_list::run(&mut *mods);
+        luxium_list::run(&mut *mods);
     }
 }
 
