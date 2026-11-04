@@ -45,6 +45,17 @@ thread_local! {
 pub fn set(pose: NativePose) {
     CURRENT.with(|c| *c.borrow_mut() = (!pose.is_empty()).then_some(pose));
 }
+/// Whether a pose is set.
+pub fn active() -> bool {
+    CURRENT.with(|c| c.borrow().is_some())
+}
+/// Runs `f` as if no pose were set.
+pub fn suspended<R>(f: impl FnOnce() -> R) -> R {
+    let saved = CURRENT.with(|c| c.borrow_mut().take());
+    let out = f();
+    CURRENT.with(|c| *c.borrow_mut() = saved);
+    out
+}
 pub fn clear() {
     CURRENT.with(|c| *c.borrow_mut() = None);
 }

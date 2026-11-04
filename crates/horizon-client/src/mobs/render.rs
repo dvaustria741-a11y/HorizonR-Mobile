@@ -1846,6 +1846,24 @@ pub fn render_single(
     draw(&model, base, &poses, uv, 0xFFFF_FFFF, light, overlay, out);
 }
 
+/// How far a native mod's pose (`native_pose`) moved the player's body from where the vanilla
+/// animation puts it, as a transform in the model's space; `None` with no pose set. Things worn on
+/// the back, such as the elytra, are drawn in the entity's space and take this to follow the body.
+pub fn body_delta(m: &Mob, alpha: f32, data: &MobData) -> Option<glam::Mat4> {
+    if !super::native_pose::active() {
+        return None;
+    }
+    let model = m.kind.layer("player#cape")?;
+    let s = anim::state(m, alpha);
+    let mut posed = Poses::new(model);
+    anim::setup(m, &s, &mut posed, &data.animations);
+    let mut vanilla = Poses::new(model);
+    super::native_pose::suspended(|| anim::setup(m, &s, &mut vanilla, &data.animations));
+    let with = part_matrix(model, glam::Mat4::IDENTITY, &posed, "body", 0.0)?;
+    let without = part_matrix(model, glam::Mat4::IDENTITY, &vanilla, "body", 0.0)?;
+    Some(with * without.inverse())
+}
+
 /// The transform of a named part (ModelPart.translateAndRotate down the tree).
 pub fn part_matrix(
     part: &Part,

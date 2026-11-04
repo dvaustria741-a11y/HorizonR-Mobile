@@ -89,6 +89,8 @@ pub(super) fn tick(game: &mut Game<'_>) {
             using: game.using.map(|(slot, ticks)| (id_of(game.stack_in(slot)), ticks)),
             swings: game.swings_started,
             mining: game.mining.is_some(),
+            use_held: game.right,
+            offhand: game.offhand.is_some(),
             armor: std::array::from_fn(|i| id_of(game.armor[i].as_ref())),
         };
         let mut loco = std::mem::take(&mut s.loco);

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "fluid-foolish",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "game": "26.3",
   "horizon": "81ae4a7d8f27d38e5cabbdcda0a06b2c4b000045",
   "mixins": "ddd9700b21997c95d95ac6ee5ecafe3830cf622a"

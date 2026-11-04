@@ -23,6 +23,8 @@ pub struct Slot {
     pub hold_last_frame: bool,
     /// `base_pose_retain`: per bone, how much locomotion stays (overrides `retain`).
     pub bones: BTreeMap<String, f32>,
+    /// Every named clip of the slot (`charge`, `idle`, `one_handed`, ...).
+    pub fields: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -39,10 +41,15 @@ pub struct Compat {
 }
 
 fn strings(v: Option<&Value>) -> Vec<String> {
+    let one = |x: &Value| match x {
+        Value::String(s) => Some(s.clone()),
+        Value::Object(o) => o.get("clip").and_then(Value::as_str).map(str::to_owned),
+        _ => None,
+    };
     match v {
-        Some(Value::String(s)) => vec![s.clone()],
-        Some(Value::Array(a)) => a.iter().filter_map(|x| x.as_str().map(str::to_owned)).collect(),
-        _ => Vec::new(),
+        Some(Value::Array(a)) => a.iter().filter_map(one).collect(),
+        Some(x) => one(x).into_iter().collect(),
+        None => Vec::new(),
     }
 }
 
@@ -50,13 +57,19 @@ fn slot(name: &str, value: &Value) -> Option<(String, Slot)> {
     let obj = value.as_object()?;
     let mut clips = strings(obj.get("clip"));
     clips.extend(strings(obj.get("variants")));
-    // Eating and drinking name their loop; bows name charge, hold and release by slot.
-    for key in ["looping", "charge", "hold", "release", "idle", "use", "equip"] {
-        if clips.is_empty() {
-            clips = match obj.get(key) {
-                Some(Value::String(s)) if name != "sequence" => vec![s.clone()],
-                _ => Vec::new(),
-            };
+    // Slots like a crossbow's name each of their clips (`charge`, `idle`, `shoot`, ...).
+    let mut fields = BTreeMap::new();
+    for (k, v) in obj {
+        if let Some(c) = strings(Some(v)).first().filter(|_| !matches!(k.as_str(), "overlays" | "variants")) {
+            fields.insert(k.clone(), c.clone());
+        }
+    }
+    if clips.is_empty() {
+        for key in ["looping", "charge", "hold", "release", "idle", "use", "equip"] {
+            if let Some(c) = fields.get(key) {
+                clips = vec![c.clone()];
+                break;
+            }
         }
     }
     let overlays = obj
@@ -68,6 +81,7 @@ fn slot(name: &str, value: &Value) -> Option<(String, Slot)> {
         .get("locomotion_influence")
         .and_then(|l| l.get("walk"))
         .and_then(Value::as_f64)
+        .or_else(|| obj.get("locomotion_retain").and_then(Value::as_f64))
         .map_or(DEFAULT_RETAIN, |v| (v as f32).clamp(0.0, 1.0));
     let hold_last_frame = obj.get("hold_last_frame").and_then(Value::as_bool).unwrap_or(false);
     let bones = obj
@@ -78,7 +92,7 @@ fn slot(name: &str, value: &Value) -> Option<(String, Slot)> {
     if clips.is_empty() {
         return None;
     }
-    Some((name.to_owned(), Slot { clips, overlays, retain, hold_last_frame, bones }))
+    Some((name.to_owned(), Slot { clips, overlays, retain, hold_last_frame, bones, fields }))
 }
 
 fn group(value: &Value) -> Group {
@@ -163,6 +177,9 @@ pub enum Use {
     Block,
     Bow,
     Spyglass,
+    Crossbow,
+    Trident,
+    Spear,
 }
 
 /// The use of an item in use, by id: `None` for items with no pose of their own.
@@ -172,11 +189,11 @@ pub fn use_of(id: &str) -> Option<Use> {
         "shield" => Use::Block,
         "bow" => Use::Bow,
         "spyglass" => Use::Spyglass,
+        "crossbow" => Use::Crossbow,
+        "trident" => Use::Trident,
         "potion" | "milk_bucket" | "honey_bottle" | "ominous_bottle" => Use::Drink,
-        "trident" | "crossbow" | "brush" | "goat_horn" | "mace" | "fishing_rod" | "shears" | "bundle" => {
-            return None;
-        }
-        _ if name.contains("spear") => return None,
+        "brush" | "goat_horn" | "mace" | "fishing_rod" | "shears" | "bundle" => return None,
+        _ if name.ends_with("_spear") => Use::Spear,
         _ => Use::Eat,
     })
 }
@@ -191,6 +208,10 @@ pub struct ActionInput {
     /// The swing counter: a rise is a swing started.
     pub swings: u32,
     pub mining: bool,
+    /// The use button is held.
+    pub use_held: bool,
+    /// Something is in the off hand.
+    pub offhand: bool,
     /// Armor pieces by slot, to see one put on: boots, leggings, chestplate, helmet ids.
     pub armor: [String; 4],
 }
@@ -214,6 +235,11 @@ pub struct Actions {
     attack: Option<Shot>,
     switch: Option<Shot>,
     armor_in: Option<Shot>,
+    use_shot: Option<Shot>,
+    release: Option<Shot>,
+    hold_t: f32,
+    prev_use: bool,
+    prev_using: Option<(Use, u32)>,
     mining_w: f32,
     mining_t: f32,
     pose_w: f32,
@@ -264,6 +290,7 @@ impl Actions {
             let slot = compat
                 .slot(group, "item_change")
                 .or_else(|| compat.slot(group, "hand_in"))
+                .or_else(|| compat.slot(group, "equip"))
                 .or_else(|| compat.default_slot("item_switch"));
             self.switch = slot.and_then(|s| {
                 s.clips.first().map(|c| Shot {
@@ -275,7 +302,9 @@ impl Actions {
                 })
             });
             self.held = input.held.clone();
+            self.hold_t = 0.0;
         }
+        self.hold_t += DT;
         // Putting armour on.
         for (i, now) in input.armor.iter().enumerate() {
             if *now != self.armor[i] && !now.is_empty() {
@@ -313,12 +342,33 @@ impl Actions {
                 }
             }
         }
-        for shot in [&mut self.attack, &mut self.switch, &mut self.armor_in] {
+        for shot in [&mut self.attack, &mut self.switch, &mut self.armor_in, &mut self.use_shot, &mut self.release] {
             if let Some(s) = shot {
                 s.t += DT;
                 if s.t >= length(clips, &s.clip) {
                     *shot = None;
                 }
+            }
+        }
+
+        // Pressing use plays the item's use clip (buckets, shears, flint and steel, throwables).
+        let pressed = input.use_held && !self.prev_use;
+        self.prev_use = input.use_held;
+        let in_use = input.using.as_ref().and_then(|(id, _)| use_of(id)).is_some();
+        if pressed && !in_use && !input.mining {
+            if let Some(s) = compat.slot(group, "use") {
+                let name = input
+                    .offhand
+                    .then(|| s.fields.get("one_handed"))
+                    .flatten()
+                    .unwrap_or(&s.clips[0]);
+                self.use_shot = Some(Shot {
+                    clip: resolve(clips, name),
+                    overlays: s.overlays.iter().map(|o| resolve(clips, o)).collect(),
+                    retain: s.retain,
+                    bones: s.bones.clone(),
+                    t: 0.0,
+                });
             }
         }
 
@@ -336,6 +386,18 @@ impl Actions {
             .using
             .as_ref()
             .and_then(|(id, ticks)| use_of(id).map(|u| (u, *ticks)));
+        if let (Some((_, ticks)), None) = (self.prev_using, &self.using) {
+            if ticks >= 10 {
+                self.release = compat.slot(group, "release").map(|s| Shot {
+                    clip: resolve(clips, &s.clips[0]),
+                    overlays: s.overlays.iter().map(|o| resolve(clips, o)).collect(),
+                    retain: s.retain,
+                    bones: s.bones.clone(),
+                    t: 0.0,
+                });
+            }
+        }
+        self.prev_using = self.using;
         approach(&mut self.using_w, f32::from(self.using.is_some()), 0.3);
         match &self.using {
             Some((_, ticks)) => self.use_t = *ticks as f32 * DT,
@@ -343,8 +405,18 @@ impl Actions {
             None => {}
         }
         // Holding a tool or a lantern shows its pose when nothing else is going on.
-        let pose = compat.slot(group, "pose").is_some() && self.attack.is_none() && !mining && self.using.is_none();
+        let pose = Self::pose_clip(compat, group).is_some() && self.attack.is_none() && !mining && self.using.is_none();
         approach(&mut self.pose_w, f32::from(pose), 0.2);
+    }
+
+    /// The clip a held item shows while nothing else is going on: its `pose` or `idle` slot, or a
+    /// crossbow's idle.
+    fn pose_clip(compat: &Compat, group: Option<&str>) -> Option<(String, Slot)> {
+        if let Some(s) = compat.slot(group, "crossbow") {
+            return s.fields.get("idle").map(|c| (c.clone(), s.clone()));
+        }
+        let s = compat.slot(group, "pose").or_else(|| compat.slot(group, "idle"))?;
+        Some((s.clips[0].clone(), s.clone()))
     }
 
     /// The clips to add, with the weight each has.
@@ -366,7 +438,7 @@ impl Actions {
                 out(o, s.t + ahead, w, 1.0, &none);
             }
         };
-        for s in [&self.attack, &self.switch, &self.armor_in].into_iter().flatten() {
+        for s in [&self.attack, &self.switch, &self.armor_in, &self.use_shot, &self.release].into_iter().flatten() {
             shot(s, &mut |c, t, w, r, b| push(c, t, w, r, b));
         }
         if self.mining_w > 0.0 {
@@ -379,8 +451,9 @@ impl Actions {
             }
         }
         if self.pose_w > 0.0 {
-            if let Some(s) = compat.slot(self.group, "pose") {
-                push(&s.clips[0], 0.0, self.pose_w, s.retain, &s.bones);
+            if let Some((clip, s)) = Self::pose_clip(compat, self.group) {
+                let len = length(clips, &resolve(clips, &clip));
+                push(&clip, self.hold_t.min(len), self.pose_w, s.retain, &s.bones);
             }
         }
         if let Some((kind, _)) = self.using.as_ref().or(None) {
@@ -411,6 +484,23 @@ impl Actions {
                     if let Some(c) = charge {
                         let len = length(clips, &c);
                         push(&c, t.min(len), w, 0.1, &none);
+                    }
+                }
+                Use::Crossbow => {
+                    if let Some(c) = compat.slot(Some("CROSSBOW"), "crossbow").and_then(|s| s.fields.get("charge")) {
+                        let len = length(clips, &resolve(clips, c));
+                        push(c, t.min(len), w, 0.1, &none);
+                    }
+                }
+                Use::Trident => {
+                    if let Some(s) = compat.slot(Some("TRIDENT"), "charge") {
+                        let len = length(clips, &resolve(clips, &s.clips[0]));
+                        push(&s.clips[0], t.min(len), w, s.retain, &s.bones);
+                    }
+                }
+                Use::Spear => {
+                    if let Some(c) = compat.slot(Some("SPEAR"), "spear").and_then(|s| s.fields.get("charge")) {
+                        push(c, t, w, 0.15, &none);
                     }
                 }
                 Use::Spyglass => {
@@ -468,7 +558,9 @@ mod tests {
         assert_eq!(use_of("minecraft:shield"), Some(Use::Block));
         assert_eq!(use_of("minecraft:apple"), Some(Use::Eat));
         assert_eq!(use_of("minecraft:potion"), Some(Use::Drink));
-        assert_eq!(use_of("minecraft:crossbow"), None);
+        assert_eq!(use_of("minecraft:crossbow"), Some(Use::Crossbow));
+        assert_eq!(use_of("minecraft:netherite_spear"), Some(Use::Spear));
+        assert_eq!(use_of("minecraft:fishing_rod"), None);
     }
 
     #[test]
@@ -569,5 +661,75 @@ mod tests {
         let during = l.sample_with(&clips, &compat, 0.0);
         assert_ne!(before["right_arm"].rotation, during["right_arm"].rotation, "the punch moves the arm");
         assert!(during.values().all(|p| p.rotation.iter().chain(&p.position).all(|v| v.is_finite())));
+    }
+
+    fn using(id: &str, ticks: u32) -> ActionInput {
+        ActionInput { using: Some((id.into(), ticks)), ..held(id) }
+    }
+
+    #[test]
+    fn charging_a_crossbow_trident_or_spear_plays_the_charge_clip() {
+        let (clips, compat) = data();
+        for id in ["minecraft:crossbow", "minecraft:trident", "minecraft:iron_spear"] {
+            let mut a = Actions::default();
+            for t in 0..8 {
+                a.tick(&clips, &compat, &using(id, t));
+            }
+            let layers = a.layers(&clips, &compat, 0.0);
+            assert!(layers.iter().any(|l| l.weight > 0.5 && l.clip.contains("charge") || l.clip.contains("spear")), "{id}: {layers:?}");
+        }
+    }
+
+    #[test]
+    fn letting_go_of_a_charged_trident_throws_it() {
+        let (clips, compat) = data();
+        let mut a = Actions::default();
+        for t in 0..14 {
+            a.tick(&clips, &compat, &using("minecraft:trident", t));
+        }
+        a.tick(&clips, &compat, &held("minecraft:trident"));
+        a.tick(&clips, &compat, &held("minecraft:trident"));
+        assert!(a.layers(&clips, &compat, 0.0).iter().any(|l| l.clip.contains("trident_throw")));
+        // A tap is not a throw.
+        let mut b = Actions::default();
+        for t in 0..3 {
+            b.tick(&clips, &compat, &using("minecraft:trident", t));
+        }
+        b.tick(&clips, &compat, &held("minecraft:trident"));
+        assert!(b.layers(&clips, &compat, 0.0).iter().all(|l| !l.clip.contains("trident_throw")));
+    }
+
+    #[test]
+    fn pressing_use_with_a_bucket_or_shears_plays_its_use_clip_once_per_press() {
+        let (clips, compat) = data();
+        for (id, word) in [("minecraft:bucket", "bucket"), ("minecraft:shears", "shears"), ("minecraft:flint_and_steel", "flint")] {
+            let mut a = Actions::default();
+            a.tick(&clips, &compat, &held(id));
+            a.tick(&clips, &compat, &ActionInput { use_held: true, ..held(id) });
+            a.tick(&clips, &compat, &ActionInput { use_held: true, ..held(id) });
+            let layers = a.layers(&clips, &compat, 0.0);
+            assert!(layers.iter().any(|l| l.clip.contains(word) && l.weight > 0.0), "{id}: {layers:?}");
+        }
+        let mut held_down = Actions::default();
+        held_down.tick(&clips, &compat, &held("minecraft:shears"));
+        held_down.tick(&clips, &compat, &ActionInput { use_held: true, ..held("minecraft:shears") });
+        for _ in 0..40 {
+            held_down.tick(&clips, &compat, &ActionInput { use_held: true, ..held("minecraft:shears") });
+        }
+        assert!(held_down.use_shot.is_none(), "holding the button is one press");
+    }
+
+    #[test]
+    fn a_held_bucket_or_crossbow_shows_its_pose_and_holds_the_last_frame() {
+        let (clips, compat) = data();
+        for id in ["minecraft:water_bucket", "minecraft:crossbow", "minecraft:mace"] {
+            let mut a = Actions::default();
+            a.tick(&clips, &compat, &held("minecraft:stick"));
+            for _ in 0..60 {
+                a.tick(&clips, &compat, &held(id));
+            }
+            let layers = a.layers(&clips, &compat, 0.0);
+            assert!(layers.iter().any(|l| l.weight > 0.9), "{id}: {layers:?}");
+        }
     }
 }

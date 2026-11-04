@@ -804,7 +804,12 @@ impl Game<'_> {
             chest,
             m.cape.as_deref(),
             false,
-            horizon_client::mobs::render::base_transform(m, partial, camera),
+            {
+                // Drawn in the entity's space, so a pose on the body has to be carried over.
+                let base = horizon_client::mobs::render::base_transform(m, partial, camera);
+                horizon_client::mobs::render::body_delta(m, partial, self.res.mob_data())
+                    .map_or(base, |delta| base * delta)
+            },
             m.extra.elytra.angles(partial),
             m.extra.crouching,
             light,
