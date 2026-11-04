@@ -21,6 +21,10 @@ mod luxium_settings;
 mod luxium_click;
 
 #[cfg(target_os = "android")]
+#[path = "android_bundled/luxium/luxium_command.rs"]
+mod luxium_command;
+
+#[cfg(target_os = "android")]
 #[path = "android_bundled/zoom/runtime.rs"]
 pub(super) mod official_zoom;
 
@@ -209,6 +213,7 @@ pub(super) fn native_command(game: &mut Game<'_>, command: &str, ran: &mut bool)
     #[cfg(target_os = "android")]
     {
         smartf3_command::run(&mut *game, command, &mut *ran);
+        luxium_command::run(&mut *game, command, &mut *ran);
     }
 }
 

@@ -3,13 +3,25 @@ id = "luxium"
 name = "Luxium"
 version = "0.1.0"
 api = "0.1"
-description = "Luxium, built into HorizonR: filmic tonemap, light shafts and wet surfaces."
+description = "Luxium, built into HorizonR: sky, lens flare, air distortion, filmic tonemap, light shafts and wet surfaces."
 authors = ["vinlanx", "HorizonR"]
 license = "Luxium Free Modification License"
+
+[sky]
+file = "sky.wgsl"
+name = "Luxium sky"
+
+[[post]]
+file = "post/distort.wgsl"
+name = "Air distortion"
 
 [[post]]
 file = "post/shafts.wgsl"
 name = "Light shafts"
+
+[[post]]
+file = "post/flare.wgsl"
+name = "Lens flare"
 
 [[post]]
 file = "post/tonemap.wgsl"
@@ -102,5 +114,95 @@ name = "Wet surfaces in rain"
 type = "bool"
 default = true
 
+[[options]]
+id = "sky_on"
+name = "Luxium sky"
+type = "bool"
+default = true
+
+[[options]]
+id = "sky_strength"
+name = "Sky strength"
+type = "float"
+default = 0.85
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "flare_on"
+name = "Lens flare"
+type = "bool"
+default = true
+
+[[options]]
+id = "flare_intensity"
+name = "Flare intensity"
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "flare_ghosts"
+name = "Flare ghosts"
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "flare_streak"
+name = "Flare streak"
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "warp_on"
+name = "Air warp (set by /luxium warp)"
+type = "bool"
+default = false
+
+[[options]]
+id = "warp_cx"
+name = "Warp X"
+type = "float"
+default = 0.0
+min = -30000000.0
+max = 30000000.0
+step = 0.01
+
+[[options]]
+id = "warp_cy"
+name = "Warp Y"
+type = "float"
+default = 0.0
+min = -4096.0
+max = 4096.0
+step = 0.01
+
+[[options]]
+id = "warp_cz"
+name = "Warp Z"
+type = "float"
+default = 0.0
+min = -30000000.0
+max = 30000000.0
+step = 0.01
+
+[[options]]
+id = "warp_r"
+name = "Warp radius"
+type = "float"
+default = 8.0
+min = 2.0
+max = 64.0
+step = 0.5
+
 [budget]
-gpu_ms = 1.2
+gpu_ms = 2.0

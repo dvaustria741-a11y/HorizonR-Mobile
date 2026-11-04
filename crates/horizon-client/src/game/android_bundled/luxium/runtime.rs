@@ -10,15 +10,18 @@ use std::path::Path;
 pub const ID: &str = "luxium";
 pub const NAME: &str = "Luxium";
 pub const VERSION: &str = "0.1.0";
-pub const DESCRIPTION: &str = "Port of Luxium: filmic tonemap, light shafts and wet surfaces in rain.";
+pub const DESCRIPTION: &str = "Port of Luxium: sky, lens flare, air distortion (/luxium warp), filmic tonemap, light shafts and wet surfaces.";
 /// The folder the bundled stages are written to inside `shaderpacks/`.
 pub const PACK_DIR: &str = "luxium";
 
-const FILES: [(&str, &str); 4] = [
+const FILES: [(&str, &str); 7] = [
     (
         "horizon-shaders.toml",
         include_str!("pack/horizon-shaders.toml"),
     ),
+    ("sky.wgsl", include_str!("pack/sky.wgsl")),
+    ("post/distort.wgsl", include_str!("pack/post/distort.wgsl")),
+    ("post/flare.wgsl", include_str!("pack/post/flare.wgsl")),
     ("post/shafts.wgsl", include_str!("pack/post/shafts.wgsl")),
     ("post/tonemap.wgsl", include_str!("pack/post/tonemap.wgsl")),
     ("material/wet.wgsl", include_str!("pack/material/wet.wgsl")),
@@ -27,6 +30,11 @@ const FILES: [(&str, &str); 4] = [
 /// Writes the bundled stages into `<shader packs dir>/luxium` when a file is missing or differs
 /// (the player's option values live beside the folder, so they are kept).
 pub fn ensure_pack(packs_dir: &Path) {
+    // A warp from an earlier session must not play again at its old place.
+    let mut chosen = horizon_shaders::read_overrides(packs_dir, PACK_DIR);
+    if WARP_KEYS.iter().any(|k| chosen.remove(*k).is_some()) {
+        let _ = horizon_shaders::write_overrides(packs_dir, PACK_DIR, &chosen);
+    }
     let root = packs_dir.join(PACK_DIR);
     for (relative, text) in FILES {
         let path = root.join(relative);
@@ -41,7 +49,15 @@ pub fn ensure_pack(packs_dir: &Path) {
 }
 
 /// The options the mod's settings page cycles: pack option id, label, values, default.
-const SETTINGS: [(&str, &str, &[&str], &str); 7] = [
+const SETTINGS: [(&str, &str, &[&str], &str); 8] = [
+    ("sky_on", "Sky", &["true", "false"], "true"),
+    ("flare_on", "Lens flare", &["true", "false"], "true"),
+    (
+        "flare_intensity",
+        "Flare intensity",
+        &["0.5", "1", "1.5"],
+        "1",
+    ),
     ("shafts_on", "Light shafts", &["true", "false"], "true"),
     (
         "shafts_strength",
@@ -51,15 +67,25 @@ const SETTINGS: [(&str, &str, &[&str], &str); 7] = [
     ),
     ("tm_strength", "Tonemap", &["0", "0.5", "1"], "1"),
     ("tm_exposure", "Exposure", &["-0.5", "0", "0.5"], "0"),
-    ("tm_contrast", "Contrast", &["0.15", "0.35", "0.6"], "0.35"),
-    (
-        "tm_saturation",
-        "Saturation",
-        &["0.95", "1.05", "1.2"],
-        "1.05",
-    ),
     ("wet_on", "Wet surfaces", &["true", "false"], "true"),
 ];
+
+/// The options `/luxium warp` sets; cleared when a session starts.
+const WARP_KEYS: [&str; 5] = ["warp_on", "warp_cx", "warp_cy", "warp_cz", "warp_r"];
+
+/// Starts the air distortion sphere `radius` blocks wide, centred ahead of `eye` along `dir`,
+/// and saves it where the engine reads pack options. Returns whether it was saved.
+pub fn warp(packs_dir: &Path, eye: [f64; 3], dir: [f64; 3], radius: f64) -> bool {
+    let radius = radius.clamp(2.0, 64.0);
+    let ahead = radius * 1.6;
+    let mut chosen = horizon_shaders::read_overrides(packs_dir, PACK_DIR);
+    chosen.insert("warp_on".into(), "true".into());
+    chosen.insert("warp_cx".into(), format!("{:.2}", eye[0] + dir[0] * ahead));
+    chosen.insert("warp_cy".into(), format!("{:.2}", eye[1] + dir[1] * ahead));
+    chosen.insert("warp_cz".into(), format!("{:.2}", eye[2] + dir[2] * ahead));
+    chosen.insert("warp_r".into(), format!("{radius:.1}"));
+    horizon_shaders::write_overrides(packs_dir, PACK_DIR, &chosen).is_ok()
+}
 
 fn shown(value: &str) -> &str {
     match value {
