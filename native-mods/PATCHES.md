@@ -8,8 +8,9 @@
 - Triggerable keys: the tuning's `triggerable` entries (sword inspect rework on G, classic on J) were ignored.
   `key()` now matches the pressed key against the entries of the held items (rebindable in the mod's keys),
   and `engine/actions.rs` plays the clip like an inspect (`Input.triggerable`).
-- Default inspect: the fallback `new_inspect_*` clip is now chosen by the inspecting hand's side (it always used
-  the right-hand clip).
+- Inspect is per item, as in the original: only items with an `inspect` tuning entry play one (swords, pickaxes,
+  golden dandelion, the baby-wolf carry; the sword's G/J triggerables). The earlier fallback that played the sword's
+  `new_inspect_*` on every other item was removed. Handed variants are still chosen by the inspecting hand's side.
 - Animation sounds: the clips' `sound_effects` (inspect spins and hits, bow load, cake and gift) were never
   played. `runtime.rs` runs the engine's `SoundCursor` each tick and plays `punchy:animationssounds/<effect>`.
   The 20 .ogg files from Punchy's jar are bundled (`engine/data/sounds`), written once into the resource root
