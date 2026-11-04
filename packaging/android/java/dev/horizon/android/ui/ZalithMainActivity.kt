@@ -6501,7 +6501,9 @@ private data class ManagerRowUiItem(
     val packDetail: ResourcePackDetailInfo?,
     val iconImage: ImageBitmap?,
     val storeCatalogMatch: StoreCatalogItem? = null,
-    val hasStoreUpdate: Boolean = false
+    val hasStoreUpdate: Boolean = false,
+    val zenkaiId: String? = null,
+    val zenkaiVersion: String? = null
 )
 
 enum class FilesSortMode(val label: String) {
@@ -6583,7 +6585,7 @@ private fun CleanFilesViewport(
                 }.orEmpty()
             }
             val installedVersions by lazy { HorizonNativeBridge.getInstalledStoreVersionsMap(context, profileSlot) }
-            files.map { file ->
+            val fileRows = files.map { file ->
                 ensureActive()
                 val modDetail = if (folder == "mods") HorizonNativeBridge.inspectModPackage(file) else null
                 val saveDetail = if (folder == "saves") HorizonNativeBridge.inspectWorldSave(file) else null
@@ -6634,6 +6636,28 @@ private fun CleanFilesViewport(
                     hasStoreUpdate = updateAvailable
                 )
             }
+            val zenkaiRows = if (folder == "mods") {
+                HorizonNativeBridge.installedZenkaiMods(context, profileSlot).map { z ->
+                    val zFile = File(File(home, "horizon-mods"), "${z.sourceProjectId}.zenkai")
+                    ManagerRowUiItem(
+                        key = "zenkai:${z.sourceProjectId}:${z.version}",
+                        file = zFile,
+                        folder = folder,
+                        displayTitle = z.title,
+                        subtitleText = "${z.summary} • by Zenkai",
+                        detailSummary = "ID: ${z.sourceProjectId} • Source: Zenkai • Bundled in this app",
+                        isEnabled = HorizonNativeBridge.isContentItemEnabled(context, folder, zFile.name, profileSlot),
+                        lastModified = 0L,
+                        modDetail = null,
+                        saveDetail = null,
+                        packDetail = null,
+                        iconImage = null,
+                        zenkaiId = z.sourceProjectId,
+                        zenkaiVersion = z.version
+                    )
+                }
+            } else emptyList()
+            fileRows + zenkaiRows
         }
         folderCache[folder] = built
     }
@@ -6874,7 +6898,9 @@ private fun CleanFilesViewport(
                     onClick = {
                         val target = delTarget
                         pendingDeleteTarget = null
-                        HorizonNativeBridge.deleteContentItemWithSync(
+                        if (target.file.name.endsWith(".zenkai", true)) {
+                            HorizonNativeBridge.uninstallZenkaiById(context, target.file.nameWithoutExtension, profileSlot, logEnabled)
+                        } else HorizonNativeBridge.deleteContentItemWithSync(
                             context = context,
                             targetFile = target.file,
                             folder = target.folder,
@@ -7182,8 +7208,12 @@ private fun CleanFilesViewport(
                                     onTriggerRefresh = { refreshCount += 1 },
                                     onToggleEnabled = { toggleItem(rowItem) },
                                     onRequestRename = { target ->
-                                        renameInputText = target.nameWithoutExtension
-                                        renameTargetFile = target
+                                        if (target.name.endsWith(".zenkai", true)) {
+                                            Toast.makeText(context, "Zenkai mods cannot be renamed.", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            renameInputText = target.nameWithoutExtension
+                                            renameTargetFile = target
+                                        }
                                     },
                                     onRequestDelete = { targetFile, title ->
                                         pendingDeleteTarget = PendingDeleteTarget(
@@ -7288,7 +7318,7 @@ private fun FileManagerRowCard(
                         )
                         when (folder) {
                             "mods" -> {
-                                LavenderTagBadge(text = "v${modDetail?.version ?: "1.0.0"}")
+                                LavenderTagBadge(text = "v${rowItem.zenkaiVersion ?: modDetail?.version ?: "1.0.0"}")
                                 LavenderTagBadge(text = "26.3")
                                 if (rowItem.hasStoreUpdate && rowItem.storeCatalogMatch != null) {
                                     Surface(

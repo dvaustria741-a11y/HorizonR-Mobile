@@ -1980,7 +1980,7 @@ object HorizonNativeBridge {
 
     fun sanitizeModId(rawNameOrId: String): String {
         var base = rawNameOrId.trim()
-        for (ext in listOf(".hmod", ".hnmod", ".jar", ".zip")) {
+        for (ext in listOf(".hmod", ".hnmod", ".jar", ".zip", ".zenkai")) {
             if (base.endsWith(ext, ignoreCase = true)) {
                 base = base.substring(0, base.length - ext.length)
                 break
@@ -4342,6 +4342,17 @@ object HorizonNativeBridge {
             f.writeText(lines.joinToString("\n") + if (lines.isNotEmpty()) "\n" else "")
         }
         invalidateContentCaches()
+    }
+
+    /** The Zenkai mods installed for this profile, as the Mods tab lists them. */
+    fun installedZenkaiMods(context: Context, profileSlot: Int): List<StoreCatalogItem> {
+        val ids = zenkaiInstalledIds(context, profileSlot)
+        return ZENKAI_MODS.filter { it.id in ids }.map { zenkaiStoreItem(it) }
+    }
+
+    fun uninstallZenkaiById(context: Context, modId: String, profileSlot: Int, logEnabled: Boolean) {
+        val m = ZENKAI_MODS.firstOrNull { it.id == modId } ?: return
+        uninstallStoreItem(context, zenkaiStoreItem(m), profileSlot, logEnabled)
     }
 
     private fun searchZenkaiMods(
