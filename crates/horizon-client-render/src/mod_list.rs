@@ -47,6 +47,20 @@ pub const NOT_BUILT: &str = "Installed, not built into this game: build the game
 /// Add a native mod's id here to ship it off by default.
 pub const DEFAULT_OFF: &[&str] = &["punchy"];
 
+/// Whether `id` ships off: a [`DEFAULT_OFF`] native mod, or on Android one of the fixed
+/// [`ANDROID_BUNDLED`] modules. Holds even before `horizon-mods.txt` exists, so a new player
+/// starts with them off and only their own `mod.<id>:true` line turns them on.
+pub fn ships_off(id: &str) -> bool {
+    if DEFAULT_OFF.contains(&id) {
+        return true;
+    }
+    #[cfg(target_os = "android")]
+    if ANDROID_BUNDLED.iter().any(|(b, _, _)| *b == id) {
+        return true;
+    }
+    false
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModList {
     /// Ids of the mods the player turned on.
@@ -166,7 +180,7 @@ impl ModList {
         if self.enabled.contains(id) {
             return true;
         }
-        !self.disabled.contains(id) && !DEFAULT_OFF.contains(&id)
+        !self.disabled.contains(id) && !ships_off(id)
     }
     pub fn is_on(&self, i: usize) -> bool {
         self.installed.get(i).is_some_and(|m| {
@@ -221,6 +235,19 @@ mod tests {
         assert!(list.is_on(0));
         list.toggle(0);
         assert!(!list.is_on(0));
+    }
+    #[cfg(target_os = "android")]
+    #[test]
+    fn bundled_android_mods_start_off_and_keep_their_on_state() {
+        let fresh = ModList::default();
+        for (id, _, _) in ANDROID_BUNDLED {
+            assert!(!fresh.native_on(id));
+        }
+        let mut list = ModList::default();
+        list.enabled.insert("zoom".into());
+        let back = ModList::parse(&list.serialize());
+        assert!(back.native_on("zoom"));
+        assert!(!back.native_on("minimap"));
     }
     #[test]
     fn round_trips_and_ignores_the_rest() {

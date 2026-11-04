@@ -1279,7 +1279,7 @@ impl Launcher {
             Some(Action::ToggleBundled(id)) => {
                 let game = self.catalog.config.game_home(&self.home);
                 let mut list = horizon_client::mod_list::ModList::load(&game);
-                let enabled = list.enabled.contains(id) && !list.disabled.contains(id);
+                let enabled = list.native_on(id);
                 if enabled {
                     list.enabled.remove(id);
                     list.disabled.insert(id.into());

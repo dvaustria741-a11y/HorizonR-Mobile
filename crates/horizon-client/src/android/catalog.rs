@@ -256,7 +256,11 @@ impl Catalog {
             .map(|e| (e.source, e.project.clone()))
             .collect();
         let on = horizon_client::mod_list::ModList::load(&game);
-        self.bundled_enabled = on.enabled.difference(&on.disabled).cloned().collect();
+        self.bundled_enabled = horizon_client::mod_list::ANDROID_BUNDLED
+            .iter()
+            .filter(|(id, _, _)| on.native_on(id))
+            .map(|(id, _, _)| (*id).to_owned())
+            .collect();
         let settings = horizon_client::settings::Settings::load(&game.join("options.txt"));
         self.local.clear();
         for kind in horizon_client::content_files::Kind::ALL {
