@@ -85,3 +85,8 @@ copyright 2026 d3grando, MIT. Exact revisions and adaptation notes are recorded 
 module retains its full MIT LICENSE. Changes provide static Android hook
 adapters, opt-in configuration, profile-state reset and compatibility guards.
 These are a fixed compiled set, not support for loading arbitrary native mods.
+
+## Luxium: Let there be light (shader pack `luxium`)
+
+Ported in part from Luxium 2.8.4-pre-alpha by vinlanx, used under the Luxium Free Modification License
+(modification, ports and redistribution permitted; not to be presented as the official release).

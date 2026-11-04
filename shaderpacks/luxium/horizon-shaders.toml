@@ -1,0 +1,106 @@
+schema = 1
+id = "luxium"
+name = "Luxium"
+version = "0.1.0"
+api = "0.1"
+description = "Port of Luxium: Let there be light (by vinlanx): filmic tonemap, light shafts and wet surfaces. Stage 1 of the port; lighting, shadows, water and plant wave need engine stages that do not exist yet."
+authors = ["vinlanx", "HorizonR"]
+license = "Luxium Free Modification License"
+
+[[post]]
+file = "post/shafts.wgsl"
+name = "Light shafts"
+
+[[post]]
+file = "post/tonemap.wgsl"
+name = "Filmic tonemap"
+
+[material]
+file = "material/wet.wgsl"
+
+[[options]]
+id = "shafts_on"
+name = "Light shafts"
+type = "bool"
+default = true
+
+[[options]]
+id = "shafts_strength"
+name = "Shaft strength"
+type = "float"
+default = 0.35
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "tm_strength"
+name = "Tonemap strength"
+type = "float"
+default = 1.0
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "tm_exposure"
+name = "Exposure (EV)"
+type = "float"
+default = 0.0
+min = -1.5
+max = 1.5
+step = 0.1
+
+[[options]]
+id = "tm_contrast"
+name = "Contrast"
+type = "float"
+default = 0.35
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "tm_highlights"
+name = "Highlight compression"
+type = "float"
+default = 0.5
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "tm_shadow_depth"
+name = "Shadow depth"
+type = "float"
+default = 0.4
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "tm_saturation"
+name = "Saturation"
+type = "float"
+default = 1.05
+min = 0.5
+max = 1.5
+step = 0.05
+
+[[options]]
+id = "tm_vibrance"
+name = "Vibrance"
+type = "float"
+default = 0.2
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "wet_on"
+name = "Wet surfaces in rain"
+type = "bool"
+default = true
+
+[budget]
+gpu_ms = 1.2
