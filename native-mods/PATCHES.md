@@ -42,6 +42,7 @@ Packaged from [badmasti2/horizon-sodium](https://github.com/badmasti2/horizon-so
   Batching, Texture Budget (`ui.rs` reads 0 and ignores writes; no row in the exact UI) and the
   "Block broken" particles option (`exact_ui.rs` no longer exposes binding 188, so its row is unsupported).
 
+- The sidebar header is two lines like Sodium 0.9's ("Sodium" over "0.9.2", the icon spanning both).
 - `exact_ui.rs` gains a small extension point (`external()` / `set_external()`): while another bundle
   owns the content area (Iris), Sodium draws no tab highlight and no rows. Its flag is cleared when the
   screen closes.
@@ -76,7 +77,7 @@ Iris's shader pack screens, opened from the Sodium video settings. It requires `
 Sodium's layout and extension point), and its hooks check `native_on("iris_horizon")`, so it stays inert
 until installed.
 
-Like Iris in Sodium 0.9, the sidebar has an "Iris" group below "Sodium Extra": "Shader Packs" (a link that
+Like Iris in Sodium 0.9, the sidebar has an "Iris" group (Iris's own logo, `iris-logo.png`, reduced to 20 x 20 pixels, over "Iris" and "1.11.7") below "Sodium Extra": "Shader Packs" (a link that
 opens the Shader Packs screen) and "Settings" (the groups "Iris" and "Settings" with the "Open >" rows).
 
 - Shader Packs screen ("Select"): the "Shaders: Enabled/Disabled" switch, the pack list (the selected pack
