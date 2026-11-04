@@ -55,3 +55,9 @@ Everything else is unchanged. Compare with upstream before updating it.
 - Camera-look sway: `engine/look.rs` ports the original's camera tilt (view up/forward/right axes), pitch shift and
   the arm's yaw-lag spring (stiffness 64, damping 15, 1/120 s steps), stepped each rendered frame from the view's
   yaw and pitch. `runtime.rs::apply_look` applies it to both hands. Axis signs are unverified in-game.
+- Air poses: `engine/air.rs` ports the fall orbit (hands circle while falling fast or far), the elytra flight pose
+  (hands pushed forward, ease-out-back) and the underwater sink pose (idle below the surface, slow blend in), with the
+  original's blend times and constants, stepped each rendered frame. They add to the hands' walk/sprint swing in
+  `begin()`. Simplified: no per-item fall-arm disable, no root-space variant while an action plays, the sink's
+  solid-support check uses `on_ground`. Unverified in-game.
+
