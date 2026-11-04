@@ -990,6 +990,8 @@ impl PackPost {
         let custom_names: Vec<String> = custom.uniforms().map(|u| u.0.to_owned()).collect();
         // A first run finds the names neither the frame nor the pack defines.
         custom.eval(0.0, &|n| pack_uniforms::index(n).map(|_| Val::scalar(0.0)));
+        // That run saw every input as 0: `smooth` must not start from its values.
+        custom.reset_smooth();
         if !custom.notes.is_empty() {
             notes.push(format!("custom uniforms: {}", custom.notes.join("; ")));
             custom.notes.clear();

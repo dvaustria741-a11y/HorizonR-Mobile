@@ -175,6 +175,11 @@ impl Custom {
         out
     }
 
+    /// Forgets what `smooth` has settled on, so its next call starts from the value it is given.
+    pub fn reset_smooth(&mut self) {
+        self.smooth.clear();
+    }
+
     fn random(&mut self) -> f64 {
         self.seed ^= self.seed << 13;
         self.seed ^= self.seed >> 7;
