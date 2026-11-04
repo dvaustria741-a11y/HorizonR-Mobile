@@ -7648,7 +7648,6 @@ private fun LauncherVersionsDialog(onDismiss: () -> Unit) {
     val installedTuple = remember { HorizonNativeBridge.parseVersionNumbers("v$installed") ?: listOf(0, 0, 0) }
     var loading by remember { mutableStateOf(true) }
     var releases by remember { mutableStateOf<List<LauncherReleaseEntry>>(emptyList()) }
-    var pendingDowngrade by remember { mutableStateOf<LauncherReleaseEntry?>(null) }
 
     LaunchedEffect(Unit) {
         releases = withContext(Dispatchers.IO) { HorizonNativeBridge.listGithubLauncherReleases() }
@@ -7661,38 +7660,6 @@ private fun LauncherVersionsDialog(onDismiss: () -> Unit) {
         } catch (ignored: Exception) {
             Toast.makeText(context, "Could not open the download link.", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    pendingDowngrade?.let { entry ->
-        AlertDialog(
-            onDismissRequest = { pendingDowngrade = null },
-            icon = { Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFFFB74D)) },
-            title = { Text("Go back to v${entry.version}?", style = MaterialTheme.typography.titleMedium) },
-            text = {
-                Text(
-                    "Android refuses to install an older build over a newer one. To go back, uninstall HorizonR first (its app data is removed with it), then install the downloaded v${entry.version} APK.\n\nBack up anything you need before continuing.",
-                    fontSize = 13.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        pendingDowngrade = null
-                        openApk(entry)
-                        try {
-                            context.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}")))
-                        } catch (ignored: Exception) {
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent)
-                ) {
-                    Text("Download and uninstall", fontSize = 12.sp, color = SkyBlueDarkText, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDowngrade = null }) { Text("Cancel", fontSize = 12.sp) }
-            }
-        )
     }
 
     AlertDialog(
@@ -7728,7 +7695,7 @@ private fun LauncherVersionsDialog(onDismiss: () -> Unit) {
                                 )
                             }
                             if (cmp != 0) {
-                                TextButton(onClick = { if (cmp > 0) openApk(entry) else pendingDowngrade = entry }) {
+                                TextButton(onClick = { openApk(entry) }) {
                                     Text(if (cmp > 0) "Update" else "Downgrade", fontSize = 12.sp)
                                 }
                             }

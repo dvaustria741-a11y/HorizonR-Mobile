@@ -73,7 +73,7 @@ jobs:
       - name: Compute App Version
         run: |
           echo "APP_VERSION=$(sh scripts/app-version.sh ${{ github.run_number }})" >> "$GITHUB_ENV"
-          echo "APP_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CODE=1000000" >> "$GITHUB_ENV"
 
       - name: Ensure Any Remaining Update/ ZIP is Applied in Build Workspace
         run: |
