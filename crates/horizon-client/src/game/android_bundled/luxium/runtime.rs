@@ -10,7 +10,7 @@ use std::path::Path;
 pub const ID: &str = "luxium";
 pub const NAME: &str = "Luxium";
 pub const VERSION: &str = "0.1.0";
-pub const DESCRIPTION: &str = "Port of Luxium: water, metal, polished stone and glass sheen, plant wave, sky, lens flare, air distortion (/luxium warp), filmic tonemap, light shafts and wet surfaces.";
+pub const DESCRIPTION: &str = "Port of Luxium: shockwave and black hole commands, water, metal, polished stone and glass sheen, plant wave, sky, lens flare, air distortion (/luxium warp), filmic tonemap, light shafts and wet surfaces.";
 /// The folder the bundled stages are written to inside `shaderpacks/`.
 pub const PACK_DIR: &str = "luxium";
 
@@ -87,15 +87,25 @@ const SETTINGS: [(&str, &str, &[&str], &str); 15] = [
     ("wet_on", "Wet surfaces", &["true", "false"], "true"),
 ];
 
-/// The options `/luxium warp` sets; cleared when a session starts.
-const WARP_KEYS: [&str; 5] = ["warp_on", "warp_cx", "warp_cy", "warp_cz", "warp_r"];
+/// The options the screen effect commands set; cleared when a session starts.
+const WARP_KEYS: [&str; 6] = [
+    "fx_kind", "warp_on", "warp_cx", "warp_cy", "warp_cz", "warp_r",
+];
 
-/// Starts the air distortion sphere `radius` blocks wide, centred ahead of `eye` along `dir`,
-/// and saves it where the engine reads pack options. Returns whether it was saved.
-pub fn warp(packs_dir: &Path, eye: [f64; 3], dir: [f64; 3], radius: f64) -> bool {
+/// The screen effects: `/luxium <name> [radius]`, and the pack's `fx_kind` for each.
+pub const EFFECTS: [(&str, &str, &str); 3] = [
+    ("warp", "0", "air warp"),
+    ("shockwave", "1", "shockwave"),
+    ("blackhole", "2", "black hole"),
+];
+
+/// Starts screen effect `kind` (a `fx_kind` value) of size `radius` blocks, centred ahead of `eye`
+/// along `dir`, and saves it where the engine reads pack options. Returns whether it was saved.
+pub fn warp(packs_dir: &Path, eye: [f64; 3], dir: [f64; 3], radius: f64, kind: &str) -> bool {
     let radius = radius.clamp(2.0, 64.0);
-    let ahead = radius * 1.6;
+    let ahead = if kind == "1" { 6.0 } else { radius * 1.6 };
     let mut chosen = horizon_shaders::read_overrides(packs_dir, PACK_DIR);
+    chosen.insert("fx_kind".into(), kind.into());
     chosen.insert("warp_on".into(), "true".into());
     chosen.insert("warp_cx".into(), format!("{:.2}", eye[0] + dir[0] * ahead));
     chosen.insert("warp_cy".into(), format!("{:.2}", eye[1] + dir[1] * ahead));

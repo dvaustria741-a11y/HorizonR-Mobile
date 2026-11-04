@@ -195,6 +195,14 @@ max = 2.0
 step = 0.1
 
 [[options]]
+id = "fx_kind"
+name = "Screen effect (set by /luxium)"
+type = "int"
+default = 0
+min = 0
+max = 2
+
+[[options]]
 id = "warp_on"
 name = "Air warp (set by /luxium warp)"
 type = "bool"

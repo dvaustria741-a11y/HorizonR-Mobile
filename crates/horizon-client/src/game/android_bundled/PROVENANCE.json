@@ -32,6 +32,6 @@
     "commit": "Luxium 2.8.4-pre-alpha (jar)",
     "repository": "https://github.com/vinlanx (Luxium: Let there be light)",
     "license": "Luxium Free Modification License",
-    "changes": "Clean-room WGSL port of the tonemap, a sun-only light shaft approximation and a wet-surface material, run through the engine's shader stages; stage 1 of the port. Stage 2 adds sky-mirror approximations of the metal, polished stone and glass reflections (the original planar mirrors need a second scene render)."
+    "changes": "Clean-room WGSL port of the tonemap, a sun-only light shaft approximation and a wet-surface material, run through the engine's shader stages; stage 1 of the port. Stage 2 adds sky-mirror approximations of the metal, polished stone and glass reflections (the original planar mirrors need a second scene render). Stage 3 adds /luxium shockwave and /luxium blackhole to the air distortion pass (lensing and accretion disc ported from blackhole.fsh)."
   }
 ]
