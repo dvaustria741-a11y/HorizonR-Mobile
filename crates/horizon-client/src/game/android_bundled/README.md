@@ -1,5 +1,11 @@
 # Fixed Android mod sources
 
+These four modules (Zoom, Minimap, Recipes, SmartF3) are installed from the Store's **Zenkai**
+source (Mods page, third source button), not toggled on a built-in list. Install writes
+`zenkai.<id>:true` and `mod.<id>:true` to `horizon-mods.txt`; Uninstall removes both. A module that
+is not installed does not run and is not listed in Options > Mods. The code still ships inside the
+APK (there is no native-mod loader on Android), so install only switches it on.
+
 The parent `android_bundled.rs` wires a fixed, opt-in set of MIT native modules
 into existing game hook points. It is not a native-mod loader or compiler.
 `PROVENANCE.json` pins source revisions; every module retains its MIT LICENSE.

@@ -9,12 +9,21 @@ pub enum Origin {
     #[default]
     Horizon,
     Modrinth,
+    /// The repo owner's own mods, built into this app and installed from the Store (Mods page only).
+    Zenkai,
 }
 impl Origin {
     pub fn source(self) -> SourceId {
         match self {
-            Self::Horizon => SourceId::Horizon,
+            // Zenkai has no online registry: its Store rows come from the app itself.
+            Self::Horizon | Self::Zenkai => SourceId::Horizon,
             Self::Modrinth => SourceId::Modrinth,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Zenkai => horizon_client::mod_list::ZENKAI_SOURCE,
+            other => other.source().label(),
         }
     }
 }

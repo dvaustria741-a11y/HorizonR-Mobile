@@ -55,7 +55,7 @@ pub(super) enum Action {
     ChooseAspect(crate::display::Aspect),
     DisplayHz,
     ChooseDisplayHz(u16),
-    ToggleBundled(&'static str),
+    ZenkaiMod(&'static str),
     PerformanceHints,
     GpuProfile,
 }
@@ -482,14 +482,24 @@ impl Launcher {
             );
             if matches!(page, Page::Shaders | Page::Mods) {
                 use crate::shader_catalog::Origin;
-                let width = ((w - 185.0) / 2.0).clamp(58.0, 120.0);
-                for (i, origin) in [Origin::Horizon, Origin::Modrinth].into_iter().enumerate() {
-                    let rect = [w - 32.0 - (2 - i) as f32 * width, 134.0, width - 5.0, 32.0];
+                let origins: &[Origin] = if page == Page::Mods {
+                    &[Origin::Horizon, Origin::Modrinth, Origin::Zenkai]
+                } else {
+                    &[Origin::Horizon, Origin::Modrinth]
+                };
+                let width = ((w - 185.0) / origins.len() as f32).clamp(58.0, 120.0);
+                for (i, origin) in origins.iter().copied().enumerate() {
+                    let rect = [
+                        w - 32.0 - (origins.len() - i) as f32 * width,
+                        134.0,
+                        width - 5.0,
+                        32.0,
+                    ];
                     button(
                         &mut ui,
                         &mut self.targets,
                         rect,
-                        origin.source().label(),
+                        origin.label(),
                         if page == Page::Mods {
                             Action::ModSource(origin)
                         } else {
@@ -513,6 +523,11 @@ impl Launcher {
                         == crate::shader_catalog::Origin::Modrinth =>
                 {
                     "Modrinth Java mods are browse-only; Fabric/Forge/NeoForge cannot run here"
+                }
+                Page::Mods
+                    if self.catalog.config.mod_source == crate::shader_catalog::Origin::Zenkai =>
+                {
+                    "Zenkai: mods by the repo owner. Install, then tune them in Options > Mods"
                 }
                 Page::Mods => "Search Horizon mods or paste an HTTPS .hmod link",
                 Page::Shaders
@@ -549,15 +564,9 @@ impl Launcher {
                 false,
             );
             let bundled: Vec<_> = if page == Page::Mods
-                && self.catalog.config.mod_source == crate::shader_catalog::Origin::Horizon
+                && self.catalog.config.mod_source == crate::shader_catalog::Origin::Zenkai
             {
-                let query = self.catalog.query.to_lowercase();
-                horizon_client::mod_list::ANDROID_BUNDLED
-                    .into_iter()
-                    .filter(|(id, title, _)| {
-                        id.contains(&query) || title.to_lowercase().contains(&query)
-                    })
-                    .collect()
+                self.catalog.zenkai_mods().collect()
             } else {
                 Vec::new()
             };
@@ -599,12 +608,12 @@ impl Launcher {
                     &mut ui,
                     &mut self.targets,
                     [w - 150.0, y, 118.0, 42.0],
-                    if self.catalog.bundled_enabled.contains(*id) {
-                        "Disable"
+                    if self.catalog.zenkai_installed.contains(*id) {
+                        "Uninstall"
                     } else {
-                        "Enable"
+                        "Install"
                     },
-                    Action::ToggleBundled(id),
+                    Action::ZenkaiMod(id),
                     false,
                 );
             }
@@ -1276,24 +1285,27 @@ impl Launcher {
                 self.configure_screen();
                 self.chooser = None;
             }
-            Some(Action::ToggleBundled(id)) => {
+            Some(Action::ZenkaiMod(id)) => {
                 let game = self.catalog.config.game_home(&self.home);
                 let mut list = horizon_client::mod_list::ModList::load(&game);
-                let enabled = list.native_on(id);
-                if enabled {
-                    list.enabled.remove(id);
-                    list.disabled.insert(id.into());
+                let installed = list.zenkai.contains(id);
+                if installed {
+                    list.uninstall_zenkai(id);
                 } else {
-                    list.disabled.remove(id);
-                    list.enabled.insert(id.into());
+                    list.install_zenkai(id);
                 }
                 std::fs::create_dir_all(&game)?;
                 std::fs::write(game.join(horizon_client::mod_list::FILE), list.serialize())?;
                 self.catalog.refresh(&self.home);
-                self.catalog.status = format!(
-                    "Bundled {id} {}. Applies on Play; settings are in Options > Mods.",
-                    if enabled { "disabled" } else { "enabled" }
-                );
+                let name = horizon_client::mod_list::ANDROID_BUNDLED
+                    .iter()
+                    .find(|(b, _, _)| *b == id)
+                    .map_or(id, |(_, title, _)| *title);
+                self.catalog.status = if installed {
+                    format!("Uninstalled {name}. Applies on Play.")
+                } else {
+                    format!("Installed {name}. Applies on Play; settings are in Options > Mods.")
+                };
             }
             Some(Action::DisplayHz) => self.open_chooser(chooser::Kind::DisplayHz),
             Some(Action::ChooseDisplayHz(hz)) => {

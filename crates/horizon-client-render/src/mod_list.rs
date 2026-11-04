@@ -10,7 +10,10 @@ use std::{
 };
 
 pub const FILE: &str = "horizon-mods.txt";
-/// Fixed native modules compiled into Android APKs, all opt-in.
+/// The Store source the Android modules are installed from: made by the repo owner.
+pub const ZENKAI_SOURCE: &str = "Zenkai";
+/// Native modules compiled into Android APKs. They are not on until the player installs them from
+/// the Store's Zenkai source (`zenkai.<id>:true` in `horizon-mods.txt`).
 pub const ANDROID_BUNDLED: [(&str, &str, &str); 4] = [
     (
         "zoom",
@@ -47,9 +50,9 @@ pub const NOT_BUILT: &str = "Installed, not built into this game: build the game
 /// Add a native mod's id here to ship it off by default.
 pub const DEFAULT_OFF: &[&str] = &["punchy"];
 
-/// Whether `id` ships off: a [`DEFAULT_OFF`] native mod, or on Android one of the fixed
+/// Whether `id` ships off: a [`DEFAULT_OFF`] native mod, or on Android one of the
 /// [`ANDROID_BUNDLED`] modules. Holds even before `horizon-mods.txt` exists, so a new player
-/// starts with them off and only their own `mod.<id>:true` line turns them on.
+/// starts with them off; installing one from the Zenkai source turns it on.
 pub fn ships_off(id: &str) -> bool {
     if DEFAULT_OFF.contains(&id) {
         return true;
@@ -61,6 +64,11 @@ pub fn ships_off(id: &str) -> bool {
     false
 }
 
+/// Whether `id` is one of the modules the Store's Zenkai source offers.
+pub fn is_zenkai(id: &str) -> bool {
+    ANDROID_BUNDLED.iter().any(|(b, _, _)| *b == id)
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModList {
     /// Ids of the mods the player turned on.
@@ -68,6 +76,9 @@ pub struct ModList {
     /// Ids of the native mods the player turned off: they rest
     /// (`native_on`) until the launcher's next build leaves them out.
     pub disabled: BTreeSet<String>,
+    /// Ids of the [`ANDROID_BUNDLED`] modules the player installed from the Store's Zenkai source
+    /// (`zenkai.<id>:true`). One that is not installed does not run and is not listed in the game.
+    pub zenkai: BTreeSet<String>,
     /// The keys the player chose for mods' keys, mod id → key name → key
     /// (`key.<id>.<name>:key.keyboard.x` lines).
     pub keys: BTreeMap<String, BTreeMap<String, String>>,
@@ -119,16 +130,21 @@ impl ModList {
                 .collect()
         };
         let (enabled, disabled) = (ids("true"), ids("false"));
+        #[allow(unused_mut)]
+        let mut zenkai: BTreeSet<String> = text
+            .lines()
+            .filter_map(|l| l.split_once(':'))
+            .filter(|(_, v)| v.trim() == "true")
+            .filter_map(|(k, _)| k.trim().strip_prefix("zenkai."))
+            .map(str::to_owned)
+            .collect();
+        // A module the player turned on before it became installable stays installed.
         #[cfg(target_os = "android")]
-        let disabled = {
-            let mut disabled = disabled;
-            for (id, _, _) in ANDROID_BUNDLED {
-                if !enabled.contains(id) {
-                    disabled.insert(id.to_owned());
-                }
+        for (id, _, _) in ANDROID_BUNDLED {
+            if enabled.contains(id) {
+                zenkai.insert(id.to_owned());
             }
-            disabled
-        };
+        }
         let mut keys: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
         for (k, v) in text.lines().filter_map(|l| l.split_once(':')) {
             // Mod ids have no dots; a key's name may.
@@ -144,6 +160,7 @@ impl ModList {
         Self {
             enabled,
             disabled,
+            zenkai,
             keys,
             installed: Vec::new(),
         }
@@ -151,11 +168,12 @@ impl ModList {
     pub fn serialize(&self) -> String {
         let on = self.enabled.iter().map(|id| format!("mod.{id}:true\n"));
         let off = self.disabled.iter().map(|id| format!("mod.{id}:false\n"));
+        let installed = self.zenkai.iter().map(|id| format!("zenkai.{id}:true\n"));
         let keys = self.keys.iter().flat_map(|(id, keys)| {
             keys.iter()
                 .map(move |(name, key)| format!("key.{id}.{name}:{key}\n"))
         });
-        on.chain(off).chain(keys).collect()
+        on.chain(off).chain(installed).chain(keys).collect()
     }
     /// Mod `id`'s chosen keys, for `Mods::set_bindings`.
     pub fn keys_of(&self, id: &str) -> Vec<(&str, &str)> {
@@ -167,6 +185,7 @@ impl ModList {
         let path = dir.join(FILE);
         if self.enabled.is_empty()
             && self.disabled.is_empty()
+            && self.zenkai.is_empty()
             && self.keys.is_empty()
             && !path.exists()
         {
@@ -177,10 +196,26 @@ impl ModList {
     /// Whether native mod `id` runs: on until the player turns it off, unless it ships in
     /// [`DEFAULT_OFF`] and the player has not turned it on.
     pub fn native_on(&self, id: &str) -> bool {
+        #[cfg(target_os = "android")]
+        if is_zenkai(id) && !self.zenkai.contains(id) {
+            return false;
+        }
         if self.enabled.contains(id) {
             return true;
         }
         !self.disabled.contains(id) && !ships_off(id)
+    }
+    /// Installs Zenkai module `id` and turns it on.
+    pub fn install_zenkai(&mut self, id: &str) {
+        self.zenkai.insert(id.to_owned());
+        self.disabled.remove(id);
+        self.enabled.insert(id.to_owned());
+    }
+    /// Uninstalls Zenkai module `id`: it stops running and leaves the game's Mods list.
+    pub fn uninstall_zenkai(&mut self, id: &str) {
+        self.zenkai.remove(id);
+        self.enabled.remove(id);
+        self.disabled.remove(id);
     }
     pub fn is_on(&self, i: usize) -> bool {
         self.installed.get(i).is_some_and(|m| {
@@ -238,16 +273,41 @@ mod tests {
     }
     #[cfg(target_os = "android")]
     #[test]
-    fn bundled_android_mods_start_off_and_keep_their_on_state() {
+    fn zenkai_android_mods_run_only_once_installed() {
         let fresh = ModList::default();
         for (id, _, _) in ANDROID_BUNDLED {
             assert!(!fresh.native_on(id));
         }
         let mut list = ModList::default();
-        list.enabled.insert("zoom".into());
+        list.install_zenkai("zoom");
         let back = ModList::parse(&list.serialize());
         assert!(back.native_on("zoom"));
         assert!(!back.native_on("minimap"));
+        // Turned off in the game: still installed, not running.
+        let mut off = back;
+        off.enabled.remove("zoom");
+        off.disabled.insert("zoom".into());
+        let off = ModList::parse(&off.serialize());
+        assert!(off.zenkai.contains("zoom") && !off.native_on("zoom"));
+        // A module turned on before it was installable counts as installed.
+        assert!(
+            ModList::parse("mod.recipes:true\n")
+                .zenkai
+                .contains("recipes")
+        );
+    }
+    #[test]
+    fn zenkai_install_round_trips_and_uninstall_forgets() {
+        let mut list = ModList::default();
+        list.install_zenkai("zoom");
+        assert!(list.zenkai.contains("zoom") && list.enabled.contains("zoom"));
+        let back = ModList::parse(&list.serialize());
+        assert!(back.zenkai.contains("zoom"));
+        let mut gone = back;
+        gone.uninstall_zenkai("zoom");
+        assert!(!gone.zenkai.contains("zoom"));
+        assert!(!gone.enabled.contains("zoom") && !gone.disabled.contains("zoom"));
+        assert!(!gone.serialize().contains("zenkai.zoom"));
     }
     #[test]
     fn round_trips_and_ignores_the_rest() {

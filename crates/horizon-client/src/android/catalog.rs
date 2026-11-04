@@ -178,7 +178,7 @@ enum Reply {
 }
 pub struct Catalog {
     pub local: Vec<LocalItem>,
-    pub bundled_enabled: std::collections::BTreeSet<String>,
+    pub zenkai_installed: std::collections::BTreeSet<String>,
     pub sections: [bool; 3],
     pub pending_delete: Option<LocalItem>,
     downloaded: Vec<(browser::SourceId, String)>,
@@ -210,7 +210,7 @@ impl Catalog {
         let config = Config::load(home);
         let mut result = Self {
             local: vec![],
-            bundled_enabled: Default::default(),
+            zenkai_installed: Default::default(),
             sections: [false, false, false],
             pending_delete: None,
             downloaded: vec![],
@@ -256,9 +256,9 @@ impl Catalog {
             .map(|e| (e.source, e.project.clone()))
             .collect();
         let on = horizon_client::mod_list::ModList::load(&game);
-        self.bundled_enabled = horizon_client::mod_list::ANDROID_BUNDLED
+        self.zenkai_installed = horizon_client::mod_list::ANDROID_BUNDLED
             .iter()
-            .filter(|(id, _, _)| on.native_on(id))
+            .filter(|(id, _, _)| on.zenkai.contains(*id))
             .map(|(id, _, _)| (*id).to_owned())
             .collect();
         let settings = horizon_client::settings::Settings::load(&game.join("options.txt"));
@@ -411,6 +411,19 @@ impl Catalog {
             }
             return;
         }
+        if self.page == Page::Mods
+            && self.config.mod_source == crate::shader_catalog::Origin::Zenkai
+        {
+            // Zenkai's modules ship inside this app: nothing to search online.
+            self.searches.cancel_interest();
+            self.results.clear();
+            self.scroll = 0.0;
+            self.status = format!(
+                "{} Zenkai mods - made by the repo owner; installs apply on Play",
+                self.zenkai_mods().count()
+            );
+            return;
+        }
         self.scroll = 0.0;
         let source = match self.page {
             Page::Packs => browser::SourceId::Modrinth,
@@ -426,6 +439,17 @@ impl Catalog {
             self.status = "Searching... You can switch tabs while results load.".into();
         }
         self.start_search();
+    }
+    /// The Zenkai source's modules matching the search box.
+    pub fn zenkai_mods(
+        &self,
+    ) -> impl Iterator<Item = (&'static str, &'static str, &'static str)> + '_ {
+        let query = self.query.to_lowercase();
+        horizon_client::mod_list::ANDROID_BUNDLED
+            .into_iter()
+            .filter(move |(id, title, _)| {
+                id.contains(&query) || title.to_lowercase().contains(&query)
+            })
     }
     fn show_results(&mut self, items: Vec<Project>) {
         self.status = if self.page == Page::Shaders
