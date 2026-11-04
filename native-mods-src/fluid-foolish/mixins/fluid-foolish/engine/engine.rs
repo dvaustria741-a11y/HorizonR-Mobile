@@ -4,13 +4,20 @@
 //! blends the clips for what the player is doing, and `rig` turns the blended bone poses into
 //! additions to the player model's parts. Pure Rust: no Horizon types, so it is tested on its own.
 
+pub mod actions;
 pub mod clip;
 pub mod locomotion;
 pub mod rig;
 
+pub use actions::{ActionInput, Actions, Compat};
 pub use clip::{Clip, Clips, Pose};
 pub use locomotion::{Input, Locomotion};
 pub use rig::{PartAdd, parts};
+
+/// The pack's item groups and defaults, compiled in (`data/compat.json`).
+pub fn embedded_compat() -> Result<Compat, String> {
+    Compat::parse(include_bytes!("data/compat.json"))
+}
 
 /// The pack's animation clips, compiled in (`data/clips.json`, built by `tools/build_native_mod.py`).
 pub fn embedded() -> Result<Clips, String> {

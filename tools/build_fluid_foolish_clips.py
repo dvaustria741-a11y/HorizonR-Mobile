@@ -27,6 +27,10 @@ def main(zip_path: str) -> None:
         pack = DEST / "pack"
         pack.mkdir(parents=True, exist_ok=True)
         (pack / "README.txt").write_bytes(z.read("README.txt"))
+        compat = json.loads(z.read("assets/punchy_moves/compat/develop.json"))
+        (out.parent / "compat.json").write_text(json.dumps(
+            {"empty_hand": compat["empty_hand"], "item_groups": compat["item_groups"],
+             "defaults": compat["defaults"]["animations"]}, separators=(",", ":")))
         for extra in ("assets/punchy_moves/compat/develop.json", "assets/punchy_moves/compat.schema.json"):
             if extra in z.namelist():
                 (pack / Path(extra).name).write_bytes(z.read(extra))

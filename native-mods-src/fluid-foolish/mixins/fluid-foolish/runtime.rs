@@ -1,6 +1,6 @@
 // Horizon glue for Fluid & Foolish's movement animations (engine/ has the clips and the logic).
 use super::*;
-use fluid_engine::{Clips, Input, Locomotion};
+use fluid_engine::{ActionInput, Clips, Compat, Input, Locomotion};
 use std::cell::RefCell;
 
 pub(super) const ID: &str = "fluid-foolish";
@@ -9,6 +9,7 @@ thread_local! { static STATE: RefCell<State> = RefCell::new(State::default()); }
 #[derive(Default)]
 struct State {
     clips: Option<std::result::Result<Clips, String>>,
+    compat: Option<std::result::Result<Compat, String>>,
     loco: Locomotion,
     last_hurt: i32,
 }
@@ -35,6 +36,9 @@ fn intensity(game: &Game<'_>) -> f32 {
         .filter(|s| s.is_finite())
         .unwrap_or(1.0)
         .clamp(0.25, 1.0)
+}
+fn compat(s: &mut State) -> std::result::Result<&Compat, String> {
+    s.compat.get_or_insert_with(fluid_engine::embedded_compat).as_ref().map_err(Clone::clone)
 }
 fn clips(s: &mut State) -> std::result::Result<&Clips, String> {
     s.clips.get_or_insert_with(fluid_engine::embedded).as_ref().map_err(Clone::clone)
@@ -79,9 +83,19 @@ pub(super) fn tick(game: &mut Game<'_>) {
             hurt_from,
             active,
         };
+        let id_of = |stack: Option<&ItemStack>| stack.map(|s| s.item.to_string()).unwrap_or_default();
+        let actions = ActionInput {
+            held: id_of(game.stack_in(game.selected)),
+            using: game.using.map(|(slot, ticks)| (id_of(game.stack_in(slot)), ticks)),
+            swings: game.swings_started,
+            mining: game.mining.is_some(),
+            armor: std::array::from_fn(|i| id_of(game.armor[i].as_ref())),
+        };
         let mut loco = std::mem::take(&mut s.loco);
-        if let Ok(clips) = clips(&mut s) {
+        let compat = compat(&mut s).ok().cloned();
+        if let (Ok(clips), Some(compat)) = (clips(&mut s), compat) {
             loco.tick(clips, &input);
+            loco.tick_actions(clips, &compat, &actions);
         }
         s.loco = loco;
     });
@@ -99,8 +113,9 @@ pub(super) fn pose(game: &Game<'_>, partial: f32, pose: &mut horizon_client::mob
             return;
         }
         let loco = s.loco.clone();
+        let compat = compat(&mut s).ok().cloned().unwrap_or_default();
         let Ok(clips) = clips(&mut s) else { return };
-        let rig = loco.sample(clips, partial);
+        let rig = loco.sample_with(clips, &compat, partial);
         for part in fluid_engine::parts(&rig) {
             let scale = |v: [f32; 3]| [v[0] * strength, v[1] * strength, v[2] * strength];
             pose.add(part.name, scale(part.position), scale(part.rotation));

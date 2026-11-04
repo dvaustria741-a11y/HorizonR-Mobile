@@ -6,6 +6,7 @@
 //! The numbers (stride lengths, cycle-rate caps, amplitude reference, fall distances) are the
 //! pack's `compat/develop.json` defaults.
 
+use crate::actions::{ActionInput, Actions, Compat};
 use crate::clip::Clips;
 use crate::rig::Rig;
 
@@ -160,6 +161,7 @@ pub struct Locomotion {
     rng: u32,
     emote: Option<Emote>,
     emote_w: f32,
+    actions: Actions,
 }
 
 fn approach(value: &mut f32, target: f32, step: f32) {
@@ -213,6 +215,13 @@ impl Locomotion {
     fn random(&mut self) -> u32 {
         self.rng = self.rng.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
         self.rng >> 8
+    }
+
+    /// What the hands did this tick (attacks, mining, item switches, items in use).
+    pub fn tick_actions(&mut self, clips: &Clips, compat: &Compat, input: &ActionInput) {
+        if self.master > 0.0 {
+            self.actions.tick(clips, compat, input);
+        }
     }
 
     pub fn tick(&mut self, clips: &Clips, input: &Input) {
@@ -440,8 +449,13 @@ impl Locomotion {
         }
     }
 
-    /// The blended bone poses, `partial` of the way to the next tick.
+    /// The blended bone poses without the hand actions.
     pub fn sample(&self, clips: &Clips, partial: f32) -> Rig {
+        self.sample_with(clips, &Compat::default(), partial)
+    }
+
+    /// The blended bone poses, `partial` of the way to the next tick.
+    pub fn sample_with(&self, clips: &Clips, compat: &Compat, partial: f32) -> Rig {
         let mut rig = Rig::new();
         for bone in BONES {
             rig.insert(bone.to_owned(), crate::clip::Pose::default());
@@ -554,6 +568,28 @@ impl Locomotion {
             let len = clips.get(&e.clip).map_or(0.0, |c| c.length);
             let w = if looped { (e.t / FADE_IN).clamp(0.0, 1.0) } else { envelope(e.t, len) };
             add(&mut rig, clips, &e.clip, e.t + ahead, w * m, 0.0);
+        }
+
+        // The hands: each action clip takes over the bones it animates, leaving as much of the
+        // walking and idling there as the pack says.
+        let layers = self.actions.layers(clips, compat, partial);
+        for layer in &layers {
+            let Some(clip) = clips.get(&layer.clip) else { continue };
+            for bone in BONES {
+                if !clip.has_bone(bone) {
+                    continue;
+                }
+                let k = 1.0 - layer.weight * m * (1.0 - layer.retain_for(bone)).clamp(0.0, 1.0);
+                let r = rig.get_mut(bone).expect("every bone is in the rig");
+                for i in 0..3 {
+                    r.position[i] *= k;
+                    r.rotation[i] *= k;
+                    r.scale[i] = 1.0 + (r.scale[i] - 1.0) * k;
+                }
+            }
+        }
+        for layer in &layers {
+            add(&mut rig, clips, &layer.clip, layer.time, layer.weight * m, 0.0);
         }
         rig
     }
