@@ -60,4 +60,9 @@ Everything else is unchanged. Compare with upstream before updating it.
   original's blend times and constants, stepped each rendered frame. They add to the hands' walk/sprint swing in
   `begin()`. Simplified: no per-item fall-arm disable, no root-space variant while an action plays, the sink's
   solid-support check uses `on_ground`. Unverified in-game.
+- Crouch spring: `engine/sway.rs` also ports the original's sneak spring (stiffness 22, damping 14, depth -0.12): the
+  hands dip as crouching starts and spring back on release, through the same root shift as the jump spring.
+- Horse riding: `engine/locomotion.rs` plays `newhorse_riding_idle` or `newhorse_riding_loop` (moving above the original's
+  4e-4 speed squared) on horses, donkeys, mules, camels and llamas. Not ported: the one-shot `newhorse_riding_mount` camera dip.
+- Fix: the crawl check named `crate::pose::Pose`, which the game crate doesn't have; it is `horizon_client::pose::Pose`.
 
