@@ -51,3 +51,6 @@ Everything else is unchanged. Compare with upstream before updating it.
   The clip drives both hands, is held on its frame while the player stands still (climb, crawl), and gives way to
   any action (attack, use, inspect). Not ported: `falling_in_water` and the walk-on-water clips; the default pack
   has no fall or elytra clips.
+- Camera-look sway: `engine/look.rs` ports the original's camera tilt (view up/forward/right axes), pitch shift and
+  the arm's yaw-lag spring (stiffness 64, damping 15, 1/120 s steps), stepped each rendered frame from the view's
+  yaw and pitch. `runtime.rs::apply_look` applies it to both hands. Axis signs are unverified in-game.
