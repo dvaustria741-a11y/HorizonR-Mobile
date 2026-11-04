@@ -5113,7 +5113,10 @@ private fun CleanStoreViewport(
             },
             onSelect = {
                 selectedCategory = it
-                if (it != StoreCategory.RESOURCE_PACK && it != StoreCategory.SHADER_PACK && selectedSource != StoreSource.HORIZON) {
+                val zenkaiCategory = it == StoreCategory.ALL || it == StoreCategory.MOD || it == StoreCategory.NATIVE_MOD
+                if (selectedSource == StoreSource.ZENKAI) {
+                    if (!zenkaiCategory) selectedSource = StoreSource.HORIZON
+                } else if (it != StoreCategory.RESOURCE_PACK && it != StoreCategory.SHADER_PACK && selectedSource != StoreSource.HORIZON) {
                     selectedSource = StoreSource.HORIZON
                 }
                 selectedProject = null
@@ -5170,7 +5173,7 @@ private fun CleanStoreViewport(
                                         color = SubRailCapsuleActive
                                     ) {
                                         Text(
-                                            text = "HORIZON REGISTRY",
+                                            text = if (selectedSource == StoreSource.HORIZON) "HORIZON REGISTRY" else "${selectedSource.label.uppercase()} SOURCE",
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = SkyBlueAccent,
@@ -5178,7 +5181,7 @@ private fun CleanStoreViewport(
                                         )
                                     }
                                     Text(
-                                        text = "${catalogItems.size} of $totalHits • ${if (selectedSource == StoreSource.HORIZON) "playhorizon.dev/mods" else selectedSource.label}",
+                                        text = "${catalogItems.size} of $totalHits • ${when (selectedSource) { StoreSource.HORIZON -> "playhorizon.dev/mods"; StoreSource.ZENKAI -> "Zenkai mods, installs apply on Play"; else -> selectedSource.label }}",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MutedSubtitleText,
@@ -5340,6 +5343,7 @@ private fun CleanStoreViewport(
                                     Text(
                                         text = searchMessage.ifBlank {
                                             if (selectedSource == StoreSource.HORIZON) "No projects found on playhorizon.dev/mods matching your filter."
+                                            else if (selectedSource == StoreSource.ZENKAI) "No Zenkai mods matched your filter."
                                             else "No ${selectedSource.label} ${if (selectedCategory == StoreCategory.SHADER_PACK) "shader" else "resource"} packs matched your filter."
                                         },
                                         fontSize = 12.sp,
@@ -5571,7 +5575,11 @@ private fun CleanStoreViewport(
                             selected = selectedSource,
                             onSelect = { src ->
                                 selectedSource = src
-                                if (src != StoreSource.HORIZON && selectedCategory != StoreCategory.SHADER_PACK) {
+                                if (src == StoreSource.ZENKAI) {
+                                    if (selectedCategory != StoreCategory.ALL && selectedCategory != StoreCategory.MOD && selectedCategory != StoreCategory.NATIVE_MOD) {
+                                        selectedCategory = StoreCategory.ALL
+                                    }
+                                } else if (src != StoreSource.HORIZON && selectedCategory != StoreCategory.SHADER_PACK) {
                                     selectedCategory = StoreCategory.RESOURCE_PACK
                                 }
                                 selectedProject = null
@@ -5591,7 +5599,7 @@ private fun CleanStoreViewport(
 
                         StoreRightSearchPill(
                             value = searchQuery,
-                            placeholder = if (selectedSource == StoreSource.HORIZON) "Search Horizon mods..." else "Search ${selectedSource.label} ${if (selectedCategory == StoreCategory.SHADER_PACK) "shader" else "resource"} packs...",
+                            placeholder = if (selectedSource == StoreSource.HORIZON) "Search Horizon mods..." else if (selectedSource == StoreSource.ZENKAI) "Search Zenkai mods..." else "Search ${selectedSource.label} ${if (selectedCategory == StoreCategory.SHADER_PACK) "shader" else "resource"} packs...",
                             onValueChange = {
                                 searchQuery = it
                                 currentPage = 1

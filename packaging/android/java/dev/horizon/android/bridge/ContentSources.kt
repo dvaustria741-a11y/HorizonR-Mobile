@@ -403,7 +403,7 @@ object ContentSources {
         return when (item.source) {
             StoreSource.MODRINTH -> modrinthVersions(item.sourceProjectId, gameVersion, item.category)
             StoreSource.CURSEFORGE -> curseForgeVersions(item.sourceProjectId, gameVersion, item.category)
-            StoreSource.HORIZON -> emptyList()
+            StoreSource.HORIZON, StoreSource.ZENKAI -> emptyList()
         }
     }
 

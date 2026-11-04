@@ -29,7 +29,8 @@ enum class StoreCategory(
 enum class StoreSource(val label: String, val badge: String) {
     HORIZON("Horizon", "HORIZON"),
     MODRINTH("Modrinth", "MODRINTH"),
-    CURSEFORGE("CurseForge", "CURSEFORGE")
+    CURSEFORGE("CurseForge", "CURSEFORGE"),
+    ZENKAI("Zenkai", "ZENKAI")
 }
 
 enum class StoreSortOption(val label: String) {

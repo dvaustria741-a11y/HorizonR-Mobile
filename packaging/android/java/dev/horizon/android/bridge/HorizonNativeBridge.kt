@@ -3180,6 +3180,10 @@ object HorizonNativeBridge {
             val existingLines = if (hmodsTxt.exists()) hmodsTxt.readLines().toMutableList() else mutableListOf()
             val seenModIds = mutableSetOf<String>()
             val cleanedLines = mutableListOf<String>()
+            val preservedLines = existingLines.filter {
+                val t = it.trim()
+                t.isNotEmpty() && !t.startsWith("mod.")
+            }
             for (line in existingLines) {
                 val trimmed = line.trim()
                 if (trimmed.startsWith("mod.") && trimmed.contains(":")) {
@@ -3200,6 +3204,7 @@ object HorizonNativeBridge {
                     cleanedLines.add("mod.$normId:$isEnabled")
                 }
             }
+            cleanedLines.addAll(preservedLines)
             hmodsTxt.writeText(cleanedLines.joinToString("\n") + if (cleanedLines.isNotEmpty()) "\n" else "")
 
             // Also sync built-in native HUD/input hooks in `horizon-extras.txt` for enabled official mods
@@ -3536,6 +3541,10 @@ object HorizonNativeBridge {
                 }
             }
 
+        ZENKAI_MODS.filter { it.id in zenkaiInstalledIds(context, profileSlot) }.forEach {
+            result["zenkai-${it.id}"] = it.version
+        }
+
         return result
     }
 
@@ -3584,6 +3593,12 @@ object HorizonNativeBridge {
         val profileHome = getProfileHome(home, profileSlot)
         val cleanId = sanitizeModId(item.id)
         var deletedAny = false
+        if (item.source == StoreSource.ZENKAI) {
+            setZenkaiInstalled(context, profileSlot, item.sourceProjectId, false)
+            appendSystemLog("Uninstalled Zenkai mod '${item.title}'.", logEnabled, context)
+            Toast.makeText(context, "${item.title} uninstalled. Applies on next Play.", Toast.LENGTH_SHORT).show()
+            return true
+        }
         if (item.source != StoreSource.HORIZON) {
             val externalBases = listOf(home, profileHome).distinctBy { it.absolutePath }
             externalBases.map { readRecordedStoreFile(it, item.id) }.filter { it.isNotBlank() }.distinct().forEach { name ->
@@ -4256,6 +4271,103 @@ object HorizonNativeBridge {
         return finalList
     }
 
+    private data class ZenkaiMod(val id: String, val title: String, val summary: String, val version: String)
+
+    private val ZENKAI_MODS = listOf(
+        ZenkaiMod("zoom", "Zoom", "Hold Z to zoom; configurable in Options > Mods", "1.0.0"),
+        ZenkaiMod("minimap", "Minimap", "A configurable map in the screen corner", "1.0.0"),
+        ZenkaiMod("recipes", "Recipes", "Item recipes and uses beside the inventory", "1.0.0"),
+        ZenkaiMod("smartf3", "SmartF3", "Configurable modules for the F3 debug screen", "1.0.0"),
+        ZenkaiMod("punchy", "Punchy", "First-person hand and item animations (preview)", "0.1.2"),
+        ZenkaiMod("sodium_horizon", "Sodium", "Sodium-style Video Settings and non-lighting optimizations", "0.4.0")
+    )
+
+    private fun zenkaiStoreItem(m: ZenkaiMod): StoreCatalogItem = StoreCatalogItem(
+        id = "zenkai-${m.id}",
+        slug = "zenkai-${m.id}",
+        title = m.title,
+        summary = m.summary,
+        author = "Zenkai",
+        version = m.version,
+        supportedMcVersions = listOf("26.3"),
+        downloadUrl = "zenkai://${m.id}",
+        fileName = "${m.id}.zenkai",
+        sizeBytes = 0L,
+        category = StoreCategory.NATIVE_MOD,
+        kindBadge = "ZENKAI MOD",
+        isSignedOrOfficial = true,
+        license = "MIT",
+        displayTags = listOf("ZENKAI", "26.3", "MIT"),
+        downloadsCount = 0L,
+        ratingCount = 0,
+        source = StoreSource.ZENKAI,
+        sourceProjectId = m.id
+    )
+
+    private fun zenkaiBases(context: Context, profileSlot: Int): List<File> {
+        val home = ensureHomeDirectories(context)
+        return listOf(home, getProfileHome(home, profileSlot)).distinctBy { it.absolutePath }
+    }
+
+    private fun zenkaiInstalledIds(context: Context, profileSlot: Int): Set<String> {
+        val ids = mutableSetOf<String>()
+        zenkaiBases(context, profileSlot).forEach { base ->
+            val f = File(base, "horizon-mods.txt")
+            if (f.exists()) {
+                f.readLines().forEach { line ->
+                    val t = line.trim()
+                    if (t.startsWith("zenkai.") && t.endsWith(":true")) {
+                        ids.add(t.removePrefix("zenkai.").substringBefore(":"))
+                    }
+                }
+            }
+        }
+        return ids
+    }
+
+    private fun setZenkaiInstalled(context: Context, profileSlot: Int, modId: String, installed: Boolean) {
+        zenkaiBases(context, profileSlot).forEach { base ->
+            base.mkdirs()
+            val f = File(base, "horizon-mods.txt")
+            val lines = if (f.exists()) {
+                f.readLines().filterNot {
+                    val t = it.trim()
+                    t.startsWith("zenkai.$modId:") || t.startsWith("mod.$modId:")
+                }.toMutableList()
+            } else mutableListOf()
+            if (installed) {
+                lines.add("zenkai.$modId:true")
+                lines.add("mod.$modId:true")
+            }
+            f.writeText(lines.joinToString("\n") + if (lines.isNotEmpty()) "\n" else "")
+        }
+        invalidateContentCaches()
+    }
+
+    private fun searchZenkaiMods(
+        context: Context,
+        profileSlot: Int,
+        category: StoreCategory,
+        searchQuery: String,
+        statusFilter: StoreStatusFilter
+    ): StoreSearchPageResult {
+        if (category != StoreCategory.ALL && category != StoreCategory.MOD && category != StoreCategory.NATIVE_MOD) {
+            return StoreSearchPageResult(emptyList(), 1, 1, 0, "Zenkai only has mods.")
+        }
+        val installed = zenkaiInstalledIds(context, profileSlot)
+        val q = searchQuery.trim()
+        val items = ZENKAI_MODS.filter { m ->
+            val matchQuery = q.isEmpty() || m.title.contains(q, true) || m.summary.contains(q, true) || m.id.contains(q, true)
+            val matchStatus = when (statusFilter) {
+                StoreStatusFilter.INSTALLED -> m.id in installed
+                StoreStatusFilter.UPDATES -> false
+                else -> true
+            }
+            matchQuery && matchStatus
+        }.map { zenkaiStoreItem(it) }
+        return StoreSearchPageResult(items, 1, 1, items.size)
+    }
+
     fun searchPlayHorizonStore(
         context: Context,
         profileSlot: Int,
@@ -4267,6 +4379,9 @@ object HorizonNativeBridge {
         page: Int = 1,
         source: StoreSource = StoreSource.HORIZON
     ): StoreSearchPageResult {
+        if (source == StoreSource.ZENKAI) {
+            return searchZenkaiMods(context, profileSlot, category, searchQuery, statusFilter)
+        }
         if (source != StoreSource.HORIZON) {
             val externalCategory = if (category == StoreCategory.SHADER_PACK) StoreCategory.SHADER_PACK else StoreCategory.RESOURCE_PACK
             return searchExternalResourcePacks(context, profileSlot, source, externalCategory, searchQuery, gameVersionFilter, sortOption, statusFilter, page)
@@ -4329,6 +4444,20 @@ object HorizonNativeBridge {
     }
 
     fun fetchProjectVersionReleases(item: StoreCatalogItem): List<StoreVersionRelease> {
+        if (item.source == StoreSource.ZENKAI) {
+            return listOf(
+                StoreVersionRelease(
+                    id = "${item.id}-${item.version}",
+                    name = "${item.title} v${item.version} (bundled in this app)",
+                    versionNumber = item.version,
+                    mcVersions = listOf("26.3"),
+                    kindLabel = item.kindBadge,
+                    datePublished = "Ships inside the app",
+                    fileName = item.fileName,
+                    downloadUrl = item.downloadUrl
+                )
+            )
+        }
         if (item.source != StoreSource.HORIZON) {
             return try {
                 ContentSources.versionsFor(item)
@@ -4510,6 +4639,31 @@ object HorizonNativeBridge {
     ) {
         storeDownloadPaused.set(false)
         storeDownloadCancelled.set(false)
+
+        if (item.source == StoreSource.ZENKAI) {
+            Thread({
+                try {
+                    onProgress(
+                        StoreDownloadProgress(
+                            activeItemId = item.id,
+                            activeTitle = item.title,
+                            running = true,
+                            percent = 60,
+                            speedText = "",
+                            statusText = "Enabling ${item.title}..."
+                        )
+                    )
+                    setZenkaiInstalled(context, profileSlot, item.sourceProjectId, true)
+                    onProgress(StoreDownloadProgress())
+                    appendSystemLog("Installed Zenkai mod '${item.title}' v${item.version}.", logEnabled, context)
+                    onComplete(true, "${item.title} installed. Applies on next Play.")
+                } catch (e: Exception) {
+                    onProgress(StoreDownloadProgress())
+                    onComplete(false, "Failed to install ${item.title}: ${e.message}")
+                }
+            }, "HorizonZ-ZenkaiInstaller").start()
+            return
+        }
 
         if (item.source != StoreSource.HORIZON) {
             installExternalStoreItem(context, item, profileSlot, logEnabled, onProgress, onComplete)
@@ -4772,7 +4926,7 @@ object HorizonNativeBridge {
             when (source) {
                 StoreSource.MODRINTH -> ContentSources.searchModrinth(searchQuery, gameVersionFilter, sortOption, page, category)
                 StoreSource.CURSEFORGE -> ContentSources.searchCurseForge(searchQuery, gameVersionFilter, sortOption, page, category)
-                StoreSource.HORIZON -> StoreSearchPageResult(emptyList(), 1, 1, 0)
+                StoreSource.HORIZON, StoreSource.ZENKAI -> StoreSearchPageResult(emptyList(), 1, 1, 0)
             }
         } catch (e: Exception) {
             Log.w(TAG, "${source.label} search failed: ${e.message}")
