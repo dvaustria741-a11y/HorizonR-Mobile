@@ -3,8 +3,17 @@
 override wet_on: bool = true;
 override water_on: bool = true;
 override water_strength: f32 = 1.0;
+override metal_on: bool = true;
+override metal_strength: f32 = 1.0;
+override polish_on: bool = true;
+override glass_on: bool = true;
 
-// Sprite tags (manifest): bit 3 water, bit 4 seagrass and kelp.
+// Sprite tags (manifest): bit 3 water, bit 4 seagrass and kelp, bit 5 metal, bit 6 polished stone,
+// bit 7 glass.
+fn sky_gradient(r: vec3<f32>) -> vec3<f32> {
+    return mix(frame.fog_color, frame.sky_color, smoothstep(-0.05, 0.5, r.y));
+}
+
 fn water_normal(world: vec3<f32>, time: f32) -> vec3<f32> {
     let d0 = vec2<f32>(0.9138, 0.4061);
     let d1 = vec2<f32>(-0.5260, 0.8505);
@@ -33,7 +42,35 @@ fn material(input: MaterialInput) -> Surface {
         let lit = mix(color.rgb, sky * (0.35 + 0.65 * input.light.y), k);
         color = vec4<f32>(lit + vec3<f32>(1.0, 0.95, 0.85) * glint * top * water_strength,
             mix(color.a, 1.0, k * 0.6));
-    } else if wet_on && !input.translucent {
+    } else {
+        // Luxium's planar mirrors (metal_reflection, polished_andesite_reflection) need a second
+        // scene render; here the surface mirrors the sky and fog instead, brighter at grazing angles.
+        let metal = metal_on && (input.tags & 32u) != 0u;
+        let polished = polish_on && (input.tags & 64u) != 0u;
+        let glass = glass_on && (input.tags & 128u) != 0u;
+        if metal || polished || glass {
+            let v = normalize(-input.position);
+            let facing = clamp(dot(gn, v), 0.0, 1.0);
+            let grazing = pow(1.0 - facing, 3.0);
+            let r = reflect(-v, gn);
+            let sky = sky_gradient(r) * (0.3 + 0.7 * input.light.y);
+            let day = smoothstep(-0.1, 0.1, frame.sun_direction.y) * (1.0 - frame.rain * 0.8);
+            let glint = pow(max(dot(r, frame.sun_direction), 0.0), 120.0) * day;
+            if metal {
+                let k = clamp((0.22 + 0.5 * grazing) * metal_strength, 0.0, 0.85);
+                let tint = mix(vec3<f32>(1.0), color.rgb / max(max(color.r, max(color.g, color.b)), 0.05), 0.6);
+                color = vec4<f32>(mix(color.rgb, sky * tint, k) + vec3<f32>(1.0, 0.95, 0.85) * glint * 0.5 * metal_strength, color.a);
+            } else if polished {
+                let k = 0.05 + 0.4 * grazing;
+                color = vec4<f32>(mix(color.rgb, sky, k) + vec3<f32>(1.0, 0.95, 0.85) * glint * 0.15, color.a);
+            } else {
+                let k = 0.04 + 0.55 * grazing;
+                color = vec4<f32>(mix(color.rgb, sky, k) + vec3<f32>(1.0, 0.95, 0.85) * glint * 0.4,
+                    mix(color.a, 1.0, k * 0.6));
+            }
+        }
+    }
+    if !(water_on && (input.tags & 8u) != 0u) && wet_on && !input.translucent {
         let wet = clamp(frame.wetness, 0.0, 1.0) * smoothstep(0.3, 0.9, input.light.y);
         let dark = 1.0 - 0.28 * wet;
         let sheen = wet * 0.05 * input.light.y;

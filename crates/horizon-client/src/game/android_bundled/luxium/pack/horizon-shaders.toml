@@ -3,7 +3,7 @@ id = "luxium"
 name = "Luxium"
 version = "0.1.0"
 api = "0.1"
-description = "Luxium, built into HorizonR: water, plant wave, sky, lens flare, air distortion, filmic tonemap, light shafts and wet surfaces."
+description = "Luxium, built into HorizonR: water, metal, polished stone and glass sheen, plant wave, sky, lens flare, air distortion, filmic tonemap, light shafts and wet surfaces."
 authors = ["vinlanx", "HorizonR"]
 license = "Luxium Free Modification License"
 
@@ -49,6 +49,18 @@ sprites = ["block/water_still", "block/water_flow", "block/water_overlay"]
 [[tags]]
 id = "aquatic"
 sprites = ["block/seagrass", "block/tall_seagrass_top", "block/tall_seagrass_bottom", "block/kelp", "block/kelp_plant", "block/kelp_top"]
+
+[[tags]]
+id = "metal"
+sprites = ["block/iron_block", "block/gold_block", "block/copper_block", "block/exposed_copper", "block/weathered_copper", "block/oxidized_copper", "block/cut_copper", "block/exposed_cut_copper", "block/weathered_cut_copper", "block/oxidized_cut_copper", "block/netherite_block", "block/diamond_block", "block/emerald_block", "block/lapis_block"]
+
+[[tags]]
+id = "polished"
+sprites = ["block/polished_andesite", "block/polished_diorite", "block/polished_granite", "block/polished_blackstone", "block/polished_deepslate", "block/smooth_stone", "block/quartz_block_top", "block/quartz_block_side", "block/quartz_block_bottom", "block/smooth_quartz", "block/obsidian", "block/crying_obsidian"]
+
+[[tags]]
+id = "glass"
+sprites = ["block/glass", "block/tinted_glass", "block/*_stained_glass"]
 
 [[options]]
 id = "shafts_on"
@@ -265,3 +277,30 @@ step = 0.1
 
 [budget]
 gpu_ms = 2.0
+
+[[options]]
+id = "metal_on"
+name = "Metal reflections"
+type = "bool"
+default = true
+
+[[options]]
+id = "metal_strength"
+name = "Metal strength"
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.1
+
+[[options]]
+id = "polish_on"
+name = "Polished stone"
+type = "bool"
+default = true
+
+[[options]]
+id = "glass_on"
+name = "Glass sheen"
+type = "bool"
+default = true

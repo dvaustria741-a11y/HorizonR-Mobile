@@ -35,7 +35,7 @@ pub const ANDROID_BUNDLED: [(&str, &str, &str); 5] = [
     (
         "luxium",
         "Luxium",
-        "Port of Luxium: filmic tonemap, light shafts, wet surfaces",
+        "Port of Luxium: water, metal and glass sheen, plant wave, sky, flare, tonemap, shafts, wet surfaces",
     ),
 ];
 
