@@ -659,8 +659,7 @@ impl Game<'_> {
     /// Once a tick, in every `Game`: the window's (in single player, on LAN
     /// and on servers), and the server's own (`native_window` is false
     /// there: the single player server thread, a dedicated server).
-    pub(super) fn native_tick(&mut self) {
-    }
+    pub(super) fn native_tick(&mut self) {}
     /// The world's phases, read-only; `error_text` carries the engine's
     /// own open-failure text, empty otherwise. Server-side; the deprecated
     /// in-frame path delivers no lifecycle events. A server loop or final
@@ -2524,6 +2523,14 @@ impl Game<'_> {
     pub(super) fn list_native_mods(&mut self) {
         let mut mods = Vec::new();
         self.native_mods(&mut mods);
+        // Only the Zenkai mods the player installed from the Store are listed.
+        #[cfg(target_os = "android")]
+        {
+            let installed = &self.settings.mods.zenkai;
+            mods.retain(|m| {
+                !horizon_client::mod_list::is_zenkai(&m.id) || installed.contains(&m.id)
+            });
+        }
         // A WebAssembly mod of the same id doesn't run (`start_mods`): the
         // native row stands for it, and alone toggles its `mod.<id>` line.
         self.settings

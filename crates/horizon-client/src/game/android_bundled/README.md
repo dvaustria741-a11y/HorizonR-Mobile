@@ -1,6 +1,7 @@
 # Fixed Android mod sources
 
-These four modules (Zoom, Minimap, Recipes, SmartF3) are installed from the Store's **Zenkai**
+These five modules (Zoom, Minimap, Recipes, SmartF3 and Punchy, which the CI build adds from
+`native-mods/`) are installed from the Store's **Zenkai**
 source (Mods page, third source button), not toggled on a built-in list. Install writes
 `zenkai.<id>:true` and `mod.<id>:true` to `horizon-mods.txt`; Uninstall removes both. A module that
 is not installed does not run and is not listed in Options > Mods. The code still ships inside the

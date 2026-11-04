@@ -14,7 +14,7 @@ pub const FILE: &str = "horizon-mods.txt";
 pub const ZENKAI_SOURCE: &str = "Zenkai";
 /// Native modules compiled into Android APKs. They are not on until the player installs them from
 /// the Store's Zenkai source (`zenkai.<id>:true` in `horizon-mods.txt`).
-pub const ANDROID_BUNDLED: [(&str, &str, &str); 4] = [
+pub const ANDROID_BUNDLED: [(&str, &str, &str); 5] = [
     (
         "zoom",
         "Zoom",
@@ -34,6 +34,11 @@ pub const ANDROID_BUNDLED: [(&str, &str, &str); 4] = [
         "smartf3",
         "SmartF3",
         "Configurable modules for the F3 debug screen",
+    ),
+    (
+        "punchy",
+        "Punchy",
+        "First-person hand and item animations (preview)",
     ),
 ];
 
@@ -257,6 +262,8 @@ mod tests {
         let mut list = ModList::default();
         assert!(!list.native_on("punchy"));
         assert!(list.native_on("other"));
+        // On Android Punchy is a Zenkai mod: it is listed only once installed.
+        list.zenkai.insert("punchy".into());
         list.installed.push(Installed {
             id: "punchy".into(),
             title: "Punchy".into(),

@@ -136,9 +136,6 @@ pub(super) fn native_mods(game: &mut Game<'_>, mods: &mut Vec<NativeMod>) {
         minimap_list::run(&mut *mods);
         recipes_list::run(&mut *mods);
         smartf3_list::run(&mut *mods);
-        // Only what the player installed from the Store's Zenkai source is listed.
-        let installed = &game.settings.mods.zenkai;
-        mods.retain(|m| !horizon_client::mod_list::is_zenkai(&m.id) || installed.contains(&m.id));
     }
 }
 
