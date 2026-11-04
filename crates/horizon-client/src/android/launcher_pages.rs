@@ -55,6 +55,7 @@ pub(super) enum Action {
     ChooseAspect(crate::display::Aspect),
     DisplayHz,
     ChooseDisplayHz(u16),
+    ToggleBundled(&'static str),
     PerformanceHints,
     GpuProfile,
 }
@@ -547,19 +548,68 @@ impl Launcher {
                 Action::Import(kind),
                 false,
             );
+            let bundled: Vec<_> = if page == Page::Mods
+                && self.catalog.config.mod_source == crate::shader_catalog::Origin::Horizon
+            {
+                let query = self.catalog.query.to_lowercase();
+                horizon_client::mod_list::ANDROID_BUNDLED
+                    .into_iter()
+                    .filter(|(id, title, _)| {
+                        id.contains(&query) || title.to_lowercase().contains(&query)
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let catalog_rows: Vec<_> = self
+                .catalog
+                .results
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| {
+                    !(page == Page::Mods
+                        && p.source == crate::browser::SourceId::Horizon
+                        && horizon_client::mod_list::ANDROID_BUNDLED
+                            .iter()
+                            .any(|(id, _, _)| *id == p.id))
+                })
+                .collect();
+            let row_count = bundled.len() + catalog_rows.len();
             let top = 296.0;
             let bottom = h - 112.0;
-            self.catalog.scroll = self.catalog.scroll.clamp(
-                0.0,
-                (self.catalog.results.len() as f32 * 78.0 - (bottom - top)).max(0.0),
-            );
+            self.catalog.scroll = self
+                .catalog
+                .scroll
+                .clamp(0.0, (row_count as f32 * 78.0 - (bottom - top)).max(0.0));
             self.list_view = Some([
                 top,
                 bottom,
-                (self.catalog.results.len() as f32 * 78.0 - (bottom - top)).max(0.0),
+                (row_count as f32 * 78.0 - (bottom - top)).max(0.0),
             ]);
-            for (i, p) in self.catalog.results.iter().enumerate() {
-                let y = top + i as f32 * 78.0 - self.catalog.scroll;
+            for (row, (id, title, description)) in bundled.iter().enumerate() {
+                let y = top + row as f32 * 78.0 - self.catalog.scroll;
+                if y < top - 1.0 || y + 68.0 > bottom {
+                    continue;
+                }
+                let title = ui.fit_text(Face::Medium, 19.0, title, w - 214.0);
+                let summary = ui.fit_text(Face::Regular, 14.0, description, w - 214.0);
+                ui.text(Face::Medium, 19.0, 32.0, y, color::TEXT, &title);
+                ui.text(Face::Regular, 14.0, 32.0, y + 29.0, color::MUTED, &summary);
+                button(
+                    &mut ui,
+                    &mut self.targets,
+                    [w - 150.0, y, 118.0, 42.0],
+                    if self.catalog.bundled_enabled.contains(*id) {
+                        "Disable"
+                    } else {
+                        "Enable"
+                    },
+                    Action::ToggleBundled(id),
+                    false,
+                );
+            }
+            for (row, (i, p)) in catalog_rows.into_iter().enumerate() {
+                let y = top + (row + bundled.len()) as f32 * 78.0 - self.catalog.scroll;
                 let download = self.catalog.download_label(p);
                 if download.is_none()
                     && !crate::catalog::source_only_mod(p)
@@ -1225,6 +1275,25 @@ impl Launcher {
                 self.catalog.config.save(&self.home)?;
                 self.configure_screen();
                 self.chooser = None;
+            }
+            Some(Action::ToggleBundled(id)) => {
+                let game = self.catalog.config.game_home(&self.home);
+                let mut list = horizon_client::mod_list::ModList::load(&game);
+                let enabled = list.enabled.contains(id) && !list.disabled.contains(id);
+                if enabled {
+                    list.enabled.remove(id);
+                    list.disabled.insert(id.into());
+                } else {
+                    list.disabled.remove(id);
+                    list.enabled.insert(id.into());
+                }
+                std::fs::create_dir_all(&game)?;
+                std::fs::write(game.join(horizon_client::mod_list::FILE), list.serialize())?;
+                self.catalog.refresh(&self.home);
+                self.catalog.status = format!(
+                    "Bundled {id} {}. Applies on Play; settings are in Options > Mods.",
+                    if enabled { "disabled" } else { "enabled" }
+                );
             }
             Some(Action::DisplayHz) => self.open_chooser(chooser::Kind::DisplayHz),
             Some(Action::ChooseDisplayHz(hz)) => {

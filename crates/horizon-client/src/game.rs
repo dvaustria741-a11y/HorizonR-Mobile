@@ -46,6 +46,7 @@ mod agent_settings;
 mod allays;
 #[cfg(target_os = "android")]
 mod android_input;
+mod android_bundled;
 mod armor_stands;
 mod atlas_slots;
 mod banners;
@@ -178,6 +179,10 @@ mod moving_pistons;
 mod music;
 mod names;
 mod native_hooks;
+#[cfg(target_os = "android")]
+use android_bundled::{
+    official_minimap, official_recipes, official_recipes_glue, official_zoom, smartf3,
+};
 mod native_lifecycle;
 mod native_menus;
 mod native_mobs;
@@ -7393,6 +7398,10 @@ impl Game<'_> {
         }
     }
     fn hud(&mut self, size: [u32; 2]) -> HudBatch {
+        #[cfg(target_os = "android")]
+        if let Some(batch) = self.smartf3_hud(size) {
+            return batch;
+        }
         // The pack prompt replaces the connecting screen (setScreen), but
         // in game it opens over the world.
         let mut batch = if (self.server_packs.prompt.is_some()
@@ -19856,4 +19865,9 @@ fn write_level_for_role(
     } else {
         level.write_without_player(dir)
     }
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn android_reset_bundled_mods() {
+    android_bundled::reset();
 }

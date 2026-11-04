@@ -248,6 +248,7 @@ impl Launcher {
             game.exiting(events);
             drop(game);
         }
+        crate::game::android_reset_bundled_mods();
         crate::performance::stop();
         crate::platform::hide();
         horizon_client::auth::clear_current();
