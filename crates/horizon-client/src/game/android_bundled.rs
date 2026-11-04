@@ -13,6 +13,14 @@ pub(super) mod official_luxium;
 mod luxium_list;
 
 #[cfg(target_os = "android")]
+#[path = "android_bundled/luxium/luxium_settings.rs"]
+mod luxium_settings;
+
+#[cfg(target_os = "android")]
+#[path = "android_bundled/luxium/luxium_click.rs"]
+mod luxium_click;
+
+#[cfg(target_os = "android")]
 #[path = "android_bundled/zoom/runtime.rs"]
 pub(super) mod official_zoom;
 
@@ -156,6 +164,7 @@ pub(super) fn native_settings(game: &mut Game<'_>, mod_id: &str, buttons: &mut V
         minimap_settings::run(&mut *game, mod_id, &mut *buttons);
         recipes_settings::run(&mut *game, mod_id, &mut *buttons);
         smartf3_settings::run(&mut *game, mod_id, &mut *buttons);
+        luxium_settings::run(&mut *game, mod_id, &mut *buttons);
     }
 }
 
@@ -167,6 +176,7 @@ pub(super) fn native_settings_click(game: &mut Game<'_>, mod_id: &str, button: u
         minimap_click::run(&mut *game, mod_id, button);
         recipes_click::run(&mut *game, mod_id, button);
         smartf3_click::run(&mut *game, mod_id, button);
+        luxium_click::run(&mut *game, mod_id, button);
     }
 }
 

@@ -39,3 +39,58 @@ pub fn ensure_pack(packs_dir: &Path) {
         let _ = std::fs::write(&path, text);
     }
 }
+
+/// The options the mod's settings page cycles: pack option id, label, values, default.
+const SETTINGS: [(&str, &str, &[&str], &str); 7] = [
+    ("shafts_on", "Light shafts", &["true", "false"], "true"),
+    (
+        "shafts_strength",
+        "Shaft strength",
+        &["0.15", "0.35", "0.6", "0.9"],
+        "0.35",
+    ),
+    ("tm_strength", "Tonemap", &["0", "0.5", "1"], "1"),
+    ("tm_exposure", "Exposure", &["-0.5", "0", "0.5"], "0"),
+    ("tm_contrast", "Contrast", &["0.15", "0.35", "0.6"], "0.35"),
+    (
+        "tm_saturation",
+        "Saturation",
+        &["0.95", "1.05", "1.2"],
+        "1.05",
+    ),
+    ("wet_on", "Wet surfaces", &["true", "false"], "true"),
+];
+
+fn shown(value: &str) -> &str {
+    match value {
+        "true" => "On",
+        "false" => "Off",
+        other => other,
+    }
+}
+
+/// One label per option, with the value in use.
+pub fn labels(packs_dir: &Path) -> Vec<String> {
+    let chosen = horizon_shaders::read_overrides(packs_dir, PACK_DIR);
+    SETTINGS
+        .iter()
+        .map(|(id, label, _, default)| {
+            let value = chosen.get(*id).map_or(*default, String::as_str);
+            format!("{label}: {}", shown(value))
+        })
+        .collect()
+}
+
+/// Moves option `button` to its next value and saves it where the engine reads pack options.
+/// Returns whether anything changed (the pack is then rebuilt).
+pub fn click(packs_dir: &Path, button: usize) -> bool {
+    let Some((id, _, values, default)) = SETTINGS.get(button) else {
+        return false;
+    };
+    let mut chosen = horizon_shaders::read_overrides(packs_dir, PACK_DIR);
+    let current = chosen.get(*id).map_or(*default, String::as_str);
+    let at = values.iter().position(|v| *v == current).unwrap_or(0);
+    let next = values[(at + 1) % values.len()];
+    chosen.insert((*id).to_owned(), next.to_owned());
+    horizon_shaders::write_overrides(packs_dir, PACK_DIR, &chosen).is_ok()
+}
