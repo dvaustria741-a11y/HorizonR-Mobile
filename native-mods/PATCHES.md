@@ -14,7 +14,7 @@
   played. `runtime.rs` runs the engine's `SoundCursor` each tick and plays `punchy:animationssounds/<effect>`.
   The 20 .ogg files from Punchy's jar are bundled (`engine/data/sounds`), written once into the resource root
   and registered with Horizon's audio. Options → Mods → Punchy has an "Animation sounds" switch.
-- Idle sway: the hands rest with Punchy's standing-still bob (up, forward and pitch; the jar's IDLE_INTENSITY
+- Idle sway (now part of `engine/sway.rs`): the hands rest with Punchy's standing-still bob (up, forward and pitch; the jar's IDLE_INTENSITY
   2.6 and IDLE_SPEED 2.0 formulas), fading in when the player stands still and out on movement or any action.
 
 Everything else is unchanged. Compare with the original `.hnmod` before updating it.
@@ -42,3 +42,12 @@ Packaged from [badmasti2/horizon-sodium](https://github.com/badmasti2/horizon-so
   "Block broken" particles option (`exact_ui.rs` no longer exposes binding 188, so its row is unsupported).
 
 Everything else is unchanged. Compare with upstream before updating it.
+- Movement sway: `engine/sway.rs` ports Punchy's walk, sprint, jump/land and idle-breathing sway (constants from the
+  original MovementStateMachine). `runtime.rs` feeds it the player's motion each tick and applies the result to the arm
+  and item pose in `begin()`. Axis and sign conventions are approximations, unverified in-game.
+- Climb, crawl and swim poses: `engine/locomotion.rs` picks the pack's looping `climb`, `crawl`, `swiming` and
+  `swiming_above` clips with the original state machines' conditions (climb needs upward motion and forward/jump;
+  crawl is the swimming pose out of water; swim needs water, and the `disable_swiming` item flag turns it off).
+  The clip drives both hands, is held on its frame while the player stands still (climb, crawl), and gives way to
+  any action (attack, use, inspect). Not ported: `falling_in_water` and the walk-on-water clips; the default pack
+  has no fall or elytra clips.
