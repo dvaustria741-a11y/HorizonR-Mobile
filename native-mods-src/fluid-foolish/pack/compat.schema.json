@@ -1,0 +1,762 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Punchy Moves private Fluid And Foolish review compat",
+  "type": "object",
+  "required": [
+    "format_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format_version": {
+      "const": 2
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "static_when_using": {
+          "type": "boolean"
+        },
+        "animations": {
+          "$ref": "#/$defs/animations"
+        }
+      }
+    },
+    "cameras": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aiming": {
+          "type": "object",
+          "properties": {
+            "camera": {
+              "$ref": "#/$defs/camera"
+            }
+          },
+          "additionalProperties": false
+        },
+        "proximity": {
+          "type": "object",
+          "properties": {
+            "camera": {
+              "$ref": "#/$defs/camera"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    "empty_hand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "static_when_using": {
+          "type": "boolean"
+        },
+        "animations": {
+          "$ref": "#/$defs/animations"
+        }
+      }
+    },
+    "item_groups": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/item"
+      },
+      "description": "Grupos nativos: SWORD, TRIDENT, MACE, BOW, SHEARS, FLINT, etc."
+    },
+    "items": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/item"
+      },
+      "description": "Overrides por ID completo, por exemplo minecraft:trident."
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "emotes": {
+      "type": "object",
+      "properties": {
+        "menu_key": {
+          "type": "string"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "animation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "animation": {
+                "type": "string"
+              },
+              "one_handed": {
+                "type": "string"
+              },
+              "keybind": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "animations": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$",
+        "not": {
+          "pattern": "^(sequence_|item_sequence$)"
+        }
+      },
+      "properties": {
+        "attack": {
+          "$ref": "#/$defs/binding"
+        },
+        "mining": {
+          "$ref": "#/$defs/binding"
+        },
+        "hand_in": {
+          "$ref": "#/$defs/binding"
+        },
+        "item_switch": {
+          "$ref": "#/$defs/binding"
+        },
+        "item_change": {
+          "$ref": "#/$defs/binding"
+        },
+        "pose": {
+          "$ref": "#/$defs/binding"
+        },
+        "idle": {
+          "$ref": "#/$defs/binding"
+        },
+        "equip": {
+          "$ref": "#/$defs/binding"
+        },
+        "charge": {
+          "$ref": "#/$defs/binding"
+        },
+        "hold": {
+          "$ref": "#/$defs/binding"
+        },
+        "release": {
+          "$ref": "#/$defs/binding"
+        },
+        "slam": {
+          "$ref": "#/$defs/binding"
+        },
+        "use": {
+          "$ref": "#/$defs/binding"
+        },
+        "cast": {
+          "$ref": "#/$defs/binding"
+        },
+        "fishing": {
+          "$ref": "#/$defs/binding"
+        },
+        "reel": {
+          "$ref": "#/$defs/binding"
+        },
+        "walking": {
+          "$ref": "#/$defs/binding"
+        },
+        "turn_in_place": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Corpo mantém o rumo até atingir o ângulo, o tempo sem mover a câmera ou uma ação. Root Y sincroniza giro e passos.",
+          "dependentRequired": {
+            "left": [
+              "right"
+            ],
+            "right": [
+              "left"
+            ]
+          },
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "left": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Giro completo para a esquerda, com as duas pernas e braços."
+            },
+            "right": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Giro completo para a direita, com as duas pernas e braços."
+            },
+            "minimum_turn_degrees": {
+              "type": "number",
+              "minimum": 2,
+              "maximum": 90
+            },
+            "look_idle_seconds": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "fade_out_seconds": {
+              "type": "number",
+              "minimum": 0.05,
+              "maximum": 0.4
+            },
+            "left_overlay": {
+              "type": "string",
+              "minLength": 1
+            },
+            "right_overlay": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "crawling": {
+          "$ref": "#/$defs/binding"
+        },
+        "climbing": {
+          "$ref": "#/$defs/binding"
+        },
+        "climb_up": {
+          "$ref": "#/$defs/binding"
+        },
+        "climb_down": {
+          "$ref": "#/$defs/binding"
+        },
+        "jump": {
+          "$ref": "#/$defs/binding"
+        },
+        "crouch": {
+          "$ref": "#/$defs/binding"
+        },
+        "falling": {
+          "$ref": "#/$defs/binding"
+        },
+        "landing": {
+          "$ref": "#/$defs/binding"
+        },
+        "swimming": {
+          "$ref": "#/$defs/binding"
+        },
+        "water_dive": {
+          "$ref": "#/$defs/binding"
+        },
+        "lava_dive": {
+          "$ref": "#/$defs/binding"
+        },
+        "elytra": {
+          "$ref": "#/$defs/binding"
+        },
+        "fence": {
+          "$ref": "#/$defs/binding"
+        },
+        "walk_on_water": {
+          "$ref": "#/$defs/binding"
+        },
+        "creative_fly": {
+          "$ref": "#/$defs/binding"
+        },
+        "crossbow": {
+          "$ref": "#/$defs/binding"
+        },
+        "spear": {
+          "$ref": "#/$defs/binding"
+        },
+        "trident": {
+          "$ref": "#/$defs/binding"
+        },
+        "throwable": {
+          "$ref": "#/$defs/binding"
+        },
+        "map_view": {
+          "$ref": "#/$defs/binding"
+        },
+        "spyglass_use": {
+          "$ref": "#/$defs/binding"
+        },
+        "eating": {
+          "$ref": "#/$defs/binding"
+        },
+        "drinking": {
+          "$ref": "#/$defs/binding"
+        },
+        "low_hunger": {
+          "$ref": "#/$defs/binding"
+        },
+        "nausea": {
+          "$ref": "#/$defs/binding"
+        },
+        "cold": {
+          "$ref": "#/$defs/binding"
+        },
+        "music_listening": {
+          "$ref": "#/$defs/binding"
+        },
+        "greeting": {
+          "$ref": "#/$defs/binding"
+        },
+        "idle_events": {
+          "$ref": "#/$defs/binding"
+        },
+        "hurt_forward": {
+          "$ref": "#/$defs/binding"
+        },
+        "hurt_backward": {
+          "$ref": "#/$defs/binding"
+        },
+        "armor": {
+          "$ref": "#/$defs/binding"
+        },
+        "armor_helmet": {
+          "$ref": "#/$defs/binding"
+        },
+        "biome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/binding"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/action"
+              }
+            }
+          ]
+        },
+        "passenger_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/binding"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/action"
+              }
+            }
+          ]
+        },
+        "sitting_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/binding"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/action"
+              }
+            }
+          ]
+        },
+        "interact": {
+          "$ref": "#/$defs/binding",
+          "description": "Gesto para ativar alavancas, botões, portas e outros blocos. Cada interação aceita reinicia com blend curto, independente do item segurado."
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/binding"
+      }
+    },
+    "binding": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "$ref": "#/$defs/action"
+        }
+      ]
+    },
+    "action": {
+      "type": "object",
+      "description": "Uma ação: clip ou variants, ajustes e complementos no mesmo bloco.",
+      "properties": {
+        "clip": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Nome base exportado pelo animador. _left e _right são resolvidos automaticamente."
+        },
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Ordem do combo. Em sequence.attack, cada variação também aceita ajustes próprios.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/action"
+              }
+            ]
+          }
+        },
+        "one_handed": {
+          "description": "Clip quando a outra mão está ocupada. Nas fases de sequence, também aceita objeto com ajustes.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/action"
+            }
+          ]
+        },
+        "hold_last_frame": {
+          "type": "boolean",
+          "description": "Começa diretamente no último frame de uma fase de sequence. Use para posturas já equipadas."
+        },
+        "transition_seconds": {
+          "type": "number",
+          "description": "Duração do blend em segundos. O clipe já avança durante a transição.",
+          "minimum": 0
+        },
+        "locomotion_retain": {
+          "type": "number",
+          "description": "Quanto da pose de locomoção fica sob a sequência: 0 a 1.",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "base_pose_retain": {
+          "$ref": "#/$defs/basePoseRetention"
+        },
+        "retrigger_progress": {
+          "type": "number",
+          "description": "Percentual do clipe antes de aceitar outro gatilho. 0 permite retrigger imediato.",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "moving_legs_influence": {
+          "type": "number",
+          "description": "Influência da sequência nas pernas ao andar. 0 libera as pernas para a caminhada.",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "legs_locomotion_retain": {
+          "type": "number",
+          "description": "Locomoção preservada nas pernas, independentemente dos braços.",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "overlays": {
+          "type": "array",
+          "description": "Clipes complementares da mesma ação.",
+          "items": {
+            "type": "object",
+            "required": [
+              "clip"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "clip": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mode": {
+                "enum": [
+                  "additive",
+                  "override",
+                  "exclusive"
+                ],
+                "default": "additive"
+              },
+              "bones": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Ossos afetados. Lista vazia usa todos os tracks do complemento."
+              }
+            }
+          }
+        },
+        "locomotion_influence": {
+          "description": "Ajuste das camadas tradicionais: valores de 0 a 1 ou percentuais maiores que 1.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object"
+            }
+          ]
+        },
+        "camera": {
+          "$ref": "#/$defs/camera"
+        },
+        "blending": {
+          "type": "object"
+        },
+        "timer_condition": {
+          "type": [
+            "string",
+            "boolean"
+          ]
+        },
+        "timer_modifier": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "timer_effect": {
+          "type": "string"
+        },
+        "timer_scale": {
+          "type": "number"
+        },
+        "type": false,
+        "name": false,
+        "start_at_end": false,
+        "surface_body_depth": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.12,
+          "description": "swimming: profundidade média do centro do tronco abaixo da água, em blocos na escala 1. Valores maiores deixam o nadador mais submerso."
+        },
+        "one_handed_overlays": {
+          "type": "array",
+          "description": "Private review runtime: replaces overlays only when the one-handed variant is selected; empty array disables them.",
+          "items": {
+            "type": "object",
+            "required": [
+              "clip"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "clip": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mode": {
+                "enum": [
+                  "additive",
+                  "override",
+                  "exclusive"
+                ],
+                "default": "additive"
+              },
+              "bones": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Ossos afetados. Lista vazia usa todos os tracks do complemento."
+              }
+            }
+          }
+        },
+        "additive": {
+          "type": "boolean"
+        },
+        "amplitude_reference_speed": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_amplitude": {
+          "type": "number",
+          "minimum": 0
+        },
+        "landing_before_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "full_strength_distance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "blend_in_response": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sprint_overlay": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "patternProperties": {
+        "^var_[0-9]+$": false
+      },
+      "additionalProperties": true,
+      "not": {
+        "required": [
+          "clip",
+          "variants"
+        ]
+      }
+    },
+    "sequence": {
+      "type": "object",
+      "required": [
+        "behavior"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "behavior": {
+          "enum": [
+            "mace",
+            "bow",
+            "trident",
+            "flint",
+            "shears",
+            "fishing",
+            "bucket",
+            "throwable"
+          ],
+          "description": "Lógica de eventos usada pelo item."
+        },
+        "defaults": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "transition_seconds": {
+              "type": "number",
+              "description": "Duração do blend em segundos. O clipe já avança durante a transição.",
+              "minimum": 0
+            },
+            "locomotion_retain": {
+              "type": "number",
+              "description": "Quanto da pose de locomoção fica sob a sequência: 0 a 1.",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "retrigger_progress": {
+              "type": "number",
+              "description": "Percentual do clipe antes de aceitar outro gatilho. 0 permite retrigger imediato.",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "moving_legs_influence": {
+              "type": "number",
+              "description": "Influência da sequência nas pernas ao andar. 0 libera as pernas para a caminhada.",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "base_pose_retain": {
+              "$ref": "#/$defs/basePoseRetention"
+            },
+            "legs_locomotion_retain": {
+              "type": "number",
+              "description": "Locomoção preservada nas pernas, independentemente dos braços.",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "charge_ticks": {
+          "type": "number",
+          "description": "Tempo de carga em ticks (20 ticks = 1 segundo).",
+          "minimum": 0
+        },
+        "minimum_charge_ticks": {
+          "type": "number",
+          "description": "Carga mínima para tocar o disparo.",
+          "minimum": 0
+        },
+        "charge_height": {
+          "type": "number",
+          "description": "Altura mínima sobre o chão para iniciar a preparação da mace.",
+          "minimum": 0
+        },
+        "smash_distance": {
+          "type": "number",
+          "description": "Distância de queda mínima do ataque crítico da mace.",
+          "minimum": 0
+        },
+        "legs_locomotion_retain": {
+          "type": "number",
+          "description": "Locomoção preservada nas pernas, independentemente dos braços.",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "basePoseRetention": {
+      "type": "object",
+      "description": "Retenção por osso em attack, mining e fases de sequence: 0 substitui; 1 soma sobre a pose existente. Nomes na referência da mão direita; playback esquerdo troca os lados. Ossos omitidos herdam o comportamento anterior. waist fornece o padrão do tronco, cabeça e braços.",
+      "propertyNames": {
+        "enum": [
+          "root",
+          "waist",
+          "head",
+          "body",
+          "left_arm",
+          "right_arm",
+          "left_leg",
+          "right_leg"
+        ]
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "static_when_using": {
+          "type": "boolean"
+        },
+        "camera": {
+          "$ref": "#/$defs/camera"
+        },
+        "sequence": {
+          "$ref": "#/$defs/sequence"
+        },
+        "animations": {
+          "$ref": "#/$defs/animations"
+        }
+      }
+    },
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "horizontal": {
+          "type": "number"
+        },
+        "vertical": {
+          "type": "number"
+        },
+        "depth": {
+          "type": "number"
+        },
+        "fov": {
+          "type": "number"
+        },
+        "response": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

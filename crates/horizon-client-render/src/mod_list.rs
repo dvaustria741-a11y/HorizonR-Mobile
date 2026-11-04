@@ -45,7 +45,7 @@ pub const NOT_BUILT: &str = "Installed, not built into this game: build the game
 /// Native mods that start off: they are in the Mods list from the first run, and the player turns
 /// them on there (an unfinished preview, say). A mod's line in `horizon-mods.txt` overrides this.
 /// Add a native mod's id here to ship it off by default.
-pub const DEFAULT_OFF: &[&str] = &["punchy"];
+pub const DEFAULT_OFF: &[&str] = &["punchy", "fluid-foolish"];
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModList {

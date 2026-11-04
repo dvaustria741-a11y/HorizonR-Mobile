@@ -1,0 +1,52 @@
+[mod]
+id = "fluid-foolish"
+version = "0.1.0"
+priority = 90
+
+[compatibility]
+horizon_revision = "81ae4a7d8f27d38e5cabbdcda0a06b2c4b000045"
+
+[[crate]]
+id = "engine"
+path = "engine"
+
+[[module]]
+id = "runtime"
+file = "crates/horizon-client/src/game.rs"
+name = "fluid_foolish"
+source = "runtime.rs"
+
+[[injection]]
+id = "list"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_mods"
+helper = "list.rs"
+bindings = [{ name="mods", ty="&mut Vec<crate::game::native_hooks::NativeMod>", value="&mut *mods" }]
+
+[[injection]]
+id = "settings"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_settings"
+helper = "settings.rs"
+bindings = [{ name="game", ty="&crate::game::Game<'_>", value="&*self" },{ name="mod_id", ty="&str", value="mod_id" },{ name="buttons", ty="&mut Vec<String>", value="&mut *buttons" }]
+
+[[injection]]
+id = "click"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_settings_click"
+helper = "click.rs"
+bindings = [{ name="game", ty="&crate::game::Game<'_>", value="&*self" },{ name="mod_id", ty="&str", value="mod_id" },{ name="button", ty="usize", value="button" }]
+
+[[injection]]
+id = "tick"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_tick"
+helper = "tick.rs"
+bindings = [{ name="game", ty="&mut crate::game::Game<'_>", value="&mut *self" }]
+
+[[injection]]
+id = "pose"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_player_pose"
+helper = "pose.rs"
+bindings = [{ name="game", ty="&crate::game::Game<'_>", value="&*self" },{ name="partial", ty="f32", value="partial" },{ name="pose", ty="&mut horizon_client::mobs::native_pose::NativePose", value="&mut *pose" }]
