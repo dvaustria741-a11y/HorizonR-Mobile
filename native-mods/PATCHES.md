@@ -72,16 +72,28 @@ Everything else is unchanged. Compare with upstream before updating it.
 
 ## iris_horizon-0.1.0.hnmod
 
-An Iris-style shader pack menu inside the Sodium video settings, as an "Iris" group below "Sodium Extra"
-with the pages Shader Packs and Shader Settings. It requires `sodium_horizon` (it uses Sodium's layout and
-extension point), and its hooks check `native_on("iris_horizon")`, so it stays inert until installed.
+Iris's shader pack screens, opened from the Sodium video settings. It requires `sodium_horizon` (it uses
+Sodium's layout and extension point), and its hooks check `native_on("iris_horizon")`, so it stays inert
+until installed.
+
+Like Iris in Sodium 0.9, the sidebar has an "Iris" group below "Sodium Extra": "Shader Packs" (a link that
+opens the Shader Packs screen) and "Settings" (the groups "Iris" and "Settings" with the "Open >" rows).
+
+- Shader Packs screen ("Select"): the "Shaders: Enabled/Disabled" switch, the pack list (the selected pack
+  in yellow), Open Shader Pack Folder..., Shader Pack Settings..., Cancel, Apply and Done. The choice is
+  pending until Apply or Done; Cancel and Escape drop it.
+- Shader Pack Settings screen ("Configure"): the pack's name, Reset, the pack's own screens laid out in its
+  one or two columns (Profile, option buttons and sliders, "< Back" inside a sub screen), tooltips from the
+  pack's comments and non-default values in yellow. Option changes apply at once (the renderer reloads the
+  pack); Cancel and Escape restore the values the screen opened with.
 
 Horizon already runs OptiFine/Iris shader packs itself (`horizon-shaders`), so this is the menu and
 config layer Iris adds, not a second renderer. It drives the engine's own state: the pack list
 (`settings.shader_packs`), the picked pack, per-pack options, profiles, reset, refresh and the folder.
 Enable Shaders remembers the last pack in `iris.properties` beside `options.txt`.
-Not ported because the engine has no equivalent: Max Shadow Distance, Color Space.
+Not ported because the engine has no equivalent: Max Shadow Distance, Color Space (shown as sRGB, read
+only), drag and drop of packs, import and export of option files.
 
-Hooks: RETURN of `draw_options` (draws after Sodium), and HEAD of `options_mouse`, `options_drag`,
-`options_scroll`, `options_key` (priority 200, before Sodium) and `native_mods`.
-
+Hooks: RETURN of `draw_options` (draws after Sodium, the screens cover it), and HEAD of `options_mouse`,
+`options_drag`, `options_scroll`, `options_key` (priority 200, before Sodium; it swallows keys while a
+screen is open so Escape closes it) and `native_mods`.
