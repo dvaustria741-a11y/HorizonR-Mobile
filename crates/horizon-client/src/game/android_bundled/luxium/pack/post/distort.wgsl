@@ -361,9 +361,85 @@ fn blackhole_effect(input: PostInput) -> vec4<f32> {
     return vec4<f32>(color, base.a);
 }
 
+// ---- Explosion: a raymarched fireball that cools into drifting smoke, with a flash and a push. ----
+// Stands in for Luxium's particle and fluid-grid explosion (explosion_particle.fsh).
+const EXPLOSION_SECONDS: f32 = 4.5;
+const FIRE_SECONDS: f32 = 2.2;
+
+fn fire_color(heat: f32) -> vec3<f32> {
+    let h = clamp(heat, 0.0, 1.0);
+    var c = mix(vec3<f32>(0.35, 0.05, 0.0), vec3<f32>(1.0, 0.35, 0.05), smoothstep(0.0, 0.35, h));
+    c = mix(c, vec3<f32>(1.0, 0.75, 0.25), smoothstep(0.3, 0.65, h));
+    c = mix(c, vec3<f32>(1.6, 1.5, 1.2), smoothstep(0.65, 1.0, h));
+    return c;
+}
+
+fn explosion_effect(input: PostInput) -> vec4<f32> {
+    let base = input.color;
+    let age = frame.time;
+    if age > EXPLOSION_SECONDS {
+        return base;
+    }
+    let grow = 1.0 - pow(1.0 - clamp(age / 1.4, 0.0, 1.0), 3.0);
+    let radius = max(warp_r * (0.25 + 0.75 * grow), 0.5);
+    let center = vec3<f32>(warp_cx, warp_cy, warp_cz) - frame.camera_position;
+    let fade = 1.0 - smoothstep(FIRE_SECONDS + 0.8, EXPLOSION_SECONDS, age);
+    let fire = 1.0 - smoothstep(0.0, FIRE_SECONDS, age);
+
+    let ray = normalize(view_position(input.uv, 1.0));
+    var scene_dist = 1000.0;
+    if input.depth > 0.0 {
+        scene_dist = length(view_position(input.uv, input.depth));
+    }
+    var color = base.rgb;
+
+    // Flash: a brief wash of light that falls off with distance from the blast.
+    let away = length(center) / max(warp_r, 1.0);
+    let flash = exp(-age * 5.0) / (1.0 + away * away);
+    color = color + vec3<f32>(1.0, 0.82, 0.55) * flash * 0.45;
+
+    // Where the ray crosses the (slightly inflated) fireball sphere.
+    let outer = radius * 1.25;
+    let b = dot(ray, center);
+    let h = b * b - dot(center, center) + outer * outer;
+    if h > 0.0 {
+        let root = sqrt(h);
+        let t0 = max(b - root, 0.0);
+        let t1 = min(b + root, scene_dist);
+        if t1 > t0 {
+            let steps = 8;
+            let dt = (t1 - t0) / f32(steps);
+            let jitter = fract(sin(dot(input.uv * 1731.0, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+            var trans = 1.0;
+            var emit = vec3<f32>(0.0);
+            for (var i = 0; i < steps; i = i + 1) {
+                let p = ray * (t0 + (f32(i) + jitter) * dt);
+                let q = (p - center) / radius;
+                let r = length(q);
+                let n = fbm3(q * 2.4 + vec3<f32>(0.0, -age * 1.1, 0.0));
+                let density = smoothstep(1.05, 0.15, r + (n - 0.5) * 0.9);
+                if density > 0.002 {
+                    let heat = fire * (1.15 - r * 0.7) * (0.5 + density);
+                    let glow = fire_color(heat) * (0.6 + 2.2 * fire);
+                    let smoke = vec3<f32>(0.09, 0.08, 0.07) * (0.4 + 0.6 * n);
+                    let source = mix(smoke, glow, clamp(heat * 1.5, 0.0, 1.0));
+                    let a = (1.0 - exp(-density * dt * 2.2 / radius * 4.0)) * fade;
+                    emit = emit + trans * a * source;
+                    trans = trans * (1.0 - a);
+                }
+            }
+            color = color * trans + emit;
+        }
+    }
+    return vec4<f32>(color, base.a);
+}
+
 fn post(input: PostInput) -> vec4<f32> {
     if !warp_on {
         return input.color;
+    }
+    if fx_kind == 3 {
+        return explosion_effect(input);
     }
     if fx_kind == 1 {
         return shockwave_effect(input);

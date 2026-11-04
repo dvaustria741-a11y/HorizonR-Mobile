@@ -3,7 +3,7 @@ id = "luxium"
 name = "Luxium"
 version = "0.1.0"
 api = "0.1"
-description = "Luxium, built into HorizonR: water, metal, polished stone and glass sheen, plant wave, sky, lens flare, air distortion, filmic tonemap, light shafts and wet surfaces."
+description = "Luxium, built into HorizonR: water, metal, polished stone and glass sheen, plant wave, sky, lens flare, air distortion, filmic tonemap, soft glow, light shafts and wet surfaces."
 authors = ["vinlanx", "HorizonR"]
 license = "Luxium Free Modification License"
 
@@ -22,6 +22,10 @@ name = "Light shafts"
 [[post]]
 file = "post/flare.wgsl"
 name = "Lens flare"
+
+[[post]]
+file = "post/bloom.wgsl"
+name = "Soft glow"
 
 [[post]]
 file = "post/tonemap.wgsl"
@@ -200,7 +204,7 @@ name = "Screen effect (set by /luxium)"
 type = "int"
 default = 0
 min = 0
-max = 2
+max = 3
 
 [[options]]
 id = "warp_on"
@@ -285,6 +289,30 @@ step = 0.1
 
 [budget]
 gpu_ms = 2.0
+
+[[options]]
+id = "bloom_on"
+name = "Soft glow"
+type = "bool"
+default = true
+
+[[options]]
+id = "bloom_strength"
+name = "Glow strength"
+type = "float"
+default = 0.35
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "bloom_threshold"
+name = "Glow threshold"
+type = "float"
+default = 0.85
+min = 0.3
+max = 1.5
+step = 0.05
 
 [[options]]
 id = "metal_on"

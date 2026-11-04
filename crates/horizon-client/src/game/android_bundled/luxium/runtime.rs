@@ -14,12 +14,13 @@ pub const DESCRIPTION: &str = "Port of Luxium: shockwave and black hole commands
 /// The folder the bundled stages are written to inside `shaderpacks/`.
 pub const PACK_DIR: &str = "luxium";
 
-const FILES: [(&str, &str); 7] = [
+const FILES: [(&str, &str); 8] = [
     (
         "horizon-shaders.toml",
         include_str!("pack/horizon-shaders.toml"),
     ),
     ("sky.wgsl", include_str!("pack/sky.wgsl")),
+    ("post/bloom.wgsl", include_str!("pack/post/bloom.wgsl")),
     ("post/distort.wgsl", include_str!("pack/post/distort.wgsl")),
     ("post/flare.wgsl", include_str!("pack/post/flare.wgsl")),
     ("post/shafts.wgsl", include_str!("pack/post/shafts.wgsl")),
@@ -49,7 +50,7 @@ pub fn ensure_pack(packs_dir: &Path) {
 }
 
 /// The options the mod's settings page cycles: pack option id, label, values, default.
-const SETTINGS: [(&str, &str, &[&str], &str); 15] = [
+const SETTINGS: [(&str, &str, &[&str], &str); 17] = [
     ("water_on", "Water surface", &["true", "false"], "true"),
     ("metal_on", "Metal reflections", &["true", "false"], "true"),
     (
@@ -75,6 +76,13 @@ const SETTINGS: [(&str, &str, &[&str], &str); 15] = [
         &["0.5", "1", "1.5"],
         "1",
     ),
+    ("bloom_on", "Soft glow", &["true", "false"], "true"),
+    (
+        "bloom_strength",
+        "Glow strength",
+        &["0.15", "0.35", "0.6"],
+        "0.35",
+    ),
     ("shafts_on", "Light shafts", &["true", "false"], "true"),
     (
         "shafts_strength",
@@ -93,17 +101,22 @@ const WARP_KEYS: [&str; 6] = [
 ];
 
 /// The screen effects: `/luxium <name> [radius]`, and the pack's `fx_kind` for each.
-pub const EFFECTS: [(&str, &str, &str); 3] = [
+pub const EFFECTS: [(&str, &str, &str); 4] = [
     ("warp", "0", "air warp"),
     ("shockwave", "1", "shockwave"),
     ("blackhole", "2", "black hole"),
+    ("explosion", "3", "explosion"),
 ];
 
 /// Starts screen effect `kind` (a `fx_kind` value) of size `radius` blocks, centred ahead of `eye`
 /// along `dir`, and saves it where the engine reads pack options. Returns whether it was saved.
 pub fn warp(packs_dir: &Path, eye: [f64; 3], dir: [f64; 3], radius: f64, kind: &str) -> bool {
     let radius = radius.clamp(2.0, 64.0);
-    let ahead = if kind == "1" { 6.0 } else { radius * 1.6 };
+    let ahead = match kind {
+        "1" => 6.0,
+        "3" => radius * 1.2 + 2.0,
+        _ => radius * 1.6,
+    };
     let mut chosen = horizon_shaders::read_overrides(packs_dir, PACK_DIR);
     chosen.insert("fx_kind".into(), kind.into());
     chosen.insert("warp_on".into(), "true".into());

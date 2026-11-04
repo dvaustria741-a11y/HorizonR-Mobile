@@ -1,5 +1,5 @@
 // Luxium: Let there be light, by vinlanx (Luxium Free Modification License; see LICENSE in this directory).
-// `/luxium warp|shockwave|blackhole [radius]`: a screen effect ahead of the player for a few seconds.
+// `/luxium warp|shockwave|blackhole|explosion [radius]`: a screen effect ahead of the player for a few seconds.
 pub(super) fn run(game: &mut crate::game::Game<'_>, command: &str, ran: &mut bool) {
     use crate::game::official_luxium as m;
     if *ran || !game.native_on(m::ID) {
@@ -27,7 +27,7 @@ pub(super) fn run(game: &mut crate::game::Game<'_>, command: &str, ran: &mut boo
                 format!("Luxium: could not save the {label}")
             }
         }
-        _ => "Usage: /luxium warp|shockwave|blackhole [radius]".to_owned(),
+        _ => "Usage: /luxium warp|shockwave|blackhole|explosion [radius]".to_owned(),
     };
     game.system_message(horizon_client::text::Text::literal(message));
 }
