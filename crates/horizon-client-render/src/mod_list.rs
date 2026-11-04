@@ -14,7 +14,7 @@ pub const FILE: &str = "horizon-mods.txt";
 pub const ZENKAI_SOURCE: &str = "Zenkai";
 /// Native modules compiled into Android APKs. They are not on until the player installs them from
 /// the Store's Zenkai source (`zenkai.<id>:true` in `horizon-mods.txt`).
-pub const ANDROID_BUNDLED: [(&str, &str, &str); 6] = [
+pub const ANDROID_BUNDLED: [(&str, &str, &str); 7] = [
     (
         "zoom",
         "Zoom",
@@ -44,6 +44,11 @@ pub const ANDROID_BUNDLED: [(&str, &str, &str); 6] = [
         "sodium_horizon",
         "Sodium",
         "Sodium-style Video Settings and non-lighting optimizations",
+    ),
+    (
+        "iris_horizon",
+        "Iris",
+        "Iris-style shader pack menu inside Sodium's video settings (needs Sodium)",
     ),
 ];
 

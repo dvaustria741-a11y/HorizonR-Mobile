@@ -96,3 +96,11 @@ Extra, under the LGPL 3.0. The upstream license texts are in the bundle's reposi
 preserved in `mixins/sodium_horizon/third_party_notices.rs` inside the `.hnmod`. Horizon-derived
 helpers in it are under Horizon's MIT license. The names identify the reference interface and do
 not imply endorsement. Local changes are listed in `native-mods/PATCHES.md`.
+
+## Iris (native mod)
+
+`native-mods/iris_horizon-0.1.0.hnmod` is a Horizon port of the shader pack menu and configuration layer
+of [Iris](https://github.com/IrisShaders/Iris) 26.3, MIT. Its page names, option wording and behavior
+follow Iris's; it contains no Iris source. The license notice is kept inside the bundle
+(`mixins/iris_horizon/LICENSE-Iris`). Shader rendering is Horizon's own.
+

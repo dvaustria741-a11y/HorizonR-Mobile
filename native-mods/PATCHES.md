@@ -42,6 +42,10 @@ Packaged from [badmasti2/horizon-sodium](https://github.com/badmasti2/horizon-so
   Batching, Texture Budget (`ui.rs` reads 0 and ignores writes; no row in the exact UI) and the
   "Block broken" particles option (`exact_ui.rs` no longer exposes binding 188, so its row is unsupported).
 
+- `exact_ui.rs` gains a small extension point (`external()` / `set_external()`): while another bundle
+  owns the content area (Iris), Sodium draws no tab highlight and no rows. Its flag is cleared when the
+  screen closes.
+
 Everything else is unchanged. Compare with upstream before updating it.
 - Movement sway: `engine/sway.rs` ports Punchy's walk, sprint, jump/land and idle-breathing sway (constants from the
   original MovementStateMachine). `runtime.rs` feeds it the player's motion each tick and applies the result to the arm
@@ -65,4 +69,19 @@ Everything else is unchanged. Compare with upstream before updating it.
 - Horse riding: `engine/locomotion.rs` plays `newhorse_riding_idle` or `newhorse_riding_loop` (moving above the original's
   4e-4 speed squared) on horses, donkeys, mules, camels and llamas. Not ported: the one-shot `newhorse_riding_mount` camera dip.
 - Fix: the crawl check named `crate::pose::Pose`, which the game crate doesn't have; it is `horizon_client::pose::Pose`.
+
+## iris_horizon-0.1.0.hnmod
+
+An Iris-style shader pack menu inside the Sodium video settings, as an "Iris" group below "Sodium Extra"
+with the pages Shader Packs and Shader Settings. It requires `sodium_horizon` (it uses Sodium's layout and
+extension point), and its hooks check `native_on("iris_horizon")`, so it stays inert until installed.
+
+Horizon already runs OptiFine/Iris shader packs itself (`horizon-shaders`), so this is the menu and
+config layer Iris adds, not a second renderer. It drives the engine's own state: the pack list
+(`settings.shader_packs`), the picked pack, per-pack options, profiles, reset, refresh and the folder.
+Enable Shaders remembers the last pack in `iris.properties` beside `options.txt`.
+Not ported because the engine has no equivalent: Max Shadow Distance, Color Space.
+
+Hooks: RETURN of `draw_options` (draws after Sodium), and HEAD of `options_mouse`, `options_drag`,
+`options_scroll`, `options_key` (priority 200, before Sodium) and `native_mods`.
 
