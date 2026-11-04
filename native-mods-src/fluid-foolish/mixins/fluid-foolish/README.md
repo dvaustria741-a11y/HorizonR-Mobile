@@ -2,7 +2,7 @@
 
 A native port of the **Fluid & Foolish** animation pack's movement clips, for the player's body in
 the third-person view (F5): idle, walking, sprinting, sidestepping, crouching, jumping, falling and
-landing. Starts **off**; turn it on in Options → Mods.
+landing, plus swimming, crawling, climbing, creative flight, elytra gliding (with banking), sitting in boats and minecarts, getting hurt, turning on the spot, random idle events and the four emotes (keys H, J, K, L, changeable in the Mods screen). Starts **off**; turn it on in Options → Mods.
 
 The animation clips are the pack's (`engine/data/clips.json`, merged from its `*.animation.json`
 files by `tools/build_fluid_foolish_clips.py`). The pack is free to use, port and redistribute; see
@@ -11,8 +11,9 @@ machine that follows the pack's `compat/develop.json` defaults (stride length, c
 amplitude, fall distances), and a mapping from the pack's rig (root > waist > body/head/arms, legs
 under root) to Horizon's player model parts.
 
-Not done yet: swimming, diving, elytra, crawling, climbing, riding, hurt, turn-in-place, idle
-events, cameras and emotes. The Bedrock-to-Java axis conversion is read from the clips themselves
+Not done yet: diving into water or lava, riding a nautilus, walking on fences or water, nausea,
+low hunger, cold biomes, listening to a jukebox, greetings, armour-in, item actions, and the
+third-person camera moves. The Bedrock-to-Java axis conversion is read from the clips themselves
 and is unverified in game.
 
 Needs the `native_player_pose` hook (`Game::native_player_pose`) of this engine.

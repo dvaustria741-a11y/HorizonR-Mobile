@@ -1,6 +1,6 @@
 [mod]
 id = "fluid-foolish"
-version = "0.1.0"
+version = "0.2.0"
 priority = 90
 
 [compatibility]
@@ -50,3 +50,10 @@ kind = "HEAD"
 target = "horizon_client::game::native_hooks::Game<'_>::native_player_pose"
 helper = "pose.rs"
 bindings = [{ name="game", ty="&crate::game::Game<'_>", value="&*self" },{ name="partial", ty="f32", value="partial" },{ name="pose", ty="&mut horizon_client::mobs::native_pose::NativePose", value="&mut *pose" }]
+
+[[injection]]
+id = "key"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_key"
+helper = "key.rs"
+bindings = [{ name="game", ty="&mut crate::game::Game<'_>", value="&mut *self" },{ name="key", ty="&str", value="key" },{ name="pressed", ty="bool", value="pressed" }]

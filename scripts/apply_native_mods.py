@@ -40,9 +40,18 @@ def run(cmd, **kw):
     return subprocess.run(cmd, capture_output=True, text=True, **kw)
 
 
+def version_key(version):
+    """`0.2.0` as (0, 2, 0) for comparing; anything unreadable sorts lowest."""
+    try:
+        return tuple(int(p) for p in str(version).split("."))
+    except ValueError:
+        return (-1,)
+
+
 def unpack_bundles(work: Path):
     """Unzip each .hnmod; return [(bundle_dir, horizon_revision)]."""
     bundles = []
+    seen = {}
     mods_in = work / "mods-in"
     mods_in.mkdir(parents=True)
     for hn in sorted(MODS_DIR.glob("*.hnmod")):
@@ -59,11 +68,21 @@ def unpack_bundles(work: Path):
             bdir = toml_path.parent
             data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
             name = data.get("mod", {}).get("id") or (bdir.name if bdir != out else hn.stem)
+            version = version_key(data.get("mod", {}).get("version"))
             dest = mods_in / name
+            if name in seen:
+                # The same mod twice (an update added next to the old file): keep the newer one.
+                if version <= seen[name]:
+                    log(f"{hn.name}: {name} is already there in a newer or equal version, skipped")
+                    continue
+                log(f"{hn.name}: replaces the older {name}")
+                shutil.rmtree(dest)
+                bundles[:] = [b for b in bundles if b[0] != dest]
+            seen[name] = version
             shutil.copytree(bdir, dest, ignore=shutil.ignore_patterns("mixins") if bdir == out else None)
             rev = (data.get("compatibility") or {}).get("horizon_revision")
-            bundles.append((dest, rev, data.get("mod", {}).get("id", bdir.name)))
-            log(f"{hn.name}: bundle {bdir.name} pinned to {rev}")
+            bundles.append((dest, rev, name))
+            log(f"{hn.name}: bundle {name} pinned to {rev}")
     return mods_in, bundles
 
 

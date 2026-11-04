@@ -10,6 +10,19 @@ thread_local! { static STATE: RefCell<State> = RefCell::new(State::default()); }
 struct State {
     clips: Option<std::result::Result<Clips, String>>,
     loco: Locomotion,
+    last_hurt: i32,
+}
+
+/// The pack's emotes: id, name, clip and default key (`compat/develop.json` emotes).
+pub(super) const EMOTES: [(&str, &str, &str, &str); 4] = [
+    ("hello", "Emote: Hello", "hello_nleg", "key.keyboard.h"),
+    ("hello_b", "Emote: Hello with both arms", "hello_nlegB", "key.keyboard.j"),
+    ("cool_emote", "Emote: Static", "cool_emote", "key.keyboard.k"),
+    ("shuuba_dance", "Emote: Shuuba dance", "shuuba_dance", "key.keyboard.l"),
+];
+/// The key bindings for the Mods screen: [id, name, default key].
+pub(super) fn emote_keys() -> Vec<[String; 3]> {
+    EMOTES.iter().map(|(id, name, _, key)| [(*id).into(), (*name).into(), (*key).into()]).collect()
 }
 
 fn enabled(game: &Game<'_>) -> bool {
@@ -38,23 +51,32 @@ pub(super) fn tick(game: &mut Game<'_>) {
             s.loco = Locomotion::default();
             return;
         };
-        let active = !(p.swimming
-            || p.fall_flying
-            || p.flying
-            || p.is_passenger
-            || p.health.dead_or_dying()
-            || game.sleeping.is_some()
-            || game.spectator()
-            || game.screen == Screen::Dead);
+        let active = !(p.health.dead_or_dying() || game.sleeping.is_some() || game.spectator() || game.screen == Screen::Dead);
+        let seated = game.riding.is_some_and(|id| {
+            game.boats.iter().any(|b| b.id == id) || game.carts.iter().any(|c| c.id == id)
+        });
+        // The hurt animation timer rises when a hit lands; `hurt_dir` is 90 for a hit from the front.
+        let hurt_time = p.health.hurt_animation_time;
+        let hurt_from = (hurt_time > s.last_hurt).then(|| p.health.hurt_dir - 90.0);
+        s.last_hurt = hurt_time;
+        let velocity = p.velocity;
         let input = Input {
-            dx: p.velocity.x as f32,
-            dz: p.velocity.z as f32,
+            dx: velocity.x as f32,
+            dz: velocity.z as f32,
             yaw: p.yaw,
             on_ground: p.ground.on_ground,
-            vy: p.velocity.y as f32,
+            vy: velocity.y as f32,
             fall_distance: p.fall_distance as f32,
             sprinting: p.sprinting,
             crouching: p.local_crouching,
+            swimming: p.swimming,
+            underwater: p.air < 300,
+            crawling: p.pose == horizon_client::pose::Pose::Swimming && !p.swimming,
+            flying: p.flying && !p.ground.on_ground,
+            gliding: p.fall_flying,
+            seated,
+            speed: (velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z).sqrt() as f32,
+            hurt_from,
             active,
         };
         let mut loco = std::mem::take(&mut s.loco);
@@ -106,5 +128,17 @@ pub(super) fn click(game: &Game<'_>, button: usize) {
             game.native_set_setting(ID, "intensity", &format!("{next:.2}"));
         }
         _ => {}
+    }
+}
+
+/// An emote key went down.
+pub(super) fn key(game: &mut Game<'_>, key: &str, pressed: bool) {
+    if !pressed || !game.native_playing() || !enabled(game) {
+        return;
+    }
+    for (id, _, clip, default) in EMOTES {
+        if key == game.native_mod_key(ID, id, default) {
+            STATE.with(|s| s.borrow_mut().loco.play_emote(clip));
+        }
     }
 }

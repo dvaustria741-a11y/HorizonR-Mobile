@@ -622,7 +622,9 @@ impl Game<'_> {
         };
         let mut native_pose = horizon_client::mobs::native_pose::NativePose::default();
         self.native_player_pose(alpha as f32, &mut native_pose);
-        horizon_client::mobs::native_pose::set(native_pose.clone());
+        // Held for the whole draw: the cape, elytra, held items, shield and head item rebuild the
+        // player's poses themselves, so they follow the animated body only while this is set.
+        let _native_pose = horizon_client::mobs::native_pose::Scope::set(native_pose);
         render(
             m,
             alpha as f32,
@@ -633,7 +635,6 @@ impl Game<'_> {
             &self.player_armor_layers(),
             out,
         );
-        horizon_client::mobs::native_pose::clear();
         let chest = self.armor[1].as_ref().map(|s| &*s.item);
         // CapeLayer: no cape on an invisible player (`isInvisible`, whoever looks).
         if !self.own_invisible() {
@@ -661,7 +662,6 @@ impl Game<'_> {
             // still draws its outline.
             if !body {
                 let mut silhouette = Vec::new();
-                horizon_client::mobs::native_pose::set(native_pose.clone());
                 horizon_client::mobs::render::render(
                     m,
                     alpha as f32,
@@ -671,7 +671,6 @@ impl Game<'_> {
                     self.res.mob_data(),
                     &mut silhouette,
                 );
-                horizon_client::mobs::native_pose::clear();
                 self.mark_outline(&silhouette, color);
             }
             self.mark_outline(&out[start..], color);

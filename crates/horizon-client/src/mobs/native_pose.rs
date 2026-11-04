@@ -49,6 +49,22 @@ pub fn clear() {
     CURRENT.with(|c| *c.borrow_mut() = None);
 }
 
+/// Keeps a pose set for as long as the guard lives, so everything drawn for the player in that time
+/// (the body, armour, cape, elytra, held items and shield, head item, parrots) follows it.
+#[must_use = "the pose is cleared when the guard is dropped"]
+pub struct Scope(());
+impl Scope {
+    pub fn set(pose: NativePose) -> Scope {
+        set(pose);
+        Scope(())
+    }
+}
+impl Drop for Scope {
+    fn drop(&mut self) {
+        clear();
+    }
+}
+
 /// Adds the current pose to `poses`: position at 0..3, rotation at 3..6 of each part's pose.
 pub fn apply(poses: &mut super::anim::Poses) {
     CURRENT.with(|c| {
@@ -81,8 +97,13 @@ mod tests {
         assert_eq!(head.rotation, [0.75, 0.0, 0.0]);
         set(NativePose::default());
         CURRENT.with(|c| assert!(c.borrow().is_none()));
-        set(pose);
+        set(pose.clone());
         CURRENT.with(|c| assert!(c.borrow().is_some()));
         clear();
+        {
+            let _scope = Scope::set(pose);
+            CURRENT.with(|c| assert!(c.borrow().is_some()));
+        }
+        CURRENT.with(|c| assert!(c.borrow().is_none()));
     }
 }
