@@ -84,7 +84,10 @@ opens the Shader Packs screen) and "Settings" (the groups "Iris" and "Settings" 
   in yellow), Open Shader Pack Folder..., Shader Pack Settings..., Cancel, Apply and Done. The choice is
   pending until Apply or Done; Cancel and Escape drop it.
 - Shader Pack Settings screen ("Configure"): the pack's name, Reset, the pack's own screens laid out in its
-  one or two columns (Profile, option buttons and sliders, "< Back" inside a sub screen), tooltips from the
+  one or two columns, drawn like Iris's widgets (the label on the left and the value in an inset box on the right:
+  On green and Off red when changed from the default, other values blue, a preview slider in the box and a full
+  slider while hovered or dragged, a modified option's label in gold until Apply; button colours are Iris's
+  `widgets.png` ones; "< Back" inside a sub screen), tooltips from the
   pack's comments and non-default values in yellow. Option changes apply at once (the renderer reloads the
   pack); Cancel and Escape restore the values the screen opened with.
 
