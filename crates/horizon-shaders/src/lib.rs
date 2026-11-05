@@ -31,6 +31,7 @@ mod post;
 mod preprocess;
 mod properties;
 mod screens;
+mod settings;
 mod textures;
 mod translate;
 

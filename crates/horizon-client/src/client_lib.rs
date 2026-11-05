@@ -6,6 +6,14 @@ pub mod advancements;
 pub mod ambience;
 pub mod animate_tick;
 pub mod arrows;
+pub mod android_resources;
+pub mod content_files;
+pub mod ime_edit;
+pub mod moved_extras;
+pub mod official_install;
+pub mod resource_install;
+pub mod touch_ui;
+pub mod ui_text;
 pub mod block_contact;
 pub mod powder_snow;
 pub use horizon_client_render::{
@@ -171,3 +179,11 @@ pub use horizon_items::flowers;
 pub use horizon_items::item_data;
 pub use horizon_items::items;
 pub use horizon_items::random_sequences;
+
+pub use horizon_client_render::{
+    android_gamepad, android_runtime, file_lock, keypad, shader_pack_options, touch,
+};
+
+#[cfg(test)]
+#[path = "android/device_preferences.rs"]
+mod android_device_preferences;
