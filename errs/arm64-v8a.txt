@@ -1,76 +1,77 @@
-error[E0432]: unresolved import `settings`
-  --> crates/horizon-shaders/src/lib.rs:56:9
-   |
-56 | pub use settings::{
-   |         ^^^^^^^^ use of unresolved module or unlinked crate `settings`
-   |
-help: to make use of source file crates/horizon-shaders/src/settings.rs, use `mod settings` in this file to declare the module
-   |
-19 + mod settings;
-   |
+error: failed to run custom build command for `horizon-client-render v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render)`
 
-For more information about this error, try `rustc --explain E0432`.
-error: could not compile `horizon-shaders` (lib) due to 1 previous error
-warning: build failed, waiting for other jobs to finish...
+Caused by:
+  process didn't exit successfully: `/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/target/release/build/horizon-client-render-503c7a3554baf42e/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../native-hooks.json
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/mod_api.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../tools/native-hook-fragments
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../tools/native-hook-fragments/spinning_geometry.json
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../tools/native-hook-fragments/host_bridge.json
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../tools/native-hook-fragments/gui_render_post.json
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../tools/native-hook-fragments/draw_text.json
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../tools/native-hook-fragments/client_services.json
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../tools/native-hook-fragments/world_primitives.json
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../tools/native-hook-fragments/block_face_sprite.json
 
 === TAIL ===
-   Compiling zerocopy v0.8.60
-   Compiling ndk-sys v0.6.0+11769913
-   Compiling cranelift-codegen-meta v0.135.8
-   Compiling half v2.7.1
-   Compiling cranelift-codegen v0.135.8
-   Compiling thiserror-impl v1.0.69
-   Compiling thiserror v1.0.69
-   Compiling num_enum_derive v0.7.6
-   Compiling num_enum v0.7.6
-   Compiling wasmtime-internal-versioned-export-macros v48.0.8
-   Compiling ndk v0.9.0
-   Compiling wgpu-naga-bridge v30.0.1
-   Compiling jni-macros v0.22.4
-   Compiling wit-component v0.254.2
-   Compiling horizon-mod-api-gen v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-mod-api-gen)
-   Compiling wasmtime-internal-wit-bindgen v48.0.8
-   Compiling jni v0.22.4
-   Compiling wasmtime-internal-unwinder v48.0.8
-   Compiling cranelift-frontend v0.135.8
-   Compiling cranelift-native v0.135.8
-   Compiling wgpu-core-deps-windows-linux-android v30.0.1
-   Compiling horizon-client-core v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-core)
-   Compiling wasmtime v48.0.8
-   Compiling aes v0.8.4
-   Compiling winit v0.30.13 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/third_party/winit)
-   Compiling wasmtime-internal-component-macro v48.0.8
-   Compiling android-activity v0.6.1
-   Compiling horizon-protocol v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-protocol)
-warning: function `install_system_srv_lookup` is never used
-  --> crates/horizon-protocol/src/resolver/dns.rs:17:8
-   |
-17 | pub fn install_system_srv_lookup(lookup: SystemSrvLookup) {
-   |        ^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/boats.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/ordered_tick.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/lan_entities.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/copper_golems.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/tweaks.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/passengers.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/spectator.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/names.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/interaction_shapes.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/lan_screen.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/server_travel.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/advancements_screen.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/paintings.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/postprocess.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/mod_input.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/test_instances.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/native_living_refs.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/boarding.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/lan_mount_menu.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/agent.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/advancements.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/lan_quiet.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/growth.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/render_control.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/powder_snow.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/composter.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/native_mob_draw.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/potent_sulfur.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/cat_spawner.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/stats.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/native_block_sprites.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/agent_settings.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/native_chunk_tickets.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/mod_render.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/creaking.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/sign_edit.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/event_loop.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/remote_chat.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/trial_spawner.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/cushions.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/native_visuals.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/books.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/split
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/split/players.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/split/launcher.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/split/hud.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/split/pads.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/split/setup.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/split/frames.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/split/windows.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/block_entity_anims.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/test_instance_edit.rs
+  cargo:rerun-if-changed=/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render/../../crates/horizon-client/src/game/beacon.rs
 
-   Compiling wgpu-core v30.0.1
-warning: `horizon-protocol` (lib) generated 1 warning
-   Compiling wasmtime-internal-cranelift v48.0.8
-   Compiling horizon-shader-api v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-shader-api)
-   Compiling jni v0.21.1
-   Compiling wgpu v30.0.1
-   Compiling horizon-telemetry v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-telemetry)
-   Compiling mimalloc v0.1.52
-   Compiling horizon-client-render v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-render)
-   Compiling horizon-shaders v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-shaders)
-error[E0432]: unresolved import `settings`
-  --> crates/horizon-shaders/src/lib.rs:56:9
-   |
-56 | pub use settings::{
-   |         ^^^^^^^^ use of unresolved module or unlinked crate `settings`
-   |
-help: to make use of source file crates/horizon-shaders/src/settings.rs, use `mod settings` in this file to declare the module
-   |
-19 + mod settings;
-   |
+  --- stderr
 
-For more information about this error, try `rustc --explain E0432`.
-error: could not compile `horizon-shaders` (lib) due to 1 previous error
+  thread 'main' (6375) panicked at crates/horizon-client-render/build.rs:6:10:
+  generating native render mod API: "duplicate hook server_about_to_start"
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 warning: build failed, waiting for other jobs to finish...
