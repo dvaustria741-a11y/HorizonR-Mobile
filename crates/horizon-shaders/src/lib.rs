@@ -47,8 +47,8 @@ pub use settings::{
     write_overrides,
 };
 pub use post::{
-    Blend, CELESTIAL_BLEND, Factor, GameInputs, Group, Post, PostProgram, TRANSLUCENT_BLEND,
-    dimension_folder, load_post,
+    Blend, CELESTIAL_BLEND, Factor, GameInputs, Group, Post, PostProgram, SkyBodies,
+    TRANSLUCENT_BLEND, dimension_folder, load_post,
 };
 pub use preprocess::{Diagnostic, Origin, Preprocessed, preprocess};
 pub use properties::{Entry, Note, Properties};

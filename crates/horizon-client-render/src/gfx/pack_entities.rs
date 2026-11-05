@@ -97,6 +97,7 @@ pub fn inputs() -> horizon_shaders::GbuffersInputs {
             .collect(),
         after: String::new(),
         // Cutout, as vanilla's entity types mostly are (OQ-23): the loader's test at 0.1.
+        far_depth: false,
         alpha_test: Some(horizon_shaders::AlphaTest {
             op: ">",
             reference: 0.1,
@@ -135,6 +136,7 @@ pub fn cloud_inputs() -> horizon_shaders::GbuffersInputs {
             .map(|&(n, v)| (n.to_owned(), v.to_owned()))
             .collect(),
         after: String::new(),
+        far_depth: false,
         alpha_test: None,
     }
 }

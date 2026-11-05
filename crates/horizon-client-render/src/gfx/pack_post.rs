@@ -138,6 +138,8 @@ struct Sky {
     geometry: PackSky,
     basic: Option<Pass>,
     textured: Option<Pass>,
+    /// What the pack leaves to the game's sky (`sky`, `sun`, `moon`, `stars` of its properties).
+    bodies: horizon_shaders::SkyBodies,
 }
 
 /// Entities, block entities, translucent entity parts and particles a pack draws
@@ -1059,6 +1061,7 @@ impl PackPost {
             .shadow_water
             .zip(terrain_geometry.as_ref())
             .and_then(|(p, g)| build(p, Some(g)));
+        let bodies = post.sky_bodies;
         let sky = (post.sky.is_some() || post.sky_textured.is_some()).then(|| {
             let geometry = PackSky::new(device);
             let basic = Geometry {
@@ -1083,6 +1086,7 @@ impl PackPost {
                 geometry,
                 basic,
                 textured,
+                bodies,
             }
         });
         let sky = sky.filter(|s| s.basic.is_some() || s.textured.is_some());
@@ -1764,6 +1768,9 @@ impl PackPost {
         let passes = [&sky.basic, &sky.textured];
         let mut open: Option<(wgpu::RenderPass<'_>, usize)> = None;
         for part in parts {
+            if !sky.bodies.draws(part.stage) {
+                continue;
+            }
             let i = usize::from(part.textured);
             let (Some(pass), Some(group)) = (passes[i], &groups[i]) else {
                 continue;

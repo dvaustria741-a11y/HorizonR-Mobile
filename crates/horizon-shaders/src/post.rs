@@ -214,6 +214,40 @@ pub struct PostProgram {
     pub mipmaps: u16,
 }
 
+/// Which of the sky's bodies the game draws (`sky`, `sun`, `moon` and `stars` of
+/// `shaders.properties`): a pack that draws its own turns the game's off.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SkyBodies {
+    /// The disc, the sunset fan and the void.
+    pub sky: bool,
+    pub sun: bool,
+    pub moon: bool,
+    pub stars: bool,
+}
+
+impl Default for SkyBodies {
+    fn default() -> Self {
+        Self {
+            sky: true,
+            sun: true,
+            moon: true,
+            stars: true,
+        }
+    }
+}
+
+impl SkyBodies {
+    /// Whether the sky part drawn at render stage `stage` (`SKY`, `SUNSET`, `SUN`...) is drawn.
+    pub fn draws(self, stage: &str) -> bool {
+        match stage {
+            "SUN" => self.sun,
+            "MOON" => self.moon,
+            "STARS" => self.stars,
+            _ => self.sky,
+        }
+    }
+}
+
 pub struct Post {
     /// The folder the programs came from: `""` for `shaders` itself, else `world0`...
     pub folder: String,
@@ -264,6 +298,8 @@ pub struct Post {
     pub translucent_late: bool,
     /// Particles draw after deferred (`particles.ordering`, `particles.before.deferred`, 3.2).
     pub particles_late: bool,
+    /// The sky's bodies the game draws.
+    pub sky_bodies: SkyBodies,
     /// The custom uniforms of `shaders.properties` (3.4).
     pub custom: Custom,
     pub config: Config,
@@ -334,6 +370,7 @@ pub fn load_post(
         shadow_comp: Vec::new(),
         translucent_late: false,
         particles_late: false,
+        sky_bodies: SkyBodies::default(),
         custom: Custom::parse(properties),
         config: Config::default(),
         notes: Vec::new(),
@@ -479,6 +516,12 @@ pub fn load_post(
     loader.post.hand = hand;
     let flag = |key: &str| properties.get(key).map(|v| v.trim() == "true");
     loader.post.translucent_late = flag("separateEntityDraws").unwrap_or(false);
+    loader.post.sky_bodies = SkyBodies {
+        sky: flag("sky").unwrap_or(true),
+        sun: flag("sun").unwrap_or(true),
+        moon: flag("moon").unwrap_or(true),
+        stars: flag("stars").unwrap_or(true),
+    };
     // `after` when the pack has a deferred program, else `mixed`; ours are all translucent, so
     // `mixed` draws them after deferred too.
     loader.post.particles_late = match properties.get("particles.ordering").map(str::trim) {
@@ -1031,6 +1074,12 @@ mod tests {
         );
         let post = load_post(&pack, "", &ordering, &macros, &inputs);
         assert!(!post.particles_late && post.translucent_late);
+        assert_eq!(post.sky_bodies, SkyBodies::default());
+        let bodies = Properties::parse("sun=false\nmoon=false\nstars = false\n", &macros);
+        let post = load_post(&pack, "", &bodies, &macros, &inputs);
+        let drawn = ["SKY", "SUNSET", "SUN", "MOON", "STARS", "VOID"]
+            .map(|stage| post.sky_bodies.draws(stage));
+        assert_eq!(drawn, [true, true, false, false, false, true]);
         let properties = Properties::parse(
             "blend.gbuffers_terrain = ONE ONE ZERO ONE\nblend.gbuffers_water = off\n",
             &macros,

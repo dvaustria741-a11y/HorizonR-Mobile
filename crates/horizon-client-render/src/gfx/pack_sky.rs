@@ -94,9 +94,10 @@ pub fn inputs() -> horizon_shaders::GbuffersInputs {
             ("vaColor".into(), "hz_Color".into()),
             ("vaNormal".into(), "hz_Normal".into()),
         ],
-        // At the far plane: the sky shows only where nothing else drew, and it writes no depth.
-        after: "    gl_Position.z = gl_Position.w;\n".into(),
+        // The depth test sees the far plane (`far_depth`): the sky shows only where nothing else drew.
+        after: String::new(),
         alpha_test: None,
+        far_depth: true,
     }
 }
 
@@ -120,8 +121,9 @@ pub fn celestial_inputs() -> horizon_shaders::GbuffersInputs {
             ("vaColor".into(), "hz_Color".into()),
             ("vaNormal".into(), "hz_Normal".into()),
         ],
-        after: "    gl_Position.z = gl_Position.w;\n".into(),
+        after: String::new(),
         alpha_test: None,
+        far_depth: true,
     }
 }
 
@@ -157,14 +159,14 @@ fn disc(y: f32, kind: u32, out: &mut Vec<Vertex>) {
 /// Depth stays at the far plane through `inputs`, so terrain remains in front.
 fn horizon(out: &mut Vec<Vertex>) {
     let corners = [
-        [-512.0, -512.0, -512.0],
-        [512.0, -512.0, -512.0],
-        [512.0, 512.0, -512.0],
-        [-512.0, 512.0, -512.0],
-        [-512.0, -512.0, 512.0],
-        [512.0, -512.0, 512.0],
-        [512.0, 512.0, 512.0],
-        [-512.0, 512.0, 512.0],
+        [-64.0, -64.0, -64.0],
+        [64.0, -64.0, -64.0],
+        [64.0, 64.0, -64.0],
+        [-64.0, 64.0, -64.0],
+        [-64.0, -64.0, 64.0],
+        [64.0, -64.0, 64.0],
+        [64.0, 64.0, 64.0],
+        [-64.0, 64.0, 64.0],
     ];
     for [a, b, c, d] in [
         [0, 1, 2, 3],

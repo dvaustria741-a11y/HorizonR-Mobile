@@ -228,6 +228,7 @@ impl PackAtlas {
                 .map(|&(n, v)| (n.to_owned(), v.to_owned()))
                 .collect(),
             after: String::new(),
+            far_depth: false,
             alpha_test: None,
         }
     }
