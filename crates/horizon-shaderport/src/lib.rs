@@ -26,7 +26,6 @@ mod pbr;
 mod postkeep;
 pub mod progress;
 mod skyblend;
-mod skyvanilla;
 mod tex2d;
 mod tex3d;
 mod uniforms;
@@ -89,7 +88,6 @@ const DRAW_PASSES: &[Pass] = &[
     ("noise2d", noise2d::fix, 40),
     ("tex2d", tex2d::fix, 5),
     ("bufsize", bufsize::fix, 25),
-    ("sky-vanilla", skyvanilla::fix, 20),
     ("skyblend", skyblend::fix, 27),
     ("cloudsoff", cloudsoff::fix, 27),
 ];
