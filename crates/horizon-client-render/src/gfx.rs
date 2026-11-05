@@ -1642,6 +1642,14 @@ fn terrain_group(
         ],
     })
 }
+fn instance_buffer_usage(limits: &wgpu::Limits) -> wgpu::BufferUsages {
+    let base = wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST;
+    if limits.max_storage_buffers_per_shader_stage > 0 {
+        base | wgpu::BufferUsages::STORAGE
+    } else {
+        base
+    }
+}
 /// CPU texture uploads prepared by the resource worker. Consumed by renderer
 /// construction so the temporary mip chains are released after GPU upload.
 pub struct PreparedTextures {
@@ -1680,7 +1688,6 @@ fn box_mip_chain(pixels: &[u8], size: u32, layers: u32) -> Vec<u8> {
         }
     }
     out
-    split: u32,
 }
 impl PreparedTextures {
     pub fn new(
@@ -1691,35 +1698,6 @@ impl PreparedTextures {
         forcefield: (&[u8], u32),
     ) -> Self {
         Self::with_split(pixels, size, layers, settings, forcefield, sprite_split())
-    }
-
-    /// Reuse the worker's exact mip bytes when the selected GPU needs smaller arrays.
-    fn for_split(self, layers: u32, split: u32) -> Self {
-        if self.split == split || layers == 0 {
-            return self;
-        }
-        let levels = self.sprites[0].1;
-        let stride = self.sprites.iter().map(|(b, _)| b.len()).sum::<usize>() / layers as usize;
-        let mut sprites = Vec::new();
-        let mut part = Vec::with_capacity(layers.min(split) as usize * stride);
-        for (bytes, _) in self.sprites {
-            let mut at = 0;
-            while at < bytes.len() {
-                let remaining_layers = layers.saturating_sub(sprites.len() as u32 * split);
-                let target = remaining_layers.min(split) as usize * stride;
-                let n = (target - part.len()).min(bytes.len() - at);
-                part.extend_from_slice(&bytes[at..at + n]);
-                at += n;
-                if part.len() == target {
-                    sprites.push((std::mem::take(&mut part), levels));
-                }
-            }
-        }
-        Self {
-            sprites,
-            forcefield: self.forcefield,
-            split,
-        }
     }
 
     fn with_split(
@@ -1757,7 +1735,6 @@ impl PreparedTextures {
                 layers,
                 size,
             ));
-            split,
         }
         self
     }
@@ -2282,11 +2259,6 @@ async fn open_backend(
         // Mobile drivers can spend hundreds of milliseconds reserving a new
         // 128-256 MiB pool block. This changes allocation granularity, not
         // resource limits, shader features, texture quality or geometry.
-        memory_hints: if cfg!(target_os = "android") {
-            wgpu::MemoryHints::MemoryUsage
-        } else {
-            wgpu::MemoryHints::Performance
-        },
         label: Some("Horizon device"),
         required_features: features,
         required_limits: limits,
@@ -2539,7 +2511,11 @@ impl Renderer {
                     surface: if offscreen {
                         None
                     } else {
-                        let spare = renderer.surface.take();
+                        let spare = renderer
+                            .spare_surface
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .take();
                         Some(match spare {
                             Some(surface) => surface,
                             None => renderer.instance.create_surface(window.clone())?,
@@ -5014,7 +4990,8 @@ impl Renderer {
             .spare_surface
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
+            .take()
+            .map(Arc::new);
         self.offscreen = None;
         self.suspended = false;
         if self.surface.is_none() {
@@ -12346,7 +12323,7 @@ mod tests {
             (&[0, 0, 0, 255].repeat(16), 4),
             2048,
         )
-        .for_split(layers, 1024);
+        .resplit(layers, 1024);
         assert_eq!(prepared.split, 1024);
         assert_eq!(
             prepared

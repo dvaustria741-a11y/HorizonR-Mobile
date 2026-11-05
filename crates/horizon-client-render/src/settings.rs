@@ -868,8 +868,6 @@ pub enum Opt {
     SharePresence,
     DirectionalAudio,
     MusicToast,
-    /// Option `.0` of the picked shader pack (`shader_pack_options`), as a slider.
-    PackOption(usize),
     /// `Options.exclusiveFullscreen`.
     ExclusiveFullscreen,
     /// VideoSettingsScreen's "Exclusive Fullscreen Mode": the monitor's mode to take.

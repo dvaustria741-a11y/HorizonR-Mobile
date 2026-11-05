@@ -584,7 +584,7 @@ impl Hdr {
         target: &wgpu::Texture,
         timing: Option<&mut super::pack_timing::PassTiming>,
     ) {
-        Self::draw_output(encoder, pipeline, group, target, false);
+        Self::draw_output(encoder, pipeline, group, target, false, timing);
     }
     fn draw_output(
         encoder: &mut wgpu::CommandEncoder,
@@ -592,6 +592,7 @@ impl Hdr {
         group: &wgpu::BindGroup,
         target: &wgpu::Texture,
         presentation: bool,
+        timing: Option<&mut super::pack_timing::PassTiming>,
     ) {
         #[cfg(not(target_os = "android"))]
         let _ = presentation;

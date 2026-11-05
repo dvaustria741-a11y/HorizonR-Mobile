@@ -78,6 +78,13 @@ pub struct Extras {
     pub zoom_smooth: bool,
     /// Divide mouse turning by the zoom.
     pub zoom_sensitivity: bool,
+    /// Far terrain a zoom magnifies is planned finer, so a spyglass does not
+    /// show the coarse cells it was given for an unzoomed screen
+    /// (`lod::Aim`). Costs far tiles while the zoom is held and gives them
+    /// back after, and does nothing at all unless far terrain is on
+    /// (`lodDistance`) and the view is actually zoomed. Off by default until
+    /// a measurement shows the extra tiles land while the zoom is still held.
+    pub lod_zoom_detail: bool,
     /// The FPS counter and keystrokes extras are official mods now
     /// (`moved_extras`): their old settings stay here until the game has
     /// installed the mod for a player who had one on.

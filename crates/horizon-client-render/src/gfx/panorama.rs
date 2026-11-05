@@ -186,9 +186,31 @@ pub(super) struct Panorama {
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     uniform: wgpu::Buffer,
+    vertices: wgpu::Buffer,
     faces: Arc<Faces>,
     /// The cube and its bindings, while the title screen shows.
     cube: Option<wgpu::BindGroup>,
+}
+
+// The same cube as CubeMap's procedural vertex indices. Passing positions
+// explicitly avoids a driver link failure on nested constant-array indexing
+// observed on GLES 3.0 Adreno 304.
+fn cube_vertices() -> [[f32; 3]; 36] {
+    let corners = [
+        [-1.0, -1.0, -1.0],
+        [1.0, -1.0, -1.0],
+        [1.0, 1.0, -1.0],
+        [-1.0, 1.0, -1.0],
+        [-1.0, -1.0, 1.0],
+        [1.0, -1.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [-1.0, 1.0, 1.0],
+    ];
+    [
+        4, 7, 6, 4, 6, 5, 5, 6, 2, 5, 2, 1, 1, 2, 3, 1, 3, 0, 0, 3, 7, 0, 7, 4, 7, 3, 2, 7, 2, 6,
+        0, 4, 5, 0, 5, 1,
+    ]
+    .map(|i| corners[i])
 }
 
 impl Panorama {
@@ -298,6 +320,7 @@ impl Panorama {
             layout,
             sampler,
             uniform,
+            vertices,
             faces,
             cube: None,
         }
@@ -380,6 +403,7 @@ impl Panorama {
         };
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, cube, &[]);
+        pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.draw(0..36, 0..1);
     }
 }

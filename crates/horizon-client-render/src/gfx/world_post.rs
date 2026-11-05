@@ -540,7 +540,7 @@ impl Post {
         group: &wgpu::BindGroup,
         timing: Option<&mut super::pack_timing::PassTiming>,
     ) {
-        self.finish_in_rect(encoder, screen, group, None);
+        self.finish_in_rect(encoder, screen, group, None, timing);
     }
     pub fn finish_in_rect(
         &self,
@@ -548,6 +548,7 @@ impl Post {
         screen: &wgpu::TextureView,
         group: &wgpu::BindGroup,
         rect: Option<[u32; 4]>,
+        timing: Option<&mut super::pack_timing::PassTiming>,
     ) {
         let attachments = [Some(wgpu::RenderPassColorAttachment {
             view: screen,

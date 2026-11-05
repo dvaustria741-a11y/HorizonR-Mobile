@@ -60,6 +60,7 @@ impl FrameScale {
                     output.width(),
                     output.height(),
                 ])),
+                None,
             );
         }
     }

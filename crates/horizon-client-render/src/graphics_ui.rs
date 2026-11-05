@@ -319,6 +319,11 @@ pub fn rows() -> Vec<(Page, Vec<(&'static str, Vec<Setting>)>)> {
                             "World pixels per screen pixel. Below 100% is faster on the GPU.",
                         ),
                         h(
+                            H::DynamicResolution,
+                            High,
+                            "Lowers the resolution while frames run slow, then restores it.",
+                        ),
+                        h(
                             H::Antialiasing,
                             Medium,
                             "Smooths jagged edges. FXAA: softer. TAA: smoothest, moving things may trail.",
@@ -748,6 +753,7 @@ impl H {
                 "BlueMap Radius",
                 lang::tr("%s chunks", &[&g.blue_map.radius_chunks()]),
             ),
+            H::DynamicResolution => labelled("Dynamic Resolution", on_off(g.dynamic_resolution)),
             H::CaveCulling => labelled("Cave Culling", on_off(g.cave_culling)),
             H::EntityCulling => labelled("Entity Culling", g.entity_culling.label()),
             H::ParticleCulling => labelled("Particle Culling", g.particle_culling.label()),
@@ -904,6 +910,7 @@ impl H {
             H::BlueMapRadius => {
                 g.blue_map.radius = step(&BLUE_MAP_RADII, g.blue_map.radius_chunks(), back)
             }
+            H::DynamicResolution => g.dynamic_resolution = !g.dynamic_resolution,
             H::CaveCulling => g.cave_culling = !g.cave_culling,
             H::EntityCulling => {
                 g.entity_culling = step(&EntityCullingMode::ALL, g.entity_culling, back)
@@ -1045,6 +1052,7 @@ impl Item {
         let g = &s.horizon;
         Some(match self {
             Item::Horizon(H::BlueMapAutoDetect) => g.blue_map.auto_detect,
+            Item::Horizon(H::DynamicResolution) => g.dynamic_resolution,
             Item::Horizon(H::CaveCulling) => g.cave_culling,
             Item::Horizon(H::CacheShulkerBoxes) => g.cache_shulker_boxes,
             Item::Horizon(H::CacheSigns) => g.cache_signs,

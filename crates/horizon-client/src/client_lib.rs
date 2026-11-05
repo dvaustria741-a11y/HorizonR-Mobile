@@ -181,7 +181,7 @@ pub use horizon_items::items;
 pub use horizon_items::random_sequences;
 
 pub use horizon_client_render::{
-    android_gamepad, android_runtime, file_lock, keypad, shader_pack_options, touch,
+    android_gamepad, android_runtime, file_lock, keypad, touch,
 };
 
 #[cfg(test)]

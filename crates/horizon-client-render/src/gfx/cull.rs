@@ -402,7 +402,7 @@ impl Cull {
                 }
                 let share = indices as f32 / r.total.max(1) as f32;
                 self.hidden = ([hidden, results.len()], share);
-                for (&slot, &result) in r.slots.iter().zip(&results) {
+                for (&slot, result) in r.slots.iter().zip(results) {
                     let (seen, slot) = if slot & TILE != 0 {
                         (&mut self.seen_tiles, (slot & !TILE) as usize)
                     } else {

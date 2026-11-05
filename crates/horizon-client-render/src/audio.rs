@@ -220,6 +220,9 @@ pub struct CapturedSound {
     pub except_entity: Option<u32>,
 }
 
+#[cfg(feature = "audio")]
+type DeviceProbe = (Option<String>, Option<String>, Vec<String>);
+
 pub struct Audio {
     _stream: Option<Stream>,
     device_name: String,
@@ -939,17 +942,6 @@ impl Audio {
         };
         let mut engine = SoundEngine::new(registry);
         engine.loaded = live;
-        #[cfg(feature = "audio")]
-        let cards = if live { card_fingerprint() } else { None };
-        // Where the cards gate the list (Linux, macOS), it starts empty: opening the
-        // output does not need it, and listing it probes every device; the first
-        // change fills it. Elsewhere it starts with every device listed, as before.
-        #[cfg(feature = "audio")]
-        let devices = if live && cards.is_none() {
-            output_devices()
-        } else {
-            Vec::new()
-        };
         Self {
             _stream: stream,
             device_name: target_device.to_owned(),
@@ -978,9 +970,7 @@ impl Audio {
             #[cfg(feature = "audio")]
             default_seen: None,
             #[cfg(feature = "audio")]
-            cards_seen: cards,
-            #[cfg(feature = "audio")]
-            devices_seen: devices,
+            cards_seen: None,
             #[cfg(feature = "audio")]
             devices_seen: Vec::new(),
             #[cfg(feature = "audio")]
@@ -1146,7 +1136,9 @@ impl Audio {
             #[cfg(feature = "audio")]
             devices_seen: self.devices_seen.clone(),
             #[cfg(feature = "audio")]
-            device_ticks: 0,
+            device_probe_started: std::time::Instant::now(),
+            #[cfg(feature = "audio")]
+            device_probe: None,
         }
     }
     /// Sync the volume options, refreshing the categories that changed
@@ -1211,42 +1203,20 @@ impl Audio {
         };
         if lost {
             log::info!("Horizon: audio device was lost");
-            self.default_seen = default_output_name();
-            self.cards_seen = card_fingerprint();
-            self.devices_seen = output_devices();
+            self.default_seen = None;
+            self.devices_seen.clear();
+            self.device_probe_started = std::time::Instant::now();
             return true;
         }
-        self.device_ticks += 1;
-        if self._stream.is_none() || self.device_ticks < 20 {
-            return false;
-        }
-        self.device_ticks = 0;
-        let default = default_output_name();
-        let cards = card_fingerprint();
-        // Listing the devices probes every one (on Linux every built-in PCM,
-        // printing ALSA's errors for the plugins this system lacks; on macOS
-        // every Core Audio device, about 90 ms with twenty of them); only the
-        // fingerprint's devices can change the list, and it is cheap.
-        if default == self.default_seen
-            && !cards_changed(self.cards_seen.as_deref(), cards.as_deref())
-        {
-            return false;
-        }
-        self.cards_seen = cards;
-        let devices = output_devices();
-        // Only a change in the device lists is looked at, as in vanilla: a
-        // preferred device that is listed but cannot open is not retried.
-        if default == self.default_seen && devices == self.devices_seen {
-            return false;
-        }
-        self.default_seen = default.clone();
-        let wanted = self.device_name.clone();
-        let available = devices.contains(&wanted);
-        self.devices_seen = devices;
-        if wanted.is_empty() {
-            let changed = default.as_deref().is_some_and(|d| d != current);
-            if changed {
-                log::info!("Horizon: system default audio device has changed");
+        let mut found = None;
+        if let Some(result) = self.device_probe.as_ref().map(|probe| probe.try_recv()) {
+            match result {
+                Ok(value) => {
+                    found = Some(value);
+                    self.device_probe = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.device_probe = None,
             }
         }
         let mut changed = false;
