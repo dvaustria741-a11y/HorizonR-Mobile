@@ -1,121 +1,28 @@
-error[E0428]: the name `UseBranch` is defined multiple times
-  --> crates/horizon-world/src/level/interact.rs:42:1
+error[E0432]: unresolved import `settings`
+  --> crates/horizon-shaders/src/lib.rs:56:9
    |
-34 | pub enum UseBranch {
-   | ------------------ previous definition of the type `UseBranch` here
-...
-42 | pub enum UseBranch {
-   | ^^^^^^^^^^^^^^^^^^ `UseBranch` redefined here
+56 | pub use settings::{
+   |         ^^^^^^^^ use of unresolved module or unlinked crate `settings`
    |
-   = note: `UseBranch` must be defined only once in the type namespace of this module
+help: to make use of source file crates/horizon-shaders/src/settings.rs, use `mod settings` in this file to declare the module
+   |
+19 + mod settings;
+   |
 
-   Compiling heck v0.5.0
-   Compiling horizon-mod-api-gen v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-mod-api-gen)
-error[E0119]: conflicting implementations of trait `std::fmt::Debug` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:23
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                       ----- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                       ^^^^^ conflicting implementation for `interact::UseBranch`
-
-error[E0119]: conflicting implementations of trait `Clone` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:10
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |          ----- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |          ^^^^^ conflicting implementation for `interact::UseBranch`
-
-error[E0119]: conflicting implementations of trait `Copy` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:17
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                 ---- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                 ^^^^ conflicting implementation for `interact::UseBranch`
-
-error[E0119]: conflicting implementations of trait `StructuralPartialEq` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:30
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                              --------- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
-
-error[E0119]: conflicting implementations of trait `PartialEq` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:30
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                              --------- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
-
-error[E0119]: conflicting implementations of trait `Eq` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:41
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                                         -- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                                         ^^ conflicting implementation for `interact::UseBranch`
-
-   Compiling jni-sys-macros v0.4.1
-   Compiling jni-sys v0.4.1
-   Compiling zerocopy-derive v0.8.60
-   Compiling jni-sys v0.3.1
-   Compiling ndk-sys v0.6.0+11769913
-   Compiling thiserror-impl v1.0.69
---
-error: could not compile `horizon-world` (lib) due to 7 previous errors
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `horizon-shaders` (lib) due to 1 previous error
 warning: build failed, waiting for other jobs to finish...
 
 === TAIL ===
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |          ^^^^^ conflicting implementation for `interact::UseBranch`
-
-error[E0119]: conflicting implementations of trait `Copy` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:17
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                 ---- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                 ^^^^ conflicting implementation for `interact::UseBranch`
-
-error[E0119]: conflicting implementations of trait `StructuralPartialEq` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:30
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                              --------- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
-
-error[E0119]: conflicting implementations of trait `PartialEq` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:30
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                              --------- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
-
-error[E0119]: conflicting implementations of trait `Eq` for type `interact::UseBranch`
-  --> crates/horizon-world/src/level/interact.rs:41:41
-   |
-33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                                         -- first implementation here
-...
-41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-   |                                         ^^ conflicting implementation for `interact::UseBranch`
-
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling xxhash-rust v0.8.19
+   Compiling wgpu-hal v30.0.1 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/third_party/wgpu-hal)
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling heck v0.5.0
+   Compiling horizon-mod-api-gen v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-mod-api-gen)
    Compiling jni-sys-macros v0.4.1
    Compiling jni-sys v0.4.1
    Compiling zerocopy-derive v0.8.60
@@ -132,7 +39,38 @@ error[E0119]: conflicting implementations of trait `Eq` for type `interact::UseB
    Compiling libmimalloc-sys v0.1.49 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/third_party/libmimalloc-sys)
    Compiling jni v0.22.4
    Compiling aes v0.8.4
-Some errors have detailed explanations: E0119, E0428.
-For more information about an error, try `rustc --explain E0119`.
-error: could not compile `horizon-world` (lib) due to 7 previous errors
+   Compiling winit v0.30.13 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/third_party/winit)
+   Compiling jni v0.21.1
+   Compiling android-activity v0.6.1
+   Compiling horizon-telemetry v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-telemetry)
+   Compiling wgpu-naga-bridge v30.0.1
+   Compiling wgpu-core-deps-windows-linux-android v30.0.1
+   Compiling horizon-client-core v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-core)
+   Compiling wgpu-core v30.0.1
+   Compiling horizon-protocol v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-protocol)
+warning: function `install_system_srv_lookup` is never used
+  --> crates/horizon-protocol/src/resolver/dns.rs:17:8
+   |
+17 | pub fn install_system_srv_lookup(lookup: SystemSrvLookup) {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling horizon-shader-api v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-shader-api)
+warning: `horizon-protocol` (lib) generated 1 warning
+   Compiling wgpu v30.0.1
+   Compiling horizon-shaders v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-shaders)
+error[E0432]: unresolved import `settings`
+  --> crates/horizon-shaders/src/lib.rs:56:9
+   |
+56 | pub use settings::{
+   |         ^^^^^^^^ use of unresolved module or unlinked crate `settings`
+   |
+help: to make use of source file crates/horizon-shaders/src/settings.rs, use `mod settings` in this file to declare the module
+   |
+19 + mod settings;
+   |
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `horizon-shaders` (lib) due to 1 previous error
 warning: build failed, waiting for other jobs to finish...
