@@ -1,47 +1,138 @@
-error: unexpected closing delimiter: `}`
-   --> crates/horizon-world/src/living_fall.rs:280:1
-    |
-274 |     fn the_grace_time_defers_the_liquid_reset() {
-    |                                                 - this opening brace...
+error[E0428]: the name `UseBranch` is defined multiple times
+  --> crates/horizon-world/src/level/interact.rs:42:1
+   |
+34 | pub enum UseBranch {
+   | ------------------ previous definition of the type `UseBranch` here
 ...
-279 |     }
-    |     - ...matches this closing brace
-280 | }
-    | ^ unexpected closing delimiter
+42 | pub enum UseBranch {
+   | ^^^^^^^^^^^^^^^^^^ `UseBranch` redefined here
+   |
+   = note: `UseBranch` must be defined only once in the type namespace of this module
 
-error: could not compile `horizon-world` (lib) due to 1 previous error
+   Compiling heck v0.5.0
+   Compiling horizon-mod-api-gen v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-mod-api-gen)
+error[E0119]: conflicting implementations of trait `std::fmt::Debug` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:23
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                       ----- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                       ^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Clone` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:10
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |          ----- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |          ^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Copy` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:17
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                 ---- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                 ^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `StructuralPartialEq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:30
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              --------- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `PartialEq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:30
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              --------- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Eq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:41
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                                         -- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                                         ^^ conflicting implementation for `interact::UseBranch`
+
+   Compiling jni-sys-macros v0.4.1
+   Compiling jni-sys v0.4.1
+   Compiling zerocopy-derive v0.8.60
+   Compiling jni-sys v0.3.1
+   Compiling ndk-sys v0.6.0+11769913
+   Compiling thiserror-impl v1.0.69
+--
+error: could not compile `horizon-world` (lib) due to 7 previous errors
 warning: build failed, waiting for other jobs to finish...
 
 === TAIL ===
-    Updating crates.io index
- Downloading crates ...
-  Downloaded zune-jpeg v0.4.21
-  Downloaded zune-core v0.4.12
-  Downloaded mio v1.2.4
-  Downloaded aes v0.8.4
-  Downloaded zip v2.6.1
-   Compiling syn v2.0.119
-   Compiling naga v30.0.1 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/third_party/naga)
-   Compiling horizon-core v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-core)
-   Compiling serde_core v1.0.229
-   Compiling horizon-world v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-world)
-   Compiling zmij v1.0.23
-   Compiling serde_json v1.0.151
-   Compiling serde v1.0.229
-   Compiling xxhash-rust v0.8.19
-   Compiling wgpu-hal v30.0.1 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/third_party/wgpu-hal)
-   Compiling itoa v1.0.18
-   Compiling memchr v2.8.3
-error: unexpected closing delimiter: `}`
-   --> crates/horizon-world/src/living_fall.rs:280:1
-    |
-274 |     fn the_grace_time_defers_the_liquid_reset() {
-    |                                                 - this opening brace...
 ...
-279 |     }
-    |     - ...matches this closing brace
-280 | }
-    | ^ unexpected closing delimiter
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |          ^^^^^ conflicting implementation for `interact::UseBranch`
 
-error: could not compile `horizon-world` (lib) due to 1 previous error
+error[E0119]: conflicting implementations of trait `Copy` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:17
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                 ---- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                 ^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `StructuralPartialEq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:30
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              --------- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `PartialEq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:30
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              --------- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Eq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:41
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                                         -- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                                         ^^ conflicting implementation for `interact::UseBranch`
+
+   Compiling jni-sys-macros v0.4.1
+   Compiling jni-sys v0.4.1
+   Compiling zerocopy-derive v0.8.60
+   Compiling jni-sys v0.3.1
+   Compiling ndk-sys v0.6.0+11769913
+   Compiling thiserror-impl v1.0.69
+   Compiling zerocopy v0.8.60
+   Compiling thiserror v1.0.69
+   Compiling num_enum_derive v0.7.6
+   Compiling num_enum v0.7.6
+   Compiling ndk v0.9.0
+   Compiling jni-macros v0.22.4
+   Compiling half v2.7.1
+   Compiling libmimalloc-sys v0.1.49 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/third_party/libmimalloc-sys)
+   Compiling jni v0.22.4
+   Compiling aes v0.8.4
+Some errors have detailed explanations: E0119, E0428.
+For more information about an error, try `rustc --explain E0119`.
+error: could not compile `horizon-world` (lib) due to 7 previous errors
 warning: build failed, waiting for other jobs to finish...
