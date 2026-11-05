@@ -740,22 +740,6 @@
       }
     },
     {
-      "name": "server_about_to_start",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_server_about_to_start",
-      "neoforge": "ServerAboutToStartEvent",
-      "side": "server",
-      "cancellable": false
-    },
-    {
-      "name": "server_stopping",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_server_stopping",
-      "neoforge": "ServerStoppingEvent",
-      "side": "server",
-      "cancellable": false
-    },
-    {
       "name": "server_tick",
       "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_server_tick",
@@ -778,16 +762,6 @@
       "mod_api": {
         "contract": "listen"
       }
-    },
-    {
-      "name": "level_tick_pre",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_level_tick_pre"
-    },
-    {
-      "name": "level_tick_post",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_level_tick_post"
     },
     {
       "name": "block_changed",
@@ -833,21 +807,6 @@
       }
     },
     {
-      "name": "random_tick",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::GameLevel<'_>::native_random_tick"
-    },
-    {
-      "name": "tick_block",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::GameLevel<'_>::native_tick_block"
-    },
-    {
-      "name": "update_shape",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::GameLevel<'_>::native_update_shape"
-    },
-    {
       "name": "hud",
       "version": 1,
       "target": "horizon_client::game::native_hooks::Game<'_>::native_hud",
@@ -889,11 +848,6 @@
         "contract": "collect",
         "out": "commands"
       }
-    },
-    {
-      "name": "commands",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_commands"
     },
     {
       "name": "zoom",
@@ -980,11 +934,6 @@
         "contract": "replace",
         "out": "tag"
       }
-    },
-    {
-      "name": "block_entity_update_tag",
-      "version": 1,
-      "target": "horizon_client::game::native_hooks::Game<'_>::native_block_entity_update_tag"
     },
     {
       "name": "block_entity_container",
