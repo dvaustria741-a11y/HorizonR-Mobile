@@ -188,8 +188,8 @@ impl Game<'_> {
             return None;
         }
         self.panel_wasm_sync();
-        let mods = &self.settings.mods;
-        let Some(shown) = self.panel.shown(|id| mods.native_on(id)) else {
+        let disabled = &self.settings.mods.disabled;
+        let Some(shown) = self.panel.shown(|id| !disabled.contains(id)) else {
             self.panel.of = None;
             self.panel.stacks.clear();
             return None;
@@ -690,16 +690,5 @@ mod tests {
         };
         assert_eq!((c.recipe, c.slot, c.right), (2, 9, true));
         assert_eq!(c.stack.item, "minecraft:oak_planks");
-    }
-}
-
-#[cfg(target_os = "android")]
-impl Game<'_> {
-    pub(super) fn mod_browser_edit_value(&self) -> String {
-        self.panel
-            .search
-            .as_ref()
-            .map(|s| s.value.clone())
-            .unwrap_or_default()
     }
 }

@@ -19,15 +19,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-/// The tree the chat parses and completes with: `Remote::chat_tree`, which is
-/// a server's, once it has sent one (ClientPacketListener.commands), else the
-/// game's own, plus the commands native mods own (`chat_tree_for`).
-pub(super) fn chat_tree(
-    remote: &Option<super::remote::Remote>,
-) -> &horizon_client::command::Dispatcher {
-    match remote.as_ref() {
-        Some(server) => &server.chat_tree,
-        None => horizon_client::command::vanilla::game_dispatcher(),
+/// The tree the chat parses and completes with: a server's, once it has
+/// sent one (ClientPacketListener.commands), else the game's own.
+fn chat_tree<'a>(
+    remote: &'a Option<super::remote::Remote>,
+    mods: &'a super::mods::ModsState,
+) -> &'a horizon_client::command::Dispatcher {
+    match remote.as_ref().and_then(|r| r.commands.as_ref()) {
+        Some(tree) => mods.remote_dispatcher().unwrap_or(tree),
+        None => mods.dispatcher(),
     }
 }
 use winit::{
@@ -1081,6 +1081,11 @@ impl Game<'_> {
                 self.ticks,
                 focused,
             );
+            if let Some(line) = heard {
+                self.mods_chat(&line);
+            }
+            self.lan_host_chat(message);
+            self.mod_player_chat(super::server_mods::Who::Local, message);
         }
     }
     pub(super) fn chat_scroll(&mut self, amount: f32) {
@@ -1283,8 +1288,8 @@ impl Game<'_> {
             return;
         }
         if self.remote.is_some() {
-            self.send_unattended_command(command);
-        } else {
+            self.send_chat(&format!("/{command}"));
+        } else if !self.local_server_mod_command(command) {
             self.run_command(command);
         }
     }

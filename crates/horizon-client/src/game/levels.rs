@@ -129,16 +129,6 @@ pub(super) struct Levels {
 }
 
 impl Levels {
-    /// Clear every parked level and dimensions recorded as heard open.
-    pub(super) fn clear(&mut self) {
-        self.parked.clear();
-        self.heard_open.clear();
-    }
-
-    /// A parked level, without opening or loading it.
-    pub(super) fn parked_world(&self, dim: Dim) -> Option<&World> {
-        self.parked.get(&dim).map(|level| &level.world)
-    }
     /// The chunks of each level not in place (capability `world` lends
     /// them to server mods for a call).
     #[cfg_attr(not(feature = "mods"), allow(dead_code))]
@@ -148,21 +138,6 @@ impl Levels {
         self.parked
             .iter_mut()
             .map(|(d, p)| (*d, &mut p.world.chunks))
-    }
-
-    /// The world of the level not in place, in `dim`, to change.
-    pub(super) fn parked_world_mut(&mut self, dim: Dim) -> Option<&mut World> {
-        self.parked.get_mut(&dim).map(|level| &mut level.world)
-    }
-
-    /// The worlds of the levels not in place.
-    pub(super) fn parked_worlds(&self) -> impl Iterator<Item = &World> {
-        self.parked.values().map(|level| &level.world)
-    }
-
-    /// The world of the level not in place, in `dim`, to change.
-    pub(super) fn parked_world_mut(&mut self, dim: Dim) -> Option<&mut World> {
-        self.parked.get_mut(&dim).map(|level| &mut level.world)
     }
 
     /// The level not in place, in `dim`.
@@ -497,23 +472,20 @@ impl Game<'_> {
             }
             self.update_dedicated_streaming();
             self.update_world();
-            result = horizon_client::block_contact::in_level(
-                (self.serving.is_some() || self.options.dedicated.is_some()).then_some(dim.id()),
-                || {
-                    if paused {
-                        self.tick_lan(true);
-                        Ok(())
-                    } else if k == 0 {
-                        self.tick()
-                    } else {
-                        let running = running.unwrap_or_else(|| self.clock.world_runs());
-                        if running {
-                            self.tick_weather_effects();
-                        }
-                        self.tick_world(running)
-                    }
-                },
-            );
+            // What server mods set in this level since its last tick.
+            self.apply_mod_block_writes();
+            result = if paused {
+                self.tick_lan(true);
+                Ok(())
+            } else if k == 0 {
+                self.tick()
+            } else {
+                let running = self.clock.world_runs();
+                if running {
+                    self.tick_weather_effects();
+                }
+                self.tick_world(running)
+            };
             if result.is_err() {
                 break;
             }

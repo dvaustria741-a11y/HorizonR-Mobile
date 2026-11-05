@@ -2862,11 +2862,107 @@ impl Game<'_> {
                 }
                 events
             };
-            self.wake_woken_guests(&mut host);
-            let Some(back) = self.lan_process_events(host, events, entities, spawn) else {
-                return;
-            };
-            host = back;
+            if let Some(state) = &state
+                && host.host_mode != state.game_mode
+            {
+                host.host_mode = state.game_mode;
+                host.hub.set_host_game_mode(state.uuid, state.game_mode);
+            }
+            for event in events {
+                match event {
+                    event @ (HostEvent::Chat { .. } | HostEvent::Warn(_) | HostEvent::Error(_)) => {
+                        self.lan_log_event(event);
+                    }
+                    HostEvent::PlayerChat { sender, text } => {
+                        self.mod_player_chat(super::server_mods::Who::Uuid(sender), &text);
+                    }
+                    HostEvent::Joined(conn) => {
+                        self.lan_guest_joined(&mut host, conn, state.as_ref(), entities, spawn);
+                        if self.options.dedicated.is_some()
+                            && let Some(g) = host.hub.guest(conn)
+                        {
+                            // PlayerList.placeNewPlayer, then the broadcast join message.
+                            super::dedicated::player_joined(g.uuid, &g.name);
+                            let [x, y, z] = g.position;
+                            super::dedicated::log(
+                                "INFO",
+                                &format!(
+                                    "{}[/{}] logged in with entity id {} at ({}, {}, {})",
+                                    g.name,
+                                    g.address,
+                                    g.entity_id,
+                                    super::dedicated::java_double(x),
+                                    super::dedicated::java_double(y),
+                                    super::dedicated::java_double(z)
+                                ),
+                            );
+                            super::dedicated::log(
+                                "INFO",
+                                &format!("System chat: {} joined the game", g.name),
+                            );
+                        } else if self.player.is_some()
+                            && let Some(g) = host.hub.guest(conn)
+                            && g.placed
+                        {
+                            // The host's chat hears of the newcomer as the guests do.
+                            let who = self.player_text(&g.name, g.uuid);
+                            self.system_message(
+                                Text::translate("multiplayer.player.joined", &[who])
+                                    .with_color(horizon_client::text::YELLOW),
+                            );
+                        }
+                    }
+                    HostEvent::Left(mut guest) => {
+                        // The container they had open loses an opener.
+                        if let Some(pos) = guest.menu.as_ref().and_then(|m| m.pos)
+                            && !guest.spectator()
+                        {
+                            // In the level they were in.
+                            let back = self.dim;
+                            let theirs = super::Dim::from_id(&guest.dimension);
+                            if self.enter_level(Some(&mut host), theirs).is_ok() {
+                                self.container_openers_changed(pos, false);
+                            }
+                            if let Err(e) = self.enter_level(Some(&mut host), back) {
+                                log::error!("could not reopen {}: {e}", back.id());
+                            }
+                        }
+                        self.lan_crafting_left(&mut host, &mut guest);
+                        if guest.placed {
+                            host.award_leave_game(guest.conn);
+                        }
+                        self.save_guest(&host, &guest);
+                        host.models.remove(&guest.conn);
+                        host.play.remove(&guest.conn);
+                        self.guest_combat.remove(&guest.conn);
+                        if self.options.dedicated.is_some() && guest.placed {
+                            super::dedicated::log(
+                                "INFO",
+                                &format!("{} lost connection: {}", guest.name, guest.left_reason),
+                            );
+                            super::dedicated::log(
+                                "INFO",
+                                &format!("System chat: {} left the game", guest.name),
+                            );
+                        } else if self.player.is_some() && guest.placed {
+                            // ServerGamePacketListenerImpl.removePlayerFromWorld.
+                            let who = self.player_text(&guest.name, guest.uuid);
+                            self.system_message(
+                                Text::translate("multiplayer.player.left", &[who])
+                                    .with_color(horizon_client::text::YELLOW),
+                            );
+                        }
+                    }
+                    HostEvent::Packet(conn, packet) => {
+                        self.lan_guest_packet(&mut host, conn, *packet);
+                        if !host.commands.is_empty() {
+                            self.lan = Some(host);
+                            self.run_guest_commands();
+                            host = self.lan.take().expect("the hub is back after the commands");
+                        }
+                    }
+                }
+            }
             host.states = states;
         }
         if !host.quiet.is_empty() {

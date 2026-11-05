@@ -184,53 +184,6 @@ fn vanilla_command(name: &str) -> bool {
         .any(|&c| d.nodes[c].name() == name)
 }
 
-/// Freeze native component IDs before reading content or opening a connection.
-/// With no mod registering any, nothing is installed, which every reader
-/// treats as no custom components, and `registries.json` isn't read.
-pub(super) fn register_components(root: &std::path::Path) -> horizon_client::Result<()> {
-    let mut names = Vec::new();
-    Game::native_component_types(&mut names);
-    if names.is_empty() {
-        return Ok(());
-    }
-    let path =
-        horizon_protocol::registry::Builtin::find(root).ok_or("registries.json not found")?;
-    let builtin = horizon_protocol::registry::Builtin::load(&path)?;
-    let types = builtin
-        .get("minecraft:data_component_type")
-        .ok_or("missing data component registry")?;
-    let first = i32::try_from(types.names.len())?;
-    horizon_protocol::item::custom::install(first, names)
-        .map_err(|error| format!("invalid native component registration: {error}"))?;
-    Ok(())
-}
-
-/// The blocks and items native mods declare in code (`native_blocks`,
-/// `native_items`): asked once, so every content root of this run, a pack
-/// reload's included, has the same ones.
-fn native_declared() -> &'static (
-    Vec<horizon_mods::content::Block>,
-    Vec<horizon_mods::content::Item>,
-) {
-    static DECLARED: std::sync::OnceLock<(
-        Vec<horizon_mods::content::Block>,
-        Vec<horizon_mods::content::Item>,
-    )> = std::sync::OnceLock::new();
-    DECLARED.get_or_init(|| {
-        let (mut blocks, mut items) = (Vec::new(), Vec::new());
-        Game::native_blocks(&mut blocks);
-        Game::native_items(&mut items);
-        (blocks, items)
-    })
-}
-/// The native mods' standalone models (`native_standalone_models`), set once
-/// before the resources first load.
-pub(super) fn register_standalone_models() {
-    let mut names = Vec::new();
-    Game::native_standalone_models(&mut names);
-    horizon_client::models::register_standalone(names);
-}
-
 /// `root` with the content mods that are on layered over it
 /// (docs/modpacks.md): their blocks, items, data and assets. Read once at
 /// start, before the resources load; a mod whose content is refused is left
@@ -344,184 +297,45 @@ pub(super) fn content_root(
     }
 }
 
-/// A loaded mod as a server tells joining clients (`horizon_protocol::mod_list`): its manifest's
-/// id, version and side, and the SHA-256 of its `.hmod` (none for a folder).
-fn announced_entry(
-    m: &horizon_mods::Manifest,
-    path: &std::path::Path,
-) -> horizon_protocol::mod_list::Entry {
-    use horizon_mods::Side;
-    use horizon_protocol::mod_list;
-    use sha2::{Digest, Sha256};
-    let sha256 = if path.is_file() {
-        std::fs::read(path)
-            .ok()
-            .map(|bytes| Sha256::digest(bytes).into())
-    } else {
-        None
-    };
-    mod_list::Entry {
-        id: m.id.clone(),
-        version: m.version.clone(),
-        sha256,
-        side: match m.side {
-            Side::Both => mod_list::Side::Both,
-            Side::Server => mod_list::Side::Server,
-            Side::Client => mod_list::Side::Client,
-        },
-    }
-}
-
-/// The mods' mob effects join vanilla's (`brewing::effect`), once the root
-/// holding their network ids is built. The startup root's effects, none
-/// included, stay until restart: a pack reload after a Mods switch builds a
-/// root with others.
-fn register_mob_effects(mods: &[horizon_client::mod_content::ContentMod]) {
-    use horizon_client::brewing::{self, Category};
-    use horizon_mods::content::EffectCategory;
-    let effects = horizon_client::mod_content::mob_effects(mods);
-    let ids: Vec<String> = effects.iter().map(|e| e.id.clone()).collect();
-    let set = brewing::register_mod_effects(effects.into_iter().map(|e| {
-        let category = match e.category {
-            EffectCategory::Beneficial => Category::Beneficial,
-            EffectCategory::Harmful => Category::Harmful,
-            EffectCategory::Neutral => Category::Neutral,
-        };
-        (e.id.clone(), e.color, category)
-    }));
-    if !set
-        && brewing::mod_effects()
-            .iter()
-            .map(|e| e.id)
-            .ne(ids.iter().map(String::as_str))
-    {
-        log::warn!("Horizon: the mods' mob effects changed; restart the game to use them");
-    }
-}
-
-/// the mods' thrown entity types, as their mob effects: set once, from the
-/// startup root.
-fn register_entity_types(mods: &[horizon_client::mod_content::ContentMod]) {
-    use horizon_client::projectiles;
-    let types = horizon_client::mod_content::entity_types(mods);
-    let set = projectiles::register_thrown_types(
-        types
-            .iter()
-            .map(|t| (t.id.clone(), t.item.clone(), t.damage)),
-    );
-    if !set
-        && projectiles::thrown_types()
-            .iter()
-            .map(|t| t.id)
-            .ne(types.iter().map(|t| t.id.as_str()))
-    {
-        log::warn!("Horizon: the mods' entity types changed; restart the game to use them");
-    }
-}
-
-/// the mods' menu types, as their entity types: set once, from the startup
-/// root.
-fn register_menu_types(mods: &[horizon_client::mod_content::ContentMod]) {
-    use horizon_client::containers;
-    let menus = horizon_client::mod_content::menu_types(mods);
-    let set = containers::register_mod_menu_types(menus.iter().map(|m| {
-        let results = m.results.iter().map(|&r| usize::from(r)).collect();
-        (m.id.clone(), m.slots.into(), m.data_slots.into(), results)
-    }));
-    if !set
-        && containers::mod_menu_types()
-            .iter()
-            .map(|m| m.id)
-            .ne(menus.iter().map(|m| m.id.as_str()))
-    {
-        log::warn!("Horizon: the mods' menu types changed; restart the game to use them");
-    }
-}
-
-/// What the launcher writes beside a game it built with native mods: their ids under `mods`.
-const BUILD_INFO: &str = "native-mods.json";
-
-/// `native-mods.json`'s `mods` list is not empty: the game was built with mods.
-fn build_lists_mods(built: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(built)
-        .ok()
-        .and_then(|info| info["mods"].as_array().map(|mods| !mods.is_empty()))
-        .unwrap_or(false)
-}
-
-/// Whether the game playing was built with native mods: the launcher writes their ids into
-/// [`BUILD_INFO`] beside the executable, and a release or Nightly has no such file.
-pub(super) fn built_with_native_mods() -> bool {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| std::fs::read_to_string(exe.with_file_name(BUILD_INFO)).ok())
-        .is_some_and(|built| build_lists_mods(&built))
-}
-
-/// The native mods the launcher built this game with, `id version, id version`, for the crash
-/// report (`built`: its [`BUILD_INFO`]). None for a release or Nightly, which have no mods.
-fn native_mods_detail(built: &str) -> Option<String> {
-    let info: serde_json::Value = serde_json::from_str(built).unwrap_or_default();
-    let list = info["mods"]
-        .as_array()?
-        .iter()
-        .map(|m| {
-            let text = |key: &str| m[key].as_str().unwrap_or("?").to_owned();
-            format!("{} {}", text("id"), text("version"))
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    (!list.is_empty()).then_some(list)
-}
-
-/// A row for each native mod the launcher installed in `dir` (`<id>.hnmod`) that this game wasn't
-/// built with (`built`: its [`BUILD_INFO`], empty for a release or Nightly) and that has no row
-/// yet. The page said "No mods" before, and players copied the files into `horizon-mods` (#4770).
-/// Its toggle is the `mod.<id>` line the launcher's next build follows.
-fn not_built(dir: &std::path::Path, built: &str, rows: &[Installed]) -> Vec<Installed> {
-    let info: serde_json::Value = serde_json::from_str(built).unwrap_or_default();
-    let in_build = |id: &str| {
-        info["mods"]
-            .as_array()
-            .is_some_and(|mods| mods.iter().any(|m| m["id"] == id))
-    };
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
-        .map(|d| d.flatten().map(|e| e.path()).collect())
-        .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
-    paths.sort();
-    let mut out: Vec<Installed> = Vec::new();
-    for path in paths {
-        let Ok(bundle) = horizon_mods::index::native::Bundle::read(&path) else {
-            continue;
-        };
-        let m = bundle.manifest;
-        let listed = rows.iter().chain(&out).any(|row| row.id == m.id);
-        if !listed && !in_build(&m.id) {
-            out.push(Installed {
-                title: format!("{} {}", m.id, m.version),
-                id: m.id,
-                description: String::new(),
-                problem: Some(mod_list::NOT_BUILT.to_owned()),
-                dev: false,
-                native: None,
-            });
-        }
-    }
-    out
-}
-
-/// A WebAssembly code mod's row on the Mods page.
-const STOPPED: &str = "Doesn't run any more: needs a native port";
-/// The player was told once about the WebAssembly mods that stopped (`horizon-mods/<this>`).
-const NOTICE_SEEN: &str = ".native-notice";
-
 /// A build without the `mods` feature: no mod runs.
 #[cfg(not(feature = "mods"))]
 impl Game<'_> {
     /// Says why the installed and dev mods don't run.
     pub(super) fn start_mods(&mut self) {
-        let dir = Self::game_dir().join(mod_list::DIR);
+        let dir = Self::options_path().with_file_name(mod_list::DIR);
+        let found = horizon_mods::find(&dir).len() + self.mods.dev.len();
+        if found > 0 {
+            log::warn!(
+                "Horizon: {found} mod(s) not started: this build has no mod runtime (build with --features mods)"
+            );
+        }
+        self.list_native_mods();
+    }
+    pub(super) fn merge_remote_tree(&mut self) {}
+    pub(super) fn sync_mods(&mut self) {}
+    pub(super) fn tick_mods(&mut self) {}
+    pub(super) fn mods_frame(&mut self, _elapsed: Duration) {}
+    pub(super) fn mod_command(&mut self, _command: &str) -> bool {
+        false
+    }
+    pub(super) fn mods_chat(&mut self, _line: &str) {}
+    pub(super) fn draw_mod_panels(&self, _batch: &mut HudBatch, _corners: &mut Corners) {}
+    pub(super) fn open_mod_screen(&mut self, _owner: usize, _settings: bool) {}
+    pub(super) fn close_mod_screen(&mut self, _tell: bool) {}
+    pub(super) fn draw_mod_screen(&mut self, _batch: &mut HudBatch) {}
+    pub(super) fn mod_screen_click(&mut self, _button: winit::event::MouseButton) {}
+    pub(super) fn mod_screen_key(&mut self, _key: winit::keyboard::KeyCode) -> bool {
+        false
+    }
+    pub(super) fn mod_screen_scroll(&mut self, _delta: f32) {}
+}
+
+#[cfg(feature = "mods")]
+impl Game<'_> {
+    /// Reads `horizon-mods/` and the dev mods, and starts the ones turned on.
+    pub(super) fn start_mods(&mut self) {
+        let dir = Self::options_path().with_file_name(mod_list::DIR);
+        let dev = &self.mods.dev;
         let mut paths = horizon_mods::find(&dir);
         paths.retain(|p| !dev.contains(p));
         paths.extend(dev.iter().cloned());
@@ -606,33 +420,6 @@ impl Game<'_> {
             })
             .collect();
         self.list_native_mods();
-        let built = std::env::current_exe()
-            .ok()
-            .and_then(|exe| std::fs::read_to_string(exe.with_file_name(BUILD_INFO)).ok())
-            .unwrap_or_default();
-        let built_mods = native_mods_detail(&built);
-        let built_with_mods = built_mods.is_some();
-        if let Some(list) = built_mods {
-            horizon_client::crash::set_detail("Native Mods", list);
-        }
-        horizon_client::gfx::native_render::set_mods_built_in(
-            built_with_mods
-                || self
-                    .settings
-                    .mods
-                    .installed
-                    .iter()
-                    .any(|m| m.native.is_some()),
-        );
-        let native_dir = Self::game_dir().join(mod_list::NATIVE_DIR);
-        let unbuilt = not_built(&native_dir, &built, &self.settings.mods.installed);
-        self.settings.mods.installed.extend(unbuilt);
-        let installed = &self.settings.mods.installed;
-        self.mods.stopped = installed
-            .iter()
-            .filter(|row| row.problem.as_deref() == Some(STOPPED))
-            .map(|row| row.title.clone())
-            .collect();
     }
     /// The chat's tree after the running mods changed.
     fn sync_mod_commands(&mut self) {
@@ -653,7 +440,7 @@ impl Game<'_> {
         self.mods.remote_tree = self
             .remote
             .as_ref()
-            .map(|r| &r.chat_tree)
+            .and_then(|r| r.commands.as_ref())
             .filter(|_| !names.is_empty())
             .map(|t| t.with_mod_commands(names.iter().map(String::as_str)));
     }
@@ -755,7 +542,8 @@ impl Game<'_> {
         if !self.mods.mods.wants_raycast() {
             return None;
         }
-        let (eye, dir) = self.aim()?;
+        let eye = self.eye_position()?;
+        let dir = super::view_vector(self.yaw, self.pitch);
         let reach = f64::from(horizon_mods::RAYCAST_MAX);
         let (pos, point, state) = match self.clip_ray(eye, dir, reach) {
             Some(hit) => (
@@ -859,9 +647,20 @@ impl Game<'_> {
         if !self.mods.mods.is_running() {
             return;
         }
-        let names = std::mem::take(&mut self.mods.stopped).join(", ");
-        let seen = Self::game_dir().join(mod_list::DIR).join(NOTICE_SEEN);
-        if seen.exists() {
+        self.tick_mod_use();
+        let snapshot = self.mod_snapshot();
+        self.mods.mods.set_snapshot(snapshot);
+        self.mods.mods.tick(self.ticks);
+        self.show_mod_output();
+    }
+    /// Restarts the dev mods rebuilt since the last check, once a second.
+    pub(super) fn reload_dev_mods(&mut self) {
+        if self.mods.dev.is_empty()
+            || self
+                .mods
+                .checked
+                .is_some_and(|t| t.elapsed() < RELOAD_CHECK)
+        {
             return;
         }
         self.mods.checked = Some(Instant::now());
@@ -1157,9 +956,7 @@ impl Game<'_> {
     /// A mod pushes its screen (`ui.open-screen`), or Options > Mods opens
     /// its settings page (`settings`, the mod's `installed` index).
     pub(super) fn open_mod_screen(&mut self, owner: usize, settings: bool) {
-        // Only the settings page is drawn at the title (Options > Mods); a
-        // mod's own screen waits for a world.
-        if self.title.is_some() && !settings {
+        if self.title.is_some() {
             return;
         }
         if settings {
@@ -1216,7 +1013,7 @@ impl Game<'_> {
         };
         let Some((title, widgets)) = Self::mod_ui_view(&self.mods.mods, ms) else {
             // The mod's surface is gone (it stopped or cleared it): leave
-            // the screen like Done did, without `closed` â€” the mod ended it.
+            // the screen like Done did, without `closed` — the mod ended it.
             self.close_mod_screen(false);
             return;
         };
@@ -1326,15 +1123,26 @@ impl Game<'_> {
                         batch.fill(atlas, xx, yy, 1.0, wh, 0xFF50_5050);
                     }
                     let content = l.rows.len() as f32 * 12.0;
-                    draw_list_rows(
-                        batch,
-                        atlas,
-                        self.cursor,
-                        &l.rows,
-                        l.selected,
-                        scroll.amount,
-                        (x, wy, wh),
-                    );
+                    let first = (scroll.amount / 12.0) as usize;
+                    let last = (first + ((rows_bottom - rows_top) / 12.0).ceil() as usize + 1)
+                        .min(l.rows.len());
+                    for (vi, ri) in (first..last).enumerate() {
+                        let ry = rows_top + vi as f32 * 12.0 - (scroll.amount % 12.0);
+                        if ui::hovered(self.cursor, x, ry, MOD_UI_COLUMN - 6.0, 12.0) {
+                            batch.fill(atlas, x + 1.0, ry, MOD_UI_COLUMN - 8.0, 12.0, 0x20FF_FFFF);
+                        }
+                        if l.selected == Some(ri as u32) {
+                            batch.fill(atlas, x + 1.0, ry, 3.0, 12.0, 0xFFFF_FFFF);
+                        }
+                        batch.text_styled(
+                            atlas,
+                            &Text::literal(l.rows[ri].clone()),
+                            x + 6.0,
+                            ry + 2.0,
+                            u32::MAX,
+                            true,
+                        );
+                    }
                     ui::scrollbar(
                         batch,
                         atlas,
@@ -1472,51 +1280,6 @@ impl Game<'_> {
     }
 }
 
-/// A mod screen's `list` rows in its frame at (`x`, `wy`), `wh` high, scrolled by `scroll`: the
-/// rows in view, the hovered one lit and the selected one marked. As AbstractSelectionList draws
-/// its entries inside `enableScissor`, they are cut at the frame's inside: the row a scroll shows
-/// in part, and the one below a full view, never draw over the frame or below it.
-#[cfg(feature = "mods")]
-fn draw_list_rows(
-    batch: &mut HudBatch,
-    atlas: &horizon_client::hud::HudAtlas,
-    cursor: (f32, f32),
-    rows: &[String],
-    selected: Option<u32>,
-    scroll: f32,
-    (x, wy, wh): (f32, f32, f32),
-) {
-    let rows_top = wy + 4.0;
-    let rows_bottom = wy + wh - 4.0;
-    let first = (scroll / 12.0) as usize;
-    let last = (first + ((rows_bottom - rows_top) / 12.0).ceil() as usize + 1).min(rows.len());
-    let start = batch.vertices.len();
-    for (vi, ri) in (first..last).enumerate() {
-        let ry = rows_top + vi as f32 * 12.0 - (scroll % 12.0);
-        if ui::hovered(cursor, x, ry, MOD_UI_COLUMN - 6.0, 12.0) {
-            batch.fill(atlas, x + 1.0, ry, MOD_UI_COLUMN - 8.0, 12.0, 0x20FF_FFFF);
-        }
-        if selected == Some(ri as u32) {
-            batch.fill(atlas, x + 1.0, ry, 3.0, 12.0, 0xFFFF_FFFF);
-        }
-        batch.text_styled(
-            atlas,
-            &Text::literal(rows[ri].clone()),
-            x + 6.0,
-            ry + 2.0,
-            u32::MAX,
-            true,
-        );
-    }
-    batch.clip_since(
-        start,
-        x + 1.0,
-        wy + 1.0,
-        x + MOD_UI_COLUMN - 1.0,
-        wy + wh - 1.0,
-    );
-}
-
 #[cfg(feature = "mods")]
 const MOD_UI_TOP: f32 = 40.0;
 #[cfg(feature = "mods")]
@@ -1524,231 +1287,3 @@ const MOD_UI_COLUMN: f32 = 200.0;
 /// A key row's height with its gap, as the widgets below it space out.
 #[cfg(feature = "mods")]
 const MOD_UI_KEY_ROW: f32 = 26.0;
-
-#[cfg(all(test, feature = "mods"))]
-mod tests {
-    use super::*;
-    use horizon_client::hud::HudAtlas;
-
-    #[test]
-    fn list_rows_stay_inside_the_frame_scrolled_or_not() {
-        let atlas =
-            HudAtlas::build(std::path::Path::new("/nonexistent/horizon-test-assets")).unwrap();
-        // #3237: 22 rows in a frame of 6 (mod_ui_layout's height for a long list). The 7th row
-        // (index 6), drawn for a scroll that shows it in part, is selected and under the
-        // cursor, so its fills reach past the frame unless they are cut.
-        let rows: Vec<String> = (0..22).map(|i| format!("Row {i}")).collect();
-        let (x, wy, wh) = (100.0, 40.0, 6.0 * 12.0 + 8.0);
-        for scroll in [0.0, 6.0, 30.0] {
-            let mut batch = HudBatch::new([640, 480]);
-            let seventh_row = wy + 4.0 + 6.0 * 12.0 - scroll % 12.0;
-            draw_list_rows(
-                &mut batch,
-                &atlas,
-                (x + 10.0, seventh_row + 2.0),
-                &rows,
-                Some(6 + (scroll / 12.0) as u32),
-                scroll,
-                (x, wy, wh),
-            );
-            assert!(!batch.vertices.is_empty(), "scroll {scroll}: rows drawn");
-            let (top, bottom) = batch
-                .vertices
-                .iter()
-                .map(|v| v.pos[1])
-                .fold((f32::MAX, f32::MIN), |(lo, hi), y| (lo.min(y), hi.max(y)));
-            assert!(
-                top >= wy + 1.0 && bottom <= wy + wh - 1.0,
-                "scroll {scroll}: rows span {top}..{bottom}, the frame's inside is {}..{}",
-                wy + 1.0,
-                wy + wh - 1.0
-            );
-        }
-    }
-}
-
-#[cfg(test)]
-fn not_built(
-    dir: &std::path::Path,
-    built: &str,
-    rows: &[mod_list::Installed],
-) -> Vec<mod_list::Installed> {
-    let info: serde_json::Value = serde_json::from_str(built).unwrap_or_default();
-    let in_build = |id: &str| {
-        info["mods"]
-            .as_array()
-            .is_some_and(|mods| mods.iter().any(|m| m["id"] == id))
-    };
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
-        .map(|d| d.flatten().map(|e| e.path()).collect())
-        .unwrap_or_default();
-    paths.retain(|p| p.extension().is_some_and(|e| e == "hnmod"));
-    paths.sort();
-    let mut out: Vec<mod_list::Installed> = Vec::new();
-    for path in paths {
-        let Ok(bundle) = horizon_mods::index::native::Bundle::read(&path) else {
-            continue;
-        };
-        let m = bundle.manifest;
-        let listed = rows.iter().chain(&out).any(|row| row.id == m.id);
-        if !listed && !in_build(&m.id) {
-            out.push(mod_list::Installed {
-                title: format!("{} {}", m.id, m.version),
-                id: m.id,
-                description: String::new(),
-                problem: Some(mod_list::NOT_BUILT.to_owned()),
-                dev: false,
-                native: None,
-                has_settings: false,
-            });
-        }
-    }
-    out
-}
-
-/// A mod gave `block` block entity `id`, but the block's template has none,
-/// so breaking it would never remove it: the block gets none.
-pub(super) fn warn_no_block_entity(block: &str, id: &str) {
-    log::warn!("{block}: no block entity {id}, its template has none (copy a chest or furnace)");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use horizon_client::mod_list::Installed;
-    use std::io::Write;
-
-    /// A minimal `.hnmod` the registry accepts: its manifest and its mixin's.
-    fn hnmod(dir: &std::path::Path, id: &str) {
-        let horizon = "a".repeat(40);
-        let manifest = serde_json::json!({
-            "schema": 1, "id": id, "version": "0.3.0", "game": "26.3",
-            "horizon": horizon, "mixins": "b".repeat(40),
-        });
-        let mixin = format!(
-            "[mod]\nid = \"{id}\"\nversion = \"0.3.0\"\n[compatibility]\nhorizon_revision = \"{horizon}\"\n"
-        );
-        let file = std::fs::File::create(dir.join(format!("{id}.hnmod"))).unwrap();
-        let mut zip = zip::ZipWriter::new(file);
-        let options = zip::write::SimpleFileOptions::default();
-        zip.start_file("horizon-native.json", options).unwrap();
-        zip.write_all(manifest.to_string().as_bytes()).unwrap();
-        zip.start_file(format!("mixins/{id}/horizon-mixin.toml"), options)
-            .unwrap();
-        zip.write_all(mixin.as_bytes()).unwrap();
-        zip.finish().unwrap();
-    }
-
-    #[test]
-    fn native_mods_installed_but_not_built_get_a_row_saying_so() {
-        let dir = std::env::temp_dir().join(format!("horizon-not-built-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        for id in ["veinminer", "zoom", "minimap"] {
-            hnmod(&dir, id);
-        }
-        std::fs::write(dir.join("notes.txt"), "not a mod").unwrap();
-        std::fs::write(dir.join("broken.hnmod"), "not a zip").unwrap();
-        // A release: none is built in; the page lists them, sorted, instead of "No mods".
-        let rows = not_built(&dir, "", &[]);
-        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
-        assert_eq!(ids, ["minimap", "veinminer", "zoom"]);
-        assert_eq!(rows[1].title, "veinminer 0.3.0");
-        assert_eq!(rows[1].problem.as_deref(), Some(mod_list::NOT_BUILT));
-        assert!(rows.iter().all(|r| r.native.is_none() && !r.dev));
-        // A native build with zoom, and minimap's row already listed by its own hook.
-        let built =
-            r#"{"base":"nightly-2026-10-30-1da354b","mods":[{"id":"zoom","version":"0.3.0"}]}"#;
-        let listed = Installed {
-            id: "minimap".into(),
-            ..rows[0].clone()
-        };
-        let rows = not_built(&dir, built, &[listed]);
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].id, "veinminer");
-        // No folder: no rows.
-        assert!(not_built(&dir.join("missing"), "", &[]).is_empty());
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-
-    /// Only a build whose `native-mods.json` lists a mod counts as built with mods.
-    #[test]
-    fn only_a_listed_mod_makes_a_build_a_mod_build() {
-        assert!(!build_lists_mods(""));
-        assert!(!build_lists_mods("{}"));
-        assert!(!build_lists_mods(r#"{"mods":[]}"#));
-        assert!(!build_lists_mods(r#"{"mods":"worldmap"}"#));
-        assert!(build_lists_mods(r#"{"mods":[{"id":"worldmap"}]}"#));
-    }
-
-    /// A minimal `.hnmod` the registry accepts: its manifest and its mixin's.
-    fn hnmod(dir: &std::path::Path, id: &str) {
-        let horizon = "a".repeat(40);
-        let manifest = serde_json::json!({
-            "schema": 1, "id": id, "version": "0.3.0", "game": "26.3",
-            "horizon": horizon, "mixins": "b".repeat(40),
-        });
-        let mixin = format!(
-            "[mod]\nid = \"{id}\"\nversion = \"0.3.0\"\n[compatibility]\nhorizon_revision = \"{horizon}\"\n"
-        );
-        let file = std::fs::File::create(dir.join(format!("{id}.hnmod"))).unwrap();
-        let mut zip = zip::ZipWriter::new(file);
-        let options = zip::write::SimpleFileOptions::default();
-        zip.start_file("horizon-native.json", options).unwrap();
-        zip.write_all(manifest.to_string().as_bytes()).unwrap();
-        zip.start_file(format!("mixins/{id}/horizon-mixin.toml"), options)
-            .unwrap();
-        zip.write_all(mixin.as_bytes()).unwrap();
-        zip.finish().unwrap();
-    }
-
-    #[test]
-    fn the_crash_report_lists_the_builds_native_mods() {
-        let built = r#"{"mods":[{"id":"machine_sample","version":"0.1.0","sha256":null},{"id":"pipes","version":"2.0"}]}"#;
-        assert_eq!(
-            native_mods_detail(built).as_deref(),
-            Some("machine_sample 0.1.0, pipes 2.0")
-        );
-        // A release has no file; a build without mods has an empty list.
-        assert_eq!(native_mods_detail(""), None);
-        assert_eq!(native_mods_detail(r#"{"mods":[]}"#), None);
-    }
-
-    #[test]
-    fn native_mods_installed_but_not_built_get_a_row_saying_so() {
-        let dir = std::env::temp_dir().join(format!("horizon-not-built-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        for id in ["veinminer", "zoom", "minimap"] {
-            hnmod(&dir, id);
-        }
-        std::fs::write(dir.join("notes.txt"), "not a mod").unwrap();
-        std::fs::write(dir.join("broken.hnmod"), "not a zip").unwrap();
-        // A release: none is built in; the page lists them, sorted, instead of "No mods".
-        let rows = not_built(&dir, "", &[]);
-        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
-        assert_eq!(ids, ["minimap", "veinminer", "zoom"]);
-        assert_eq!(rows[1].title, "veinminer 0.3.0");
-        assert_eq!(rows[1].problem.as_deref(), Some(mod_list::NOT_BUILT));
-        assert!(rows.iter().all(|r| r.native.is_none() && !r.dev));
-        // A native build with zoom, and minimap's row already listed by its own hook.
-        let built =
-            r#"{"base":"nightly-2026-10-30-1da354b","mods":[{"id":"zoom","version":"0.3.0"}]}"#;
-        let listed = Installed {
-            id: "minimap".into(),
-            ..rows[0].clone()
-        };
-        let rows = not_built(&dir, built, &[listed]);
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].id, "veinminer");
-        // No folder: no rows.
-        assert!(not_built(&dir.join("missing"), "", &[]).is_empty());
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-}

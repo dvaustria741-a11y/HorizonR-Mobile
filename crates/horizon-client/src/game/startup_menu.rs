@@ -668,17 +668,9 @@ impl Loading {
                     super::packs::open_uri(super::options::ACCESSIBILITY_HELP_LINK)
                 }
                 // Mods' settings pages open only in a running game.
-                Event::NativeSettings(_) | Event::NativeButton(..) => {}
-                // The startup menu runs before the game opens a control socket,
-                // and before its sound engine (no clicks, no volume previews,
-                // and no music tracks to list or play).
-                Event::ButtonClick
-                | Event::CopyAgentDetails
-                | Event::ToggleRecording
-                | Event::ExportRepro
-                | Event::ListMusicTracks
-                | Event::PlayMusicTrack(..)
-                | Event::Volume(..) => {}
+                Event::ModSettings(_) | Event::NativeButton(..) => {}
+                // The startup menu runs before the game opens a control socket.
+                Event::ButtonClick | Event::CopyAgentDetails => {}
             }
         }
     }

@@ -198,7 +198,10 @@ mod mob_gear;
 mod mob_index;
 mod mob_looting;
 mod mob_sounds;
-mod mod_api_host;
+mod mod_input;
+#[cfg(feature = "mods")]
+mod mod_panel;
+mod mod_render;
 mod mods;
 mod mount_menu;
 mod mounts;
@@ -691,7 +694,7 @@ impl Options {
             match arg.as_str() {
                 "--help" | "-h" => {
                     println!(
-                        "Horizon — Minecraft Java Edition {} in Rust\n\n  --resources PATH        Prepared resources (horizon-prepare)\n  --render-distance N     Chunks, 2..128 (default 12)\n  --world NAME            World folder under saves/ (default \"New World\")\n  --seed N                World seed for new worlds (default 0)\n  --width N, --height N   Window size (default 1280 x 720)\n  --creative              Creative mode (default survival)\n  --test-terrain          Simple test terrain instead of vanilla generation\n  --frames N              Exit after N frames (testing)\n  --world-frames N        Exit after N frames drawn in the world (testing)\n  --smoke-report PATH     Write a JSON report on exit\n  --benchmark SCENARIO    Run a benchmark (standard, village, forest, ocean, mountain), write its report to benchmarks/ and quit\n  --control               Accept horizon-ctl commands on a local socket\n  --control-socket PATH   Control socket path (default $XDG_RUNTIME_DIR/horizon-control.sock)\n  --server HOST[:PORT]    Join a multiplayer server (offline mode) at start\n  --quickPlaySingleplayer WORLD  Open this world of saves/ at start, only if it exists (vanilla's)\n  --quickPlayMultiplayer HOST[:PORT]  The same as --server (vanilla's name)\n  --name NAME             Player name for multiplayer (default: generated once, kept in horizon-player.txt)\n  --session-file PATH     Signed-in account from the launcher (read once, then deleted)\n  --session-stdin         The same account as JSON on standard input\n  --game-dir DIR          Game folder: saves, options.txt, packs, mods (default: the working directory)\n  --home DIR              Logs and crash reports (default $HORIZON_HOME, else the platform data folder)\n  --player-dir DIR        This player's own files when several play in one game folder: options.txt, logs, horizon-player.txt, servers.dat, screenshots\n  --fullscreen            Open the window fullscreen\n  --launch-api            Print the Launch API version and options as JSON (docs/api/launch.md)\n  --dev-mod PATH          A content mod (.hmod or folder) to develop: always on\n  --pregen                Add Horizon's /pregen command (docs/pregeneration.md)\n\nControls: mouse look, WASD move, Space jump, Left Shift sneak, Left Ctrl sprint,\nleft click break, right click place/use, 1-9/scroll hotbar, E inventory,\nQ drop, F3 debug, Esc pause.",
+                        "Horizon — Minecraft Java Edition {} in Rust\n\n  --resources PATH        Prepared resources (horizon-prepare)\n  --render-distance N     Chunks, 2..64 (default 12)\n  --world NAME            World folder under saves/ (default \"New World\")\n  --seed N                World seed for new worlds (default 0)\n  --width N, --height N   Window size (default 1280 x 720)\n  --creative              Creative mode (default survival)\n  --test-terrain          Simple test terrain instead of vanilla generation\n  --frames N              Exit after N frames (testing)\n  --world-frames N        Exit after N frames drawn in the world (testing)\n  --smoke-report PATH     Write a JSON report on exit\n  --benchmark SCENARIO    Run a benchmark (standard, village, forest, ocean, mountain), write its report to benchmarks/ and quit\n  --control               Accept horizon-ctl commands on a local socket\n  --control-socket PATH   Control socket path (default $XDG_RUNTIME_DIR/horizon-control.sock)\n  --server HOST[:PORT]    Join a multiplayer server (offline mode) at start\n  --quickPlaySingleplayer WORLD  Open this world of saves/ at start, only if it exists (vanilla's)\n  --quickPlayMultiplayer HOST[:PORT]  The same as --server (vanilla's name)\n  --name NAME             Player name for multiplayer (default: generated once, kept in horizon-player.txt)\n  --session-file PATH     Signed-in account from the launcher (read once, then deleted)\n  --dev-mod PATH          A Horizon mod (.hmod or folder) to develop: always on, reloaded when rebuilt\n  --in-frame              Run single player's world in the frame, not on its server thread\n  --pregen                Add Horizon's /pregen command (docs/pregeneration.md)\n\nControls: mouse look, WASD move, Space jump, Left Shift sneak, Left Ctrl sprint,\nleft click break, right click place/use, 1-9/scroll hotbar, E inventory,\nQ drop, F3 debug, Esc pause.",
                         horizon_core::VANILLA_VERSION
                     );
                     return Ok(None);
@@ -852,41 +855,9 @@ enum Screen {
     DialogWarning,
     /// WinScreen: the end poem and the credits (game/win.rs).
     Win,
-    /// DebugOptionsScreen, F3+F6 (game/debug_options.rs).
-    DebugOptions,
-    /// A screen of a native mod's own (`native_mod_screen_open`): it draws and
-    /// takes its input through the screen hooks.
+    /// A `ui` mod's own screen, or its settings page from Options > Mods
+    /// (game/mods.rs).
     Mod,
-}
-impl Screen {
-    /// The id native mods see for this screen (`NativeScreenView.id`, the
-    /// `screen_render_post` hook): one per variant, and a hook's contract, so
-    /// it stays the same from release to release. A new variant must add one.
-    fn id(self) -> &'static str {
-        match self {
-            Screen::Playing => "playing",
-            Screen::GameModeSwitcher => "game_mode_switcher",
-            Screen::Paused => "paused",
-            Screen::Options => "options",
-            Screen::Chat => "chat",
-            Screen::Creative => "creative",
-            Screen::Inventory => "inventory",
-            Screen::Dead => "dead",
-            Screen::Stats => "stats",
-            Screen::Advancements => "advancements",
-            Screen::WorldOptions => "world_options",
-            Screen::Friends => "friends",
-            Screen::Social => "social",
-            Screen::CommandBlock => "command_block",
-            Screen::BlockEditor => "block_editor",
-            Screen::ServerLinks => "server_links",
-            Screen::ConfirmLink => "confirm_link",
-            Screen::DialogWarning => "dialog_warning",
-            Screen::Win => "win",
-            Screen::DebugOptions => "debug_options",
-            Screen::Mod => "mod",
-        }
-    }
 }
 struct Mining {
     pos: [i32; 3],
@@ -7070,8 +7041,7 @@ impl Game<'_> {
         let target = [pos.x, pos.y, pos.z];
         let state = self.apply_item_block_state(target, state, &stack)?;
         self.mod_block_event(target, state, true);
-        let name = self.res.facts().get(state).name.clone();
-        if let Some(entity) = self.new_block_entity(&name) {
+        if let Some(entity) = BlockEntity::for_block(&self.res.facts().get(state).name) {
             let key = (target[0], target[1], target[2]);
             self.world.block_entities.insert(key, entity);
             let game_master = self.can_use_game_master_blocks();
@@ -7860,7 +7830,345 @@ impl Game<'_> {
         self.tick_command_extras();
         self.tick_mods();
         self.native_tick();
-        self.tell_native_now();
+        self.tick_server_mods();
+        let camera_eye = self.camera_eye_height();
+        let stick = self.pad_move();
+        if self.riding.is_some() && self.player.is_some() {
+            let playing = self.screen == Screen::Playing;
+            let held = |k| playing && self.keys.contains(&k);
+            let keys = Keys {
+                forward: held(KeyCode::KeyW),
+                backward: held(KeyCode::KeyS),
+                left: held(KeyCode::KeyA),
+                right: held(KeyCode::KeyD),
+                jump: held(KeyCode::Space),
+                shift: held(KeyCode::ShiftLeft),
+                sprint: false,
+                analog: None,
+            }
+            .with_stick(stick.filter(|_| playing));
+            self.tick_riding(keys)?;
+        }
+        let riding = self.riding.is_some();
+        let entity_collisions = self.player_entity_collisions();
+        let spin_targets = self.spin_targets();
+        self.sync_player_body();
+        let Some(player) = self.player.as_mut() else {
+            // A dedicated server has no local player: the world still runs.
+            if self.options.dedicated.is_some() {
+                return self.tick_world(running);
+            }
+            return Ok(());
+        };
+        // Hold position until the surrounding terrain exists.
+        let (cx, cz) = (
+            (player.position.x.floor() as i32) >> 4,
+            (player.position.z.floor() as i32) >> 4,
+        );
+        if !self.streaming.is_lit(cx, cz) {
+            return Ok(());
+        }
+        let playing = self.screen == Screen::Playing && self.sleeping.is_none();
+        let held = |k| playing && self.keys.contains(&k);
+        let keys = Keys {
+            forward: held(KeyCode::KeyW),
+            backward: held(KeyCode::KeyS),
+            left: held(KeyCode::KeyA),
+            right: held(KeyCode::KeyD),
+            jump: held(KeyCode::Space),
+            shift: held(KeyCode::ShiftLeft),
+            sprint: held(KeyCode::ControlLeft),
+            analog: None,
+        }
+        .with_stick(stick.filter(|_| playing));
+        if !riding {
+            self.previous_position = player.position;
+        }
+        let spectator = self.mode == horizon_client::command::args::GameMode::Spectator;
+        player.may_fly = self.creative || spectator;
+        player.invulnerable = self.creative || spectator;
+        player.spectator = spectator;
+        player.spin_targets = spin_targets;
+        let grounded = player.ground.on_ground;
+        let before = (
+            grounded,
+            [player.velocity.x, player.velocity.y, player.velocity.z],
+            [player.position.x, player.position.y, player.position.z],
+        );
+        if !riding {
+            MotionWorld {
+                entities: &entity_collisions,
+                player,
+                scene: &mut self.world,
+                assets: &self.pack.assets,
+                collision_binding: self.collision,
+                resources: self.motion,
+            }
+            .controlled_simulation_tick(keys)?;
+            // Player.jumpFromGround: the jump statistic.
+            if grounded && keys.jump && !player.flying && player.velocity.y > 0.2 {
+                self.stats.custom("jump", 1);
+            }
+        }
+        let events = std::mem::take(&mut player.events);
+        let spin_hit = player.spin_hit.take();
+        let glider_wear = std::mem::take(&mut player.glider_wear);
+        let feet = [player.position.x, player.position.y, player.position.z];
+        let player_velocity = [player.velocity.x, player.velocity.y, player.velocity.z];
+        self.previous_eye = self.eye;
+        let eye_height = if self.sleeping.is_some() {
+            0.2
+        } else {
+            player.dimensions.eye_height
+        };
+        self.eye += (camera_eye.unwrap_or(eye_height) - self.eye) * 0.5;
+        // `LivingEntity.baseTick` (Soul Speed) comes before `aiStep` (the
+        // glide's wear): both draw from the level random.
+        if let Some((at, velocity)) = self.tick_soul_speed() {
+            self.particles.send_particles(
+                &horizon_client::particles::ParticleOptions::simple(
+                    horizon_client::particles::ParticleType::Soul,
+                ),
+                at,
+                velocity,
+                1.0,
+                0,
+            );
+            if let Some(host) = self.lan.as_ref() {
+                lan_particles::send_soul_particle(host, at, velocity);
+            }
+        }
+        // `ItemStack.hurtAndBreak` for the glide: Unbreaking can save the wear.
+        if glider_wear > 0
+            && !self.creative
+            && let Some(stack) = self.armor[1].clone()
+        {
+            let loss = self.wear(&stack, glider_wear);
+            if let Some(elytra) = self.armor[1].as_mut() {
+                elytra.damage += loss;
+            }
+        }
+        self.tick_avatar(before, riding);
+        self.end_spin_attack(spin_hit);
+        self.record_combat(&events);
+        self.wear_armor(&events);
+        for event in events {
+            match event {
+                MotionEvent::HurtSound(sound) => self.player_hurt_sound(sound, feet),
+                MotionEvent::Emission { state, muffled, .. } => {
+                    let sounds = self.res.facts().get(state).sounds.clone();
+                    // Entity.playStepSound: the block's step sound at 0.15 volume,
+                    // muffled under the swim sound in water. Whether it plays is
+                    // Player.getMovementEmission's call (shift on the ground),
+                    // not the pose: a forced crouch still steps.
+                    let (volume, pitch) = if muffled {
+                        (sounds.volume * 0.05, sounds.pitch * 0.8)
+                    } else {
+                        (sounds.volume * 0.15, sounds.pitch)
+                    };
+                    self.audio.play(&sounds.step, Some(feet), volume, pitch);
+                }
+                MotionEvent::Swim { volume, pitch } => {
+                    self.audio
+                        .play("minecraft:entity.player.swim", Some(feet), volume, pitch);
+                }
+                MotionEvent::Chime { volume, pitch } => {
+                    self.audio.play(
+                        "minecraft:block.amethyst_block.chime",
+                        Some(feet),
+                        volume,
+                        pitch,
+                    );
+                }
+                MotionEvent::Drown => {
+                    // The guests see the entity event 67 too.
+                    if let Some(host) = &self.lan {
+                        host.hub
+                            .entity_event(host.host_entity, combat::DROWN_EVENT, feet);
+                    }
+                    self.drown_particles(feet, player_velocity);
+                }
+                MotionEvent::BubbleColumnParticle { bubble, position } => {
+                    // ServerLevel.sendParticles: SPLASH (speed 1) or BUBBLE
+                    // (y spread 0.01, speed 0.2), one each.
+                    use horizon_client::particles::{ParticleOptions, ParticleType};
+                    let (kind, spread, speed) = if bubble {
+                        (ParticleType::Bubble, [0.0, 0.01, 0.0], 0.2)
+                    } else {
+                        (ParticleType::Splash, [0.0; 3], 1.0)
+                    };
+                    self.particles.send_particles(
+                        &ParticleOptions::simple(kind),
+                        [position.x, position.y, position.z],
+                        spread,
+                        speed,
+                        1,
+                    );
+                }
+                MotionEvent::Fall(horizon_client::landing::FallEvent::Sound {
+                    sound,
+                    volume,
+                    pitch,
+                    ..
+                }) => {
+                    let name = match sound {
+                        horizon_client::landing::SceneSound::BigFall => {
+                            "minecraft:entity.player.big_fall"
+                        }
+                        horizon_client::landing::SceneSound::SmallFall => {
+                            "minecraft:entity.player.small_fall"
+                        }
+                        _ => continue,
+                    };
+                    self.audio.play(name, Some(feet), volume, pitch);
+                }
+                // Player.causeFallDamage: a fall of 2 blocks or more counts.
+                MotionEvent::Fall(horizon_client::landing::FallEvent::Statistic(cm)) => {
+                    self.stats.custom("fall_one_cm", cm)
+                }
+                // LivingEntity.checkFallDamage: the block's crumbs where the fall landed.
+                MotionEvent::Fall(horizon_client::landing::FallEvent::Particles {
+                    state,
+                    position,
+                    count,
+                    speed,
+                }) => self.landing_dust(None, state, position, count, speed),
+                MotionEvent::Fall(event) => self.landing_block_updates(&event),
+                MotionEvent::Snowflake { position, velocity } => self.snowflake(position, velocity),
+                MotionEvent::EnterBlock { state } => self.trigger_enter_block(state),
+                MotionEvent::HoneySlide {
+                    pos,
+                    sound,
+                    particles,
+                } => {
+                    if self.world.game_time % 20 == 0 {
+                        self.trigger_honey_slide([pos.x, pos.y, pos.z]);
+                    }
+                    if sound {
+                        self.audio
+                            .play("minecraft:block.honey_block.slide", Some(feet), 1.0, 1.0);
+                    }
+                    if particles {
+                        self.honey_slide_particles(feet);
+                        // The server's event 53 reaches the guests too.
+                        let id = self.lan.as_ref().map(|h| h.host_entity);
+                        if let Some(id) = id {
+                            self.lan_entity_event(id, 53, feet);
+                        }
+                    }
+                }
+                MotionEvent::InsidePortal { pos } => self.player_inside_nether_portal(pos),
+                MotionEvent::CauldronExtinguish { pos } => self.cauldron_extinguish(pos),
+                MotionEvent::InsideWitherRose => self.wither_rose_contact(),
+                MotionEvent::SmashLanding {
+                    state,
+                    position,
+                    fall_distance,
+                } => self.smash_landing_particles(state, position, fall_distance),
+                MotionEvent::Splash {
+                    high_speed,
+                    volume,
+                    pitch,
+                } => {
+                    let name = if high_speed {
+                        "minecraft:entity.player.splash.high_speed"
+                    } else {
+                        "minecraft:entity.player.splash"
+                    };
+                    self.audio.play(name, Some(feet), volume, pitch);
+                }
+                MotionEvent::SplashParticle {
+                    bubble,
+                    position,
+                    velocity,
+                } => {
+                    use horizon_client::particles::{ParticleOptions, ParticleType};
+                    let kind = if bubble {
+                        ParticleType::Bubble
+                    } else {
+                        ParticleType::Splash
+                    };
+                    self.particles.add(
+                        &ParticleOptions::simple(kind),
+                        [position.x, position.y, position.z],
+                        [velocity.x, velocity.y, velocity.z],
+                    );
+                }
+                _ => {}
+            }
+        }
+        self.powder_snow_fire()?;
+        self.rain_extinguish_in_frame();
+        // LivingEntity.baseTick: a new block position runs the worn
+        // enchantments' location_changed effects (frost walker) on the server.
+        if self.remote.is_none() {
+            self.location_changed_effects(before.2, before.0);
+        }
+        self.tick_totem();
+        self.handle_shoulder_entities();
+        let Some(player) = self.player.as_mut() else {
+            return Ok(());
+        };
+        if player.position.y < f64::from(MIN_Y - 64) {
+            // Out of the world.
+            let _ = player.set_health(0.0, false);
+        }
+        let dead = player.health.dead_or_dying();
+        if dead && self.screen != Screen::Dead {
+            // Inventory.dropAll: every stack thrown in a random direction.
+            let feet = [player.position.x, player.position.y, player.position.z];
+            let at = [feet[0], feet[1] + 1.32, feet[2]];
+            let killer = self.combat_killer_kind();
+            // Player.die: the dimension and block of the death.
+            self.level.last_death =
+                Some((self.dim.id().to_owned(), feet.map(|v| v.floor() as i32)));
+            self.death_message();
+            // ServerPlayer.die: deaths, and the time-since counters restart.
+            self.stats.custom("deaths", 1);
+            self.score_player_died();
+            if let Some(kind) = killer {
+                self.stats.add("killed_by", &kind, 1);
+                let view = horizon_client::advancements::EntityView {
+                    kind,
+                    ..Default::default()
+                };
+                self.trigger_entity("minecraft:entity_killed_player", "entity", &view);
+            }
+            self.stats.reset("custom", "minecraft:time_since_death");
+            self.stats.reset("custom", "minecraft:time_since_rest");
+            let reward = self
+                .experience
+                .death_reward(self.ui.rules.bool("keep_inventory") || self.spectator());
+            self.spawn_orbs(feet, reward);
+            if !self.spectator() {
+                self.drop_inventory(at);
+            }
+            self.audio
+                .play("minecraft:entity.player.death", Some(at), 1.0, 1.0);
+            // LivingEntity.die: the LAN guests see the host's death animation.
+            if let Some(host) = &self.lan {
+                host.hub.entity_event(host.host_entity, 3, feet);
+            }
+            if self.ui.rules.bool("immediate_respawn") {
+                // Gui.setScreen: without the death screen the player respawns at once.
+                self.respawn_player()?;
+            } else {
+                self.screen = Screen::Dead;
+                self.capture(false);
+                self.ui.death_time = 0;
+            }
+        } else if dead {
+            // LivingEntity.tickDeath: 20 ticks after dying the player is
+            // removed, and Player.remove's inventoryMenu.removed drops what
+            // the cursor held.
+            self.ui.death_time += 1;
+            if self.ui.death_time >= 20
+                && let Some(stack) = self.carried.take()
+                && let Some(eye) = self.eye_position()
+            {
+                self.throw_from_eyes(stack, eye, false);
+            }
+        }
         self.tick_world(running)
     }
     /// What the tick runs after the local player's own update: effects, the
@@ -8919,6 +9227,7 @@ impl Game<'_> {
                 g.draw_boss_bars(batch);
             });
             self.draw_extras(&mut batch);
+            self.draw_mod_shapes(&mut batch);
         }
         if show_hud {
             // Hud.nextContextualInfoState: the jump bar, the experience bar or
@@ -16805,7 +17114,7 @@ impl Game<'_> {
         if self.screen == Screen::Mod && self.mod_screen_key(key) {
             return Ok(());
         }
-        if self.sort_key_press(key) || self.hdr_key_press(key) {
+        if self.sort_key_press(key) {
             return Ok(());
         }
         if self.remote.is_some() && self.remote_key(key)? {
@@ -16852,8 +17161,7 @@ impl Game<'_> {
                 Screen::BlockEditor => self.close_block_editor(),
                 Screen::Chat => self.close_chat(chat::ChatExit::Intentional),
                 Screen::Win => self.close_win_screen()?,
-                Screen::DebugOptions => self.close_debug_options(),
-                Screen::Mod => self.close_mod_screen(),
+                Screen::Mod => self.close_mod_screen(true),
             },
             // `checkHotbarKeyPressed`: the keys the controls bind to the off
             // hand and the hotbar slots, so a rebound key swaps instead of
@@ -17029,10 +17337,6 @@ impl Game<'_> {
     }
     /// A mouse button while playing (window or control socket).
     fn play_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
-        #[cfg(target_os = "android")]
-        if !pressed && self.android_custom_mouse_held(button) {
-            return Ok(());
-        }
         // A mod's claimed item takes the use button (capability `input`).
         if self.mod_use(button, pressed) {
             return Ok(());
@@ -17106,25 +17410,19 @@ impl Game<'_> {
         }
         Ok(())
     }
-    /// LOD Distance and Far Detail Reduced as the player chose them, the
-    /// distance no farther than a server sampling far terrain for us allows.
+    /// LOD Distance and Far Detail Reduced as chosen: the player's LOD
+    /// Distance when it is on, else a mod's far terrain
+    /// (`render.set-far-terrain`).
     fn far_terrain_choice(&self) -> (u32, bool) {
         let g = &self.settings.horizon;
         let reduced = g.far_detail == horizon_client::graphics::FarDetail::Reduced;
-        let distance = match self.server_far_terrain() {
-            Some(offer) => g.lod_distance.min(offer.distance),
-            None => g.lod_distance,
-        };
-        (distance, reduced)
-    }
-    /// The far terrain another machine's server samples for us
-    /// (`lod_net`): a client of a dedicated server or of a LAN world, not of
-    /// its own server thread, which hands its generator over directly.
-    fn server_far_terrain(&self) -> Option<horizon_client::lod_net::Offer> {
-        if self.integrated.is_some() {
-            return None;
+        if g.lod_distance > 0 {
+            return (g.lod_distance, reduced);
         }
-        self.remote.as_ref()?.far_terrain
+        match self.mod_far_terrain() {
+            Some(f) => (f.distance, reduced || f.reduced),
+            None => (0, reduced),
+        }
     }
     /// LOD Distance as far terrain uses it (`graphics::lod_distance_capped`).
     fn lod_distance(&self) -> u32 {
@@ -18593,9 +18891,10 @@ impl Game<'_> {
                         && self.sleeping.is_none()
                         && self.player.is_some()
                         && !self.native_wheel_event(d)
-                        && let Some((wheel, (horizontal_steps, vertical_steps))) = self
-                            .mouse
-                            .on_scroll(raw_x, raw_y, discrete, wheel_sensitivity)
+                        && !self.mod_wheel(d)
+                        && let Some((wheel, (_, vertical_steps))) =
+                            self.mouse
+                                .on_scroll(raw_x, raw_y, discrete, wheel_sensitivity)
                     {
                         if !self.pad_synthetic_input() {
                             let mut canceled = false;
@@ -18639,21 +18938,10 @@ impl Game<'_> {
                     if self.screen == Screen::Social && d != 0.0 {
                         self.social_scroll(d);
                     }
-                    if self.screen == Screen::CommandBlock && d != 0.0 {
-                        self.command_block_scroll(d);
-                    }
-                    if self.screen == Screen::Options && d != 0.0 {
-                        self.options_scroll(d)?;
-                    }
                     if self.screen == Screen::Mod && d != 0.0 {
                         self.mod_screen_scroll(d);
                     }
-                    // AbstractContainerScreen.mouseScrolled: a bundle under the
-                    // cursor takes the wheel before the screen's own scrolling.
-                    let bundle = bundles::takes_bundle_wheel(self.screen)
-                        && d != 0.0
-                        && self.bundle_scroll(scaled(raw_x), scaled(raw_y));
-                    if self.screen == Screen::Creative && d != 0.0 && !bundle {
+                    if self.screen == Screen::Creative && d != 0.0 {
                         self.creative_screen.wheel(f64::from(d), &self.pack.names);
                     }
                     if self.screen == Screen::Inventory

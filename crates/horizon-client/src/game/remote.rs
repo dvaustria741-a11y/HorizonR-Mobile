@@ -1450,29 +1450,18 @@ impl Game<'_> {
             return false;
         }
         let text = content.plain();
-        let focused = self.screen == Screen::Chat;
-        if source == horizon_client::chat::ChatSource::Player {
-            self.ui.chat.add_signed(
-                &self.gui.atlas,
-                content,
-                signature,
-                trust.tag(),
-                self.ticks,
-                focused,
-            );
-        } else {
-            // addServerSystemMessage and addClientSystemMessage both carry
-            // GuiMessageTag.systemSinglePlayer: the grey bar at the line's left.
-            let indicator = Some(horizon_client::chat::SYSTEM_INDICATOR);
-            self.ui.chat.add(
-                &self.gui.atlas,
-                content,
-                indicator,
-                source,
-                self.ticks,
-                focused,
-            );
-        }
+        // addServerSystemMessage and addClientSystemMessage both carry
+        // GuiMessageTag.systemSinglePlayer: the grey bar at the line's left.
+        let indicator = (source != horizon_client::chat::ChatSource::Player)
+            .then_some(horizon_client::chat::SYSTEM_INDICATOR);
+        self.ui.chat.add(
+            &self.gui.atlas,
+            content,
+            indicator,
+            source,
+            self.ticks,
+            self.screen == Screen::Chat,
+        );
         if self.mods.running() {
             self.mods_chat(&text);
         }
@@ -5941,14 +5930,8 @@ impl Game<'_> {
         // for chunks.
         self.tick_own_rockets();
         // Client mods tick on any server, single player's own included.
-        self.native_net.to_server = 0;
+        self.tick_mods();
         self.native_tick();
-        self.tell_native_now();
-        // Far tiles the samplers asked for (`lod_net`).
-        if let Some(r) = &self.remote {
-            r.session.send_far_terrain();
-        }
-        self.tick_chat_session();
         // Minecraft.tick sends this even when the player cannot tick yet,
         // including while waiting for chunks. Keep it outside early returns.
         if self.remote.as_ref().is_some_and(Remote::has_level) {

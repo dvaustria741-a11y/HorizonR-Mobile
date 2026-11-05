@@ -3322,30 +3322,8 @@ impl Game<'_> {
             );
             return;
         }
-        // The chat filter's mute commands (game/chat_filter.rs), on servers that filter.
-        if super::chat_filter::MUTE_COMMANDS.contains(&words[0]) && host.hub.chat_filter_on() {
-            self.guest_mute_command(host, conn, &words);
-            return;
-        }
-        // Horizon's `/tempban` (game/tempban.rs), on dedicated servers.
-        if super::tempban::TEMPBAN_COMMANDS.contains(&words[0]) && self.server_lists.is_some() {
-            self.guest_tempban_command(host, conn, &words);
-            return;
-        }
-        // A native mod's command, for every player its level allows,
-        // whether the world allows commands or not (game/native_server.rs).
-        let integrated = host.hub.config.integrated;
-        if let Some(level) = Self::native_command_level(host, command.trim_start_matches('/'))
-            && let Some(permission) = host.hub.guest(conn).map(|g| g.permission)
-            && permission >= level
-        {
-            host.commands.push(GuestCommand {
-                conn,
-                command: command.trim_start_matches('/').to_owned(),
-                permission,
-                integrated,
-                quiet: false,
-            });
+        // A server mod's command, for every player whatever their level.
+        if self.guest_server_mod_command(host, conn, command.trim_start_matches('/')) {
             return;
         }
         // An integrated server runs every player's commands at their own

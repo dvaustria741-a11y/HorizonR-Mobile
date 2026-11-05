@@ -1549,21 +1549,8 @@ enum Act {
     /// Pick `s.shader_packs[i]`, or turn it off when it is the pick.
     PickShaderPack(usize),
     OpenShaderPackFolder,
-    /// Open the picked pack's Shader Options page.
-    ShaderOptions,
-    /// Open the options page of the Horizon pack `s.shader_packs[.0]`.
-    NativePackOptions(usize),
-    /// Option `.1` of that pack: its next value.
-    NativePackOption(usize, usize),
-    /// Every option of that pack back to its default.
-    NativePackReset(usize),
-    /// Shader Options: the next value of an option, a screen of the pack, the next profile,
-    /// every option back to its default.
-    ShaderOption(String),
-    ShaderScreen(String),
-    ShaderProfile,
-    ShaderReset,
-    /// The installed native mod's settings page.
+    /// The installed mod's own settings page (capability `ui`), shown as a
+    /// screen: `Event::ModSettings` has the game open it.
     ModSettings(usize),
     /// A native mod's key (mod, key) waits for a key; a button of its page.
     NativeKey(usize, usize),
@@ -1718,16 +1705,9 @@ pub enum Event {
     /// Option `.0` of `shader_pack_options` changed: save the values and build the pack again.
     ShaderPackOption(usize),
     OpenShaderPackFolder,
-    /// The Shader Options page opened: read the picked pack's options into `shader_options`.
-    OpenShaderOptions,
-    /// The Shader Options page closed with changes: save them and load the pack again.
-    ShaderOptions,
-    /// The options of `shader_packs[.0]`, a Horizon pack, changed: save them (the pack reloads
-    /// with them).
-    NativePackOptions(usize),
-    /// Native mod `.0`'s page opened: the game asks the mod for its labels
-    /// again (they were made with the list, maybe in another language).
-    NativeSettings(usize),
+    /// Open the mod's own settings page (capability `ui`): the installed
+    /// mod's index in `mods.installed`.
+    ModSettings(usize),
     /// Button `.1` of native mod `.0`'s page was pressed: the game tells the
     /// mod and refreshes the page.
     NativeButton(usize, usize),
@@ -3199,23 +3179,10 @@ impl OptionsUi {
                         } else if installed.dev {
                             label = label.append(tr("horizon.mods.dev"));
                         }
-                        // A content mod's set feeds the block-state tables the
-                        // open world's chunks were decoded with: changing it
-                        // mid-world remaps their ids (Forge/Fabric freeze the
-                        // registry before a world opens). A native mod toggles
-                        // live through `native_on`, so it stays available.
-                        let content = installed.native.is_none();
-                        if self.in_world && content {
-                            label = label.append(tr("horizon.mods.in_world"));
-                        }
-                        let dead =
-                            installed.dev || installed.id.is_empty() || self.in_world && content;
-                        // Only native mods with actual settings need a second button.
-                        if installed
-                            .native
-                            .as_ref()
-                            .is_some_and(|page| !page.keys.is_empty() || !page.buttons.is_empty())
-                        {
+                        let dead = installed.dev || installed.id.is_empty();
+                        // A running mod with a settings page (capability
+                        // `ui`) gets its own button beside the toggle.
+                        if installed.has_settings || installed.native.is_some() {
                             let toggle = button(0.0, 0.0, 150.0, label, Act::ToggleMod(i));
                             let settings = button(
                                 0.0,
@@ -4817,7 +4784,6 @@ impl OptionsUi {
                             events.push(Event::ButtonClick);
                             if s.mods.installed.get(i).is_some_and(|m| m.native.is_some()) {
                                 self.push(Page::NativeMod(i));
-                                events.push(Event::NativeSettings(i));
                             } else {
                                 events.push(Event::ModSettings(i));
                             }

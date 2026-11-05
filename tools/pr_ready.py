@@ -292,48 +292,6 @@ CI_CLIPPY_SERVER = "cargo clippy -p horizon-client --all-targets --locked --no-d
 CI_TEST_FEATURES = "horizon-client/mods,horizon-mods/pack"
 
 
-# CI installs the current stable each run (rustup toolchain install stable), and Rust ships one every six weeks
-# since 1.85.0 on 2025-02-20: so CI's version follows from the date, without the network.
-RUST_TRAIN = (85, datetime.date(2025, 2, 20))
-
-
-def ci_rust(today):
-    """The minor version of the stable Rust CI runs on this date."""
-    minor, released = RUST_TRAIN
-    return minor + (today - released).days // 42
-
-
-def rust_version():
-    """The rustc the checks here run with, as (major, minor, patch), or None."""
-    try:
-        output = subprocess.run(["rustc", "--version"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError):
-        return None
-    match = re.match(r"rustc (\d+)\.(\d+)\.(\d+)", output)
-    return tuple(int(part) for part in match.groups()) if match else None
-
-
-def old_rust(version, today):
-    """A warning when this Rust is older than CI's: an older clippy flags lints CI's no longer does."""
-    if version is None or version[:1] != (1,) or version[1] >= ci_rust(today):
-        return None
-    return (f"{'.'.join(map(str, version))} is older than CI's stable (1.{ci_rust(today)}): clippy may flag lints "
-            "CI doesn't, update with `rustup update`")
-
-
-def mark_old_rust(steps, warning):
-    """A ⚠️ Rust row above the first clippy that runs, and failed clippy rows point at it. Never fails the run."""
-    clippy = [step for step in steps if step.name.endswith("clippy") and step.skip is None]
-    if not warning or not clippy:
-        return
-    for step in clippy:
-        if step.status == "fail":
-            step.detail += "; likely the old Rust above"
-    rust = Step("Rust", where="git")
-    rust.status, rust.detail = "warn", warning
-    steps.insert(steps.index(clippy[0]), rust)
-
-
 def mod_features(crates):
     """The features CI's workspace-wide test run gives these crates (code mods are off by default: docs/mods.md).
     Cargo unifies features over the packages it builds, so a crate tested alone needs the ones the workspace would
@@ -352,7 +310,7 @@ def mod_features(crates):
 # they are #[ignore]d and run here only when one of these changes.
 CONTENT_ROOT = ("crates/horizon-client/src/mod_content", "crates/horizon-client-render/src/assets.rs", "crates/horizon-items/",
                 "crates/horizon-mods/", "crates/horizon-assets/")
-CONTENT_ROOT_TESTS = "cargo test --locked -p horizon-client-lib --lib mod_content::tests:: -- --ignored"
+CONTENT_ROOT_TESTS = "cargo test --locked -p horizon-client --features horizon-client/mods --lib mod_content::tests:: -- --ignored"
 
 
 def plan(args, base, changed, crates_of, libraries, dependencies):
