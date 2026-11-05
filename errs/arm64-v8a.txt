@@ -1,156 +1,77 @@
-error[E0609]: no field `vertex` on type `std::option::Option<horizon_shaders::Program>`
-  --> crates/horizon-shaderport/src/gpu.rs:22:46
-   |
-22 |     for (stage, m) in [("vertex", &p.program.vertex), ("fragment", &p.program.fragment)] {
-   |                                              ^^^^^^ unknown field
-   |
-help: one of the expressions' fields has a field of the same name
-   |
-22 |     for (stage, m) in [("vertex", &p.program.unwrap().vertex), ("fragment", &p.program.fragment)] {
-   |                                              +++++++++
+error[E0308]: mismatched types
+   --> crates/horizon-shaderport/src/gpu.rs:191:75
+    |
+191 |         (_, Some(naga::Binding::Location { location, .. })) => outs.push((location, width(result.ty))),
+    |                                                                           ^^^^^^^^ expected `u32`, found `&u32`
+    |
+help: consider dereferencing the borrow
+    |
+191 |         (_, Some(naga::Binding::Location { location, .. })) => outs.push((*location, width(result.ty))),
+    |                                                                           +
 
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-  --> crates/horizon-shaderport/src/gpu.rs:22:79
-   |
-22 |     for (stage, m) in [("vertex", &p.program.vertex), ("fragment", &p.program.fragment)] {
-   |                                                                               ^^^^^^^^ unknown field
-   |
-help: one of the expressions' fields has a field of the same name
-   |
-22 |     for (stage, m) in [("vertex", &p.program.vertex), ("fragment", &p.program.unwrap().fragment)] {
-   |                                                                               +++++++++
-
-error[E0609]: no field `vertex` on type `std::option::Option<horizon_shaders::Program>`
-  --> crates/horizon-shaderport/src/gpu.rs:53:26
-   |
-53 |     for m in [&p.program.vertex, &p.program.fragment] {
-   |                          ^^^^^^ unknown field
-   |
-help: one of the expressions' fields has a field of the same name
-   |
-53 |     for m in [&p.program.unwrap().vertex, &p.program.fragment] {
-   |                          +++++++++
-
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-  --> crates/horizon-shaderport/src/gpu.rs:53:45
-   |
-53 |     for m in [&p.program.vertex, &p.program.fragment] {
-   |                                             ^^^^^^^^ unknown field
-   |
-help: one of the expressions' fields has a field of the same name
-   |
-53 |     for m in [&p.program.vertex, &p.program.unwrap().fragment] {
-   |                                             +++++++++
-
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/gpu.rs:162:24
-    |
-162 |     let m = &p.program.fragment;
-    |                        ^^^^^^^^ unknown field
-    |
-help: one of the expressions' fields has a field of the same name
-    |
-162 |     let m = &p.program.unwrap().fragment;
-    |                        +++++++++
-
-error[E0614]: type `u32` cannot be dereferenced
-   --> crates/horizon-shaderport/src/gpu.rs:183:75
-    |
-183 |         (_, Some(naga::Binding::Location { location, .. })) => outs.push((*location, width(result.ty))),
-    |                                                                           ^^^^^^^^^ can't be dereferenced
-
-error[E0609]: no field `interface` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/gpu.rs:219:10
-    |
-219 |         .interface
-    |          ^^^^^^^^^ unknown field
-    |
-help: one of the expressions' fields has a field of the same name
-    |
-219 |         .unwrap().interface
-    |          +++++++++
-
-error[E0063]: missing fields `entity_geometry`, `lines` and `terrain_geometry` in initializer of `GameInputs`
-  --> crates/horizon-shaderport/src/load.rs:56:5
-   |
-56 |     GameInputs {
-   |     ^^^^^^^^^^ missing `entity_geometry`, `lines` and `terrain_geometry`
-
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/skyblend.rs:120:24
-    |
-120 |     let m = &p.program.fragment;
-    |                        ^^^^^^^^ unknown field
-    |
-help: one of the expressions' fields has a field of the same name
-    |
-120 |     let m = &p.program.unwrap().fragment;
-    |                        +++++++++
-
-Some errors have detailed explanations: E0063, E0609, E0614.
-For more information about an error, try `rustc --explain E0063`.
-error: could not compile `horizon-shaderport` (lib) due to 9 previous errors
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `horizon-shaderport` (lib) due to 1 previous error
 warning: build failed, waiting for other jobs to finish...
 warning: `horizon-client-render` (lib) generated 4 warnings
 
 === TAIL ===
-  --> crates/horizon-shaderport/src/gpu.rs:53:45
+     |     ^^^^^^
+1027 |     queue: wgpu::Queue,
+     |     ^^^^^
+1028 |     surface: Option<wgpu::Surface<'static>>,
+     |     ^^^^^^^
+1029 |     config: wgpu::SurfaceConfiguration,
+     |     ^^^^^^
+1030 |     present_modes: Vec<wgpu::PresentMode>,
+     |     ^^^^^^^^^^^^^
+1031 |     hdr_output: Option<hdr::Output>,
+     |     ^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `startup` is never read
+    --> crates/horizon-client-render/src/gfx.rs:1394:5
+     |
+1045 | pub struct Renderer {
+     |            -------- field in this struct
+...
+1394 |     startup: Option<crate::android_runtime::graphics_startup::Startup>,
+     |     ^^^^^^^
+
+warning: method `replacement_context` is never used
+    --> crates/horizon-client-render/src/gfx.rs:4974:8
+     |
+2470 | impl Renderer {
+     | ------------- method in this implementation
+...
+4974 |     fn replacement_context(&self) -> ReplacementContext {
+     |        ^^^^^^^^^^^^^^^^^^^
+
+warning: method `end` is never used
+  --> crates/horizon-client-render/src/gfx/frame_timing.rs:50:19
    |
-53 |     for m in [&p.program.vertex, &p.program.fragment] {
-   |                                             ^^^^^^^^ unknown field
-   |
-help: one of the expressions' fields has a field of the same name
-   |
-53 |     for m in [&p.program.vertex, &p.program.unwrap().fragment] {
-   |                                             +++++++++
+10 | impl FrameTiming {
+   | ---------------- method in this implementation
+...
+50 |     pub(super) fn end(
+   |                   ^^^
 
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/gpu.rs:162:24
+   Compiling mio v1.2.4
+   Compiling horizon-android v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-android)
+   Compiling horizon-shaderport v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-shaderport)
+   Compiling horizon-port-pack v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-port-pack)
+error[E0308]: mismatched types
+   --> crates/horizon-shaderport/src/gpu.rs:191:75
     |
-162 |     let m = &p.program.fragment;
-    |                        ^^^^^^^^ unknown field
+191 |         (_, Some(naga::Binding::Location { location, .. })) => outs.push((location, width(result.ty))),
+    |                                                                           ^^^^^^^^ expected `u32`, found `&u32`
     |
-help: one of the expressions' fields has a field of the same name
+help: consider dereferencing the borrow
     |
-162 |     let m = &p.program.unwrap().fragment;
-    |                        +++++++++
+191 |         (_, Some(naga::Binding::Location { location, .. })) => outs.push((*location, width(result.ty))),
+    |                                                                           +
 
-error[E0614]: type `u32` cannot be dereferenced
-   --> crates/horizon-shaderport/src/gpu.rs:183:75
-    |
-183 |         (_, Some(naga::Binding::Location { location, .. })) => outs.push((*location, width(result.ty))),
-    |                                                                           ^^^^^^^^^ can't be dereferenced
-
-error[E0609]: no field `interface` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/gpu.rs:219:10
-    |
-219 |         .interface
-    |          ^^^^^^^^^ unknown field
-    |
-help: one of the expressions' fields has a field of the same name
-    |
-219 |         .unwrap().interface
-    |          +++++++++
-
-error[E0063]: missing fields `entity_geometry`, `lines` and `terrain_geometry` in initializer of `GameInputs`
-  --> crates/horizon-shaderport/src/load.rs:56:5
-   |
-56 |     GameInputs {
-   |     ^^^^^^^^^^ missing `entity_geometry`, `lines` and `terrain_geometry`
-
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/skyblend.rs:120:24
-    |
-120 |     let m = &p.program.fragment;
-    |                        ^^^^^^^^ unknown field
-    |
-help: one of the expressions' fields has a field of the same name
-    |
-120 |     let m = &p.program.unwrap().fragment;
-    |                        +++++++++
-
-Some errors have detailed explanations: E0063, E0609, E0614.
-For more information about an error, try `rustc --explain E0063`.
-error: could not compile `horizon-shaderport` (lib) due to 9 previous errors
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `horizon-shaderport` (lib) due to 1 previous error
 warning: build failed, waiting for other jobs to finish...
 warning: `horizon-client-render` (lib) generated 4 warnings
