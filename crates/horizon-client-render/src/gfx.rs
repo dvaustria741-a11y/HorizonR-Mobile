@@ -1380,6 +1380,18 @@ pub struct Renderer {
     frame_gen: frame_gen::FrameGen,
     /// The entities' texture atlas (`entity_group`'s), for frame generation's motion.
     entity_atlas: wgpu::TextureView,
+    /// Automatic render scale: the Resolution Scale setting times the factor
+    /// that frame times pick (`set_dynamic_scale`).
+    dyn_scale: dyn_scale::DynScale,
+    /// The Resolution Scale setting, before `dyn_scale`'s factor.
+    scale_base: f32,
+    last_draw: Option<Instant>,
+    #[cfg(target_os = "android")]
+    frame_scale: Option<frame_scale::FrameScale>,
+    #[cfg(target_os = "android")]
+    opaque_output: Option<opaque_output::OpaqueOutput>,
+    #[cfg(target_os = "android")]
+    startup: Option<crate::android_runtime::graphics_startup::Startup>,
     /// HDR output (Horizon setting): `Some` while the swapchain is HDR.
     hdr: Option<hdr::Hdr>,
     /// Which pixels of each block sprite may shine in HDR output (terrain.wgsl's
@@ -1668,6 +1680,7 @@ fn box_mip_chain(pixels: &[u8], size: u32, layers: u32) -> Vec<u8> {
         }
     }
     out
+    split: u32,
 }
 impl PreparedTextures {
     pub fn new(
@@ -1744,6 +1757,7 @@ impl PreparedTextures {
                 layers,
                 size,
             ));
+            split,
         }
         self
     }
@@ -2533,6 +2547,9 @@ impl Renderer {
         if split < sprite_split() {
             log::info!("Horizon: {split} block textures per array (the GPU's limit)");
         }
+        let split = split.min(device.limits().max_texture_array_layers);
+        #[cfg(target_os = "android")]
+        crate::android_runtime::configure_atlas_limit(device.limits().max_texture_dimension_2d);
         let info = adapter.get_info();
         crate::graphics::suggest_reduced_far_detail(crate::graphics::lod_capped(&info));
         let size = window.inner_size();
@@ -4769,6 +4786,15 @@ impl Renderer {
             world_post,
             frame_gen: frame_gen::FrameGen::new(),
             entity_atlas: atlas_view.clone(),
+            dyn_scale: dyn_scale::DynScale::new(false),
+            scale_base: 1.0,
+            last_draw: None,
+            #[cfg(target_os = "android")]
+            frame_scale: None,
+            #[cfg(target_os = "android")]
+            opaque_output: None,
+            #[cfg(target_os = "android")]
+            startup,
             hdr: None,
             hdr_lighting_setting: true,
             emission_stats,
@@ -7390,6 +7416,13 @@ impl Renderer {
         if let Some(t) = &mut self.own_timing {
             t.begin(&self.device, &self.queue);
         }
+        #[cfg(target_os = "android")]
+        if let Some(timer) = &mut self.gpu_timer {
+            timer.begin(&mut encoder);
+        }
+        if let Some(stages) = &mut self.gpu_stages {
+            stages.begin_prepare(&mut encoder);
+        }
         if self.animated_textures {
             self.hud
                 .animate_sprites(&mut self.uploads, &mut encoder, frame.ticks);
@@ -8963,6 +8996,13 @@ impl Renderer {
         }
         if gpu_frame && let Some(gpu) = &self.gpu_culling {
             gpu.dispatch(&mut encoder, self.own_timing.as_mut());
+        }
+        if let Some(stages) = &mut self.gpu_stages {
+            stages.begin_world(
+                &self.device,
+                &mut encoder,
+                (&view_target, self.config.format.remove_srgb_suffix()),
+            );
         }
         // The world's targets: the screen, or the scaled target of `post`.
         let pack_post = !frame.title && self.pack_post.as_ref().is_some_and(|p| p.1.is_some());
@@ -11799,6 +11839,16 @@ mod tests {
         assert!(f > 3.7, "{f}");
     }
     #[test]
+    fn instance_buffers_omit_storage_when_the_device_has_no_storage_bindings() {
+        use super::instance_buffer_usage;
+        let legacy = instance_buffer_usage(&wgpu::Limits::downlevel_webgl2_defaults());
+        assert!(legacy.contains(wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST));
+        assert!(!legacy.contains(wgpu::BufferUsages::STORAGE));
+        assert!(
+            instance_buffer_usage(&wgpu::Limits::default()).contains(wgpu::BufferUsages::STORAGE)
+        );
+    }
+    #[test]
     fn drawable_size_skips_minimized_and_oversized_windows() {
         use super::drawable_size;
         assert!(drawable_size(1280, 720, 8192));
@@ -11860,6 +11910,44 @@ mod tests {
                 paper_white: 456,
                 peak: 456,
                 black: 0
+            })
+        );
+        assert_eq!(os_reported(&info(Some(1000.0), None)), None);
+        assert_eq!(os_reported(&info(Some(f32::NAN), Some(80.0))), None);
+        assert_eq!(os_reported(&wgpu::DisplayHdrInfo::default()), None);
+    }
+
+    #[test]
+    fn os_luminances_become_auto_values() {
+        let info = |max, white| wgpu::DisplayHdrInfo {
+            luminance: Some(wgpu::DisplayLuminance {
+                max_nits: max,
+                sdr_white_nits: white,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        // Windows' SDR content brightness slider runs 80..480 nits.
+        assert_eq!(
+            os_reported(&info(Some(998.4), Some(240.0))),
+            Some(Reported {
+                paper_white: 240,
+                peak: 998
+            })
+        );
+        assert_eq!(
+            os_reported(&info(Some(120.0), Some(1000.0))),
+            Some(Reported {
+                paper_white: 480,
+                peak: 480
+            })
+        );
+        // White above the calibrated peak (a Samsung QD-OLED's 380, the slider at 456).
+        assert_eq!(
+            os_reported(&info(Some(380.0), Some(456.0))),
+            Some(Reported {
+                paper_white: 456,
+                peak: 456
             })
         );
         assert_eq!(os_reported(&info(Some(1000.0), None)), None);
@@ -13178,6 +13266,33 @@ fn os_reported(info: &wgpu::DisplayHdrInfo) -> Option<crate::graphics::Reported>
     Some(crate::graphics::Reported {
         paper_white,
         black: hundredths_of_a_nit(luminance.min_nits.unwrap_or(0.0)),
+        // Windows' SDR brightness slider can set white above the reported peak (480 against
+        // a calibrated 380): the highlights then stay at white instead of dropping below it.
+        peak: (peak.round() as u32).clamp(200, 10_000).max(paper_white),
+    })
+}
+fn log_os_reported(reported: Option<crate::graphics::Reported>) {
+    log_display(match reported {
+        Some(r) => format!(
+            "Horizon renderer: the system reports SDR white at {} nits and a peak of {} nits",
+            r.paper_white, r.peak
+        ),
+        None => "Horizon renderer: the system doesn't report the display's luminance".into(),
+    });
+}
+/// What the OS reports in absolute nits (Windows: DXGI's `MaxLuminance` and the SDR
+/// white level the brightness slider sets), which is HDR output's scale there: SDR
+/// white is Paper White, the display's peak is Peak Brightness. Both are kept within
+/// the settings' ranges. The OS's figures often come from the display's EDID and may
+/// run optimistic; the player's own value always wins.
+fn os_reported(info: &wgpu::DisplayHdrInfo) -> Option<crate::graphics::Reported> {
+    let luminance = info.luminance?;
+    let usable = |n: f32| n.is_finite() && n > 0.0;
+    let peak = luminance.max_nits.filter(|&n| usable(n))?;
+    let white = luminance.sdr_white_nits.filter(|&n| usable(n))?;
+    let paper_white = (white.round() as u32).clamp(80, 480);
+    Some(crate::graphics::Reported {
+        paper_white,
         // Windows' SDR brightness slider can set white above the reported peak (480 against
         // a calibrated 380): the highlights then stay at white instead of dropping below it.
         peak: (peak.round() as u32).clamp(200, 10_000).max(paper_white),

@@ -362,3 +362,25 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+
+    /// `--progress json`'s three lines as docs/api/launch.md promises them: a launcher parses
+    /// them, so a refactor must not change them silently.
+    #[test]
+    fn progress_json_lines_keep_their_shape() {
+        assert_eq!(
+            json_line("message", "Copying \"sounds\"\nnext"),
+            r#"{"message": "Copying \"sounds\"\nnext"}"#
+        );
+        assert_eq!(
+            json_line("error", "no Java 25"),
+            r#"{"error": "no Java 25"}"#
+        );
+        assert_eq!(fraction_line(0.05), r#"{"fraction": 0.050}"#);
+        assert_eq!(fraction_line(1.0), r#"{"fraction": 1.000}"#);
+        for line in [json_line("message", "tab\there, é"), fraction_line(0.9)] {
+            assert!(horizon_prepare::pyjson::loads(&line).is_ok(), "{line}");
+        }
+    }
+}

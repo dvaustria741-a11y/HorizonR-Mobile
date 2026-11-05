@@ -691,6 +691,8 @@ impl Game<'_> {
         // not (skipAttackInteraction only asks mayInteract).
         self.attack_ticks = 0;
         if hurt {
+        });
+        if hurt {
             self.swing_arm();
         }
         hurt

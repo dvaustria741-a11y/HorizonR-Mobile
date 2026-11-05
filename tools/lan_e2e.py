@@ -1792,6 +1792,110 @@ def check_deaths(host, guest, out):
             f'a raw template in the {case} chat: {lines}'
     return said
 
+def check_deaths(host, guest, out):
+    def other_player(watcher):
+        """The other player's entity id as `watcher` draws it: aiming by an entity, not by
+        coordinates, holds when a just-respawned client's position lags the server's."""
+        for _ in range(20):
+            found = watcher.raw('entities', 6, 'player')['entities']
+            if found:
+                return found[0]['id']
+            watcher.wait(5)
+        raise AssertionError(f'{watcher.name} does not draw the other player')
+
+    def ready():
+        for g in (host, guest):
+            if g('state').get('screen') == 'dead':
+                g.raw('respawn')
+                g.wait(40)
+            back_to_game(g)
+            g('command', command='effect give @s minecraft:instant_health 1 5')
+        host('command', command='execute at @s run fill ~-5 200 ~-5 ~5 200 ~5 minecraft:stone')
+        host('command', command='tp @s ~ 201 ~')
+        host('command', command=f'tp {GUEST_NAME} {host.player}')
+        guest('command', command='tp @s ~3 ~ ~')
+        host.wait(20)
+        host.raw('look-at-entity', other_player(host))
+        guest.raw('look-at-entity', other_player(guest))
+        host.wait(5)
+
+    said = {}
+    try:
+        host('command', command='gamerule pvp true')
+        host('command', command='gamerule natural_health_regeneration false')
+        for g in (host, guest):
+            g('command', command='gamemode survival')
+            g('command', command='clear @s')
+            g('command', command='item replace entity @s armor.chest with minecraft:air')
+        host('command', command='item replace entity @s weapon.mainhand with minecraft:iron_sword')
+        ready()
+        host('command', command=f'damage {GUEST_NAME} 18 minecraft:generic')
+        host.wait(30)
+        host.raw('attack')
+        host.wait(20)
+        said['sword'] = host.raw('messages', 10)['chat']
+        host.shot(out, 'deaths-sword')
+        guest('command', command='item replace entity @s weapon.mainhand with minecraft:iron_sword')
+        ready()
+        host('command', command=f'damage {host.player} 18 minecraft:generic')
+        guest.wait(30)
+        guest.raw('attack')
+        guest.wait(20)
+        said['host_death'] = host.raw('messages', 10)['chat']
+        said['host_death_behind_guest'] = guest.raw('messages', 10)['chat']
+        guest.shot(out, 'deaths-host')
+        host('command', command='item replace entity @s weapon.mainhand with minecraft:bow')
+        host('command', command='give @s minecraft:arrow 16')
+        ready()
+        host('command', command=f'damage {GUEST_NAME} 18 minecraft:generic')
+        host.raw('use-item', '--hold', 1.3)
+        host.wait(20)
+        said['arrow'] = host.raw('messages', 10)['chat']
+        guest('command', command='item replace entity @s weapon.mainhand with minecraft:bow')
+        guest('command', command='give @s minecraft:arrow 16')
+        ready()
+        host('command', command=f'damage {host.player} 18 minecraft:generic')
+        guest.raw('use-item', '--hold', 1.3)
+        guest.wait(20)
+        said['arrow_behind_guest'] = guest.raw('messages', 10)['chat']
+        host('command', command='item replace entity @s weapon.mainhand with minecraft:air')
+        host('command', command='item replace entity @s armor.chest with '
+                                'minecraft:diamond_chestplate[minecraft:enchantments={"minecraft:thorns":255}]')
+        ready()
+        hx, hy, hz = pos_of(host)
+        for _ in range(8):
+            if dead(guest):
+                break
+            guest('command', command='effect give @s minecraft:instant_health 1 5')
+            host('command', command=f'tp @s {hx:.2f} {hy:.2f} {hz:.2f}')
+            host('command', command=f'tp {GUEST_NAME} {host.player}')
+            guest('command', command='tp @s ~3 ~ ~')
+            host('command', command=f'damage {GUEST_NAME} 19 minecraft:generic')
+            guest.wait(30)
+            guest.raw('look-at-entity', other_player(guest))
+            guest.raw('attack')
+            guest.wait(10)
+        said['thorns'] = host.raw('messages', 10)['chat']
+        host.shot(out, 'deaths-thorns')
+    finally:
+        host('command', command='gamerule natural_health_regeneration true')
+        for g in (host, guest):
+            g('command', command='item replace entity @s armor.chest with minecraft:air')
+            g('command', command='clear @s')
+    name = host.player
+    want = {'sword': f'{GUEST_NAME} was slain by {name}',
+            'host_death': f'{name} was slain by {GUEST_NAME}',
+            'host_death_behind_guest': f'{name} was slain by {GUEST_NAME}',
+            'arrow': f'{GUEST_NAME} was shot by {name}',
+            'arrow_behind_guest': f'{name} was shot by {GUEST_NAME}',
+            'thorns': f'{GUEST_NAME} was killed while trying to hurt {name}'}
+    for case, line in want.items():
+        assert line in said[case], f'no "{line}" in the {case} chat: {said[case]}'
+    for case, lines in said.items():
+        assert not any('%1$s' in line or '%2$s' in line for line in lines), \
+            f'a raw template in the {case} chat: {lines}'
+    return said
+
 def dead_players(game, want, ticks=60):
     """The other players `game`'s client draws dead, once that is `want` (empty or not) or after `ticks`."""
     for _ in range(ticks // 5):
@@ -10011,6 +10115,53 @@ def check_leash_reload(host, guest, out):
 
 CHECKS += ['leash_reload']
 CHECK_FNS.update(leash_reload=check_leash_reload)
+
+
+def check_reopen_player(host, guest, out):
+    """Save and Quit, then reopen: the owner comes back where they stood with what
+    they held (the world's own player file, `players/data/<singleplayer uuid>.dat`),
+    and a guest likewise from their own file (#5065, #5075)."""
+    places = {host.name: (40.5, 120.0, -30.5), guest.name: (-25.5, 110.0, 45.5)}
+    items = {host.name: ('minecraft:diamond', 7), guest.name: ('minecraft:emerald', 5)}
+
+    def held(game):
+        item = items[game.name][0]
+        return game('inventory')['counts'].get(item, 0)
+
+    for game in (host, guest):
+        back_to_game(game)
+        x, y, z = places[game.name]
+        item, count = items[game.name]
+        # A glass block to stand on, so nobody is still falling when the world saves.
+        host('command', command=f'setblock {math.floor(x)} {int(y) - 1} {math.floor(z)} minecraft:glass')
+        game('command', command=f'tp @s {x} {y} {z}')
+        game('command', command=f'give @s {item} {count}')
+    host.wait(40)
+    before = {game.name: {'position': [round(v, 1) for v in pos_of(game)], 'held': held(game)}
+              for game in (host, guest)}
+    for game in (host, guest):
+        want = {'position': list(places[game.name]), 'held': items[game.name][1]}
+        assert before[game.name] == want, f'{game.name} not set up: {before[game.name]}'
+    guest.raw('disconnect')
+    host.raw('pause')
+    host.raw('click-button', 'Save and Quit to Title')
+    host.raw('wait-for', 'screen', 'title', '--timeout', 120)
+    host.raw('open', 'Lan')
+    host('wait_ready', seconds=400)
+    port = host.raw('lan', 'open', 0, 'commands')['port']
+    guest.raw('connect', f'127.0.0.1:{port}', GUEST_NAME)
+    guest.raw('wait-for', 'loaded', '--timeout', 300)
+    guest.wait(20)
+    after = {}
+    for game in (host, guest):
+        after[game.name] = {'position': [round(v, 1) for v in pos_of(game)], 'held': held(game)}
+        game.shot(out, 'reopen-player')
+    assert after == before, f'players reset on reopen: before={before}, after={after}'
+    return {'reopened': after}
+
+
+CHECKS += ['reopen_player']
+CHECK_FNS.update(reopen_player=check_reopen_player)
 
 
 def check_recipe_targets(host, guest, out):

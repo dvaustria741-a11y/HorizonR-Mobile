@@ -104,6 +104,39 @@ impl Game<'_> {
         Ok(self.native_tag_items()?.block_in_tag(tag, block))
     }
 
+    /// Test a block state's name against the world's merged block tags. API 28.
+    #[allow(dead_code)]
+    pub(super) fn native_block_in_tag(
+        &self,
+        context: &NativeLifecycleContext,
+        state: &BlockState,
+        tag: &str,
+    ) -> Result<bool, NativeBlockReadError> {
+        if !self.native_lifecycle.permits_read(context) {
+            return Err(NativeBlockReadError::InactiveContext);
+        }
+        Ok(self.items().block_in_tag(tag, &state.name))
+    }
+
+    /// Test an item stack against the world's merged item tags. API 28.
+    #[allow(dead_code)]
+    pub(super) fn native_item_in_tag(
+        &self,
+        context: &NativeLifecycleContext,
+        stack: &ItemStack,
+        tag: &str,
+    ) -> Result<bool, NativeBlockReadError> {
+        if !self.native_lifecycle.permits_read(context) {
+            return Err(NativeBlockReadError::InactiveContext);
+        }
+        let item = if stack.count == 0 {
+            "minecraft:air"
+        } else {
+            &stack.item
+        };
+        Ok(self.items().item_in_tag(tag, item))
+    }
+
     /// Read a loaded block in a server tick hook, without loading a chunk.
     /// The returned name and properties are owned and remain valid after the hook.
     #[allow(dead_code)]

@@ -86,6 +86,24 @@ impl Mixer {
         i as u32 + 1
     }
 }
+#[cfg(feature = "audio")]
+type DeviceProbe = (Option<String>, Option<String>, Vec<String>);
+
+/// A camera's forward, up and right vectors.
+type Basis = ([f64; 3], [f64; 3], [f64; 3]);
+impl Mixer {
+    /// The id of world `name` (1 and up), given once per name.
+    fn world_id(&mut self, name: &str) -> u32 {
+        let i = match self.world_names.iter().position(|w| w == name) {
+            Some(i) => i,
+            None => {
+                self.world_names.push(name.to_owned());
+                self.world_names.len() - 1
+            }
+        };
+        i as u32 + 1
+    }
+}
 /// A sound the player could have heard (`SoundEventListener.onPlaySound`):
 /// what the subtitle overlay needs.
 #[derive(Clone, Debug, PartialEq)]
@@ -112,6 +130,27 @@ pub struct MixerBackend {
     world: u32,
     /// How many other players share this output: alone, a sound never looks for its copy.
     shares: Arc<std::sync::atomic::AtomicUsize>,
+    /// Whose channels these are (`Channel::owner`).
+    owner: u8,
+    world: u32,
+    /// How many other players share this output: alone, a sound never looks for its copy.
+    shares: Arc<std::sync::atomic::AtomicUsize>,
+}
+/// A splitscreen player's backend leaving: its camera and sounds go with it.
+impl Drop for MixerBackend {
+    fn drop(&mut self) {
+        if self.owner == 0 {
+            return;
+        }
+        self.shares
+            .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(mut m) = self.mixer.lock() {
+            m.listeners.remove(&self.owner);
+            m.worlds.remove(&self.owner);
+            let owner = self.owner;
+            m.channels.retain(|_, c| c.owner != owner);
+        }
+    }
 }
 /// A splitscreen player's backend leaving: its camera and sounds go with it.
 impl Drop for MixerBackend {
@@ -606,6 +645,16 @@ fn mix(mixer: &mut Mixer, data: &mut [f32], channels: usize, rate: u32) {
         // The nearest camera hears it (one camera but in splitscreen).
         let camera = mixer
             .cameras
+            .iter()
+            .filter(|camera| c.relative || camera.2 == c.world)
+            .min_by(|a, b| length(away(a.0)).total_cmp(&length(away(b.0))))
+            .map(|camera| (camera.0, camera.1));
+        // Unheard sources still advance: returning to a world must not resume stale sounds.
+        let (listener, (forward, up, right)) = camera.unwrap_or(([0.0; 3], basis(0.0, 0.0)));
+        let d = if c.relative { at } else { away(listener) };
+        let length = |d: [f64; 3]| d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+        // The nearest camera hears it (one camera but in splitscreen).
+        let camera = cameras
             .iter()
             .filter(|camera| c.relative || camera.2 == c.world)
             .min_by(|a, b| length(away(a.0)).total_cmp(&length(away(b.0))))
@@ -2105,6 +2154,34 @@ mod tests {
         let mut data = [0.0; 2];
         mix(&mut m, &mut data, 1, 48_000);
         assert_eq!(data, [0.5; 2]);
+    }
+
+    #[test]
+    fn output_devices_are_looked_at_again_only_when_the_cards_change() {
+        // No fingerprint (not Linux, or the cards could not be read): the list
+        // has to be looked at as before.
+        assert!(cards_changed(None, None));
+        assert!(cards_changed(Some("0 [PCH ]"), None));
+        // The same cards list the same devices; a card added or removed does not.
+        assert!(!cards_changed(Some("0 [PCH ]"), Some("0 [PCH ]")));
+        assert!(cards_changed(Some("0 [PCH ]"), Some("0 [PCH ]\n 1 [USB ]")));
+    }
+    #[cfg(feature = "audio")]
+    #[test]
+    fn pending_device_discovery_does_not_block_tick() {
+        let mut audio = Audio::silent(Path::new("missing-audio-test-resources"));
+        audio.backend.mixer.lock().unwrap().device_name = "primary".into();
+        audio.default_seen = Some("primary".into());
+        audio.devices_seen = vec!["primary".into()];
+        let (tx, rx) = std::sync::mpsc::channel();
+        audio.device_probe = Some(rx);
+        assert!(!audio.should_change_device());
+        assert!(audio.device_probe.is_some());
+        tx.send((Some("headphones".into()), None, vec!["headphones".into()]))
+            .unwrap();
+        assert!(audio.should_change_device());
+        assert!(audio.device_probe.is_none());
+        assert_eq!(audio.default_seen.as_deref(), Some("headphones"));
     }
 
     #[test]

@@ -93,6 +93,51 @@ fn take_fresh(tag: &mut Tag) -> bool {
         Tag::Compound(c) => c.remove(&FRESH_ADD.into()).is_some(),
         _ => false,
     }
+    /// Entities a native mod kept out of the level (`native_entity_join_level`),
+    /// counted so `/summon` can fail as vanilla's refused add does.
+    pub(super) joins_canceled: u32,
+}
+
+/// The key that marks a compound queued with the chunk loads as a fresh add
+/// (`PersistentEntitySectionManager.addNewEntity`: `/summon`, a portal
+/// arrival), not an entity loaded from disk. Taken off before the compound
+/// is kept or saved.
+const FRESH_ADD: &str = "horizon:fresh_add";
+
+/// Queue `tag` with the chunk loads as a fresh add.
+pub(super) fn mark_fresh(tag: &mut Tag) {
+    if let Tag::Compound(c) = tag {
+        c.insert(FRESH_ADD.into(), Tag::Byte(1));
+    }
+}
+
+/// The key that marks a compound queued with the chunk loads as an entity
+/// moving within its level (an End gateway: `Entity.teleport` takes
+/// `teleportSameDimension`, which moves the entity without removing it), so
+/// it doesn't join the level again. Taken off like [`FRESH_ADD`].
+const SAME_LEVEL_MOVE: &str = "horizon:same_level_move";
+
+/// Queue `tag` with the chunk loads as an entity moving within its level.
+pub(super) fn mark_moved(tag: &mut Tag) {
+    if let Tag::Compound(c) = tag {
+        c.insert(SAME_LEVEL_MOVE.into(), Tag::Byte(1));
+    }
+}
+
+/// Whether `tag` was queued as a move within its level; the mark comes off.
+fn take_moved(tag: &mut Tag) -> bool {
+    match tag {
+        Tag::Compound(c) => c.remove(&SAME_LEVEL_MOVE.into()).is_some(),
+        _ => false,
+    }
+}
+
+/// Whether `tag` was queued as a fresh add; the mark comes off.
+fn take_fresh(tag: &mut Tag) -> bool {
+    match tag {
+        Tag::Compound(c) => c.remove(&FRESH_ADD.into()).is_some(),
+        _ => false,
+    }
 }
 
 fn anon_key(kind: &str, p: Vec3) -> (String, [u64; 3]) {
@@ -2221,6 +2266,23 @@ mod tests {
         add_passengers(&mut tag, Vec::new());
         assert!(tag.get("Passengers").is_none());
     }
+
+    /// A portal arrival or a `/summon` is told as a fresh add, and the mark
+    /// never reaches the entity's kept or saved compound.
+    #[test]
+    fn a_fresh_add_is_told_apart_from_a_load_and_unmarked() {
+        let mut loaded = Tag::Compound(Default::default());
+        assert!(!take_fresh(&mut loaded));
+        let mut fresh = Tag::Compound(Default::default());
+        mark_fresh(&mut fresh);
+        assert!(take_fresh(&mut fresh));
+        assert!(!take_fresh(&mut fresh));
+        assert_eq!(fresh, Tag::Compound(Default::default()));
+    }
+}
+
+#[cfg(test)]
+    use super::{Tag, mark_fresh, take_fresh};
 
     /// A portal arrival or a `/summon` is told as a fresh add, and the mark
     /// never reaches the entity's kept or saved compound.

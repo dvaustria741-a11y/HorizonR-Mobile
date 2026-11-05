@@ -2076,6 +2076,9 @@ impl ArmorStand {
                 horizontal_collision = true;
                 velocity.x = 0.0;
             }
+            if (wanted.x - moved.x).abs() >= f64::from(1.0e-5_f32) {
+                velocity.x = 0.0;
+            }
             if moved.y != wanted.y {
                 velocity.y = 0.0;
             }

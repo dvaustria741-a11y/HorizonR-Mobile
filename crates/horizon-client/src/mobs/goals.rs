@@ -709,6 +709,18 @@ impl Mob {
             }
         }
     }
+    /// `canAttack` of any target: the player rules above, and
+    /// `IronGolem.canAttack`'s refusal of creepers. The callers check that
+    /// the target is alive and can be seen as an enemy.
+    pub fn spares_target(&self, w: &MobWorld, who: Who) -> bool {
+        match who {
+            Who::Player => self.spares_players(w),
+            Who::Mob(id) => {
+                self.species() == Species::IronGolem
+                    && w.seen(id).is_some_and(|s| s.species == Species::Creeper)
+            }
+        }
+    }
     /// TargetingConditions.forCombat().test for the player: alive, not
     /// creative, within range scaled by visibility, optionally visible.
     pub fn can_target_player(&mut self, w: &MobWorld, range: f64, check_sight: bool) -> bool {

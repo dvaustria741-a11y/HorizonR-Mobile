@@ -521,6 +521,52 @@ pub trait LevelAccess {
         _may: &mut Option<bool>,
     ) {
     }
+    /// `BlockState.randomTick` from `ServerLevel.tickChunk`, before the block
+    /// handles it. The level may change the block (`Behaviours::set_block`
+    /// with `ticks`); setting `handled` skips the block's own random tick. A
+    /// level that changed the block without setting `handled` must put the
+    /// block's state as it is now in `state`: the block's own random tick
+    /// runs on it. The default does nothing.
+    fn before_random_tick(
+        &mut self,
+        _ticks: &mut Ticks,
+        _pos: BlockPos,
+        _state: &mut BlockStateId,
+        _handled: &mut bool,
+    ) {
+    }
+    /// `BlockState.tick` from `ServerLevel.tickBlock` (a due scheduled tick
+    /// whose block is still there), before the block handles it. The level
+    /// may change the block (`Behaviours::set_block` with `ticks`); setting
+    /// `handled` skips the block's own tick. A level that changed the block
+    /// without setting `handled` must put the block's state as it is now in
+    /// `state`: the block's own tick runs on it. The default does nothing.
+    fn before_tick_block(
+        &mut self,
+        _ticks: &mut Ticks,
+        _pos: BlockPos,
+        _state: &mut BlockStateId,
+        _handled: &mut bool,
+    ) {
+    }
+    /// `BlockState.updateShape` for `state` at `pos` after its neighbour in
+    /// `direction` became `neighbour`, before the block computes it. `state`
+    /// may not be in the level yet (a piston landing it). A state put in
+    /// `new` is the result, and the block's own `updateShape` doesn't run;
+    /// the level may schedule ticks through `ticks`, as that would. The
+    /// default does nothing.
+    #[allow(clippy::too_many_arguments)]
+    fn before_update_shape(
+        &self,
+        _ticks: &mut Ticks,
+        _pos: BlockPos,
+        _state: BlockStateId,
+        _direction: Direction,
+        _neighbour_pos: BlockPos,
+        _neighbour: BlockStateId,
+        _new: &mut Option<BlockStateId>,
+    ) {
+    }
     /// `Level.isClientSide`: this level is a client's copy (false on a
     /// server, a host or the test harness).
     fn is_client_side(&self) -> bool {
@@ -667,6 +713,23 @@ pub trait LevelAccess {
         _direction: Direction,
         vanilla: i32,
     ) -> i32 {
+        vanilla
+    }
+    /// `BlockState.getSignal` (or `getDirectSignal` when `direct`) once the
+    /// library answered `vanilla`: the signal to use. The default keeps it.
+    fn adjust_signal(
+        &self,
+        _pos: BlockPos,
+        _state: BlockStateId,
+        _direction: Direction,
+        _direct: bool,
+        vanilla: i32,
+    ) -> i32 {
+        vanilla
+    }
+    /// `BlockState.isSignalSource` once the library answered `vanilla`: the
+    /// answer to use. The default keeps it.
+    fn adjust_signal_source(&self, _state: BlockStateId, vanilla: bool) -> bool {
         vanilla
     }
     /// `BlockState.getSignal` (or `getDirectSignal` when `direct`) once the

@@ -440,6 +440,28 @@ fn mesh_columns_with_edges(
     } else {
         (columns, neighbors)
     };
+    let heightmap_columns;
+    let heightmap_neighbors;
+    let (columns, neighbors) = if key.level >= HEIGHTMAP_LEVEL {
+        let [ox, _, oz] = key.origin();
+        let mut fluid = |span: &Span| material(span, Direction::Up, [ox, oz]).fluid != 0;
+        heightmap_columns = columns
+            .iter()
+            .map(|column| heightmap(column, &mut fluid))
+            .collect::<Vec<_>>();
+        heightmap_neighbors = neighbors.each_ref().map(|side| {
+            side.iter()
+                .map(|edge| EdgeColumn {
+                    start: edge.start,
+                    end: edge.end,
+                    column: heightmap(&edge.column, &mut fluid),
+                })
+                .collect::<Vec<_>>()
+        });
+        (&heightmap_columns[..], &heightmap_neighbors)
+    } else {
+        (columns, neighbors)
+    };
     let mut count = CELLS * CELLS;
     let edge_offsets = std::array::from_fn::<_, 4, _>(|side| {
         let start = count;
@@ -1357,6 +1379,84 @@ mod tests {
                         span(top - 1, top, 4),
                     ]
                     .into(),
+                }
+            })
+            .collect();
+        let quads = |level| {
+            let key = TileKey { x: 0, z: 0, level };
+            let mesh = mesh_columns(key, &rolling, &FxHashSet::default(), None, material);
+            mesh.solid.len() / 4
+        };
+        let (voxel, height) = (quads(HEIGHTMAP_LEVEL - 1), quads(HEIGHTMAP_LEVEL));
+        assert!(height * 3 < voxel * 2, "{height} quads against {voxel}");
+    }
+    #[test]
+    fn world_sized_faces_are_one_quad_with_uvs_that_fit() {
+        let mut mesh = SectionMesh::default();
+        let key = FaceKey {
+            direction: Direction::Up,
+            plane: 64.0f32.to_bits(),
+            overlay: 0,
+            layer: 1,
+            light: 0,
+            color: 0,
+            translucent: false,
+        };
+        let size = 4_194_304.0;
+        emit(
+            &mut mesh,
+            key,
+            Rect {
+                u0: 0.0,
+                v0: 0.0,
+                u1: size,
+                v1: size / 2.0,
+            },
+        );
+        assert_eq!(mesh.solid.len(), 4);
+        let corners: Vec<[f32; 3]> = mesh.solid.iter().map(|v| v.pos).collect();
+        assert!(
+            corners.iter().any(|p| p[0] == size && p[2] == size / 2.0),
+            "{corners:?}"
+        );
+        let top = mesh
+            .solid
+            .iter()
+            .map(tiled_uv)
+            .fold(0.0f32, |m, uv| m.max(uv[0]).max(uv[1]));
+        assert!(top <= MAX_FACE + 1.0, "UV reaches {top}");
+        assert!(
+            top > MAX_FACE / 4.0,
+            "the texture still repeats across the face"
+        );
+    }
+    #[test]
+    fn far_columns_are_heightmaps_of_their_surface_and_water() {
+        let fluid = |s: &Span| s.state.0 == 2;
+        let strata = Column {
+            surface: None,
+            spans: vec![span(0, 60, 1), span(60, 63, 3), span(63, 64, 4)],
+        };
+        let flat = heightmap(&strata, fluid);
+        assert_eq!(flat.spans, [span(-64, 64, 4)]);
+        let sea = Column {
+            surface: None,
+            spans: vec![span(0, 50, 1), span(50, 62, 2)],
+        };
+        let flat = heightmap(&sea, fluid);
+        assert_eq!(flat.spans, [span(-64, 50, 1), span(50, 62, 2)]);
+        assert!(heightmap(&columns()[0], fluid).spans.is_empty());
+        // A rolling landscape of strata: far tiles need a fraction of the quads.
+        let rolling: Vec<Column> = (0..CELLS * CELLS)
+            .map(|i| {
+                let top = 64 + (i * 7 % 5) as i16;
+                Column {
+                    surface: None,
+                    spans: vec![
+                        span(0, top - 4, 1),
+                        span(top - 4, top - 1, 3),
+                        span(top - 1, top, 4),
+                    ],
                 }
             })
             .collect();

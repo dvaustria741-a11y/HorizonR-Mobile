@@ -80,6 +80,16 @@ alert = 5
 kick = 20
 [anticheat.prediction]
 enabled = false
+[anticheat.timer]
+setback = 2
+alert = 5
+kick = 20
+[anticheat.ground]
+setback = 5
+alert = 15
+kick = 60
+[anticheat.prediction]
+enabled = false
 '''
 OFF = '[anticheat]\nenabled = false\n'
 

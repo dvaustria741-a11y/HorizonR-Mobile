@@ -3474,6 +3474,42 @@ mod tests {
         }
     }
     #[test]
+    fn world_wide_plans_stay_small_and_cover_every_level() {
+        // About 10 000 nodes at a corner of the world, 9 000 at its centre.
+        const WORLD_PLAN_NODES: usize = 16_384;
+        for (camera, elevation) in [
+            ([0, 0], 0),
+            ([115, 135], 49_000_000),
+            ([-30_000_000, 29_999_000], 90),
+        ] {
+            let plan =
+                Plan::with_previous(camera, 12, MAX_CHUNKS, &Plan::default(), elevation, false);
+            let reduced =
+                Plan::with_previous(camera, 12, MAX_CHUNKS, &Plan::default(), elevation, true);
+            let top = plan.nodes.iter().map(|k| k.level).max().unwrap();
+            assert_eq!(top, MAX_LEVEL, "{camera:?} y={elevation}: roots stop short");
+            assert!(
+                plan.nodes.len() < WORLD_PLAN_NODES,
+                "{camera:?} y={elevation}: {} nodes",
+                plan.nodes.len()
+            );
+            assert!(
+                reduced.nodes.len() <= plan.nodes.len(),
+                "{camera:?} y={elevation}: reduced has {} nodes, full {}",
+                reduced.nodes.len(),
+                plan.nodes.len()
+            );
+            // Every level from the finest planned one up to the roots has tiles.
+            let finest = plan.nodes.iter().map(|k| k.level).min().unwrap();
+            for level in finest..=MAX_LEVEL {
+                assert!(
+                    plan.nodes.iter().any(|k| k.level == level),
+                    "{camera:?} y={elevation}: no level-{level} tile"
+                );
+            }
+        }
+    }
+    #[test]
     fn aerial_distance_avoids_unseen_full_detail_outside_the_near_area() {
         let ground = Plan::new([0, 0], 12, 1024);
         let high = Plan::with_previous([0, 0], 12, 1024, &Plan::default(), 1024, false, None);

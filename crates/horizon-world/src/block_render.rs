@@ -62,6 +62,19 @@ impl FaceVisibility {
     pub fn is_empty(&self) -> bool {
         self.states.is_empty()
     }
+    /// No state's faces, for a server, which draws nothing: every lookup
+    /// answers "unknown render state".
+    pub fn empty() -> Self {
+        Self {
+            states: Vec::new(),
+            faces: vec![VoxelShape::empty(), VoxelShape::block()],
+            cache: HashMap::new(),
+        }
+    }
+    /// [`Self::empty`]: no state is known.
+    pub fn is_empty(&self) -> bool {
+        self.states.is_empty()
+    }
     pub fn new(
         occlusion: &CachedCollisionRegistry<'_>,
         definitions: &BTreeMap<String, RenderDefinition>,

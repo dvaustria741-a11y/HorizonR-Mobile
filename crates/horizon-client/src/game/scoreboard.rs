@@ -1117,3 +1117,72 @@ mod team_tests {
         );
     }
 }
+
+#[cfg(test)]
+
+    const WOLF: [i32; 4] = [1, 2, 3, 4];
+    const CAT: [i32; 4] = [5, 6, 7, 8];
+    const STEVE: [i32; 4] = [9, 10, 11, 12];
+
+    /// The player in place is on `red`, the cat on `blue`; nobody else is on a
+    /// team (`Game::mob_team` names the player by profile, a mob by UUID).
+    fn board() -> Scoreboard {
+        let mut board = Scoreboard::default();
+        board.add_team("red");
+        board.add_to_team("Steve", "red");
+        board.add_team("blue");
+        board.add_to_team(&uuid_text(CAT), "blue");
+        board
+    }
+
+    fn team_name(team: Option<&sb::Team>) -> Option<&str> {
+        team.map(|t| t.name.as_str())
+    }
+
+    #[test]
+    fn a_tamed_pet_with_no_team_answers_its_owners() {
+        let board = board();
+        let wolf = uuid_text(WOLF);
+        assert_eq!(
+            team_name(pet_team(&board, &wolf, Some("Steve"))),
+            Some("red")
+        );
+    }
+
+    #[test]
+    fn a_pet_with_its_own_team_answers_that_one() {
+        let board = board();
+        let cat = uuid_text(CAT);
+        assert_eq!(
+            team_name(pet_team(&board, &cat, Some("Steve"))),
+            Some("blue")
+        );
+    }
+
+    #[test]
+    fn an_untamed_pet_answers_no_team() {
+        let board = board();
+        let wolf = uuid_text(WOLF);
+        // `mob_team` names no owner for a pet that is not tamed.
+        assert_eq!(pet_team(&board, &wolf, None), None);
+    }
+
+    #[test]
+    fn a_pet_owned_by_a_pet_reaches_the_root_owner() {
+        let board = board();
+        // The wolf's owner is the cat, whose own owner is the player: the
+        // wolf answers the player's team, not the cat's.
+        let pet_owner = |pet: [i32; 4]| (pet == CAT).then_some(STEVE);
+        let root = root_owner(CAT, pet_owner);
+        assert_eq!(root, STEVE);
+        let root_name = if root == STEVE { "Steve" } else { "nobody" };
+        assert_eq!(
+            team_name(pet_team(&board, &uuid_text(WOLF), Some(root_name))),
+            Some("red")
+        );
+        // An owner loop (only `/data` can make one) stops instead of hanging.
+        let looped = |uuid: [i32; 4]| Some(if uuid == WOLF { CAT } else { WOLF });
+        let root = root_owner(WOLF, looped);
+        assert!(root == WOLF || root == CAT);
+    }
+}

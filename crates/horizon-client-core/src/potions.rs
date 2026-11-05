@@ -380,3 +380,53 @@ mod tests {
         assert_eq!(ids.last(), Some(&"ruby:glow"));
     }
 }
+#[cfg(test)]
+
+    #[test]
+    fn description_ids_keep_the_namespace() {
+        assert_eq!(description_id("speed"), "effect.minecraft.speed");
+        assert_eq!(description_id("minecraft:speed"), "effect.minecraft.speed");
+        assert_eq!(description_id("ruby:curse/dark"), "effect.ruby.curse.dark");
+    }
+
+    /// `PotionContents.getColorOptional`: each visible effect's colour weighted by its
+    /// amplifier + 1, the channels averaged by integer division; none gives the base colour.
+    #[test]
+    fn effects_mix_their_colours_by_amplifier() {
+        let c = |id: &str| effect(id).unwrap().color;
+        assert_eq!(effects_color([("poison", 0)].into_iter()), c("poison"));
+        let (p, s) = (c("poison"), c("speed"));
+        let mix = |shift: u32| (((p >> shift & 255) + 3 * (s >> shift & 255)) / 4) << shift;
+        assert_eq!(
+            effects_color([("poison", 0), ("speed", 2)].into_iter()),
+            mix(16) | mix(8) | mix(0)
+        );
+        assert_eq!(effects_color(std::iter::empty()), BASE_POTION_COLOR);
+    }
+
+    /// The only test that registers: the registry is set once per process.
+    #[test]
+    fn mod_effects_follow_vanilla_once_registered() {
+        assert!(register_mod_effects([(
+            "ruby:glow".to_owned(),
+            0xFF0000,
+            Category::Neutral
+        )]));
+        assert!(!register_mod_effects([(
+            "ruby:late".to_owned(),
+            1,
+            Category::Harmful
+        )]));
+        let glow = effect("ruby:glow").unwrap();
+        assert_eq!(
+            (glow.color, glow.category, glow.instant),
+            (0xFF0000, Category::Neutral, false)
+        );
+        assert!(effect("glow").is_none() && effect("ruby:late").is_none());
+        assert_eq!(namespaced(glow.id), "ruby:glow");
+        assert_eq!(effect("minecraft:speed").unwrap().id, "speed");
+        let ids: Vec<_> = all_effects().map(|e| e.id).collect();
+        assert_eq!(ids.len(), EFFECTS.len() + 1);
+        assert_eq!(ids.last(), Some(&"ruby:glow"));
+    }
+}

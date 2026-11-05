@@ -419,6 +419,18 @@ impl Game<'_> {
                         pack.save_values(&Self::shader_packs_dir());
                     }
                 }
+                Event::ListShaderPackOptions => {
+                    self.settings.shader_pack_options = Self::list_shader_pack_options(&self.settings);
+                }
+                Event::ShaderPackOption(_) => {
+                    Self::save_shader_pack_options(&self.settings);
+                    // Build the pack again with the new values on the next frame.
+                    self.native_shaders.invalidate();
+                    self.pack_ids = None;
+                    if let Some(renderer) = &mut self.renderer {
+                        renderer.drop_shader_packs();
+                    }
+                }
                 Event::OpenShaderPackFolder => {
                     let dir = Self::shader_packs_dir();
                     let _ = std::fs::create_dir_all(&dir);
@@ -510,6 +522,9 @@ impl Game<'_> {
                 s.horizon.frame_generation != horizon_client::graphics::FrameGeneration::Off,
             );
             r.set_hdr_lighting(s.horizon.hdr_lighting);
+            // The frame cap is the budget: a capped frame is not a slow one.
+            let target = s.horizon.battery_limit(s.max_fps as i32, true, true);
+            r.set_dynamic_scale(s.horizon.dynamic_resolution, target as f32);
             r.set_hdr(
                 s.horizon.hdr,
                 s.horizon.paper_white_nits() as f32,

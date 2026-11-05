@@ -341,6 +341,10 @@ impl Game<'_> {
         if let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone()) {
             self.native_player_open_sign(player, &name, [pos.0, pos.1, pos.2], front);
         }
+        #[cfg(target_os = "android")]
+        if self.window.is_some() && !crate::keyboard_mouse_input() {
+            self.android_show_keyboard();
+        }
     }
     /// `AbstractSignEditScreen.tick`: the editor closes (and `removed` sends
     /// the text) once its sign is removed or the player's eyes are further

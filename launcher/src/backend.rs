@@ -1028,6 +1028,74 @@ fn short_path(path: &Path) -> Option<PathBuf> {
     (got != 0 && got < need).then(|| PathBuf::from(std::ffi::OsString::from_wide(&buf[..got])))
 }
 
+/// A canonical path without Windows' verbatim prefix: `canonicalize` gives `\\?\C:\...` there,
+/// and some tools stat `\\?\C:` — the volume itself — and fail. A drive path loses its `\\?\`;
+/// any other path is left as it is.
+pub(crate) fn plain(path: PathBuf) -> PathBuf {
+    match path.to_str().and_then(|p| p.strip_prefix(r"\\?\")) {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
+        _ => path,
+    }
+}
+
+/// `path` spelled only in ASCII: what Windows' MinGW-w64 tools can open (they read paths
+/// through ANSI APIs, so a Cyrillic user name in %APPDATA% breaks them, #5189).
+fn ascii(path: &Path) -> bool {
+    path.as_os_str().to_str().is_some_and(str::is_ascii)
+}
+
+/// Where builds happen — the Rust toolchain, its Cargo home and `native_mods::root` — as a
+/// path every build tool can read: `data_dir()` resolved, so the tools are never handed a
+/// link (horizon-mixins refuses one, and macOS's /tmp is one). On Windows, when the resolved
+/// path isn't [`ascii`], [`windows_build_dir`] names the same folder a way MinGW-w64 can open.
+pub fn build_dir() -> PathBuf {
+    let data = data_dir();
+    let _ = fs::create_dir_all(&data);
+    let real = data.canonicalize().map(plain).unwrap_or(data);
+    if ascii(&real) {
+        return real;
+    }
+    #[cfg(windows)]
+    return windows_build_dir(&real);
+    #[cfg(not(windows))]
+    real
+}
+
+/// [`build_dir`] when `real` isn't [`ascii`]: the folder's own short (8.3) name where the
+/// volume keeps one — the same files, spelled in ASCII — else a folder of ProgramData's,
+/// named for the path so each user's is its own and can be created there.
+#[cfg(windows)]
+fn windows_build_dir(real: &Path) -> PathBuf {
+    if let Some(short) = short_path(real).filter(|p| ascii(p)) {
+        return short;
+    }
+    let public = std::env::var_os("ProgramData")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute() && ascii(p))
+        .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
+    let key = Sha256::digest(real.as_os_str().as_encoded_bytes());
+    let key: String = key[..4].iter().map(|b| format!("{b:02x}")).collect();
+    public.join(format!("horizon-launcher-{key}"))
+}
+
+/// `GetShortPathNameW`: `path`'s short (8.3) name, or None on error. A folder with no short
+/// name (the volume may keep none) answers with its long name again, which [`ascii`] refuses.
+#[cfg(windows)]
+fn short_path(path: &Path) -> Option<PathBuf> {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetShortPathNameW(long: *const u16, short: *mut u16, len: u32) -> u32;
+    }
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    let need = unsafe { GetShortPathNameW(wide.as_ptr(), std::ptr::null_mut(), 0) } as usize;
+    if need == 0 {
+        return None;
+    }
+    let mut buf = vec![0u16; need];
+    let got = unsafe { GetShortPathNameW(wide.as_ptr(), buf.as_mut_ptr(), need as u32) } as usize;
+    (got != 0 && got < need).then(|| PathBuf::from(std::ffi::OsString::from_wide(&buf[..got])))
+}
+
 fn versions_dir() -> PathBuf {
     data_dir().join("versions")
 }
@@ -4224,6 +4292,10 @@ pub struct Settings {
     /// An older file's switch for the release profile, read when `native_profile` is unset.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub native_release: bool,
+    /// Native builds compile with the release profile (`native_mods::Profile`) instead of `fast`:
+    /// slower to build, slightly faster game.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub native_release: bool,
     /// Developer options (hidden: seven clicks on the sidebar's launcher version reveal them):
     /// offline names play without an account that owns the game, in the window only
     /// (`account::Accounts::play_as_with`, `account::launch_for_game`). Never a download: the game still
@@ -5086,6 +5158,57 @@ pub fn {f}("
             let optional = (os, arch) == ("windows", "aarch64");
             assert!(
                 named == 2 || (optional && named > 2),
+                "nightly-build.yml must sign and publish {game} ({os} {arch})"
+            );
+            assert!(
+                launcher.contains(&format!("asset: {launcher_asset}")),
+                "launcher.yml builds no {launcher_asset}"
+            );
+        }
+    }
+
+    #[test]
+    fn each_mac_picks_the_build_for_its_processor() {
+        assert_eq!(
+            platform_assets("macos", "aarch64"),
+            Some((
+                "horizon-macos-arm64.zip",
+                "horizon-launcher-macos-arm64.zip"
+            ))
+        );
+        assert_eq!(
+            platform_assets("macos", "x86_64"),
+            Some(("horizon-macos-x64.zip", "horizon-launcher-macos-x64.zip"))
+        );
+        assert_eq!(
+            platform_assets("windows", "x86_64").map(|(game, _)| game),
+            Some("horizon-windows-x64.zip")
+        );
+        assert_eq!(platform_assets("linux", "aarch64"), None);
+        assert_eq!(platform_assets("macos", "x86"), None);
+        assert_eq!(
+            ASSET,
+            platform_assets(std::env::consts::OS, std::env::consts::ARCH).map(|(game, _)| game)
+        );
+    }
+
+    /// Every asset a launcher looks for is one the release workflows build, sign and publish.
+    #[test]
+    fn platform_assets_are_published() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let read = |path: &str| fs::read_to_string(repo.join(path)).unwrap();
+        let build = read(".github/workflows/game-build.yml");
+        let nightly = read(".github/workflows/nightly-build.yml");
+        let launcher = read(".github/workflows/launcher.yml");
+        for (os, arch, game, launcher_asset) in PLATFORMS {
+            assert!(
+                build.contains(&format!("asset: {game}")),
+                "game-build.yml builds no {game}"
+            );
+            // Signed (SHA256SUMS), then published.
+            assert_eq!(
+                nightly.matches(&format!("dist/{game}")).count(),
+                2,
                 "nightly-build.yml must sign and publish {game} ({os} {arch})"
             );
             assert!(

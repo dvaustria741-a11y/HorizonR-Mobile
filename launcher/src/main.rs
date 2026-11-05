@@ -281,6 +281,15 @@ struct Launcher {
     /// contents, so an entry never goes stale.
     native_builds:
         std::cell::RefCell<std::collections::HashMap<String, Option<native_status::Build>>>,
+    /// The instance (id) the build under way, or the last one's error, is for.
+    native_for: Option<String>,
+    /// The newer Horizon the open warning's build moves to (Update), else None: a build stays
+    /// on the Horizon the instance plays.
+    native_update: Option<String>,
+    /// What each installed native build was made from, by version. A build's version names its
+    /// contents, so an entry never goes stale.
+    native_builds:
+        std::cell::RefCell<std::collections::HashMap<String, Option<native_status::Build>>>,
     /// The mods of a build made for other Horizon versions (`native_mods::MISMATCH`): the build
     /// waits for "Build anyway".
     native_mismatch: Option<String>,
@@ -611,6 +620,9 @@ impl Launcher {
             native_for: None,
             native_update: None,
             native_on_base: false,
+            native_builds: Default::default(),
+            native_for: None,
+            native_update: None,
             native_builds: Default::default(),
             native_mismatch: None,
             native_log: Default::default(),
@@ -1006,6 +1018,9 @@ impl Launcher {
         self.native_started = Some((Instant::now(), 0));
         self.native_done = None;
         let profile = native_mods::Profile::chosen(&self.settings);
+        self.native_started = Some((Instant::now(), 0));
+        self.native_done = None;
+        let profile = native_mods::Profile::from_setting(self.settings.native_release);
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let result = native_mods::build(
@@ -4117,6 +4132,8 @@ impl Launcher {
         )
     }
 
+    /// Settings' Game arguments row: the extra arguments the game starts with, kept in
+    /// `settings.json` and appended to the launcher's own (quotes group a word with spaces).
     fn game_args_row(&self, n: usize, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let focused = self.args_focused;

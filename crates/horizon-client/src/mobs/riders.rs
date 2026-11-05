@@ -554,6 +554,17 @@ mod tests {
             1.312_500_059_604_645
         ));
     }
+    /// A scaled vehicle that is not an avatar: `remote_mob_attributes` puts
+    /// `minecraft:scale` on any living entity, but `awake_dims_in` grows only
+    /// avatars' boxes, so the seat still rides at the scaled box height.
+    #[test]
+    fn a_scaled_vehicle_seat_stays_scaled() {
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+        let mut cow = Mob::new(1, crate::mobs::sensor_scan_tests::kind(), Vec3::ZERO, 0.0);
+        assert!(close(passenger_attachment(&cow)[1], 1.4));
+        cow.extra.model_scale = 2.0;
+        assert!(close(passenger_attachment(&cow)[1], 2.8));
+    }
     #[test]
     fn archers_keep_their_distance_and_brawlers_close_in() {
         assert!(ranged(Species::Skeleton) && ranged(Species::Pillager));

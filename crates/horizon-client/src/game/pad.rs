@@ -30,6 +30,21 @@ pub(super) struct Pads {
     pub(super) feed: Option<PadState>,
     /// The pad behind `feed`.
     feed_source: Option<PadId>,
+    #[cfg(target_os = "android")]
+    pub(super) custom_keys: std::collections::HashSet<KeyCode>,
+    #[cfg(target_os = "android")]
+    pub(super) hardware_keys: std::collections::HashSet<KeyCode>,
+    #[cfg(target_os = "android")]
+    last_input_mode: Option<horizon_client::android_gamepad::InputMode>,
+    #[cfg(target_os = "android")]
+    pub(super) touch_shield: bool,
+    #[cfg(target_os = "android")]
+    pub(super) touch: horizon_client::touch::TouchControls,
+    /// Keep a released tap's ray until the tick consumed its queued click.
+    #[cfg(target_os = "android")]
+    pub(super) touch_aim: Option<[f32; 2]>,
+    #[cfg(target_os = "android")]
+    pub(super) touch_ui: horizon_client::touch_ui::TouchUi,
     /// The real controllers and the DualSense's output.
     #[cfg(all(feature = "controllers", not(target_os = "android")))]
     devices: hardware::Devices,
@@ -230,6 +245,18 @@ impl Game<'_> {
         }
     }
 
+    #[cfg(target_os = "android")]
+    pub(super) fn touch_shield_available(&self) -> bool {
+        self.held()
+            .into_iter()
+            .chain(self.offhand.as_ref())
+            .any(|s| self.blocks_attacks(s).is_some())
+    }
+    #[cfg(target_os = "android")]
+    pub(super) fn android_inventory_controls(&self) -> bool {
+        self.settings.touch.inventory_controls
+            && matches!(self.screen, Screen::Inventory | Screen::Creative)
+    }
     /// Once per loop iteration: read the pads and act on button changes.
     pub(super) fn poll_pads(&mut self, event_loop: &dyn EventLoopCtl) {
         self.pad.virtual_input = self.pad.injected != PadState::default();

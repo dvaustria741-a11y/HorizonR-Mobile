@@ -114,6 +114,9 @@ pub(super) struct Mods {
     /// (`native_status::pinning`, for builds that didn't record it).
     native_state: std::cell::RefCell<Option<(String, native_status::State, Vec<String>)>>,
     native_files: std::cell::RefCell<Option<(String, Vec<native_status::Installed>)>>,
+    /// The selected instance's native build state, and the `native_status::fingerprint` it was
+    /// read for: read again only when that changes.
+    native_state: std::cell::RefCell<Option<(String, native_status::State)>>,
     /// Java mods' checks, by source and project.
     pub(super) checks: HashMap<(SourceId, String), Checking>,
     /// Horizon registry projects' trust and capabilities, by id ([`horizon::trust_and_capabilities`]).
@@ -1320,6 +1323,11 @@ impl Launcher {
                     .iter()
                     .any(|e| native_status::is_native_file(&e.file));
         let instance = self.selected_instance().map(|i| i.name.clone());
+        let native = self.mods.java.is_none()
+            && entries
+                .iter()
+                .any(|e| native_status::is_native_file(&e.file));
+        let instance = self.selected_instance().map(|i| i.name.clone());
         let row = |i: usize| {
             if i >= entries.len() {
                 return self.native_mod_row(&native_entries[i - entries.len()], busy, cx);
@@ -1409,6 +1417,21 @@ impl Launcher {
                     .on_click(move |_, _, cx| {
                         let _ = std::fs::create_dir_all(&folder);
                         crate::glass_toast::open(cx, &folder);
+                    }),
+                );
+            }
+            if is_native {
+                let folder = self.mods.home().join(native_mods::INSTALLED);
+                right = right.child(
+                    button(
+                        SharedString::from(format!("mods-folder-{}", e.project)),
+                        "Open folder",
+                        Kind::Ghost,
+                        &t,
+                    )
+                    .on_click(move |_, _, cx| {
+                        let _ = std::fs::create_dir_all(&folder);
+                        cx.open_with_system(&folder);
                     }),
                 );
             }
@@ -1715,6 +1738,162 @@ impl Launcher {
         ))
     }
 
+    /// The selected instance's native build (docs/native-mods.md): which build it plays, the
+    /// Horizon it was built on, and whether it holds the native mods turned on (Up to date,
+    /// Needs rebuild, Not built), with Build, and Update when a newer Horizon is installed. Both
+    /// open the trust warning first (`native_warning`). A build under way, or its error, shows
+    /// only on the instance it is for.
+    fn native_build(&self, cx: &mut Context<Self>) -> Option<Div> {
+        let t = self.theme;
+        let instance = self.selected_instance()?;
+        let version = self.version_of(instance).cloned();
+        let home = self.mods.home();
+        let key = native_status::fingerprint(&home, version.as_deref());
+        let mut memo = self.mods.native_state.borrow_mut();
+        let state = match memo.as_ref() {
+            Some((k, state)) if *k == key => *state,
+            _ => {
+                let built = version.as_deref().and_then(native_status::built);
+                let state = native_status::state(&native_status::enabled(&home), built.as_deref());
+                *memo = Some((key, state));
+                state
+            }
+        };
+        let build = version.as_deref().and_then(|v| self.native_build_of(v));
+        let update = build
+            .as_ref()
+            .filter(|_| state != State::NoMods)
+            .and_then(|b| native_mods::newer_than(&b.base, &self.installed));
+        let mine = self.native_for.as_deref() == Some(instance.id.as_str());
+        let step = self.native_step.as_ref().filter(|_| mine);
+        let error = self.native_error.as_ref().filter(|_| mine);
+        let name = [("instance", instance.name.as_str())];
+        let line = |s: String| div().child(s);
+        let (status, badge) = match (step, error, state) {
+            (Some(step), _, _) => (
+                line(format!(
+                    "{step} - {}",
+                    native_mods::duration_label(
+                        self.native_started.map_or(0, |(s, _)| s.elapsed().as_secs())
+                    )
+                ))
+                .text_color(t.accent),
+                Some((tr("Building"), t.accent)),
+            ),
+            (None, Some(e), _) => (line(e.clone()).text_color(t.danger), None),
+            (None, None, State::NoMods) => (line(tr("No native mod is turned on.").into()), None),
+            (None, None, State::NotBuilt) => (
+                line(trf(
+                    "{instance} doesn't play its native mods yet: build the game with them.",
+                    &name,
+                )),
+                Some((tr("Not built"), t.warn)),
+            ),
+            (None, None, State::Outdated) => (
+                line(trf(
+                    "The native mods turned on changed since {instance} was built: build again to play them.",
+                    &name,
+                )),
+                Some((tr("Needs rebuild"), t.warn)),
+            ),
+            (None, None, State::UpToDate) => (
+                line(trf("Up to date: {instance} plays these mods.", &name)),
+                Some((tr("Up to date"), t.success)),
+            ),
+        };
+        let mut detail = div().flex().flex_col().gap(px(4.)).child(status);
+        if let Some(done) = self.native_done.as_ref().filter(|_| mine && step.is_none()) {
+            detail = detail.child(div().text_color(t.muted).child(done.clone()));
+        }
+        if let (Some(tag), Some(build)) = (&version, &build) {
+            detail = detail.child(div().text_color(t.muted).child(trf(
+                "Plays {build}, built on Horizon {version}.",
+                &[("build", tag), ("version", &build.horizon())],
+            )));
+        }
+        if self.native_step.is_some() && !mine {
+            let other = self
+                .native_for
+                .as_deref()
+                .and_then(|id| self.instances.list.iter().find(|i| i.id == id));
+            detail = detail.child(div().text_color(t.muted).child(trf(
+                "{instance} is building: one build at a time.",
+                &[("instance", other.map_or("", |i| i.name.as_str()))],
+            )));
+        }
+        let mismatch = self
+            .native_step
+            .is_none()
+            .then_some(self.native_mismatch.as_ref())
+            .flatten();
+        let idle =
+            self.native_step.is_none() && self.native_confirm.is_none() && mismatch.is_none();
+        let can_build =
+            idle && (error.is_some() || matches!(state, State::NotBuilt | State::Outdated));
+        let mut right = div()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .children(badge.map(|(label, color)| blocks::badge(label.to_string(), color, &t)));
+        if let Some(newer) = update.filter(|_| idle) {
+            right = right.child(
+                button(
+                    "native-update",
+                    trf(
+                        "Rebuild on Horizon {version}",
+                        &[("version", &native_status::horizon_label(&newer))],
+                    ),
+                    Kind::Secondary,
+                    &t,
+                )
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.native_update = Some(newer.clone());
+                    this.native_confirm = Some(this.native_mods_to_build().map(|(_, b)| b));
+                    cx.notify();
+                })),
+            );
+        }
+        if can_build {
+            right = right.child(button("native-build", "Build", Kind::Primary, &t).on_click(
+                cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.native_update = None;
+                    this.native_confirm = Some(this.native_mods_to_build().map(|(_, b)| b));
+                    cx.notify();
+                }),
+            ));
+        }
+        detail = detail.child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(
+                    switch("native-release", self.settings.native_release, &t).on_click(
+                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                            this.settings.native_release = !this.settings.native_release;
+                            this.native_done = None;
+                            this.settings.save();
+                            cx.notify();
+                        }),
+                    ),
+                )
+                .child(tr("Release build: slower to build, slightly faster game").to_string()),
+        );
+        if let Some(list) = mismatch {
+            detail = detail.child(self.native_mismatch_panel(list, cx));
+        }
+        if let Some(mods) = &self.native_confirm {
+            detail = detail.child(self.native_warning(mods, cx));
+        }
+        Some(index_row(
+            0,
+            trf("Native build of {instance}", &name),
+            Some(detail.into_any_element()),
+            Some(right.into_any_element()),
+            &t,
+        ))
+    }
+
     fn mods_results(&mut self, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let m = &self.mods;
@@ -1891,6 +2070,15 @@ pub(super) fn switches(kind: PackKind) -> bool {
         kind,
         PackKind::Mod | PackKind::ResourcePack | PackKind::Modpack
     )
+}
+
+/// Where a kind's tab searches first: Horizon's registry, but Modrinth for resource packs and
+/// modpacks.
+fn source_for(kind: PackKind) -> SourceId {
+    match kind {
+        PackKind::ResourcePack | PackKind::Modpack => SourceId::Modrinth,
+        _ => SourceId::Horizon,
+    }
 }
 
 impl Launcher {

@@ -460,6 +460,7 @@ dependencies = [
  "tower",
  "ureq",
  "zip 2.6.1",
+ "zip",
 ]
 
 [[package]]

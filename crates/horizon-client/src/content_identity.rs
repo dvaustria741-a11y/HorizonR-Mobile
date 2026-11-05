@@ -147,6 +147,40 @@ fn hash_entries(previous: [u8; 32], registry: &str, entries: &[(u64, String)]) -
     hash.finalize().into()
 }
 
+/// The built-in registries whose network ids content mods extend besides blocks.
+const REGISTRIES: [&str; 2] = ["minecraft:item", "minecraft:mob_effect"];
+
+fn parse_registries(bytes: &[u8]) -> Result<Builtin, IdentityError> {
+    let text = std::str::from_utf8(bytes).map_err(|e| IdentityError::Registries(e.to_string()))?;
+    Builtin::parse(text).map_err(|e| IdentityError::Registries(e.to_string()))
+}
+
+/// The content mods' entries of `registry` in `registries.json`, by network id.
+fn mod_entries(report: &Builtin, registry: &str) -> Vec<(u64, String)> {
+    // Names come indexed by network id, so they are already in order.
+    report
+        .get(registry)
+        .into_iter()
+        .flat_map(|ids| ids.names.iter().enumerate())
+        .filter(|(_, name)| !name.is_empty() && !name.starts_with("minecraft:"))
+        .map(|(id, name)| (id as u64, name.clone()))
+        .collect()
+}
+
+/// The identity so far extended with the mods' entries of one registry.
+fn hash_entries(previous: [u8; 32], registry: &str, entries: &[(u64, String)]) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(previous);
+    hash.update((registry.len() as u64).to_le_bytes());
+    hash.update(registry);
+    for (id, name) in entries {
+        hash.update(id.to_le_bytes());
+        hash.update((name.len() as u64).to_le_bytes());
+        hash.update(name);
+    }
+    hash.finalize().into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{hash_entries, hash_facts, identity, mod_entries, parse_registries};

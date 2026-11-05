@@ -313,6 +313,28 @@ pub struct CreativeTab {
     pub title: String,
     pub icon: String,
     pub items: Vec<String>,
+    /// Its item's component patch, as an [`Item`]'s.
+    pub components: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreativeTabFile {
+    title: String,
+    icon: String,
+    items: Vec<String>,
+}
+
+/// A creative inventory tab the mod adds (`data/<id>/horizon/creative_tab/`):
+/// its title, the item on its button, and its items in order. Items no mod
+/// or vanilla registers are left out when the game loads.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CreativeTab {
+    /// `<mod id>:<path>`.
+    pub id: String,
+    pub title: String,
+    pub icon: String,
+    pub items: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -350,6 +372,30 @@ pub struct Item {
     /// What it leaves in the crafting grid (`Item.Properties.craftRemainder`):
     /// a vanilla item or one of the mod's own.
     pub crafting_remainder: Option<String>,
+    /// What it leaves in the crafting grid (`Item.Properties.craftRemainder`):
+    /// a vanilla item or one of the mod's own.
+    pub crafting_remainder: Option<String>,
+}
+
+/// `MobEffectCategory`.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum EffectCategory {
+    Beneficial,
+    Harmful,
+    Neutral,
+}
+
+/// A mob effect the mod adds: what `new MobEffect(category, color)` takes.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MobEffect {
+    /// `<mod id>:<path>`.
+    #[serde(skip)]
+    pub id: String,
+    pub category: EffectCategory,
+    /// RGB, `0x000000` to `0xFFFFFF`.
+    pub color: u32,
 }
 
 /// `MobEffectCategory`.
@@ -812,6 +858,47 @@ impl Content {
         for (tab, name) in tabs {
             let file: CreativeTabFile =
                 serde_json::from_slice(&reader.read(&name)?).map_err(|e| format!("{name}: {e}"))?;
+            let id_like = |s: &str| {
+                s.split_once(':')
+                    .is_some_and(|(n, p)| !n.is_empty() && !p.is_empty())
+            };
+            if !id_like(&file.icon) || !file.items.iter().all(|i| id_like(i)) {
+                return Err(format!(
+                    "{name}: icon and items are item ids (namespace:path)"
+                ));
+            }
+            self.creative_tabs.push(CreativeTab {
+                id: tab,
+                title: file.title,
+                icon: file.icon,
+                items: file.items,
+                crafting_remainder: file.crafting_remainder,
+            });
+        }
+        for (effect, name) in effects {
+            let file: MobEffect =
+                serde_json::from_slice(&self.file(&name)?).map_err(|e| format!("{name}: {e}"))?;
+            if file.color > 0xFF_FFFF {
+                return Err(format!("{name}: color is RGB, 0 to 16777215 (0xFFFFFF)"));
+            }
+            self.effects.push(MobEffect { id: effect, ..file });
+        }
+        // After every item, so a remainder may be declared in a later file.
+        for (name, rest) in remainders {
+            if rest == "minecraft:air" {
+                return Err(format!(
+                    "{name}: crafting_remainder {rest:?} is no remainder (leave it out)"
+                ));
+            }
+            if !vanilla_id(&rest) && !ids.contains(&rest) {
+                return Err(format!(
+                    "{name}: crafting_remainder {rest:?} is not a vanilla item (minecraft:...) or one of this mod's"
+                ));
+            }
+        }
+        for (tab, name) in tabs {
+            let file: CreativeTabFile =
+                serde_json::from_slice(&self.file(&name)?).map_err(|e| format!("{name}: {e}"))?;
             let id_like = |s: &str| {
                 s.split_once(':')
                     .is_some_and(|(n, p)| !n.is_empty() && !p.is_empty())
@@ -1680,6 +1767,74 @@ capabilities = ["registries"]
     }
 
     #[test]
+    fn mob_effects_take_a_category_and_a_colour() {
+        let files: &[(&str, &[u8])] = &[
+            (
+                "data/ruby/horizon/mob_effect/glow.json",
+                br#"{"category": "beneficial", "color": 16711680}"#,
+            ),
+            (
+                "data/ruby/horizon/mob_effect/curse/dark.json",
+                br#"{"category": "harmful", "color": 0}"#,
+            ),
+        ];
+        let content = hmod("effects", MANIFEST_TEXT, files).unwrap();
+        let effects: Vec<_> = content
+            .effects
+            .iter()
+            .map(|e| (e.id.as_str(), e.category, e.color))
+            .collect();
+        assert_eq!(
+            effects,
+            [
+                ("ruby:curse/dark", EffectCategory::Harmful, 0),
+                ("ruby:glow", EffectCategory::Beneficial, 0xFF0000),
+            ]
+        );
+        for (case, file, why) in [
+            (
+                "effect-colour",
+                r#"{"category": "neutral", "color": 16777216}"#,
+                "color is RGB",
+            ),
+            (
+                "effect-category",
+                r#"{"category": "good", "color": 1}"#,
+                "unknown variant",
+            ),
+            (
+                "effect-key",
+                r#"{"category": "neutral", "color": 1, "id": "x"}"#,
+                "unknown field",
+            ),
+            (
+                "effect-missing",
+                r#"{"category": "neutral"}"#,
+                "missing field",
+            ),
+        ] {
+            let files: &[(&str, &[u8])] =
+                &[("data/ruby/horizon/mob_effect/a.json", file.as_bytes())];
+            let e = hmod(case, MANIFEST_TEXT, files).unwrap_err();
+            assert!(e.contains(why), "{case}: {e}");
+        }
+    }
+
+    #[test]
+    fn block_items_patch_their_components() {
+        let block = br#"{"template": "minecraft:iron_block", "components": {
+            "minecraft:max_stack_size": 16, "!minecraft:lore": {}}}"#;
+        let files: &[(&str, &[u8])] = &[("data/ruby/horizon/block/ruby_block.json", block)];
+        let content = hmod("block-components", MANIFEST_TEXT, files).unwrap();
+        let components = &content.blocks[0].components;
+        assert_eq!(
+            components.keys().collect::<Vec<_>>(),
+            ["!minecraft:lore", "minecraft:max_stack_size"]
+        );
+        assert_eq!(components["minecraft:max_stack_size"], 16);
+    }
+
+    #[test]
     fn folder_mod_reads_the_same() {
         let dir = scratch("folder");
         std::fs::write(dir.join(MANIFEST), MANIFEST_TEXT).unwrap();
@@ -2006,6 +2161,67 @@ capabilities = ["registries"]
             assert!(e.contains("crafting_remainder"), "{case}: {e}");
         }
         for (case, block, why) in [
+            (
+                "block-removal-value",
+                r#"{"template": "minecraft:stone", "components": {"!minecraft:lore": []}}"#,
+                "a removal's value is {}",
+            ),
+            (
+                "block-stack-zero",
+                r#"{"template": "minecraft:stone", "components": {"minecraft:max_stack_size": 0}}"#,
+                "integer 1 to 99",
+            ),
+            (
+                "block-stack-100",
+                r#"{"template": "minecraft:stone", "components": {"minecraft:max_stack_size": 100}}"#,
+                "integer 1 to 99",
+            ),
+            (
+                "block-stack-string",
+                r#"{"template": "minecraft:stone", "components": {"minecraft:max_stack_size": "16"}}"#,
+                "integer 1 to 99",
+            ),
+            (
+                "block-rarity",
+                r#"{"template": "minecraft:stone", "components": {"minecraft:rarity": "bogus"}}"#,
+                "common, uncommon",
+            ),
+            (
+                "block-without-item",
+                r#"{"template": "minecraft:glass", "item": false,
+                    "components": {"minecraft:max_stack_size": 16}}"#,
+                "item is false",
+            ),
+        ] {
+            let e = refused(
+                case,
+                &[("data/ruby/horizon/block/a.json", block.as_bytes())],
+            );
+            assert!(e.contains(why), "{case}: {e}");
+        }
+        let glass = br#"{"template": "minecraft:glass", "item": false}"#;
+        for (case, rest) in [
+            ("bare-remainder", "bowl"),
+            ("missing-remainder", "ruby:bowl"),
+            ("other-mod-remainder", "jade:bowl"),
+            ("itemless-remainder", "ruby:glass"),
+            ("air-remainder", "minecraft:air"),
+        ] {
+            let item =
+                format!(r#"{{"template": "minecraft:stick", "crafting_remainder": "{rest}"}}"#);
+            let files: &[(&str, &[u8])] = &[
+                ("data/ruby/horizon/item/a.json", item.as_bytes()),
+                ("data/ruby/horizon/block/glass.json", glass),
+            ];
+            let e = refused(case, files);
+            assert!(e.contains("crafting_remainder"), "{case}: {e}");
+        }
+        for (case, block, why) in [
+            (
+                "block-modded-component",
+                r#"{"template": "minecraft:stone", "components": {"ruby:mana": 3}}"#,
+                "not a vanilla type",
+            ),
             (
                 "block-removal-value",
                 r#"{"template": "minecraft:stone", "components": {"!minecraft:lore": []}}"#,

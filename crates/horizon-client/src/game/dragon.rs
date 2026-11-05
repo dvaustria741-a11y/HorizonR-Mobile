@@ -477,6 +477,16 @@ fn is_fire(kind: DamageKind) -> bool {
     };
     source.is_fire()
 }
+/// `#minecraft:is_fire`, which the dragon's parts and the crystals refuse
+/// (`isInvulnerableToBase`: both types are fire immune).
+fn is_fire(kind: DamageKind) -> bool {
+    let source = Damage {
+        kind,
+        attacker: None,
+        from: None,
+    };
+    source.is_fire()
+}
 const PART_SIZES: [(f64, f64); 8] = [
     (1.0, 1.0),
     (3.0, 3.0),
@@ -575,6 +585,30 @@ impl Dragon {
         part: usize,
         damage: f32,
         counts: Option<HurtSource<'_>>,
+        kind: DamageKind,
+        direct: Option<&ProjectileKind>,
+    ) -> Hurt {
+        if is_fire(kind) {
+            return Hurt::Refused;
+        }
+        let arrow = matches!(
+            direct,
+            Some(
+                ProjectileKind::Arrow { .. } | ProjectileKind::Trident | ProjectileKind::WindCharge
+            )
+        );
+        self.hurt(part, damage, counts, arrow)
+    }
+    /// `EnderDragonPart.hurtServer`: `isInvulnerableToBase` refuses fire
+    /// (the dragon's type is fire immune) before `EnderDragon.hurt`.
+    /// `direct` is the projectile that hit: a direct `AbstractArrow` or a
+    /// `WindCharge` is the arrow a perched dragon shrugs off, a breeze's
+    /// `BreezeWindCharge` is neither.
+    fn hurt_part(
+        &mut self,
+        part: usize,
+        damage: f32,
+        counts: bool,
         kind: DamageKind,
         direct: Option<&ProjectileKind>,
     ) -> Hurt {
@@ -4322,6 +4356,105 @@ impl Game<'_> {
                 .play("minecraft:entity.ender_dragon.growl", Some(at), 2.5, pitch);
         }
     }
+    /// `DragonLandingPhase.doClientTick`, `DragonSittingFlamingPhase.doClientTick`,
+    /// `DragonDeathPhase.doClientTick` and `DragonSittingAttackingPhase.doClientTick`,
+    /// which `EnderDragon.aiStep` runs on a client. The first two breathe
+    /// dragon breath from the head (their `look.yRot(...)` results are thrown
+    /// away in vanilla, so every puff leaves along the same line), the third
+    /// puffs an explosion every 10 ticks and the last growls on every tick.
+    fn remote_dragon_phase_tick(&mut self) {
+        let look = self.dragon_look();
+        let norm = (look[0] * look[0] + look[1] * look[1] + look[2] * look[2]).sqrt();
+        let look = if norm < 1.0e-5 {
+            [0.0; 3]
+        } else {
+            [look[0] / norm, look[1] / norm, look[2] / norm]
+        };
+        let Some(d) = self.dragon.as_mut() else {
+            return;
+        };
+        let head = d.parts[0].0;
+        let head_y = head.y + PART_SIZES[0].1 * 0.5;
+        let motion = d.velocity;
+        let at = [d.position.x, d.position.y, d.position.z];
+        let mut puffs: Vec<([f64; 3], [f64; 3])> = Vec::new();
+        let mut emitter = None;
+        let mut growl = None;
+        match &mut d.phase {
+            Phase::Landing { .. } => {
+                for _ in 0..8 {
+                    let r = &mut d.random;
+                    let p = [
+                        head.x + r.next_gaussian() / 2.0,
+                        head_y + r.next_gaussian() / 2.0,
+                        head.z + r.next_gaussian() / 2.0,
+                    ];
+                    puffs.push((
+                        p,
+                        [
+                            -look[0] * f64::from(0.08_f32) + motion.x,
+                            -look[1] * f64::from(0.3_f32) + motion.y,
+                            -look[2] * f64::from(0.08_f32) + motion.z,
+                        ],
+                    ));
+                }
+            }
+            Phase::Flaming { ticks } => {
+                *ticks += 1;
+                if *ticks % 2 == 0 && *ticks < 10 {
+                    for _ in 0..8 {
+                        let r = &mut d.random;
+                        let p = [
+                            head.x + r.next_gaussian() / 2.0,
+                            head_y + r.next_gaussian() / 2.0,
+                            head.z + r.next_gaussian() / 2.0,
+                        ];
+                        for j in 0..6 {
+                            puffs.push((
+                                p,
+                                [
+                                    -look[0] * f64::from(0.08_f32) * f64::from(j),
+                                    -look[1] * f64::from(0.6_f32),
+                                    -look[2] * f64::from(0.08_f32) * f64::from(j),
+                                ],
+                            ));
+                        }
+                    }
+                }
+            }
+            Phase::Dying { time, .. } => {
+                if *time % 10 == 0 {
+                    let r = &mut d.random;
+                    let o = [
+                        f64::from((r.next_float() - 0.5) * 8.0),
+                        f64::from((r.next_float() - 0.5) * 4.0),
+                        f64::from((r.next_float() - 0.5) * 8.0),
+                    ];
+                    emitter = Some([at[0] + o[0], at[1] + 2.0 + o[1], at[2] + o[2]]);
+                }
+                *time += 1;
+            }
+            Phase::Attacking { .. } => {
+                growl = Some(0.8 + d.random.next_float() * 0.3);
+            }
+            _ => {}
+        }
+        let breath = ParticleOptions::simple(ParticleType::DragonBreath);
+        for (p, v) in puffs {
+            self.particles.add(&breath, p, v);
+        }
+        if let Some(p) = emitter {
+            self.particles.add(
+                &ParticleOptions::simple(ParticleType::ExplosionEmitter),
+                p,
+                [0.0; 3],
+            );
+        }
+        if let Some(pitch) = growl {
+            self.audio
+                .play("minecraft:entity.ender_dragon.growl", Some(at), 2.5, pitch);
+        }
+    }
     /// The dragon's parts as a server's client attacks them: the server's
     /// ids for `EnderDragonPart`s follow the dragon's.
     pub(super) fn remote_dragon_part_hit(
@@ -4816,6 +4949,44 @@ mod tests {
         let mut d = dragon(flying());
         d.hurt_part(2, player.amount, HIT, player.kind, Some(&skull));
         assert_eq!(d.health, MAX_HEALTH - 3.0);
+    }
+
+    #[test]
+    fn a_part_refuses_fire() {
+        // EnderDragonPart.hurtServer: the dragon is fire immune, so a
+        // fireball's hit is refused on the head and on the other parts.
+        let large = ProjectileKind::LargeFireball { power: 1 };
+        for part in [0, 2] {
+            let mut d = dragon(flying());
+            let hurt = d.hurt_part(part, 6.0, true, DamageKind::Fireball, Some(&large));
+            assert_eq!(hurt, Hurt::Refused);
+            assert_eq!(d.health, MAX_HEALTH);
+        }
+        let small = ProjectileKind::SmallFireball;
+        let mut d = dragon(flying());
+        let hurt = d.hurt_part(0, 5.0, true, DamageKind::Fireball, Some(&small));
+        assert_eq!(hurt, Hurt::Refused);
+        assert_eq!(d.health, MAX_HEALTH);
+    }
+
+    #[test]
+    fn a_perched_dragon_shrugs_a_players_wind_charge_off() {
+        // AbstractDragonSittingPhase.onHurt: a direct WindCharge does
+        // nothing, a breeze's BreezeWindCharge is not one.
+        let charge = ProjectileKind::WindCharge;
+        let mut d = dragon(Phase::Scanning { time: 0 });
+        let hurt = d.hurt_part(0, 1.0, true, DamageKind::WindCharge, Some(&charge));
+        assert_eq!(hurt, Hurt::Shrugged);
+        assert_eq!(d.health, MAX_HEALTH);
+        let breeze = ProjectileKind::BreezeWindCharge;
+        let hurt = d.hurt_part(0, 1.0, true, DamageKind::WindCharge, Some(&breeze));
+        assert_eq!(hurt, Hurt::Landed { full: true });
+        assert_eq!(d.health, MAX_HEALTH - 1.0);
+        // In flight the player's charge lands too.
+        let mut d = dragon(flying());
+        let hurt = d.hurt_part(0, 1.0, true, DamageKind::WindCharge, Some(&charge));
+        assert_eq!(hurt, Hurt::Landed { full: true });
+        assert_eq!(d.health, MAX_HEALTH - 1.0);
     }
 
     #[test]

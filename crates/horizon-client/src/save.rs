@@ -2737,6 +2737,44 @@ impl SaveDir {
     pub fn pending_writes(&self) -> usize {
         self.pending.lock().map_or(0, |p| p.len())
     }
+    /// A saved full chunk read for a player's far ring (`lan::far`), as `load` but past the gameplay
+    /// region cache, and only where the region file lists it (no file opened where there is none).
+    pub fn load_far(
+        &self,
+        x: i32,
+        z: i32,
+        registry: &BlockRegistry,
+        biomes: &Biomes,
+    ) -> Option<Chunk> {
+        let pending = self
+            .pending
+            .lock()
+            .ok()?
+            .get(&(Folder::Region, x, z))
+            .map(|(_, record)| record.clone());
+        let root = if let Some(record) = pending {
+            record.tag().map(|tag| (*tag).clone())?
+        } else {
+            if !self.lod_saved(x, z) {
+                return None;
+            }
+            let mut region = RegionFile::open(self.region_path("region", x >> 5, z >> 5)).ok()?;
+            region
+                .read(ChunkPos::new(x, z))
+                .ok()??
+                .nbt(Limits::default())
+                .ok()?
+        };
+        let tables = self.tables.get().map(|t| &**t);
+        let mut chunk = decode_with(&root, registry, biomes, tables, self.shape.column())?;
+        load_light(&root.tag, &mut chunk, self.shape.sky_light);
+        // Without its saved light (`isLightOn`) it would need the light engine: not one for the far ring.
+        chunk.light_loaded.then_some(chunk)
+    }
+    /// Chunks queued for the writer thread and not yet in their region files.
+    pub fn pending_writes(&self) -> usize {
+        self.pending.lock().map_or(0, |p| p.len())
+    }
     /// A proto chunk saved before it became final (`decode_proto`).
     pub fn load_proto(
         &self,

@@ -272,6 +272,15 @@ impl Game<'_> {
             )
         })
     }
+    /// `blast_cause` for the blast going off now.
+    pub(super) fn blast_attacker(&self) -> Option<(u32, Text)> {
+        blast_cause(
+            self.combat.explosion_owner,
+            self.combat.explosion_source,
+            |id| self.mob_display_name(id),
+            &self.combat.exploded,
+        )
+    }
     /// `ServerExplosion.getSeenPercent` for an entity box.
     pub(super) fn seen_percent(&self, center: [f64; 3], min: [f64; 3], max: [f64; 3]) -> f32 {
         let xs = 1.0 / ((max[0] - min[0]) * 2.0 + 1.0);
@@ -1263,6 +1272,96 @@ mod tests {
         let health = m.health;
         hurt_mob(&mut m, true, Some(Species::Skeleton), hit);
         m.push_from_explosion(push);
+        assert_eq!(m.health, health);
+        pushed(&m);
+    }
+
+    /// A zombie's type with only what a hurt and a push read.
+    fn zombie_type() -> std::sync::Arc<horizon_client::mobs::MobType> {
+        std::sync::Arc::new(MobType {
+            id: "minecraft:zombie".into(),
+            species: Species::Zombie,
+            width: 0.6,
+            height: 1.95,
+            eye_height: 1.74,
+            category: "monster".into(),
+            max_health: 20.0,
+            speed: 0.23,
+            flying_speed: 0.02,
+            attack_damage: 3.0,
+            attack_knockback: 0.0,
+            follow_range: 35.0,
+            step_height: 0.6,
+            armor: 2.0,
+            armor_toughness: 0.0,
+            knockback_resistance: 0.0,
+            jump_strength: 0.42,
+            attributes: Default::default(),
+            gravity: 0.08,
+            safe_fall_distance: 3.0,
+            fall_damage_multiplier: 1.0,
+            water_efficiency: 0.0,
+            water_slowdown: 0.8,
+            air_speed: 0.02,
+            baby_scale: 0.5,
+            head_rot_speed: 10.0,
+            max_head_x_rot: 40.0,
+            max_head_y_rot: 75.0,
+            ambient_interval: 80,
+            flags: Default::default(),
+            model: std::sync::Arc::new(Part {
+                name: "root".into(),
+                pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                polygons: Vec::new(),
+                children: Vec::new(),
+            }),
+            layers: Default::default(),
+            texture: String::new(),
+            brain: Brain::Passive,
+            anim: Anim::Humanoid { zombie_arms: true },
+            sounds: ["", "", ""],
+            step_sound: None,
+            food: Default::default(),
+            tempt: Default::default(),
+        })
+    }
+
+    #[test]
+    fn a_mob_that_refuses_the_hit_is_still_pushed() {
+        let hit = (10.0, Damage::of(DamageKind::Explosion));
+        let push = [0.5, 0.25, -0.5];
+        let mob = |id, species| {
+            let mut kind = (*zombie_type()).clone();
+            kind.species = species;
+            Mob::new(id, std::sync::Arc::new(kind), Vec3::ZERO, 0.0)
+        };
+        let pushed = |m: &Mob| {
+            assert_eq!(m.velocity, Vec3::new(0.5, 0.25, -0.5));
+            assert!(m.needs_sync);
+        };
+        // An ordinary mob is hurt and pushed.
+        let mut m = mob(1, Species::Zombie);
+        let health = m.health;
+        hurt_and_push_mob(&mut m, true, None, hit, push);
+        assert!(m.health < health);
+        pushed(&m);
+        // An invulnerable one refuses the hit, and is pushed all the same.
+        let mut m = mob(2, Species::Zombie);
+        m.invulnerable_flag = true;
+        let health = m.health;
+        hurt_and_push_mob(&mut m, true, None, hit, push);
+        assert_eq!(m.health, health);
+        pushed(&m);
+        // A team mate of the exploding mob is not hurt, but pushed.
+        let mut m = mob(3, Species::Zombie);
+        let health = m.health;
+        hurt_and_push_mob(&mut m, false, None, hit, push);
+        assert_eq!(m.health, health);
+        pushed(&m);
+        // A wither shrugs off a blast an undead caused, and is pushed.
+        let mut m = mob(4, Species::Wither);
+        let health = m.health;
+        hurt_and_push_mob(&mut m, true, Some(Species::Skeleton), hit, push);
         assert_eq!(m.health, health);
         pushed(&m);
     }

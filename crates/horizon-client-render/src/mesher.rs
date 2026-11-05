@@ -387,6 +387,24 @@ impl SectionMesh {
             + self.lights.capacity() * std::mem::size_of::<([i32; 3], u32)>()
             + self.sprite_layers.capacity() * std::mem::size_of::<u16>()
     }
+    /// Padding applied to mesh vertex bounds to prevent clipping at the frustum
+    /// boundary when shader packs with vertex displacement (e.g. waving foliage, water) are active.
+    pub const BOUNDS_PAD: f32 = 0.5;
+
+    /// Retain geometry capacity after an upload, but none of its old contents.
+    pub(crate) fn clear(&mut self) {
+        self.solid.clear();
+        self.translucent.clear();
+        self.block_entities.clear();
+        self.sides = Sides::default();
+        self.visibility = ALL_VISIBLE;
+        self.bounds = None;
+    }
+    pub(crate) fn capacity_bytes(&self) -> usize {
+        self.solid.capacity() * std::mem::size_of::<TerrainVertex>()
+            + self.translucent.capacity() * std::mem::size_of::<TerrainVertex>()
+            + self.block_entities.capacity() * std::mem::size_of::<([i32; 3], u32)>()
+    }
     /// Sorts the solid quads by the side they face, for the renderer to
     /// leave out those facing away from the eye (`sides`).
     /// Then lays them out compactly (`packed`) while the renderer reads that.
@@ -1137,6 +1155,15 @@ mod leaf_culling_tests;
 mod reuse_tests;
 #[cfg(test)]
 mod tint_tests;
+/// Per-worker temporary arrays. They never hold resource-pack references or
+/// geometry still owned by the renderer, and total about 88 KiB per worker.
+#[derive(Default)]
+pub(crate) struct MeshScratch {
+    padded: Padded,
+    own: Option<Box<[u32; 4096]>>,
+    visibility: Vec<usize>,
+}
+#[cfg(test)]
 /// Set on a terrain vertex's sprite layer when its texture alpha must be ignored.
 pub const OPAQUE_LAYER: u16 = 1 << 15;
 /// The bits of `TerrainVertex::color`'s alpha byte that hold how brightly its face shines

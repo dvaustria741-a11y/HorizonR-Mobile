@@ -19,6 +19,8 @@ pub struct Pack {
     /// The values the player chose for the pack's options, applied to its sources as they are
     /// read (`options::apply`).
     chosen: BTreeMap<String, String>,
+    /// Option values the player chose (`settings::apply_overrides`), applied to every source read.
+    overrides: BTreeMap<String, String>,
 }
 
 enum Files {
@@ -86,6 +88,7 @@ impl Pack {
             name: name.to_owned(),
             files,
             chosen: BTreeMap::new(),
+            overrides: BTreeMap::new(),
         })
     }
 
@@ -122,6 +125,14 @@ impl Pack {
             .into_iter()
             .filter(|(name, value)| options.get(name).is_some_and(|o| o.values.contains(value)))
             .collect();
+        self
+    }
+
+    /// The pack as the player set it up: its sources read with these option values (`NAME` to
+    /// `true`, `false` or a value) over the defaults the pack ships with.
+    #[must_use]
+    pub fn with_overrides(mut self, overrides: BTreeMap<String, String>) -> Self {
+        self.overrides = overrides;
         self
     }
 

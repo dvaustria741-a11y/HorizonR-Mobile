@@ -211,6 +211,19 @@ jobs:
           "$TOOLCHAIN_BIN/llvm-strip" --strip-unneeded ".local/android/gradle-jni/${{ matrix.abi }}/libhorizon_android.so" || true
           ls -lh ".local/android/gradle-jni/${{ matrix.abi }}/libhorizon_android.so"
 
+      - name: Save compiler errors to ci-errors branch
+        if: failure() && github.ref_name == 'upstream-shader-handler'
+        continue-on-error: true
+        run: |
+          [ -f cargo_build.log ] || exit 0
+          grep -E -A12 '^(error|warning: unused import)' cargo_build.log | grep -vE '^warning' | head -1500 > /tmp/errs.txt || true
+          grep -cE '^error' cargo_build.log > /tmp/errcount.txt || true
+          git config user.name ci; git config user.email ci@users.noreply.github.com
+          git fetch origin ci-errors:ci-errors 2>/dev/null || git branch ci-errors
+          git checkout -q ci-errors 2>/dev/null || git checkout -q --orphan ci-errors
+          mkdir -p errs; cp /tmp/errs.txt errs/${{ matrix.abi }}.txt; cp /tmp/errcount.txt errs/${{ matrix.abi }}.count
+          git add errs/; git -c core.hooksPath=/dev/null commit -q -m "errors ${{ github.sha }} ${{ matrix.abi }}" || true
+          git push origin HEAD:ci-errors || (git pull --rebase origin ci-errors && git push origin HEAD:ci-errors) || true
       - name: Set up Gradle 8.10.2
         uses: gradle/actions/setup-gradle@v4
         with:

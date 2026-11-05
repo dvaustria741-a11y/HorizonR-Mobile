@@ -1109,6 +1109,22 @@ fn enderman_render_offset(m: &Mob, alpha: f32) -> glam::DVec3 {
     let z = random.next_gaussian() * d;
     glam::DVec3::new(x, 0.0, z)
 }
+/// `EndermanRenderer.getRenderOffset`: a creepy (angry) enderman is moved by
+/// a gaussian 0.02 blocks sideways in x and z every frame. Vanilla draws from
+/// the renderer's own random; this one is seeded by the mob and the frame's
+/// age, so the body, its carried block and its eyes agree within a frame.
+fn enderman_render_offset(m: &Mob, alpha: f32) -> glam::DVec3 {
+    if m.species() != Species::Enderman || !m.extra.flag {
+        return glam::DVec3::ZERO;
+    }
+    let frame = (m.age as f32 + alpha).to_bits();
+    let mut random = LegacyRandom::new((i64::from(m.id) << 32) ^ i64::from(frame));
+    // `0.02 * state.scale`, the enderman's scale being 1.
+    let d = 0.02;
+    let x = random.next_gaussian() * d;
+    let z = random.next_gaussian() * d;
+    glam::DVec3::new(x, 0.0, z)
+}
 /// `base_transform` from a pose of the entity's origin (`EntityRenderDispatcher.submit`
 /// under a pose stack, as `SpawnerRenderer` draws the mob inside a spawner).
 pub fn base_transform_at(m: &Mob, alpha: f32, origin: glam::Mat4) -> glam::Mat4 {
@@ -2831,6 +2847,108 @@ mod tests {
             flags: Flags::default(),
             model,
             layers: Default::default(),
+            texture: String::new(),
+            brain: Brain::Passive,
+            anim: Anim::Camel,
+            sounds: [""; 3],
+            step_sound: None,
+            food: Arc::default(),
+            tempt: Arc::default(),
+        });
+        let gliding = |previous: Vec3, current: Vec3| {
+            let mut m = Mob::new(1, kind.clone(), Vec3::ZERO, 0.0);
+            m.extra.fall_flying = true;
+            m.extra.fall_fly_ticks = 20;
+            m.extra.previous_velocity = previous;
+            m.velocity = current;
+            m
+        };
+        let from = Vec3::new(0.4, 0.0, 0.4);
+        let to = Vec3::new(0.0, 0.0, 0.5);
+        let at = |m: &Mob, alpha: f32| base_transform_at(m, alpha, glam::Mat4::IDENTITY);
+        let differs = |a: glam::Mat4, b: glam::Mat4| {
+            a.to_cols_array()
+                .iter()
+                .zip(b.to_cols_array())
+                .any(|(x, y)| (x - y).abs() > 1.0e-4)
+        };
+        let m = gliding(from, to);
+        // The ends are the two ticks' velocities.
+        assert!(!differs(at(&m, 0.0), at(&gliding(from, from), 0.0)));
+        assert!(!differs(at(&m, 1.0), at(&gliding(to, to), 1.0)));
+        // Between them the yaw is that of the lerped velocity, which is
+        // neither end: the current tick's alone made it snap.
+        let mid = Vec3::new(0.2, 0.0, 0.45);
+        let half = at(&m, 0.5);
+        assert!(!differs(half, at(&gliding(mid, mid), 0.5)));
+        assert!(differs(half, at(&gliding(to, to), 0.5)));
+        assert!(differs(half, at(&gliding(from, from), 0.5)));
+    }
+
+    #[test]
+    fn offhand_does_not_inherit_mainhand_components() {
+        let mut extra = super::super::Extra::default();
+        let mut main = ItemStack::new("minecraft:crossbow", 1);
+        main.data_mut().custom_name = Some(horizon_world::nbt::Tag::String("Main hand".into()));
+        extra.set_main_hand_stack(Some(main));
+        extra.off_hand = Some("minecraft:crossbow".into());
+        assert_eq!(
+            held_item_stack(&extra, false)
+                .unwrap()
+                .custom_name()
+                .as_deref(),
+            Some("Main hand")
+        );
+        assert!(
+            held_item_stack(&extra, true)
+                .unwrap()
+                .custom_name()
+                .is_none()
+        );
+        extra.off_hand = None;
+        assert!(held_item_stack(&extra, true).is_none());
+    }
+
+    /// The elytra's flight yaw (`AvatarRenderer.extractFlightData`) lerps
+    /// the velocity of the previous tick towards this tick's, so the model
+    /// does not step once per tick while the view turns (#4104).
+    #[test]
+    fn the_elytra_flight_yaw_lerps_the_velocity_between_ticks() {
+
+        let model = Arc::new(Part::parse("root", &json!({"children": {"head": {}}})));
+        let kind = Arc::new(MobType {
+            id: "minecraft:player".into(),
+            species: Species::Zombie,
+            width: 0.6,
+            height: 1.8,
+            eye_height: 1.62,
+            category: "misc".into(),
+            max_health: 20.0,
+            speed: 0.1,
+            flying_speed: 0.02,
+            attack_damage: 1.0,
+            attack_knockback: 0.0,
+            follow_range: 0.0,
+            step_height: 0.6,
+            armor: 0.0,
+            armor_toughness: 0.0,
+            knockback_resistance: 0.0,
+            jump_strength: 0.42,
+            attributes: Arc::default(),
+            gravity: 0.08,
+            safe_fall_distance: 3.0,
+            fall_damage_multiplier: 1.0,
+            water_efficiency: 0.0,
+            water_slowdown: 0.8,
+            air_speed: 0.02,
+            baby_scale: 0.5,
+            head_rot_speed: 10.0,
+            max_head_x_rot: 40.0,
+            max_head_y_rot: 75.0,
+            ambient_interval: 80,
+            flags: Flags::default(),
+            model,
+            layers: std::collections::HashMap::new(),
             texture: String::new(),
             brain: Brain::Passive,
             anim: Anim::Camel,

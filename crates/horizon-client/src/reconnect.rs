@@ -211,6 +211,16 @@ mod tests {
     }
 
     #[test]
+    fn reconnect_keeps_the_selected_server_kind() {
+        let mut tracker = Tracker::default();
+        let now = Instant::now();
+        tracker.connecting("127.0.0.1:25565", "Tester", true);
+        assert!(tracker.ended("Server closed", true, now).unwrap().lan);
+        tracker.connecting("127.0.0.1:25565", "Tester", false);
+        assert!(!tracker.ended("Server closed", true, now).unwrap().lan);
+    }
+
+    #[test]
     fn only_lost_connections_and_shutdowns_are_retried() {
         assert!(allowed(
             "Connection reset by peer (os error 104)",

@@ -1569,6 +1569,35 @@ impl Game<'_> {
             }),
         });
     }
+    /// `Creeper.spawnLingeringCloud`: an `AreaEffectCloud` of radius 2.5, wait time 10, duration 300,
+    /// shrinking by `-radius / duration` a tick and by 0.5 for each entity it affects, applying
+    /// the creeper's effects at 0.25 of their remaining duration.
+    pub(super) fn spawn_creeper_cloud(
+        &mut self,
+        at: [f64; 3],
+        effects: Vec<(&'static str, i32, i32)>,
+        hidden: Vec<&'static str>,
+        ambient: Vec<&'static str>,
+        color: u32,
+    ) {
+        self.breath_clouds.push(Breath {
+            id: 0,
+            at,
+            radius: 2.5,
+            age: 0,
+            duration: 300,
+            from_dragon: false,
+            potion: Some(PotionCloud {
+                effects,
+                hidden,
+                ambient,
+                radius_per_tick: -2.5 / 300.0,
+                color,
+                victims: Vec::new(),
+                source: Text::translate("entity.minecraft.area_effect_cloud", &[]),
+            }),
+        });
+    }
     /// What a cloud puts on one entity: instant effects at half strength
     /// (`applyInstantaneousEffect` with 0.5), the others at the cloud's duration
     /// scale (`PotionContents.forEachEffect`).

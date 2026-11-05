@@ -163,6 +163,22 @@ impl Hub {
                 .get_or_insert_default()
                 .tick_end(input, sprinting);
         }
+        if ac.config.runs(Check::Combat)
+            && let Some(foul) = self.guests[i].anticheat.attacks.tick_end()
+        {
+            self.combat_foul(i, foul, events);
+        }
+        let Some(ac) = self.anticheat.as_deref() else {
+            return;
+        };
+        if ac.config.runs(Check::Prediction) {
+            let g = &mut self.guests[i];
+            let (input, sprinting) = (g.input, g.sprinting);
+            g.anticheat
+                .record
+                .get_or_insert_default()
+                .tick_end(input, sprinting);
+        }
         if !ac.config.runs(Check::Timer) {
             return;
         }
@@ -441,6 +457,47 @@ impl Hub {
                 .map_or(String::new(), |p| format!("; {}", p.describe()));
             let detail = format!(
                 "moved up to {:.3} blocks off what its keys allow ({} {ticks}{worst})",
+                over.worst, over.ticks
+            );
+            let weight = over.weight;
+            self.flag_to(
+                i,
+                Check::Prediction,
+                weight,
+                &detail,
+                &mut events,
+                Some(agreed),
+            );
+        }
+        events
+    }
+
+    /// [`Hub::flag`], whose setback sends the player to `back` (where it was by default).
+    fn flag_to(
+        &mut self,
+        i: usize,
+        check: Check,
+        weight: f32,
+        detail: &str,
+        events: &mut Vec<HostEvent>,
+        back: Option<[f64; 3]>,
+    ) -> bool {
+        self.flag_to(i, check, weight, detail, events, None)
+    }
+
+    /// `prediction`: guest `conn`'s ticks that landed off the replay. A setback sends the player
+    /// back to `agreed`, where its moves last agreed.
+    pub fn anticheat_prediction(
+        &mut self,
+        conn: u32,
+        over: &super::prediction::Over,
+        agreed: [f64; 3],
+    ) -> Vec<HostEvent> {
+        let mut events = Vec::new();
+        if let Some(i) = self.guests.iter().position(|g| g.conn == conn) {
+            let ticks = if over.ticks == 1 { "tick" } else { "ticks" };
+            let detail = format!(
+                "moved up to {:.3} blocks off what its keys allow ({} {ticks})",
                 over.worst, over.ticks
             );
             let weight = over.weight;

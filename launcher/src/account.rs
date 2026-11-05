@@ -2171,6 +2171,9 @@ impl SignIn {
     }
 
     fn start_expected(expected: Option<Account>) -> Self {
+        Self::start_with_client_id(client_id())
+    }
+    pub fn start_with_client_id(configured_id: Option<String>) -> Self {
         use std::sync::atomic::Ordering;
         let state = std::sync::Arc::new(Mutex::new(SignInState::Starting));
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

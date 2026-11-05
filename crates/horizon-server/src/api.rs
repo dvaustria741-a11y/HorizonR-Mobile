@@ -78,6 +78,13 @@ pub const ROUTES: [Route; 32] = [
         what: "Log lines, the supervisor's phase, and the game's joins, leaves, kicks, chat, messages the chat filter refused (`chat_filtered`, without their text) and deaths (the last 2000 kept)",
     },
     Route {
+        method: "GET",
+        path: "/api/v1/events",
+        takes: "`?since=N` (or `Last-Event-ID`), `?types=join,leave,kick,chat,death,log,phase` (all by default)",
+        answers: "with `Accept: text/event-stream`, server-sent events as they happen (`id`, `event`: the type, `data`: JSON); otherwise `{\"next\": N, \"events\": [...]}`",
+        what: "Log lines, the supervisor's phase, and the game's joins, leaves, kicks, chat and deaths (the last 2000 kept)",
+    },
+    Route {
         method: "POST",
         path: "/api/v1/command",
         takes: "`{\"line\": \"<one command>\"}`",
@@ -181,6 +188,104 @@ pub const ROUTES: [Route; 32] = [
         takes: "",
         answers: "`engine` (`found`, `target`, `base`, `horizon`, `hooks`) and `native` (id, version, sha256), from the `native-mods.json` the launcher wrote beside the game program",
         what: "The native mods the server's game program was built with",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/players/kick",
+        takes: "`{\"name\", \"reason\"}` (reason optional)",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Kick an online player",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/players/ban",
+        takes: "`{\"name\", \"reason\"}` (reason optional)",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Ban a player (kicked if online)",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/players/pardon",
+        takes: "`{\"name\"}`",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Lift a player's ban",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/players/ban-ip",
+        takes: "`{\"ip\", \"reason\"}`, or `{\"name\"}` of an online player",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Ban an address (its players are kicked)",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/players/pardon-ip",
+        takes: "`{\"ip\"}`",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Lift an address's ban",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/players/op",
+        takes: "`{\"name\"}`",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Make a player an operator (op-permission-level)",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/players/deop",
+        takes: "`{\"name\"}`",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Make a player no longer an operator",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/whitelist",
+        takes: "`{\"enabled\": bool}`",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Turn the whitelist on or off",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/whitelist/add",
+        takes: "`{\"name\"}`",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Whitelist a player",
+    },
+    Route {
+        method: "POST",
+        path: "/api/v1/whitelist/remove",
+        takes: "`{\"name\"}`",
+        answers: "`{\"changed\": bool, \"output\": [...]}`: whether the list (or who is online) changed, and the console's lines",
+        what: "Take a player off the whitelist (kicked if enforce-whitelist)",
+    },
+    Route {
+        method: "GET",
+        path: "/api/v1/config",
+        takes: "",
+        answers: "`{\"config\": {...}}`: server.toml's settings by section (`api.token` hidden)",
+        what: "The settings",
+    },
+    Route {
+        method: "PATCH",
+        path: "/api/v1/config",
+        takes: "`{\"changes\": {\"world.difficulty\": \"hard\", ...}}`",
+        answers: "`saved`, `applied` (taken by the running game at once), `restart` (from the next start), `running`",
+        what: "Change settings as `config set` does; not `engine.*`, `panel.*`, `api.*`, nor RCON, query or management keys",
+    },
+    Route {
+        method: "GET",
+        path: "/api/v1/metrics/prometheus",
+        takes: "",
+        answers: "the latest sample as Prometheus text: `horizon_up`, `horizon_tps`, `horizon_mspt{stat}`, `horizon_players_online`, `horizon_memory_rss_bytes`...",
+        what: "Metrics for a monitoring tool to scrape",
+    },
+    Route {
+        method: "GET",
+        path: "/api/v1/players",
+        takes: "",
+        answers: "`online` (name, uuid, address, ping_ms, op_level), `max_players`, `ops`, `whitelist` (`enabled`, `players`), `bans`, `ip_bans` (with reason, source, created, expires)",
+        what: "Who is online, and vanilla's lists",
     },
     Route {
         method: "POST",
@@ -839,6 +944,53 @@ pub fn route(shared: &Arc<Shared>, request: &Request) -> Response {
             Err(e) => Response::error(409, &e),
         },
         ("PATCH", "/api/v1/config") => patch_config(shared, &request.body),
+        ("GET", "/api/v1/metrics/prometheus") => admin::prometheus(shared),
+        ("GET", "/api/v1/players") => admin::players(shared),
+        ("POST", "/api/v1/players/kick") => admin::act(shared, Action::Kick, &request.body),
+        ("POST", "/api/v1/players/ban") => admin::act(shared, Action::Ban, &request.body),
+        ("POST", "/api/v1/players/pardon") => admin::act(shared, Action::Pardon, &request.body),
+        ("POST", "/api/v1/players/ban-ip") => admin::act(shared, Action::BanIp, &request.body),
+        ("POST", "/api/v1/players/pardon-ip") => {
+            admin::act(shared, Action::PardonIp, &request.body)
+        }
+        ("POST", "/api/v1/players/op") => admin::act(shared, Action::Op, &request.body),
+        ("POST", "/api/v1/players/deop") => admin::act(shared, Action::Deop, &request.body),
+        ("POST", "/api/v1/whitelist") => admin::act(shared, Action::Whitelist, &request.body),
+        ("POST", "/api/v1/whitelist/add") => {
+            admin::act(shared, Action::WhitelistAdd, &request.body)
+        }
+        ("POST", "/api/v1/whitelist/remove") => {
+            admin::act(shared, Action::WhitelistRemove, &request.body)
+        }
+        ("DELETE", "/api/v1/backups") => {
+            let name = request.param("name").unwrap_or_default();
+            if !backup::list(&shared.dir).iter().any(|b| b.name == name) {
+                return Response::error(404, "no such backup (`GET /api/v1/backups` lists them)");
+            }
+            match std::fs::remove_file(shared.dir.join(backup::DIR).join(name)) {
+                Ok(()) => {
+                    crate::supervisor::note(
+                        shared,
+                        "INFO",
+                        &format!("Control API: deleted the backup {name}"),
+                    );
+                    Response::json(200, &json!({ "name": name }))
+                }
+                Err(e) => Response::error(409, &e.to_string()),
+            }
+        }
+        ("GET", "/api/v1/backups/download") => {
+            let name = request.param("name").unwrap_or_default();
+            if !backup::list(&shared.dir).iter().any(|b| b.name == name) {
+                return Response::error(404, "no such backup (`GET /api/v1/backups` lists them)");
+            }
+            Response::file(shared.dir.join(backup::DIR).join(name), name)
+        }
+        ("GET", "/api/v1/config") => match settings::shown(&shared.dir) {
+            Ok(config) => Response::json(200, &json!({ "config": config })),
+            Err(e) => Response::error(409, &e),
+        },
+        ("PATCH", "/api/v1/config") => patch_config(shared, &request.body),
         (_, path) if ROUTES.iter().any(|r| r.path == path) => Response::error(405, "wrong method"),
         _ => Response::error(404, "no such endpoint"),
     }
@@ -893,6 +1045,58 @@ fn patch_config(shared: &Shared, body: &[u8]) -> Response {
     let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
     let live =
         |line: &str| shared.phase() == Phase::Running && settings::ask_game(&shared.dir, line);
+    let running = matches!(shared.phase(), Phase::Running | Phase::Restarting);
+    match settings::apply(
+        &shared.dir,
+        &lines,
+        running.then_some(&live as &dyn Fn(&str) -> bool),
+    ) {
+        Ok(outcome) => {
+            crate::supervisor::note(
+                shared,
+                "INFO",
+                &format!("Control API: config set {}", lines.join(" ")),
+            );
+            Response::json(200, &outcome.to_json())
+        }
+        Err(e) => Response::error(400, &e),
+    }
+}
+
+/// `PATCH /api/v1/config`: `config set` for a program, without the settings that change who can reach the
+/// server or what program it runs.
+fn patch_config(shared: &Shared, body: &[u8]) -> Response {
+    let body: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+    let Some(changes) = body["changes"].as_object().filter(|c| !c.is_empty()) else {
+        return Response::error(
+            400,
+            "the body must be {\"changes\": {\"section.name\": value, ...}}",
+        );
+    };
+    let mut lines = Vec::new();
+    for (key, value) in changes {
+        if !settings::changeable_remotely(key) {
+            return Response::error(403, &format!("{key} can only be changed in server.toml"));
+        }
+        let text = match value {
+            Value::String(s) if !s.contains(['\n', '\r']) => s.clone(),
+            Value::Bool(_) | Value::Number(_) => value.to_string(),
+            _ => {
+                return Response::error(
+                    400,
+                    &format!("{key}: a value is one line of text, a number or true/false"),
+                );
+            }
+        };
+        lines.push(format!("{key}={text}"));
+    }
+    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let live = |line: &str| {
+        shared.phase() == Phase::Running
+            && engine::Control::connect(&shared.dir)
+                .and_then(|mut c| c.ask(&format!("console {line}")))
+                .is_ok()
+    };
     let running = matches!(shared.phase(), Phase::Running | Phase::Restarting);
     match settings::apply(
         &shared.dir,
@@ -1514,6 +1718,157 @@ mod tests {
         let response = request("POST", "/api/v1/start", b"");
         assert_eq!(response.status, 200, "{}", response.body);
         assert!(shared.restart.load(Ordering::SeqCst));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_token_and_a_port_from_server_toml() {
+        let dir =
+            std::env::temp_dir().join(format!("horizon-server-api-fixed-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join(".horizon")).unwrap();
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let token = "a-token-for-the-discord-bot";
+        let toml = crate::config::TEMPLATE
+            .replace(
+                "[api]\nbind = \"\"",
+                &format!("[api]\nbind = \"127.0.0.1:{port}\""),
+            )
+            .replace("token = \"\"", &format!("token = \"{token}\""));
+        std::fs::write(dir.join(crate::config::FILE), toml).unwrap();
+        let _endpoint = start(Shared::new(&dir)).unwrap();
+        let address: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
+        let get = |token: &str| {
+            http::request(
+                address,
+                token,
+                "GET",
+                "/api/v1/status",
+                None,
+                Duration::from_secs(5),
+            )
+            .unwrap()
+            .0
+        };
+        assert_eq!((get(token), get("a-token-for-the-discord-bo")), (200, 401));
+        drop(_endpoint);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn config_and_backups_over_the_api() {
+        let dir =
+            std::env::temp_dir().join(format!("horizon-server-api-admin-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("backups")).unwrap();
+        let toml = crate::config::TEMPLATE
+            .replace("token = \"\"", "token = \"a-token-for-the-discord-bot\"");
+        std::fs::write(dir.join(crate::config::FILE), toml).unwrap();
+        std::fs::write(
+            dir.join("backups/2026-10-31T12-00-00Z-manual.zip"),
+            b"PK\x05\x06zip",
+        )
+        .unwrap();
+        let shared = Shared::with_install(&dir, None);
+        shared.set_phase(Phase::Restarting);
+        let call = |method: &str, path: &str, query: &str, body: Value| {
+            let response = route(
+                &shared,
+                &Request {
+                    method: method.into(),
+                    path: path.into(),
+                    query: query.into(),
+                    headers: Vec::new(),
+                    body: body.to_string().into_bytes(),
+                },
+            );
+            (
+                response.status,
+                serde_json::from_str::<Value>(&response.body).unwrap_or(Value::Null),
+            )
+        };
+        let (status, config) = call("GET", "/api/v1/config", "", Value::Null);
+        assert_eq!(
+            (status, &config["config"]["api"]["token"]),
+            (200, &json!("(set)"))
+        );
+        assert_eq!(config["config"]["world"]["difficulty"], "easy");
+        let (status, outcome) = call(
+            "PATCH",
+            "/api/v1/config",
+            "",
+            json!({ "changes": { "world.difficulty": "hard", "server.max_players": 50 } }),
+        );
+        assert_eq!(status, 200, "{outcome}");
+        // The game is down between a crash and its restart: both wait for its start.
+        assert_eq!(
+            outcome["restart"],
+            json!(["server.max_players", "world.difficulty"])
+        );
+        let saved = crate::config::Config::load(&dir).unwrap();
+        assert_eq!(
+            (saved.world.difficulty.as_str(), saved.server.max_players),
+            ("hard", 50)
+        );
+        for key in [
+            "engine.path",
+            "api.allow_public",
+            "panel.bind",
+            "properties.enable-rcon",
+        ] {
+            let (status, _) = call(
+                "PATCH",
+                "/api/v1/config",
+                "",
+                json!({ "changes": { key: "x" } }),
+            );
+            assert_eq!(status, 403, "{key}");
+        }
+        let (status, _) = call(
+            "PATCH",
+            "/api/v1/config",
+            "",
+            json!({ "changes": { "world.difficulty": "brutal" } }),
+        );
+        assert_eq!(status, 400);
+        assert_eq!(
+            crate::config::Config::load(&dir).unwrap().world.difficulty,
+            "hard"
+        );
+
+        let name = "2026-10-31T12-00-00Z-manual.zip";
+        let response = route(
+            &shared,
+            &Request {
+                method: "GET".into(),
+                path: "/api/v1/backups/download".into(),
+                query: format!("name={name}"),
+                headers: Vec::new(),
+                body: Vec::new(),
+            },
+        );
+        assert!(response.stream.is_some());
+        assert!(response.headers.contains(&("Content-Length", "7".into())));
+        let (status, _) = call(
+            "DELETE",
+            "/api/v1/backups",
+            "name=../server.toml",
+            Value::Null,
+        );
+        assert_eq!(status, 404);
+        assert_eq!(
+            call(
+                "DELETE",
+                "/api/v1/backups",
+                &format!("name={name}"),
+                Value::Null
+            )
+            .0,
+            200
+        );
+        assert!(backup::list(&dir).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

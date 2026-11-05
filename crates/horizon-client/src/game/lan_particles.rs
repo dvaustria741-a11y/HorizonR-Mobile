@@ -684,6 +684,22 @@ impl Game<'_> {
                 let distance: f64 = (0..3).map(|k| (position[k] - sound.at[k]).powi(2)).sum();
                 distance <= range * range
             });
+            let packet = host
+                .hub
+                .sound_packet(
+                    &sound.sound,
+                    sound.at,
+                    sound.volume,
+                    sound.pitch,
+                    sound.source,
+                    host.hub.next_sound_seed(),
+                )
+                .encode();
+            let range = f64::from(sound.volume.max(1.0)) * 16.0;
+            send_native_nearby(host, sound.dimension, packet, |position| {
+                let distance: f64 = (0..3).map(|k| (position[k] - sound.at[k]).powi(2)).sum();
+                distance <= range * range
+            });
         }
     }
 

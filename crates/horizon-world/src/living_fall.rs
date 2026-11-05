@@ -238,3 +238,43 @@ mod tests {
         assert!(impulse.ignores_fall_damage());
     }
 }
+
+#[cfg(test)]
+
+    /// A wind charge's or mace's impact position with no grace time left.
+    fn impact() -> ImpulseContext {
+        ImpulseContext {
+            reset_grace_time: 0,
+            impact_position: Some(Vec3::new(0.5, 64.0, 0.5)),
+        }
+    }
+
+    #[test]
+    fn a_move_that_lands_in_a_liquid_ends_the_impulse_context() {
+        let mut impulse = impact();
+        impulse.landed_in_liquid(-0.08, true);
+        assert!(impulse.impact_position.is_none());
+    }
+
+    #[test]
+    fn a_move_that_lands_on_dry_ground_keeps_it() {
+        let mut impulse = impact();
+        impulse.landed_in_liquid(-0.08, false);
+        assert_eq!(impulse.impact_position, Some(Vec3::new(0.5, 64.0, 0.5)));
+    }
+
+    #[test]
+    fn a_rise_through_a_liquid_keeps_it() {
+        let mut impulse = impact();
+        impulse.landed_in_liquid(0.2, true);
+        assert!(impulse.ignores_fall_damage());
+    }
+
+    #[test]
+    fn the_grace_time_defers_the_liquid_reset() {
+        let mut impulse = ImpulseContext::default();
+        impulse.set_ignore_fall_damage(true, Some(Vec3::new(0.5, 64.0, 0.5)));
+        impulse.landed_in_liquid(-0.08, true);
+        assert!(impulse.ignores_fall_damage());
+    }
+}

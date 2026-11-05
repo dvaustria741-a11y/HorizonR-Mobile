@@ -10,6 +10,7 @@ use crate::{
     ui,
 };
 use horizon_assets::item_model::{DisplayContext, ItemEnv};
+use horizon_assets::item_model::{DisplayContext, NoEnv};
 use horizon_world::nbt::Tag;
 use serde_json::Value;
 use std::{collections::BTreeSet, path::Path};
@@ -1074,6 +1075,18 @@ mod tests {
             "{tinted:?}"
         );
     }
+
+    #[test]
+    fn a_layer_shows_the_item_of_its_block() {
+        assert_eq!(layer_item("minecraft:grass_block"), "minecraft:grass_block");
+        assert_eq!(layer_item("dirt"), "minecraft:dirt");
+        assert_eq!(layer_item("minecraft:water"), "minecraft:water_bucket");
+        assert_eq!(layer_item("minecraft:lava"), "minecraft:lava_bucket");
+    }
+}
+
+#[cfg(test)]
+    use super::layer_item;
 
     #[test]
     fn a_layer_shows_the_item_of_its_block() {

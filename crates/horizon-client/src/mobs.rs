@@ -3753,6 +3753,49 @@ impl Mob {
         }
         !(self.kind.flags.undead && matches!(effect, "minecraft:poison" | "minecraft:regeneration"))
     }
+    /// `LivingEntity.addEffect` of a `MobEffectInstance` with its flags: the effect as
+    /// `add_effect` has it, and `MobEffectInstance.update`'s rules for the flags of one already
+    /// there: it takes the new ambient flag when the new one is not ambient or the effect
+    /// changed, and always the new visibility.
+    pub fn add_effect_with(
+        &mut self,
+        effect: &'static str,
+        ticks: i32,
+        amplifier: i32,
+        ambient: bool,
+        visible: bool,
+    ) {
+        let effect = horizon_client_core::potions::namespaced(effect);
+        let before = self
+            .extra
+            .effects
+            .iter()
+            .find(|e| e.0 == effect)
+            .map(|e| (e.1, e.2));
+        self.add_effect(effect, ticks, amplifier);
+        let after = self
+            .extra
+            .effects
+            .iter()
+            .find(|e| e.0 == effect)
+            .map(|e| (e.1, e.2));
+        let present_ambient = self.extra.ambient_effects.contains(&effect);
+        // A new effect takes its flags as they are; one already there by update's rules.
+        let take_ambient = match before {
+            None => true,
+            Some(_) => (!ambient && present_ambient) || before != after,
+        };
+        if take_ambient {
+            self.extra.ambient_effects.retain(|h| *h != effect);
+            if ambient {
+                self.extra.ambient_effects.push(effect);
+            }
+        }
+        self.extra.hidden_effects.retain(|h| *h != effect);
+        if !visible {
+            self.extra.hidden_effects.push(effect);
+        }
+    }
     pub fn add_effect(&mut self, effect: &'static str, ticks: i32, amplifier: i32) {
         let effect = horizon_client_core::potions::namespaced(effect);
         // LivingEntity.addEffect: an effect the mob refuses is never added, so it
@@ -5441,5 +5484,85 @@ mod silent_voice_tests {
         assert!((0.8..=1.2).contains(&loud[0].2), "{}", loud[0].2);
         assert!(quiet.is_empty(), "{quiet:?}");
         assert_eq!(quiet_next, loud_next, "the pitch is drawn either way");
+    }
+}
+
+#[cfg(test)]
+
+    fn witch() -> Mob {
+        let mut kind = kind();
+        let k = Arc::make_mut(&mut kind);
+        k.id = "minecraft:witch".into();
+        k.species = Species::Witch;
+        Mob::new(1, kind, Vec3::ZERO, 0.0)
+    }
+
+    /// `MobEffectInstance.update` for the flags of an effect a mob has: a new instance that is
+    /// not ambient takes the ambient flag off an ambient one, one that is ambient does not unless
+    /// the effect itself changes, and visibility is always the new instance's.
+    #[test]
+    fn an_effect_added_again_updates_its_ambient_and_visible_flags_as_vanilla() {
+        let mut m = witch();
+        let speed = "minecraft:speed";
+        // A new effect takes its flags as they are.
+        m.add_effect_with("speed", 600, 0, true, false);
+        assert!(
+            m.extra.ambient_effects.contains(&speed) && m.extra.hidden_effects.contains(&speed)
+        );
+        // The same effect, no stronger and no longer, ambient again and visible: ambient stays
+        // (nothing changed), the visibility follows.
+        m.add_effect_with("speed", 100, 0, true, true);
+        assert_eq!(m.extra.effects, vec![(speed, 600, 0)]);
+        assert!(
+            m.extra.ambient_effects.contains(&speed) && !m.extra.hidden_effects.contains(&speed)
+        );
+        // Not ambient: it takes the flag off, though nothing else changed.
+        m.add_effect_with("speed", 100, 0, false, true);
+        assert!(!m.extra.ambient_effects.contains(&speed));
+        // Ambient over a not ambient one that does not change: not taken; one that changes: taken.
+        m.add_effect_with("speed", 100, 0, true, true);
+        assert!(!m.extra.ambient_effects.contains(&speed));
+        m.add_effect_with("speed", 900, 0, true, true);
+        assert!(m.extra.ambient_effects.contains(&speed));
+        assert_eq!(m.extra.effects, vec![(speed, 900, 0)]);
+    }
+
+    /// `Witch.getDamageAfterMagicAbsorb`: `#witch_resistant_to` (`magic`,
+    /// `indirect_magic`, `sonic_boom`, `thorns`) takes 15% of the hit, which
+    /// leaves a 10 health witch on 7 of a 20 hit it would not survive whole.
+    #[test]
+    fn a_witch_takes_15_percent_of_a_witch_resistant_hit() {
+        for resistant in [
+            DamageKind::Magic,
+            DamageKind::IndirectMagic,
+            DamageKind::SonicBoom,
+            DamageKind::Thorns,
+        ] {
+            let mut m = witch();
+            assert!(m.damage(20.0, Damage::of(resistant)));
+            assert_eq!(m.health, 7.0, "{resistant:?} is in #witch_resistant_to");
+        }
+    }
+
+    /// A hit outside the tag (`mob_attack`) takes all of it.
+    #[test]
+    fn a_witch_takes_all_of_a_physical_hit() {
+        let mut m = witch();
+        m.damage(4.0, Damage::of(DamageKind::MobAttack));
+        assert_eq!(m.health, 6.0);
+    }
+
+    /// `Witch.getDamageAfterMagicAbsorb`: a source whose entity is the witch
+    /// itself takes nothing, so its own harming potion cannot hurt it.
+    #[test]
+    fn a_witch_takes_nothing_from_its_own_hit() {
+        let mut m = witch();
+        let own = Damage {
+            kind: DamageKind::IndirectMagic,
+            attacker: Some(Who::Mob(m.id)),
+            from: None,
+        };
+        m.damage(20.0, own);
+        assert_eq!(m.health, 10.0);
     }
 }

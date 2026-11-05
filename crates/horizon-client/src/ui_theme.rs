@@ -673,6 +673,124 @@ fn wrapping_lines(ui: &Ui, face: Face, size: f32, text: &str, max_w: f32) -> Vec
     lines
 }
 
+// ---- the boot screen ----
+
+/// The boot screen's palette on the pure black: a white wordmark and dimmed
+/// console lines (the theme's ink is for light pages).
+const BOOT_TEXT: u32 = color::hex(0xFFFFFF, 255);
+const BOOT_LOG: u32 = color::hex(0x9BA1A6, 255);
+
+/// The boot screen while the menu is not ready yet: the wordmark centred on
+/// pure black and the console's last lines at the bottom right, as the
+/// terminal prints them.
+pub fn draw_boot(atlas: &HudAtlas, batch: &mut HudBatch, logs: &[String]) {
+    // Pure black under everything: the frame's panorama (the title artwork
+    // once the bundle is in) must not leak through.
+    batch.fill(
+        atlas,
+        0.0,
+        0.0,
+        batch.width,
+        batch.height,
+        color::hex(0x000000, 255),
+    );
+    // Android: the launcher's animated HorizonZ splash is the loading screen, so the engine
+    // paints pure black only (no "Horizon" wordmark, tagline or console lines) and the next
+    // thing the player sees is the game itself.
+    #[cfg(target_os = "android")]
+    let _ = logs;
+    #[cfg(not(target_os = "android"))]
+    {
+        wordmark(atlas, batch);
+        draw_boot_log(atlas, batch, logs);
+    }
+}
+
+/// The wordmark with its tagline, centred.
+#[cfg_attr(target_os = "android", allow(dead_code))]
+fn wordmark(atlas: &HudAtlas, batch: &mut HudBatch) {
+    let mut ui = Ui::new(atlas, batch, (0.0, 0.0));
+    let size = (ui.w / 16.0).clamp(DISPLAY, 96.0);
+    let small = (size * 0.25).clamp(MICRO, 18.0);
+    let block = size * 1.45 + small * 0.6 + small * 1.5;
+    let top = (ui.h - block) / 2.0;
+    ui.text_centered(Face::SemiBold, size, ui.w / 2.0, top, BOOT_TEXT, "Horizon");
+    ui.text_centered(
+        Face::Mono,
+        small,
+        ui.w / 2.0,
+        top + size * 1.45 + small * 0.6,
+        BOOT_LOG,
+        "Rust based minecraft client",
+    );
+    ui.finish();
+}
+
+/// The console's last lines at the bottom left, over any loading screen: long
+/// lines wrap word-wise, the block grows upwards.
+pub fn draw_boot_log(atlas: &HudAtlas, batch: &mut HudBatch, logs: &[String]) {
+    if logs.is_empty() {
+        return;
+    }
+    let mut ui = Ui::new(atlas, batch, (0.0, 0.0));
+    let (size, line, pad) = (MICRO, MICRO * 1.5, 16.0);
+    let max_w = ui.w / 2.0;
+    let max_rows = (((ui.h - pad) / line) as usize).clamp(1, 24);
+    let mut y = ui.h - pad - line;
+    let mut drawn = 0;
+    'lines: for text in logs.iter().rev() {
+        let chunks = wrapping_lines(&ui, Face::Mono, size, text, max_w);
+        for chunk in chunks.iter().rev() {
+            if drawn == max_rows {
+                break 'lines;
+            }
+            ui.text(Face::Mono, size, pad, y, BOOT_LOG, chunk);
+            y -= line;
+            drawn += 1;
+        }
+    }
+    ui.finish();
+}
+
+/// The lines `text` wraps into at `max_w`, word-wise; a word wider than
+/// `max_w` on its own breaks at the edge.
+fn wrapping_lines(ui: &Ui, face: Face, size: f32, text: &str, max_w: f32) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split(' ') {
+        let mut word = word;
+        loop {
+            let candidate = if line.is_empty() {
+                word.to_owned()
+            } else {
+                format!("{line} {word}")
+            };
+            if ui.measure(face, size, &candidate) <= max_w {
+                line = candidate;
+                break;
+            }
+            if line.is_empty() {
+                // The word alone does not fit: hard-break it at the edge.
+                let mut end = 0;
+                for (i, ch) in word.char_indices() {
+                    if i > 0 && ui.measure(face, size, &word[..i]) > max_w {
+                        break;
+                    }
+                    end = i + ch.len_utf8();
+                }
+                lines.push(word[..end].to_owned());
+                word = &word[end..];
+            } else {
+                lines.push(std::mem::take(&mut line));
+            }
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1392,6 +1392,64 @@ mod tests {
         );
     }
 
+    struct SwapRules;
+    impl Rules for SwapRules {
+        fn items(&self) -> &Items {
+            unreachable!("swap does not read the item catalog");
+        }
+        fn max_stack(&self, _: &str) -> u32 {
+            64
+        }
+        fn armor_index(&self, _: &str) -> Option<usize> {
+            None
+        }
+    }
+
+    /// F (SWAP button 40) over a chest or the inventory below it swaps with
+    /// the off hand, even though the menu has no off-hand slot.
+    #[test]
+    fn guest_chest_f_swaps_with_the_off_hand() {
+        let rules = SwapRules;
+        let mut g = guest();
+        g.offhand = Some(ItemStack::new("minecraft:shield", 1));
+        let mut chest = vec![Some(ItemStack::new("minecraft:diamond", 1)), None];
+        let mut drag = None;
+        let mut view = View {
+            guest: &mut g,
+            container: Some(&mut chest),
+            shulker: false,
+            hidden: &[],
+        };
+        click(&mut view, &mut drag, 0, 40, input::SWAP, &rules);
+        assert_eq!(
+            view.get(0).as_ref().map(|s| &*s.item),
+            Some("minecraft:shield")
+        );
+        assert_eq!(
+            view.guest.offhand.as_ref().map(|s| &*s.item),
+            Some("minecraft:diamond")
+        );
+        // Empty chest slot: the off hand goes in.
+        click(&mut view, &mut drag, 1, 40, input::SWAP, &rules);
+        assert_eq!(
+            view.get(1).as_ref().map(|s| &*s.item),
+            Some("minecraft:diamond")
+        );
+        assert!(view.guest.offhand.is_none());
+        // F over the first hotbar slot (menu slot 2 + 27).
+        view.guest.offhand = Some(ItemStack::new("minecraft:oak_boat", 1));
+        view.guest.inventory[0] = Some(ItemStack::new("minecraft:apple", 1));
+        click(&mut view, &mut drag, 2 + 27, 40, input::SWAP, &rules);
+        assert_eq!(
+            view.guest.inventory[0].as_ref().map(|s| &*s.item),
+            Some("minecraft:oak_boat")
+        );
+        assert_eq!(
+            view.guest.offhand.as_ref().map(|s| &*s.item),
+            Some("minecraft:apple")
+        );
+    }
+
     #[test]
     fn guest_shulker_box_menu_refuses_shulker_boxes() {
         let Some(rules) = rules() else {
