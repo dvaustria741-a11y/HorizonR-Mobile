@@ -188,7 +188,7 @@ fn narrow_outputs(p: &PostProgram, config: &Config) -> Vec<(u32, u32, u32)> {
                 }
             }
         }
-        (_, Some(naga::Binding::Location { location, .. })) => outs.push((location, width(result.ty))),
+        (_, Some(naga::Binding::Location { location, .. })) => outs.push((*location, width(result.ty))),
         _ => {}
     }
     let mut bad = Vec::new();
