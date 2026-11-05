@@ -216,8 +216,9 @@ jobs:
         continue-on-error: true
         run: |
           [ -f cargo_build.log ] || exit 0
-          grep -E -A12 '^(error|warning: unused import)' cargo_build.log | grep -vE '^warning' | head -1500 > /tmp/errs.txt || true
-          grep -cE '^error' cargo_build.log > /tmp/errcount.txt || true
+          sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' cargo_build.log > /tmp/clean.log
+          { grep -E -A14 '^error' /tmp/clean.log | head -2500; echo; echo '=== TAIL ==='; tail -60 /tmp/clean.log; } > /tmp/errs.txt || true
+          grep -cE '^error' /tmp/clean.log > /tmp/errcount.txt || true
           git config user.name ci; git config user.email ci@users.noreply.github.com
           git fetch origin ci-errors:ci-errors 2>/dev/null || git branch ci-errors
           git checkout -q ci-errors 2>/dev/null || git checkout -q --orphan ci-errors
