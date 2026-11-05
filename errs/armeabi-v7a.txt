@@ -1,66 +1,56 @@
-error[E0433]: cannot find module or crate `url` in this scope
-   --> crates/horizon-client-lib/../horizon-client/src/official_install.rs:109:15
-    |
-109 |     let url = url::Url::parse(text)?;
-    |               ^^^ use of unresolved module or unlinked crate `url`
-    |
-    = help: if you wanted to use a crate named `url`, use `cargo add url` to add it to your `Cargo.toml`
+error: mismatched closing delimiter: `}`
+     --> crates/horizon-client/src/game.rs:16583:21
+      |
+16583 |                 .map(|h| {
+      |                     ^ unclosed delimiter
+...
+16607 |                 })
+      |                 ^ mismatched closing delimiter
 
-error[E0433]: cannot find module or crate `url` in this scope
-  --> crates/horizon-client-lib/../horizon-client/src/resource_install.rs:28:19
-   |
-28 |         let url = url::Url::parse(&self.url)?;
-   |                   ^^^ use of unresolved module or unlinked crate `url`
-   |
-   = help: if you wanted to use a crate named `url`, use `cargo add url` to add it to your `Cargo.toml`
+error: unexpected closing delimiter: `}`
+     --> crates/horizon-client/src/game.rs:16974:5
+      |
+16281 |     fn render(&mut self) -> Result<bool> {
+      |                                          - the nearest open delimiter
+...
+16607 |                 })
+      |                  - missing open `(` for this delimiter
+...
+16974 |     }
+      |     ^ unexpected closing delimiter
 
-warning: unused import: `Tempt`
-  --> crates/horizon-client-lib/../horizon-client/src/mobs/aquatic.rs:10:35
-   |
-10 |         RandomLookAround, Stroll, Tempt, TryFindWater, goal_clone, reduced,
-   |                                   ^^^^^
-   |
-   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
---
-error[E0061]: this method takes 4 arguments but 3 arguments were supplied
-   --> crates/horizon-client-lib/../horizon-client/src/touch_ui.rs:418:15
-    |
-418 |             k.draw(&mut ui, false, crate::gamepad::GlyphStyle::Xbox);
-    |               ^^^^-------------------------------------------------- argument #4 of type `bool` is missing
-    |
-note: method defined here
-   --> crates/horizon-client-lib/../horizon-client/src/osk.rs:297:12
-    |
-297 |     pub fn draw(&self, ui: &mut Ui, at_top: bool, glyphs: GlyphStyle, by_letter: bool) {
-    |            ^^^^                                                       ---------------
-help: provide the argument
-    |
-418 |             k.draw(&mut ui, false, crate::gamepad::GlyphStyle::Xbox, /* bool */);
-    |                                                                    ++++++++++++
---
-error: could not compile `horizon-client-lib` (lib) due to 3 previous errors; 2 warnings emitted
+error: could not compile `horizon-client` (lib) due to 2 previous errors
 warning: build failed, waiting for other jobs to finish...
-warning: `horizon-shaderport` (lib) generated 2 warnings
 warning: `horizon-client-render` (lib) generated 4 warnings
+warning: `horizon-client-lib` (lib) generated 1 warning (run `cargo fix --lib -p horizon-client-lib` to apply 1 suggestion)
 
 === TAIL ===
+50 |     pub(super) fn end(
+   |                   ^^^
+
+   Compiling horizon-mcp v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-mcp)
+   Compiling mio v1.2.4
+   Compiling horizon-android v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-android)
+   Compiling horizon-shaderport v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-shaderport)
+warning: function `apply_one` is never used
+   --> crates/horizon-shaderport/src/fix.rs:199:8
+    |
+199 | pub fn apply_one(files: &mut Files, eval: &Eval, name: &str) -> Result<usize, String> {
+    |        ^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `skipped_names` is never used
+   --> crates/horizon-shaderport/src/load.rs:315:12
+    |
+286 | impl Eval {
+    | --------- method in this implementation
+...
+315 |     pub fn skipped_names(&self) -> Vec<String> {
+    |            ^^^^^^^^^^^^^
+
+   Compiling horizon-port-pack v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-port-pack)
    Compiling horizon-client-lib v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-lib)
-error[E0433]: cannot find module or crate `url` in this scope
-   --> crates/horizon-client-lib/../horizon-client/src/official_install.rs:109:15
-    |
-109 |     let url = url::Url::parse(text)?;
-    |               ^^^ use of unresolved module or unlinked crate `url`
-    |
-    = help: if you wanted to use a crate named `url`, use `cargo add url` to add it to your `Cargo.toml`
-
-error[E0433]: cannot find module or crate `url` in this scope
-  --> crates/horizon-client-lib/../horizon-client/src/resource_install.rs:28:19
-   |
-28 |         let url = url::Url::parse(&self.url)?;
-   |                   ^^^ use of unresolved module or unlinked crate `url`
-   |
-   = help: if you wanted to use a crate named `url`, use `cargo add url` to add it to your `Cargo.toml`
-
 warning: unused import: `Tempt`
   --> crates/horizon-client-lib/../horizon-client/src/mobs/aquatic.rs:10:35
    |
@@ -69,38 +59,29 @@ warning: unused import: `Tempt`
    |
    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-error[E0061]: this method takes 4 arguments but 3 arguments were supplied
-   --> crates/horizon-client-lib/../horizon-client/src/touch_ui.rs:418:15
-    |
-418 |             k.draw(&mut ui, false, crate::gamepad::GlyphStyle::Xbox);
-    |               ^^^^-------------------------------------------------- argument #4 of type `bool` is missing
-    |
-note: method defined here
-   --> crates/horizon-client-lib/../horizon-client/src/osk.rs:297:12
-    |
-297 |     pub fn draw(&self, ui: &mut Ui, at_top: bool, glyphs: GlyphStyle, by_letter: bool) {
-    |            ^^^^                                                       ---------------
-help: provide the argument
-    |
-418 |             k.draw(&mut ui, false, crate::gamepad::GlyphStyle::Xbox, /* bool */);
-    |                                                                    ++++++++++++
-
-   Compiling horizon-port-pack v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-port-pack)
-warning: unreachable pattern
-    --> crates/horizon-client-lib/../horizon-client/src/lan/hub.rs:3574:17
-     |
-3566 |                 S::Interact(p) => {
-     |                 -------------- matches all the relevant values
-...
-3574 |                 S::Interact(p) => {
-     |                 ^^^^^^^^^^^^^^ no value can reach this
-     |
-     = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
-
-Some errors have detailed explanations: E0061, E0433.
-For more information about an error, try `rustc --explain E0061`.
-warning: `horizon-client-lib` (lib) generated 2 warnings
-error: could not compile `horizon-client-lib` (lib) due to 3 previous errors; 2 warnings emitted
-warning: build failed, waiting for other jobs to finish...
 warning: `horizon-shaderport` (lib) generated 2 warnings
+error: mismatched closing delimiter: `}`
+     --> crates/horizon-client/src/game.rs:16583:21
+      |
+16583 |                 .map(|h| {
+      |                     ^ unclosed delimiter
+...
+16607 |                 })
+      |                 ^ mismatched closing delimiter
+
+error: unexpected closing delimiter: `}`
+     --> crates/horizon-client/src/game.rs:16974:5
+      |
+16281 |     fn render(&mut self) -> Result<bool> {
+      |                                          - the nearest open delimiter
+...
+16607 |                 })
+      |                  - missing open `(` for this delimiter
+...
+16974 |     }
+      |     ^ unexpected closing delimiter
+
+error: could not compile `horizon-client` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
 warning: `horizon-client-render` (lib) generated 4 warnings
+warning: `horizon-client-lib` (lib) generated 1 warning (run `cargo fix --lib -p horizon-client-lib` to apply 1 suggestion)
