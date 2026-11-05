@@ -1215,18 +1215,6 @@ impl Hub {
                 g.sender.send(joined.clone());
             }
         }
-        // PlayerList.placeNewPlayer broadcasts the join line before
-        // players.add: the others read it, the newcomer doesn't.
-        self.broadcast_except(
-            conn,
-            &C::SystemChat(play::SystemChat {
-                content: yellow_names(
-                    "multiplayer.player.joined",
-                    vec![display_name(self.guests[i].uuid, &name)],
-                ),
-                overlay: false,
-            }),
-        );
         self.guests[i].placed = true;
         self.resend_teleport(i, None);
         let g = &self.guests[i];
@@ -3398,20 +3386,6 @@ impl Hub {
                     if !self.anticheat_attack(i, p.id, events) {
                         events.push(HostEvent::Packet(conn, Box::new(S::Attack(p))));
                         held = self.move_queued(i);
-                    }
-                }
-                S::Punch(p) => {
-                    self.anticheat_swing(i);
-                    events.push(HostEvent::Packet(conn, Box::new(S::Punch(p))));
-                }
-                S::Pong(p) => self.anticheat_pong(i, p.id),
-                S::Attack(p) => {
-                    if !self.anticheat_attack(i, p.id, events) {
-                        events.push(HostEvent::Packet(conn, Box::new(S::Attack(p))));
-                        // Apply the attack before processing a move queued behind it.
-                        if self.move_queued(i) {
-                            break;
-                        }
                     }
                 }
                 S::Punch(p) => {

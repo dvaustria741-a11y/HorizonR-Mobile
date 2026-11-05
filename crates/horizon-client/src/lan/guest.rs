@@ -613,32 +613,6 @@ impl Guest {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(change);
     }
-    /// What `packet` changes about how the client moves, for the prediction's replay: kept until
-    /// the tick's ping places it (`Hub::anticheat_ping`).
-    fn note_change(&self, packet: &play::Clientbound) {
-        let own = |id: i32| id == self.entity_id;
-        let change = match packet {
-            C::SetEntityMotion(p) if own(p.id) => {
-                Change::Velocity(horizon_protocol::buf::LpVec3::quantize(p.velocity))
-            }
-            C::Explode(p) => match p.knockback {
-                Some(k) => Change::Knockback(k),
-                None => return,
-            },
-            C::UpdateAttributes(p) if own(p.id) => Change::State,
-            C::UpdateMobEffect(p) if own(p.id) => Change::State,
-            C::RemoveMobEffect(p) if own(p.id) => Change::State,
-            C::PlayerAbilities(_) => Change::Abilities,
-            // The chest slot (InventoryMenu's slot 6): a glider.
-            C::ContainerSetSlot(p) if p.container == 0 && p.slot == 6 => Change::Abilities,
-            C::ContainerSetContent(p) if p.container == 0 => Change::Abilities,
-            _ => return,
-        };
-        self.changes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(change);
-    }
     /// `Entity.stopRiding`: out of the vehicle it rode.
     pub fn stop_riding(&mut self) {
         (self.vehicle, self.vehicle_good) = (None, None);
@@ -1345,25 +1319,6 @@ fn network_stack(
         stack.added.push((
             horizon_protocol::item::component::CUSTOM_DATA,
             horizon_protocol::item::Component::Nbt(tag.clone()),
-        ));
-    }
-    if let Some(t) = s
-        .data()
-        .and_then(|d| d.other("minecraft:custom_model_data"))
-    {
-        stack.added.push((
-            horizon_protocol::item::component::CUSTOM_MODEL_DATA,
-            custom_model_data(t),
-        ));
-    }
-    // The model a pack or mod picks for this stack, which the client's item model reads.
-    if let Some(model) = s
-        .data()
-        .and_then(|d| crate::save::text(d.other("minecraft:item_model")))
-    {
-        stack.added.push((
-            horizon_protocol::item::component::ITEM_MODEL,
-            horizon_protocol::item::Component::Ident(model),
         ));
     }
     if let Some(t) = s

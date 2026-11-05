@@ -1658,37 +1658,3 @@ mod tests {
         assert_eq!((bot.bytes_in(), bot.bytes_out()), (1234, 56));
     }
 }
-
-#[cfg(test)]
-
-    #[test]
-    fn percentiles_use_nearest_rank() {
-        assert_eq!(percentile(&[], 50), 0);
-        assert_eq!(percentile(&[7], 99), 7);
-        let v: Vec<u64> = (1..=100).collect();
-        assert_eq!(percentile(&v, 50), 50);
-        assert_eq!(percentile(&v, 99), 99);
-        assert_eq!(percentile(&[10, 20, 30, 40], 50), 20);
-    }
-
-    #[test]
-    fn join_summary_sorts_and_reports_max() {
-        let s = join_summary(vec![300, 100, 200]);
-        assert_eq!(s["count"], 3);
-        assert_eq!(s["p50_ms"], 200);
-        assert_eq!(s["p99_ms"], 300);
-        assert_eq!(s["max_ms"], 300);
-        assert_eq!(join_summary(vec![])["count"], 0);
-    }
-
-    #[test]
-    fn bot_bytes_come_from_the_connection_counters() {
-        let bot = Bot::default();
-        assert_eq!((bot.bytes_in(), bot.bytes_out()), (0, 0));
-        let counters = Arc::new(Counters::default());
-        counters.bytes_in.store(1234, Ordering::Relaxed);
-        counters.bytes_out.store(56, Ordering::Relaxed);
-        let _ = bot.counters.set(counters);
-        assert_eq!((bot.bytes_in(), bot.bytes_out()), (1234, 56));
-    }
-}

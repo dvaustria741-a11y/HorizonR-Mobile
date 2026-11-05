@@ -290,10 +290,6 @@ pub struct Player {
     pub sprinting: bool,
     /// The attacks of the client tick being heard.
     pub attacks: combat::Attacks,
-    /// The client ticks the prediction plays again (only while it runs).
-    pub record: Option<Box<prediction::Record>>,
-    /// The attacks of the client tick being heard.
-    pub attacks: combat::Attacks,
 }
 
 impl Player {

@@ -313,28 +313,6 @@ fn random_bounds(s: &Sources) -> Option<(i32, i32, i32, i32)> {
     })
 }
 
-/// The box that holds every chunk `random_ticking` can answer for: a player's
-/// simulation ticket reaches its simulation distance, a forced chunk only ever
-/// random ticks in the chunk itself, and a `PORTAL` ticket inside its whole
-/// area. Each is a superset of that ticket's random-ticking chunks, so the box
-/// never rejects a chunk that random ticks.
-fn random_bounds(s: &Sources) -> Option<(i32, i32, i32, i32)> {
-    let sim = s.simulation_distance.clamp(0, 32);
-    let boxes = s
-        .players
-        .iter()
-        .map(|&p| (p, sim))
-        .chain(s.forced.iter().map(|&f| (f, 0)))
-        .chain(s.portal.iter().map(|&p| (p, PORTAL_RADIUS)));
-    boxes.fold(None, |b, ((x, z), r)| {
-        let (lo_x, lo_z, hi_x, hi_z) = (x - r, z - r, x + r, z + r);
-        Some(match b {
-            None => (lo_x, lo_z, hi_x, hi_z),
-            Some((a, b, c, d)) => (lo_x.min(a), lo_z.min(b), hi_x.max(c), hi_z.max(d)),
-        })
-    })
-}
-
 /// How far a player's tickets reach, and the simulation ticket's level.
 fn reach(s: &Sources) -> (i32, i32, i32) {
     let view = s.view_distance.clamp(0, 32);

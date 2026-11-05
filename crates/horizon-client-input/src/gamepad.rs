@@ -1407,19 +1407,6 @@ mod tests {
     }
 
     #[test]
-    fn java_stick_has_exact_keyboard_directions_at_every_magnitude() {
-        for x in [-1.0f32, -0.45, 0.0, 0.45, 1.0] {
-            for y in [-1.0f32, -0.45, 0.0, 0.45, 1.0] {
-                let expected = crate::input::keyboard_direction(y > 0.0, y < 0.0, x < 0.0, x > 0.0);
-                assert_eq!(java_move_vector([x, y], 0.1).unwrap_or([0.0; 2]), expected);
-            }
-        }
-        assert_eq!(java_move_vector([0.02, 1.0], 0.1), Some([0.0, 1.0]));
-        assert_eq!(java_move_vector([1.0, -0.02], 0.1), Some([-1.0, 0.0]));
-        assert!(java_move_vector([0.05, 0.05], 0.1).is_none());
-        assert!(java_move_vector([f32::NAN, 1.0], 0.1).is_none());
-    }
-    #[test]
     fn defaults_follow_bedrock() {
         let s = PadSettings::default();
         assert_eq!(s.actions_of(Button::South), ["key.jump"]);

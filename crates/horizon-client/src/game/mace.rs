@@ -387,37 +387,6 @@ impl Game<'_> {
         }
         self.weapon_wear(&stack);
     }
-    /// `Player.itemAttackInteraction` after the player's hit hurt the armor
-    /// stand `id` (a living target) at `center`: as `weapon_hit` does for a
-    /// mob, a smash stops the fall and knocks the creatures around the stand
-    /// away, and the Wind Burst (a `post_attack` explosion on the attacker)
-    /// launches the attacker.
-    pub(super) fn weapon_hit_stand(&mut self, id: u32, center: Vec3, on_ground: bool) {
-        let Some(stack) = self.held().cloned() else {
-            return;
-        };
-        if self.smash_attack()
-            && let Some(fall) = self.mace_smash_self(on_ground)
-        {
-            self.smash_knockback(center, Spared::Stand(id), fall);
-        }
-        if self
-            .res
-            .items()
-            .get(&stack.item)
-            .is_some_and(|i| i.weapon_damage.is_some())
-        {
-            self.stats.add("used", &stack.item, 1);
-        }
-        self.post_attack_bursts(&stack, "minecraft:armor_stand");
-        // MaceItem.postHurtEnemy
-        if self.smash_attack()
-            && let Some(p) = self.player.as_mut()
-        {
-            p.fall_distance = 0.0;
-        }
-        self.weapon_wear(&stack);
-    }
     /// `MaceItem.knockback`: the dust pillar (level event 2013) under the
     /// target, then every living entity within 3.5 blocks of it but the
     /// player and the target pushed away and up, harder after a fall of more

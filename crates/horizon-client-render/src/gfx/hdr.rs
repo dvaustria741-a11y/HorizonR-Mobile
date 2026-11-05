@@ -574,9 +574,6 @@ impl Hdr {
         params[12] = c.map_or(0.0, |c| c.step as f32);
         params[13] = c.map_or(0.0, |c| c.nits);
         params[14] = c.map_or(0.0, |c| c.band);
-        params[20] = c.map_or(0.0, |c| c.step as f32);
-        params[21] = c.map_or(0.0, |c| c.nits);
-        params[22] = c.map_or(0.0, |c| c.band);
         params
     }
 

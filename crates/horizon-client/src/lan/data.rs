@@ -490,27 +490,6 @@ impl SyncData {
             .any(|(_, e)| e.from_pack.contains(&true))
     }
 
-    /// MinecraftServer.reloadResources: `/reload` keeps the synchronized
-    /// registries the server started with (`kept`'s, its
-    /// LayeredRegistryAccess) and reads the tags against them
-    /// (TagLoader.loadTagsForExistingRegistries); the rest stays reloaded.
-    pub fn keep_registries(&mut self, resources: &Path, kept: &SyncData) {
-        self.dynamic = kept.dynamic.clone();
-        self.registries = kept.registries.clone();
-        self.tags = Self::load_tags(
-            &resources.join("data/minecraft"),
-            &self.builtin,
-            &self.dynamic,
-        );
-    }
-
-    /// Whether a synchronized registry holds an entry from a world's pack.
-    pub fn has_pack_entries(&self) -> bool {
-        self.registries
-            .iter()
-            .any(|(_, e)| e.from_pack.contains(&true))
-    }
-
     /// The id of a name in a built-in or synchronized registry.
     pub fn id(&self, registry: &str, name: &str) -> Option<i32> {
         if registry == "minecraft:data_component_type"
@@ -1137,61 +1116,6 @@ mod tests {
         expected.extend_from_slice(b"minecraft:dialog_list");
         expected.push(0);
         assert_eq!(encoded, expected);
-    }
-
-    #[test]
-    fn pack_dialogs_join_the_registry_in_identifier_order() {
-        let vanilla = |p: &str| (("minecraft".to_owned(), p.to_owned()), Value::Null, false);
-        let mut entries = vec![
-            vanilla("custom_options"),
-            vanilla("quick_actions"),
-            vanilla("x"),
-        ];
-        let files = [
-            (
-                "dialog/blazeandcave:config/change_points_task".to_owned(),
-                vec![br#"{"type":"minecraft:notice"}"#.to_vec()],
-            ),
-            // A lower pack's file, then the top one's: the top one is read.
-            (
-                "dialog/minecraft:quick_actions".to_owned(),
-                vec![
-                    b"{}".to_vec(),
-                    br#"{"type":"minecraft:multi_action"}"#.to_vec(),
-                ],
-            ),
-            ("dialog/broken:bad".to_owned(), vec![b"{".to_vec()]),
-            ("dialog/minecraft:x-y".to_owned(), vec![b"{}".to_vec()]),
-            ("recipe/blazeandcave:other".to_owned(), vec![b"{}".to_vec()]),
-        ];
-        let overlay = horizon_world::loot::PackOverlay { files: &files };
-        pack_entries("dialog", &overlay, &mut entries);
-        file_order(&mut entries);
-        let got: Vec<_> = entries
-            .iter()
-            .map(|((ns, p), v, from_pack)| (format!("{ns}:{p}"), v["type"].clone(), *from_pack))
-            .collect();
-        // Identifier.compareTo: "config/..." sorts before "custom_options"
-        // by path, though "blazeandcave" is not "minecraft"; "x-y.json"
-        // sorts before "x.json".
-        assert_eq!(
-            got,
-            [
-                (
-                    "blazeandcave:config/change_points_task".to_owned(),
-                    Value::from("minecraft:notice"),
-                    true
-                ),
-                ("minecraft:custom_options".to_owned(), Value::Null, false),
-                (
-                    "minecraft:quick_actions".to_owned(),
-                    Value::from("minecraft:multi_action"),
-                    true
-                ),
-                ("minecraft:x-y".to_owned(), Value::Null, true),
-                ("minecraft:x".to_owned(), Value::Null, false),
-            ]
-        );
     }
 
     #[test]

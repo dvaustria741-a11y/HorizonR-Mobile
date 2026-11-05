@@ -638,10 +638,6 @@ impl Loading {
                         pack.save_values(&Game::shader_packs_dir());
                     }
                 }
-                Event::ListShaderPackOptions => {
-                    self.settings.shader_pack_options = Game::list_shader_pack_options(&self.settings);
-                }
-                Event::ShaderPackOption(_) => Game::save_shader_pack_options(&self.settings),
                 Event::OpenShaderPackFolder => {
                     let dir = Game::shader_packs_dir();
                     let _ = std::fs::create_dir_all(&dir);
@@ -973,146 +969,6 @@ impl Loading {
             }
         }
         self.menu.key_synthetic = was;
-    }
-
-    #[cfg(target_os = "android")]
-    pub(super) fn menu_android_keyboard(&mut self) {
-        use horizon_client::osk::Output;
-        if let Some(notice) = crate::documents::poll() {
-            if notice.changed {
-                self.menu.options.pack_infos =
-                    packs::pack_infos(&self.options.as_ref().unwrap().resources);
-                self.menu.options.pack_screen = None;
-                self.settings.shader_packs =
-                    horizon_client::shader_pack_list::scan(&Game::shader_packs_dir());
-            }
-            log::info!("{}", notice.text);
-        }
-        for out in crate::platform::poll() {
-            match out {
-                Output::Text(s) => {
-                    if self.menu.options_open {
-                        self.menu
-                            .options
-                            .type_text(&self.gui.as_ref().unwrap().atlas, &s);
-                    } else if let Some(t) = &mut self.menu.title {
-                        t.type_text(&s);
-                    }
-                }
-                Output::Backspace => {
-                    if self.menu.options_open {
-                        let e = self.menu.options.key(
-                            &mut self.settings,
-                            &self.gui.as_ref().unwrap().atlas,
-                            KeyCode::Backspace,
-                            None,
-                        );
-                        self.menu_option_events(e);
-                    } else if let Some(t) = &mut self.menu.title {
-                        t.backspace();
-                    }
-                }
-                Output::Enter | Output::Close => {
-                    crate::platform::hide();
-                    if let Some(t) = &mut self.menu.title {
-                        t.confirm_edit();
-                    }
-                }
-            }
-            self.save_menu_address();
-        }
-    }
-    #[cfg(target_os = "android")]
-    fn startup_navigation(&mut self, events: &ActiveEventLoop, event: &KeyEvent) -> Result<bool> {
-        use horizon_client::{
-            gamepad::{self, Button},
-            widgets,
-        };
-        let Some(key) = horizon_client::keypad::resolve_key(event.physical_key, &event.logical_key)
-        else {
-            return Ok(false);
-        };
-        if crate::platform::active()
-            || self.menu.options.selected_key.is_some()
-            || self
-                .menu
-                .title
-                .as_mut()
-                .is_some_and(|t| t.has_caret_field())
-        {
-            return Ok(false);
-        }
-        let direction = match key {
-            KeyCode::ArrowUp => Some(Button::DPadUp),
-            KeyCode::ArrowDown => Some(Button::DPadDown),
-            KeyCode::ArrowLeft => Some(Button::DPadLeft),
-            KeyCode::ArrowRight => Some(Button::DPadRight),
-            _ => None,
-        };
-        let targets = widgets::last_targets();
-        if let Some(direction) = direction {
-            self.menu.keyboard_navigation = true;
-            let rects: Vec<_> = targets.iter().map(|t| t.rect).collect();
-            let old = self
-                .menu
-                .keyboard_focus
-                .and_then(|f| gamepad::refind(f.rect, &rects, 2.0));
-            let next = old
-                .and_then(|i| gamepad::focus_step_rect(rects[i], direction, &rects))
-                .or(old)
-                .or_else(|| (!targets.is_empty()).then_some(0));
-            if let Some(i) = next {
-                self.menu.keyboard_focus = Some(targets[i]);
-            }
-            if let Some(t) = self.menu.keyboard_focus {
-                let scale = HudBatch::new(self.menu_size()).scale;
-                self.menu_event(
-                    events,
-                    WindowEvent::CursorMoved {
-                        device_id: DeviceId::dummy(),
-                        position: winit::dpi::PhysicalPosition::new(
-                            f64::from(t.center().0 * scale),
-                            f64::from(t.center().1 * scale),
-                        ),
-                    },
-                )?;
-            }
-            return Ok(true);
-        }
-        if matches!(key, KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space)
-            && self.menu.keyboard_focus.is_some()
-        {
-            self.startup_mouse_button(events, false, true)?;
-            self.startup_mouse_button(events, false, false)?;
-            self.menu.keyboard_focus = None;
-            return Ok(true);
-        }
-        Ok(false)
-    }
-
-    #[cfg(target_os = "android")]
-    fn startup_mouse_button(
-        &mut self,
-        events: &ActiveEventLoop,
-        right: bool,
-        down: bool,
-    ) -> Result<()> {
-        self.menu_event(
-            events,
-            WindowEvent::MouseInput {
-                device_id: winit::event::DeviceId::dummy(),
-                button: if right {
-                    MouseButton::Right
-                } else {
-                    MouseButton::Left
-                },
-                state: if down {
-                    ElementState::Pressed
-                } else {
-                    ElementState::Released
-                },
-            },
-        )
     }
 
     pub(super) fn menu_event(
@@ -1668,45 +1524,6 @@ impl Loading {
             batch,
             false,
         );
-        #[cfg(target_os = "android")]
-        {
-            self.menu.touch.draw(batch, &gui.atlas, true);
-            if self.menu.touch.virtual_mouse {
-                horizon_client::touch_ui::draw_pointer(batch, &gui.atlas, self.menu.cursor);
-            }
-        }
-        self.menu
-            .frame_graph
-            .draw(self.settings.horizon.overlay, batch, &gui.atlas);
-        #[cfg(target_os = "android")]
-        crate::documents::draw(batch, &gui.atlas);
-    }
-
-    #[cfg(target_os = "android")]
-    pub(super) fn tick_menu_audio(&mut self) {
-        let now = Instant::now();
-        let last = self.menu.audio_tick.get_or_insert(now);
-        if now.duration_since(*last) < Duration::from_millis(50) {
-            return;
-        }
-        *last = now;
-        if let Some(audio) = &mut self.menu.audio {
-            audio.master = self.settings.volumes[0];
-            let mut volumes = self.settings.volumes;
-            volumes[0] = 1.0;
-            horizon_client::settings::set_source_volumes(volumes);
-            let music = horizon_client::music::Music::menu();
-            let frequency = horizon_client::music::MusicFrequency::parse(
-                &self.settings.file.name("musicFrequency"),
-            );
-            if self.menu.music.frequency != frequency {
-                self.menu.music.set_frequency(frequency, Some(&music));
-            }
-            self.menu
-                .music
-                .tick(Some(&music), 1.0, self.menu.pending.is_some(), audio);
-            audio.tick(false, &Default::default());
-        }
     }
 
     pub(super) fn restart_menu_resources(&mut self) -> Result<()> {
@@ -1816,45 +1633,6 @@ mod tests {
         loading.title_drawn = false;
         loading.ui_at = Instant::now().checked_sub(Duration::from_secs(2));
         assert!(loading.ready_for_handoff());
-    }
-
-    #[test]
-    fn renderer_preparation_does_not_wait_for_its_worker() {
-        let (_sender, receiver) = std::sync::mpsc::channel();
-        let (release, wait) = std::sync::mpsc::channel();
-        let mut loading = loading(receiver);
-        loading.renderer_job = Some(std::thread::spawn(move || {
-            wait.recv().unwrap();
-            Err("test renderer failure".into())
-        }));
-        loading.prepare_renderer().unwrap();
-        assert!(!loading.renderer_job.as_ref().unwrap().is_finished());
-        release.send(()).unwrap();
-        while !loading.renderer_job.as_ref().unwrap().is_finished() {
-            std::thread::yield_now();
-        }
-        assert!(
-            loading
-                .prepare_renderer()
-                .unwrap_err()
-                .to_string()
-                .contains("test renderer failure")
-        );
-        assert!(loading.renderer_job.is_none());
-    }
-
-    #[test]
-    fn performance_overlay_is_available_before_the_core_finishes() {
-        let (_sender, receiver) = std::sync::mpsc::channel();
-        let mut loading = loading(receiver);
-        let root = std::env::temp_dir().join("horizon-early-overlay-no-world-data");
-        loading.gui = Some(gui(&root));
-        loading.settings.horizon.overlay = horizon_client::graphics::Overlay::Fps;
-        loading.menu.frame_graph.record(20.0, 4.0, None);
-        let mut batch = HudBatch::new([1280, 720]);
-        loading.draw_menu(&mut batch);
-        assert!(!batch.vertices.is_empty());
-        assert!(loading.loaded.is_none());
     }
 
     #[test]

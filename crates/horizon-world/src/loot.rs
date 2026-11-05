@@ -590,52 +590,6 @@ pub fn native_loot_table_load(id: &str, table: &mut Value) {
     crate::native_load_hooks::loot_table_load(id, table);
 }
 
-/// The loot tables of every namespace in `root`'s `data/`, with `overlay`'s
-/// over them. Shared while one is alive: `Items` and [`LootData`] of the
-/// same root and packs hold one map, not a copy each (7 MB). The key holds
-/// the packs' bytes and each root file's size and modification time, so a
-/// table changed on disk is read again rather than taken from a held map.
-pub fn shared_tables(
-    root: &Path,
-    overlay: &PackOverlay,
-) -> io::Result<Arc<HashMap<String, Value>>> {
-    static LOADED: Mutex<Vec<(u64, Weak<HashMap<String, Value>>)>> = Mutex::new(Vec::new());
-    let key = {
-        let mut hasher = DefaultHasher::new();
-        root.hash(&mut hasher);
-        let data = root.join("data");
-        let mut namespaces: Vec<_> = fs::read_dir(&data)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-            .collect();
-        namespaces.sort();
-        for namespace in namespaces {
-            hash_files(&namespace.join("loot_table"), &mut hasher);
-        }
-        overlay
-            .kind("loot_table")
-            .for_each(|file| file.hash(&mut hasher));
-        hasher.finish()
-    };
-    let mut loaded = LOADED.lock().unwrap_or_else(|e| e.into_inner());
-    loaded.retain(|(_, tables)| tables.strong_count() > 0);
-    if let Some(tables) = loaded
-        .iter()
-        .find(|(k, _)| *k == key)
-        .and_then(|(_, tables)| tables.upgrade())
-    {
-        return Ok(tables);
-    }
-    let mut tables = HashMap::new();
-    load_kind(&root.join("data"), "loot_table", &mut tables)?;
-    overlay_map(overlay, "loot_table", &mut tables);
-    let tables = Arc::new(tables);
-    loaded.push((key, Arc::downgrade(&tables)));
-    Ok(tables)
-}
-
 fn load_kind(data: &Path, kind: &str, out: &mut HashMap<String, Value>) -> io::Result<()> {
     let Ok(entries) = fs::read_dir(data) else {
         return Ok(());

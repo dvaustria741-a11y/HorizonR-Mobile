@@ -32,7 +32,6 @@ mod preprocess;
 mod properties;
 mod screens;
 mod textures;
-mod settings;
 mod translate;
 
 pub use biomes::{

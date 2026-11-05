@@ -662,47 +662,6 @@ fn description(item: Item, s: &Settings, text: &'static str) -> &'static str {
         _ => text,
     }
 }
-
-/// Whether the system set HDR up for the display, and whether the player kept it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Setup {
-    /// The system says nothing: the player calibrates.
-    Unknown,
-    /// Peak Brightness and Paper White follow the system.
-    Automatic,
-    /// The system said, and the player changed them anyway.
-    Changed,
-}
-fn setup(s: &Settings) -> Setup {
-    setup_of(&s.horizon, crate::graphics::reported().is_some())
-}
-fn setup_of(g: &crate::graphics::Graphics, reported: bool) -> Setup {
-    if !reported {
-        Setup::Unknown
-    } else if g.hdr_peak == 0 && g.hdr_paper_white == 0 {
-        Setup::Automatic
-    } else {
-        Setup::Changed
-    }
-}
-/// The description beside `item` where it depends on [`setup`]; `text` otherwise.
-fn description(item: Item, s: &Settings, text: &'static str) -> &'static str {
-    match (item, setup(s)) {
-        (Item::Horizon(H::HdrCalibrate), Setup::Unknown) => {
-            "Your display didn't say how bright it gets: calibrate to set it up."
-        }
-        (Item::Horizon(H::HdrCalibrate), Setup::Automatic) => {
-            "Already set up for your display. Only calibrate if HDR looks wrong."
-        }
-        (Item::Horizon(H::HdrCalibrate), Setup::Changed) => {
-            "Puts Peak Brightness and Paper White back to your display's setup."
-        }
-        (Item::Horizon(H::HdrPeak | H::HdrPaperWhite), Setup::Automatic | Setup::Changed) => {
-            "Set up for your display. Leave on Auto unless it looks wrong."
-        }
-        _ => text,
-    }
-}
 fn on_off(on: bool) -> String {
     lang::get(if on { "On" } else { "Off" })
 }

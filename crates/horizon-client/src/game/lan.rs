@@ -4100,17 +4100,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-    use super::{OFFHAND_SLOT, living_flags};
-
-    /// `LivingEntity.startUsingItem` sets flag 1 for the use and flag 2 for
-    /// the off hand, so an off-hand use is 3, not 2. A reader takes bit 0 as
-    /// `isUsingItem` and bit 1 as `getUsedItemHand`.
-    #[test]
-    fn an_off_hand_use_flags_both_the_use_and_the_hand() {
-        assert_eq!(living_flags(None), 0);
-        assert_eq!(living_flags(Some((0, 12))), 1);
-        assert_eq!(living_flags(Some((OFFHAND_SLOT, 12))), 3);
-    }
-}

@@ -643,83 +643,6 @@ impl Game<'_> {
             m.persistent = true;
         }
     }
-    /// `Mob.burnUndead` for a mob in daylight with an item on its sun
-    /// protection slot (the head, or the body for a zombie horse or
-    /// nautilus): `hurtAndBreak(random.nextInt(2))` on a damageable item, and
-    /// when it breaks the slot empties and `onEquippedItemBroken` broadcasts
-    /// the break event.
-    fn wear_sun_protection(&mut self, id: u32) {
-        let Some(m) = self.mobs.iter().find(|m| m.id == id) else {
-            return;
-        };
-        let body = horizon_client::mobs::drops::head_is_body(m.species());
-        let slot = if body {
-            EquipmentSlot::Body
-        } else {
-            EquipmentSlot::Head
-        };
-        let Some(mut stack) = m.item_by_slot(slot) else {
-            return;
-        };
-        if !horizon_client::stations::is_damageable(self.res.items(), &stack) {
-            return;
-        }
-        let at = [m.position.x, m.position.y, m.position.z];
-        let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) else {
-            return;
-        };
-        let amount = m.random.next_int_bound(2).unwrap_or(0) as u32;
-        if amount == 0 {
-            return;
-        }
-        let loss = self.durability_loss(&stack, amount);
-        if loss == 0 {
-            return;
-        }
-        let max = self
-            .res
-            .items()
-            .get(&stack.item)
-            .map_or(0, |i| i.max_damage);
-        stack.damage += loss;
-        let broke = stack.damage >= max;
-        let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) else {
-            return;
-        };
-        match (body, broke) {
-            (true, false) => m.extra.body_damage = stack.damage as i32,
-            (true, true) => {
-                m.extra.head = None;
-                m.extra.body_damage = 0;
-            }
-            (false, false) => m.extra.armor[0] = Some(stack),
-            (false, true) => {
-                m.extra.head = None;
-                m.extra.armor[0] = None;
-            }
-        }
-        if broke {
-            // LivingEntity.entityEventForEquipmentBreak: head 49, body 65.
-            self.lan_entity_event(id as i32, if body { 65 } else { 49 }, at);
-        }
-    }
-    /// What a converted frog gets once its tadpole has grown up: the spawn
-    /// finalization of a conversion, then persistence.
-    fn finalize_converted(&mut self, id: u32) {
-        let Some(at) = self.mobs.iter().find(|m| m.id == id).map(|m| m.position) else {
-            return;
-        };
-        let facts = self.biome_facts(
-            at.x.floor() as i32,
-            at.y.floor() as i32,
-            at.z.floor() as i32,
-        );
-        let difficulty = self.local_difficulty([at.x, at.y, at.z]);
-        if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
-            spawning::finalize(m, &facts, &difficulty);
-            m.persistent = true;
-        }
-    }
     /// `Mob.convertTo(type, ConversionParams.single(...))` for a mob already
     /// removed: a new mob of `kind`, made without spawn finalization, takes
     /// its place with what `conversion::single` carries over, and the old
@@ -6410,31 +6333,6 @@ impl Game<'_> {
                 randomization: 0,
             });
         }
-        if let Some(fresh) = stew_particles {
-            // `SpellParticleOption.create(EFFECT, -1, 1)` is the plain white
-            // effect particle; the smoke is the already-fed answer.
-            let ty = if fresh {
-                ParticleType::Effect
-            } else {
-                ParticleType::Smoke
-            };
-            let options = ParticleOptions::simple(ty);
-            let at = [feet[0], feet[1] + 0.5, feet[2]];
-            let (spread, count) = ([0.5, 0.0, 0.5], if fresh { 4 } else { 2 });
-            // shortcut: scalar speed models DEFAULT randomization; 26.3 sends
-            // ALTERNATIVE_WITH_SPEED with a per-axis maximum speed.
-            self.particles
-                .send_particles(&options, at, spread, 0.2, count);
-            self.lan_send_particles(super::lan_particles::QueuedParticle {
-                dimension: self.dim.id(),
-                options,
-                state: None,
-                at,
-                spread,
-                speed: 0.2,
-                count: count as i32,
-            });
-        }
         // PlayerInteractTrigger: the item used on the mob, once the interaction took.
         if let Some(stack) = &held {
             let target = self.mob_entity(&self.mobs[index]);
@@ -6875,25 +6773,6 @@ impl Game<'_> {
     /// `TypedEntityData.loadInto`: the mob's own compound, the data merged over
     /// it, loaded back into the same mob (`/data merge entity`'s loader).
     pub(super) fn apply_spawn_egg_entity_data(&mut self, id: u32, stack: &ItemStack) {
-        let Some(i) = self.mobs.iter().position(|m| m.id == id) else {
-            return;
-        };
-        let kind = self.mobs[i].kind.id.clone();
-        let op = self.acting_player_is_op();
-        let Some(data) = horizon_client::block_entity_item::spawn_egg_entity_data(stack, &kind, op)
-        else {
-            return;
-        };
-        let own = self.mob_tree_nbt(i);
-        let tag = horizon_client::data_cmd::merged(&own, data);
-        // Nothing to report: the mob's own compound always loads back.
-        let _ = self.apply_entity_nbt(super::commands::Target::Mob(id), tag);
-    }
-    /// `EntityType.updateCustomEntityTag`: the egg's `minecraft:entity_data` on
-    /// the mob it spawned, once the guards let it through, as
-    /// `TypedEntityData.loadInto`: the mob's own compound, the data merged over
-    /// it, loaded back into the same mob (`/data merge entity`'s loader).
-    fn apply_spawn_egg_entity_data(&mut self, id: u32, stack: &ItemStack) {
         let Some(i) = self.mobs.iter().position(|m| m.id == id) else {
             return;
         };
@@ -8161,30 +8040,6 @@ mod damage_type_tests {
             attacker,
             from: Some([0.0; 3]),
             attacker_species: None,
-        };
-        let creeper = blast(Some(Who::Mob(7)));
-        assert_eq!(source_damage_type(creeper), "minecraft:player_explosion");
-        // No causing entity.
-        assert_eq!(source_damage_type(blast(None)), "minecraft:explosion");
-        // The other kinds do not ask.
-        let bite = Damage {
-            kind: DamageKind::MobAttack,
-            ..creeper
-        };
-        assert_eq!(source_damage_type(bite), "minecraft:mob_attack");
-    }
-}
-
-#[cfg(test)]
-
-    /// `DamageSources.explosion`: a blast with a causing entity is
-    /// `player_explosion` whoever caused it, so an exploding creeper's too.
-    #[test]
-    fn a_creeper_blast_is_a_player_explosion() {
-        let blast = |attacker| Damage {
-            kind: DamageKind::Explosion,
-            attacker,
-            from: Some([0.0; 3]),
         };
         let creeper = blast(Some(Who::Mob(7)));
         assert_eq!(source_damage_type(creeper), "minecraft:player_explosion");

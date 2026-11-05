@@ -2491,18 +2491,6 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         hide_splash: bool,
         hide_server_address: bool,
     ) {
-        self.draw_with_items(atlas, None, batch, cursor, hide_splash);
-    }
-    /// [`Title::draw`] with the item models, which draw the item icons of the
-    /// Superflat screens the way `GuiGraphics.renderItem` does.
-    pub fn draw_with_items(
-        &self,
-        atlas: &HudAtlas,
-        items: Option<&crate::item_render::ItemRenderer>,
-        batch: &mut HudBatch,
-        cursor: (f32, f32),
-        hide_splash: bool,
-    ) {
         let (w, h) = (batch.width.ceil(), batch.height.ceil());
         if let Some(rules) = self.rules.borrow_mut().as_mut() {
             return rules.draw(batch, atlas, cursor);

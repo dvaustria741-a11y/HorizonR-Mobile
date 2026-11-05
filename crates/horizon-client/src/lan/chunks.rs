@@ -1726,60 +1726,6 @@ mod tests {
         }
     }
 
-    /// A mod block's block entity goes out with its block's own type and the
-    /// tag its mod gives; a mod block whose mod made none is left out.
-    #[test]
-    fn mod_block_entities_carry_their_blocks_type_and_the_mods_tag() {
-        let builtin = Builtin::parse(
-            r#"{"minecraft:block_entity_type": {"entries": {
-                "minecraft:chest": {"protocol_id": 1},
-                "test:machine": {"protocol_id": 49},
-                "test:casing": {"protocol_id": 50}}}}"#,
-        )
-        .unwrap();
-        let states =
-            ["minecraft:air", "test:machine", "test:casing"].map(|n| (Arc::<str>::from(n), false));
-        let mut encoder = ChunkEncoder::new(states, &builtin, &[], &[]);
-        encoder.mod_update_tag = Some(|pos, entity| {
-            let mut tag = Compound::new();
-            tag.insert(
-                "active".into(),
-                entity.nbt.get(&JavaString::from("active"))?.clone(),
-            );
-            tag.insert("x".into(), Tag::Int(pos[0]));
-            Some(tag)
-        });
-        let mut chunk = Chunk::empty(0, 0);
-        chunk.set(1, MIN_Y + 2, 3, 1);
-        chunk.set(5, MIN_Y + 2, 5, 2);
-        let mut machine = ModBlockEntity {
-            id: "test:machine".into(),
-            ..ModBlockEntity::default()
-        };
-        machine.nbt.insert("active".into(), Tag::Byte(1));
-        machine.nbt.insert("recipe".into(), Tag::Int(7));
-        let block_entities =
-            HashMap::from([((1, MIN_Y + 2, 3), BlockEntity::Mod(Box::new(machine)))]);
-        let infos = encoder.encode(&chunk, &block_entities).chunk.block_entities;
-        assert_eq!(infos.len(), 1, "the casing has no block entity");
-        assert_eq!((infos[0].kind, infos[0].y), (49, (MIN_Y + 2) as i16));
-        let mut expected = Compound::new();
-        expected.insert("active".into(), Tag::Byte(1));
-        expected.insert("x".into(), Tag::Int(1));
-        assert_eq!(infos[0].tag, Tag::Compound(expected));
-        // As does an encoder for saved chunks past the view distance (`lan::far`).
-        let far = encoder.detached().encode(&chunk, &block_entities);
-        assert_eq!(far.chunk.block_entities[0].tag, infos[0].tag);
-        // An empty tag is not sent either (BlockEntityInfo.create).
-        encoder.mod_update_tag = Some(|_, _| Some(Compound::new()));
-        let infos = encoder.encode(&chunk, &block_entities).chunk.block_entities;
-        assert_eq!(infos[0].tag, Tag::End);
-        // Without the hook, nothing of it is sent.
-        encoder.mod_update_tag = None;
-        let infos = encoder.encode(&chunk, &block_entities).chunk.block_entities;
-        assert_eq!(infos[0].tag, Tag::End);
-    }
-
     fn encoder() -> ChunkEncoder {
         let states = ["minecraft:air", "minecraft:stone", "minecraft:water"]
             .map(|n| (Arc::<str>::from(n), n.ends_with("water")));

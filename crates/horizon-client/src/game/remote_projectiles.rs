@@ -915,11 +915,6 @@ mod tests {
     /// rotation from is the rotation the last tick ended with. An arrow shot
     /// straight up at the lowest power a bow fires turns over within a few
     /// ticks, so every tick has to carry the value of the one before it.
-    /// The same, under the id a server tracks it by.
-    fn tracked(kind: ProjectileKind, id: u32) -> Projectile {
-        Projectile { id, ..thrown(kind) }
-    }
-
     #[test]
     fn a_thrown_item_flies_on_between_the_server_updates() {
         // A thrown egg, an ender pearl and a wind charge (#1762): the server
@@ -1019,43 +1014,5 @@ mod tests {
         );
         remote_projectile_item(&mut list, 14, ItemStack::new("minecraft:diamond", 1));
         assert_eq!(list[2].item, None);
-    }
-
-    #[test]
-    fn a_power_packet_gives_a_fireball_the_power_its_next_tick_uses() {
-        // ClientPacketListener.handleProjectilePowerPacket: the fireball with
-        // id 12 gets the power the server sends bundled with its motion.
-        let mut list = vec![tracked(ProjectileKind::LargeFireball { power: 1 }, 12)];
-        remote_projectile_power(&mut list, 12, 0.5);
-        assert_eq!(list[0].acceleration, 0.5);
-        // AbstractHurtingProjectile.applyInertia: (v + v/|v| * 0.5) * 0.95,
-        // where the default 0.1 would have made 1.52.
-        remote_projectile_tick(&mut list[0], &Empty);
-        assert!((list[0].velocity.x - 1.9).abs() < 1e-9, "{:?}", list[0]);
-    }
-
-    #[test]
-    fn a_power_packet_ignores_an_arrow_an_unknown_id_and_a_thrown_item() {
-        // Vanilla's instanceof AbstractHurtingProjectile: an arrow and a
-        // thrown egg are none, and no entity is id 99.
-        let mut list = vec![
-            tracked(
-                ProjectileKind::Arrow {
-                    base_damage: 2.0,
-                    critical: false,
-                    effect: None,
-                },
-                3,
-            ),
-            tracked(ProjectileKind::Egg, 4),
-            tracked(ProjectileKind::LargeFireball { power: 1 }, 12),
-        ];
-        remote_projectile_power(&mut list, 3, 0.5);
-        remote_projectile_power(&mut list, 4, 0.5);
-        remote_projectile_power(&mut list, 99, 0.5);
-        assert_eq!(
-            list.iter().map(|p| p.acceleration).collect::<Vec<_>>(),
-            [0.1; 3]
-        );
     }
 }

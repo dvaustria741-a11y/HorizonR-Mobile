@@ -5758,7 +5758,6 @@ mod sheep_nbt_tests {
             ("id", string("minecraft:enderman")),
             ("Pos", doubles(&[0.5, 64.0, 0.5])),
             ("carriedBlockState", string("minecraft:air")),
-            ("PuffState", Tag::Int(5)),
         ]);
         assert_eq!(
             mob_from_nbt(&air, &types, 3, Some(&registry))

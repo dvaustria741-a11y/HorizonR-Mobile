@@ -727,11 +727,6 @@ mod tests {
                 assert_eq!(value, vanilla_like, "{key}");
                 continue;
             }
-            // Horizon's own (off by default), which vanilla doesn't have.
-            if key.starts_with("horizon-") {
-                assert_eq!(value, "0", "{key}");
-                continue;
-            }
             assert_eq!(vanilla.raw.get(&key), Some(value.as_str()), "{key}");
         }
     }

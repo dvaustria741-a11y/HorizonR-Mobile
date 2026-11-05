@@ -935,43 +935,4 @@ mod tests {
         assert!(!nixos.contains("apt install"), "{nixos}");
         assert_eq!(linux_needs(|_: &str, _: &[&str]| true, mint, true), Ok(()));
     }
-
-    #[test]
-    fn a_linux_build_names_what_is_missing_and_the_distributions_command() {
-        // A system with `cc` and `pkg-config` but no development files, as Linux Mint ships.
-        let no_dev =
-            |program: &str, args: &[&str]| program != "pkg-config" || args[0] != "--exists";
-        let mint = "NAME=\"Linux Mint\"\nID=linuxmint\nID_LIKE=\"ubuntu debian\"\n";
-        let e = linux_needs(no_dev, mint).unwrap_err();
-        assert!(
-            e.contains("lacks them: ALSA's development files, libudev's development files."),
-            "{e}"
-        );
-        assert!(
-            e.ends_with("\nsudo apt install build-essential pkg-config libasound2-dev libudev-dev")
-        );
-        // Nothing to check through without pkg-config, and nothing at all on SteamOS.
-        let nothing = |_: &str, _: &[&str]| false;
-        let deck = "ID=steamos\nID_LIKE=arch\n";
-        let e = linux_needs(nothing, deck).unwrap_err();
-        assert!(e.contains("a C compiler (cc), pkg-config, ALSA's"), "{e}");
-        assert!(e.contains("SteamOS") && !e.contains("pacman"), "{e}");
-        // SteamOS 3's GCC runs but finds no `stdint.h` (#4770).
-        let headless = |program: &str, args: &[&str]| program != "cc" || args == ["--version"];
-        let e = linux_needs(headless, deck).unwrap_err();
-        assert!(
-            e.contains("lacks them: the C library's headers. SteamOS"),
-            "{e}"
-        );
-        let arch = linux_needs(nothing, "ID=endeavouros\nID_LIKE=arch\n").unwrap_err();
-        assert!(arch.contains("pacman -S --needed base-devel"), "{arch}");
-        let fedora = linux_needs(nothing, "ID=fedora\n").unwrap_err();
-        assert!(fedora.contains("dnf install"), "{fedora}");
-        let other = linux_needs(nothing, "ID=gentoo\n").unwrap_err();
-        assert!(
-            other.contains("package manager") && other.contains("apt install"),
-            "{other}"
-        );
-        assert_eq!(linux_needs(|_: &str, _: &[&str]| true, mint), Ok(()));
-    }
 }

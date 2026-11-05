@@ -833,10 +833,6 @@ enum Cmd {
         /// game). Default: the native-profile setting
         #[arg(long, value_parser = ["performance", "dev", "release"])]
         profile: Option<String>,
-        /// The Cargo profile: fast (the default: incremental, quick to rebuild) or release
-        /// (thin LTO: slower to build, slightly faster game). Default: the native-profile setting
-        #[arg(long, value_parser = ["fast", "release"])]
-        profile: Option<String>,
     },
     /// Show a release's patch notes (default: the newest)
     Notes { tag: Option<String> },
@@ -1123,13 +1119,6 @@ fn set_setting(s: &mut backend::Settings, key: &str, value: &str) -> Result<(), 
             };
             s.native_release = false;
         }
-        "native-profile" => {
-            s.native_release = match value {
-                "fast" | "default" => false,
-                "release" => true,
-                _ => return Err(format!("{value}: say fast or release")),
-            }
-        }
         "proxy" => {
             if value == "default" || value.is_empty() {
                 s.proxy = None;
@@ -1164,7 +1153,6 @@ fn settings_json(s: &backend::Settings) -> serde_json::Value {
         "background": horizon_launcher::themes::background(&backend::data_dir(), s.background.as_deref()),
         "native_profile": native_mods::Profile::chosen(s).name(),
         "native_cache_gib": s.native_cache_gib.unwrap_or(native_mods::DEFAULT_CACHE_GIB),
-        "native_profile": native_mods::Profile::from_setting(s.native_release).name(),
         "no_ai": backend::no_ai(),
     })
 }
@@ -1387,12 +1375,6 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 );
                 return Ok(());
             }
-            let profile = match profile.as_deref().and_then(native_mods::Profile::parse) {
-                Some(profile) => profile,
-                None => {
-                    native_mods::Profile::from_setting(backend::Settings::load().native_release)
-                }
-            };
             let target = match &instance {
                 Some(name) => instances::find(name)?,
                 None => instances::selected(),

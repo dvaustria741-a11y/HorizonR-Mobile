@@ -1399,51 +1399,6 @@ impl Game<'_> {
             .and_then(|id| self.boats.iter().find(|b| b.id == id))
             .is_some_and(|b| b.chest)
     }
-    /// `ContainerEntity.interactWithContainerVehicle` (`AbstractChestBoat`):
-    /// the chest's 27 slots go under a placeholder key that the menu edits; a
-    /// server hands them to the player as a `ChestMenu` (`as_guest` ->
-    /// `lan_open_container`). `AbstractChestBoat.interact` fires
-    /// `CONTAINER_OPEN` and angers the piglins that see it.
-    pub(super) fn open_chest_boat_container(&mut self, i: usize) {
-        let b = &self.boats[i];
-        let key = (i32::MAX - 15, super::minecarts::CART_KEY_Y, b.id as i32);
-        let at = [b.position.x, b.position.y, b.position.z];
-        let items = b.items.clone();
-        self.world
-            .block_entities
-            .insert(key, horizon_client::containers::BlockEntity::Chest(items));
-        self.container = Some(key);
-        self.screen = super::Screen::Inventory;
-        self.capture(false);
-        self.right = false;
-        let ctx = self.player_context(None);
-        self.post_game_event("minecraft:container_open", at, ctx);
-        self.anger_piglins(true);
-    }
-    /// `AbstractChestBoat.openCustomInventoryScreen` (`HasCustomInventoryScreen`),
-    /// the inventory key while riding a chest boat: its chest opens, not the
-    /// player's inventory.
-    pub(super) fn open_ridden_chest_boat(&mut self) -> bool {
-        let Some(id) = self.riding else {
-            return false;
-        };
-        let Some(i) = self.boats.iter().position(|b| b.id == id) else {
-            return false;
-        };
-        if !self.boats[i].chest {
-            return false;
-        }
-        self.open_chest_boat_container(i);
-        true
-    }
-    /// Whether the player rides a chest boat: `HasCustomInventoryScreen`, so
-    /// the inventory key sends `ServerboundPlayerCommandPacket.Action.OPEN_INVENTORY`
-    /// (`ServerGamePacketListenerImpl.handlePlayerCommand` opens its screen).
-    pub(super) fn riding_chest_boat(&self) -> bool {
-        self.riding
-            .and_then(|id| self.boats.iter().find(|b| b.id == id))
-            .is_some_and(|b| b.chest)
-    }
     /// `VehicleEntity.hurtServer` from the player's attack.
     pub(super) fn attack_boat(&mut self) -> bool {
         let Some((i, d)) = self.boat_hit() else {

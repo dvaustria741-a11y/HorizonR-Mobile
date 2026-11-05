@@ -217,27 +217,6 @@ pub fn apply(
     changes: &[&str],
     live: Option<&dyn Fn(&str) -> bool>,
 ) -> Result<Outcome, String> {
-    let client = Client::open(dir)?;
-    let up = client.as_ref().is_some_and(|c| {
-        c.call("GET", "/api/v1/status", None)
-            .is_ok_and(|s| s["phase"] == "running")
-    });
-    let run = |line: &str| {
-        up && client.as_ref().is_some_and(|c| {
-            c.call("POST", "/api/v1/command", Some(&json!({ "line": line })))
-                .is_ok()
-        })
-    };
-    apply(dir, changes, client.is_some().then_some(&run))
-}
-
-/// Writes the changes to server.toml, then sends a running server (`live` runs a console command and says
-/// whether it did) what it can take at once.
-pub fn apply(
-    dir: &Path,
-    changes: &[&str],
-    live: Option<&dyn Fn(&str) -> bool>,
-) -> Result<Outcome, String> {
     let current = toml::Table::try_from(config::Config::load(dir)?).map_err(|e| e.to_string())?;
     let parsed = changes
         .iter()
@@ -287,30 +266,6 @@ pub fn shown(dir: &Path) -> Result<Value, String> {
         {
             *secret = toml::Value::String("(set)".into());
         }
-    }
-    serde_json::to_value(&table).map_err(|e| e.to_string())
-}
-
-/// The settings the control API may change: none of `[engine]` (which program runs), `[panel]` and `[api]`
-/// (who can reach the server), nor the vanilla keys that open another remote console.
-pub fn changeable_remotely(key: &str) -> bool {
-    let (section, field) = key.split_once('.').unwrap_or((key, ""));
-    !matches!(section, "engine" | "panel" | "api")
-        && !(section == "properties"
-            && (field.starts_with("rcon.")
-                || field.starts_with("management-server-")
-                || matches!(field, "enable-rcon" | "enable-query" | "query.port")))
-}
-
-/// The settings as JSON, the API's token hidden.
-pub fn shown(dir: &Path) -> Result<Value, String> {
-    let mut table = toml::Table::try_from(config::Config::load(dir)?).map_err(|e| e.to_string())?;
-    if let Some(token) = table
-        .get_mut("api")
-        .and_then(|a| a.get_mut("token"))
-        .filter(|t| t.as_str() != Some(""))
-    {
-        *token = toml::Value::String("(set)".into());
     }
     serde_json::to_value(&table).map_err(|e| e.to_string())
 }

@@ -206,8 +206,6 @@ pub struct Settings {
     pub shader_packs: Vec<crate::shader_pack_list::Entry>,
     /// The picked pack's options while its Shader Options page is open.
     pub shader_options: Option<crate::shader_options::ShaderOptions>,
-    /// The options of the picked shader pack, listed when Shader Pack Settings opens.
-    pub shader_pack_options: crate::shader_pack_options::Options,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -294,7 +292,6 @@ impl Default for Settings {
             mods: Default::default(),
             shader_packs: Vec::new(),
             shader_options: None,
-            shader_pack_options: Default::default(),
         }
     }
 }
@@ -491,7 +488,6 @@ impl Settings {
             mods: Default::default(),
             shader_packs: Vec::new(),
             shader_options: None,
-            shader_pack_options: Default::default(),
             auto_jump: f.bool("autoJump"),
             language: f.string("lang"),
             force_unicode: f.bool("forceUnicodeFont"),

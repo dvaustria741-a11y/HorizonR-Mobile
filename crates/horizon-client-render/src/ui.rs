@@ -1932,14 +1932,6 @@ mod tests {
     }
 
     #[test]
-    fn centered_label_matches_vanilla_integer_center() {
-        // Even box, odd text: (w - width) / 2 floors one pixel left of w/2 - width/2.
-        assert_eq!(centered_left(0.0, 200.0, 9.0), 96.0);
-        assert_eq!(centered_left(0.0, 200.0, 8.0), 96.0);
-        assert_eq!(centered_left(10.0, 196.0, 9.0), 104.0);
-        assert_eq!(centered_left(2.0, 196.0, 7.0), 97.0);
-    }
-    #[test]
     fn slider_track_is_outlined_only_while_dragged() {
         let (track, handle) = slider_sprites(true, true, false);
         assert_eq!(track, "gui/sprites/widget/slider");

@@ -52,12 +52,6 @@ stroke in `currentColor`.
 [Simple Icons](https://github.com/simple-icons/simple-icons) 13.21.0 (CC0 1.0). The logo is Discord's
 trademark, used only on the button that opens Horizon's Discord server.
 
-## winit
-
-`third_party/winit` is [winit](https://github.com/rust-windowing/winit) 0.30.13,
-licensed under Apache-2.0 (see `third_party/winit/LICENSE`). The Android backend
-has local mouse and modifier-event fixes described in `third_party/winit/PATCHES.md`.
-
 ## AMD FidelityFX SDK (FSR 3.1 frame generation)
 
 `crates/horizon-client-render/src/gfx/frame_gen/optical_flow.wgsl` and `interpolation.wgsl` are
@@ -176,42 +170,3 @@ BlueMap is licensed under the MIT license:
 > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 > THE SOFTWARE.
-
-## Horizon Translator (shader converter)
-
-`crates/horizon-shaderport` is adapted from the shader converter in
-[Horizon-Translator](https://github.com/merenotnoonereal/Horizon-Translator) by merenotnoonereal
-(`shader-converter/`). The upstream repository has no LICENSE file; the author has said publicly
-that the code is open source and free to use. It was turned into a library and given a Store
-entry point (`port_pack`); the rewrite rules are otherwise unchanged. Credit for the rules belongs
-to the upstream project.
-
-## Statically bundled Android mods
-
-Zoom, Minimap and Recipes are adapted from [horizon-rust/horizon-mods](https://github.com/horizon-rust/horizon-mods/tree/e3ee0a7c450b28c3ed58fa59a4881ec78c5ee2e0/native),
-copyright 2026 Ludovic Marie and the Horizon contributors, MIT.
-SmartF3 is adapted from [d3grando/smartf3](https://github.com/d3grando/smartf3),
-copyright 2026 d3grando, MIT. Exact revisions and adaptation notes are recorded in
-`crates/horizon-client/src/game/android_bundled/PROVENANCE.json`; each bundled
-module retains its full MIT LICENSE. Changes provide static Android hook
-adapters, opt-in configuration, profile-state reset and compatibility guards.
-These are a fixed compiled set, not support for loading arbitrary native mods.
-
-## Sodium Horizon (native mod)
-
-`native-mods/sodium_horizon-0.4.0.hnmod` is [Sodium Horizon](https://github.com/badmasti2/horizon-sodium)
-0.4.0 by badmasti2. The bundle's own code is MIT, but it carries material from Sodium, under the
-[PolyForm Shield License 1.0.0](https://polyformproject.org/licenses/shield/1.0.0), and from Sodium
-Extra, under the LGPL 3.0. The upstream license texts are in the bundle's repository
-(`SODIUM-LICENSE.md`, `SODIUM-EXTRA-LICENSE.txt`, `THIRD_PARTY_NOTICES.md`) and the notices are
-preserved in `mixins/sodium_horizon/third_party_notices.rs` inside the `.hnmod`. Horizon-derived
-helpers in it are under Horizon's MIT license. The names identify the reference interface and do
-not imply endorsement. Local changes are listed in `native-mods/PATCHES.md`.
-
-## Iris (native mod)
-
-`native-mods/iris_horizon-0.1.0.hnmod` is a Horizon port of the shader pack menu and configuration layer
-of [Iris](https://github.com/IrisShaders/Iris) 26.3, MIT. Its page names, option wording and behavior
-follow Iris's; it contains no Iris source. The license notice is kept inside the bundle
-(`mixins/iris_horizon/LICENSE-Iris`). Shader rendering is Horizon's own.
-

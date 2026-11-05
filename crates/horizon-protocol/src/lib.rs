@@ -22,7 +22,6 @@ pub mod quiet;
 pub mod registry;
 mod resolver;
 pub use resolver::server_redirect;
-pub use resolver::dns::install_system_srv_lookup;
 pub mod rsa;
 pub mod secure_chat;
 pub mod servers;

@@ -4696,8 +4696,6 @@ impl ParticleEngine {
         let mut light_cache = ParticleLightCache::default();
         let mut section_cache =
             (CULL && frustum.is_some()).then(ParticleSectionFrustumCache::default);
-        // The camera looks down its own -Z (quads face +Z, toward it).
-        let forward = base * FVec3::NEG_Z;
         for p in &self.particles {
             if p.no_render {
                 continue;

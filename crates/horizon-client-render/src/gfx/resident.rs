@@ -160,10 +160,6 @@ impl<T> Resident<T> {
         bounds: Option<[Vec3; 2]>,
         marked: bool,
     ) {
-        self.insert_with_bounds(key, value, None);
-    }
-    /// Adds or replaces `key`'s value with optional tight geometry bounds.
-    pub fn insert_with_bounds(&mut self, key: SectionKey, value: T, bounds: Option<[Vec3; 2]>) {
         if let Some(&slot) = self.slots.get(&key) {
             self.items[slot as usize].1 = value;
             self.bounds[slot as usize] = bounds;

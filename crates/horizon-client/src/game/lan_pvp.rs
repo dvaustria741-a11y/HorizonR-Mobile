@@ -43,15 +43,6 @@ impl Victim {
     }
 }
 
-impl Victim {
-    fn conn(self) -> Option<u32> {
-        match self {
-            Victim::Host => None,
-            Victim::Guest(conn) => Some(conn),
-        }
-    }
-}
-
 /// The attacker's side of the hit.
 pub(super) struct Strike {
     /// The attacking guest, kept after their turn through `as_guest` ends.
@@ -284,19 +275,6 @@ impl Game<'_> {
         }
     }
 
-    fn player_attacker(&self, host: &LanHost, conn: Option<u32>) -> Option<(u32, Text)> {
-        match conn {
-            Some(conn) => {
-                let g = host.hub.guest(conn)?;
-                Some((g.entity_id as u32, self.player_text(&g.name, g.uuid)))
-            }
-            None => self.player.is_some().then(|| {
-                let name = self.player_text(&host.host_name, host.host_uuid);
-                (host.host_entity as u32, name)
-            }),
-        }
-    }
-
     /// The hit landing on the victim with its extra knockback, then the
     /// attacker's attack sound. Whether the victim was hurt.
     pub(super) fn pvp_land(&mut self, host: &mut LanHost, victim: Victim, s: &Strike) -> bool {
@@ -328,28 +306,12 @@ impl Game<'_> {
                 .map(|a| (a.entity_id, self.player_text(&a.name, a.uuid)))
         });
         let attacker_id = self.player.as_ref().map_or(0, |p| p.entity_id);
-        // CombatTracker: the attacking player is the death message's killer.
-        // Without it the message is built with one argument and a template
-        // that names a killer ("%1$s was slain by %2$s") shows as written.
-        let attacker_note = match s.attacker {
-            Some(conn) => host
-                .hub
-                .guest(conn)
-                .map(|a| (a.entity_id, self.player_text(&a.name, a.uuid))),
-            None => Some((
-                host.host_entity,
-                self.player_text(&host.host_name, host.host_uuid),
-            )),
-        };
         let land = |g: &mut Self| {
             let _attacker =
                 g.knockback_scope(attacker_note.as_ref().map_or(attacker_id, |(id, _)| *id));
             g.combat.player_attacker = Some((s.from, s.disable_blocking));
             if let Some((id, name)) = attacker_note.clone() {
                 g.note_player_attacker("minecraft:player_attack", id as u32, name, s.item.clone());
-            }
-            if let Some((id, name)) = attacker_note.clone() {
-                g.note_named_attacker("minecraft:player_attack", id as u32, name);
             }
             let hurt = g.mob_hits_player(s.amount, s.from, "minecraft:player_attack");
             g.combat.player_attacker = None;

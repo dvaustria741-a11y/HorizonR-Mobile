@@ -8507,41 +8507,6 @@ impl GameLevel<'_> {
         true
     }
 
-    /// Play a registered vanilla sound for nearby players in this server level.
-    /// The return value means queued, not heard. Unknown sound events are
-    /// rejected at dispatch when the server registry is available.
-    pub(super) fn native_play_sound(
-        &mut self,
-        sound: &str,
-        at: [f64; 3],
-        source: usize,
-        volume: f32,
-        pitch: f32,
-    ) -> bool {
-        if !self.native_authoritative || !sound.starts_with("minecraft:") {
-            return false;
-        }
-        if source >= horizon_client::settings::SOUND_SOURCES.len() {
-            return false;
-        }
-        let position_ok = at
-            .into_iter()
-            .all(|v| v.is_finite() && v.abs() <= f64::from(i32::MAX) / 8.0);
-        let gain_ok = volume.is_finite() && volume >= 0.0 && pitch.is_finite() && pitch >= 0.0;
-        if !position_ok || !gain_ok {
-            return false;
-        }
-        self.native_sounds.push(super::creatures::NativeSound {
-            dimension: dimension_id(self.dimension),
-            sound: sound.to_owned(),
-            at,
-            source: source as i32,
-            volume,
-            pitch,
-        });
-        true
-    }
-
     /// Queue particles in this authoritative level. A zero count sends one
     /// directional particle. The return value means accepted, not delivered.
     /// Block particle types require their block state; item, trail and
@@ -9663,16 +9628,6 @@ impl Game<'_> {
     /// mod `Host::config_dir`. API 26.
     pub(super) fn native_config_dir() -> Result<PathBuf, String> {
         config_dir(&Self::game_dir())
-    }
-    /// The game's `config/` folder beside `options.txt`, shared by every mod
-    /// as on Fabric and NeoForge: a mod names its own files in it
-    /// (`config/<id>.json`, or a folder of its own). The same folder on the
-    /// window, its server thread and a LAN host; a dedicated server's is in
-    /// its own folder, beside `server.properties`. Made when missing. No
-    /// `self`, so it works from any hook (`Game::native_config_dir()`), the
-    /// level's too. API 26.
-    pub(super) fn native_config_dir() -> Result<PathBuf, String> {
-        config_dir(&Self::options_path())
     }
     /// Shows the panel beside container screens with these items (at most
     /// 8192), as the game's own slots in pages, with a search box; the
@@ -10835,31 +10790,6 @@ fn mod_screen_opens(
     None
 }
 
-/// An item entity as `native_item_entities` lists it. API 42.
-/// Read by mods only.
-#[allow(dead_code)]
-#[derive(Clone, Debug)]
-pub(super) struct NativeItemEntity {
-    /// The entity's ID, for `native_set_item_entity`.
-    pub id: u32,
-    pub position: [f64; 3],
-    pub stack: ItemStack,
-    /// Ticks before a player may pick it up (`ItemEntity.pickupDelay`);
-    /// hoppers take it whatever this is.
-    pub pickup_delay: u32,
-}
-
-/// `AABB.intersects`: the boxes overlap, touching faces excluded.
-fn box_meets(b: &horizon_core::geometry::Aabb, min: [f64; 3], max: [f64; 3]) -> bool {
-    let (lo, hi) = (b.min_position(), b.max_position());
-    lo.x < max[0]
-        && hi.x > min[0]
-        && lo.y < max[1]
-        && hi.y > min[1]
-        && lo.z < max[2]
-        && hi.z > min[2]
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
@@ -11266,54 +11196,6 @@ mod tests {
             assert!(!body.contains("return true"), "{head}");
         }
     }
-
-    /// A mod's property write: none for a key or value the block lacks, the
-    /// state itself when it already has the value, else the new state.
-    #[test]
-    fn with_property_finds_the_state() {
-        let facts = br#"{"defaults":{"minecraft:air":0,"test:crop":1},"states":[
-            ["air",true,false,"","minecraft:air"],
-            ["crop0",false,false,"",{"id":"test:crop","properties":{"age":"0"}}],
-            ["crop1",false,false,"",{"id":"test:crop","properties":{"age":"1"}}]
-        ]}"#;
-        let registry = horizon_world::registry::BlockRegistry::from_facts_json(&facts[..]).unwrap();
-        let (age0, age1) = (BlockStateId(1), BlockStateId(2));
-        assert_eq!(
-            super::with_property(&registry, age0, "age", "0"),
-            Some(age0)
-        );
-        assert_eq!(
-            super::with_property(&registry, age0, "age", "1"),
-            Some(age1)
-        );
-        assert_eq!(super::with_property(&registry, age0, "age", "9"), None);
-        assert_eq!(super::with_property(&registry, age0, "lit", "true"), None);
-        // What both property setters write: nothing (false) when the
-        // property already has the value, as `Level.setBlock`.
-        assert_eq!(super::property_change(&registry, age0, "age", "0"), None);
-        assert_eq!(
-            super::property_change(&registry, age0, "age", "1"),
-            Some(age1)
-        );
-        assert_eq!(super::property_change(&registry, age0, "age", "9"), None);
-        assert_eq!(super::property_change(&registry, age0, "lit", "true"), None);
-    }
-    /// Both property setters return false for a write that changes nothing:
-    /// each goes through `property_change`, none returns true on its own.
-    #[test]
-    fn property_setters_refuse_no_change() {
-        let source = include_str!("native_hooks.rs");
-        let code = source.split("#[cfg(test)]").next().unwrap_or_default();
-        for head in [
-            "    pub(super) fn native_set_block_property(\n        &mut self,\n        ticks:",
-            "    pub(super) fn native_set_block_property_with(",
-        ] {
-            let body = code.split(head).nth(1).expect(head);
-            let body = &body[..body.find("\n    }\n").expect(head)];
-            assert!(body.contains("property_change("), "{head}");
-            assert!(!body.contains("return true"), "{head}");
-        }
-    }
     /// horizon-mixins refuses targets whose body has a `cfg` or a macro:
     /// the hook points and helpers must stay free of both. The launcher
     /// reads the API line as it is.
@@ -11663,23 +11545,6 @@ mod tests {
         assert_eq!(dir, root.join("config"));
         assert!(dir.is_dir());
         assert_eq!(config_dir(&root).unwrap(), dir);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// The config folder is `config/` beside `options.txt`, made when
-    /// missing.
-    #[test]
-    fn config_dir_is_config_beside_options() {
-        // Callable without a game, from any hook.
-        let _: fn() -> Result<std::path::PathBuf, String> = super::Game::native_config_dir;
-        let root = std::env::temp_dir().join(format!("horizon-config-dir-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let options = root.join("options.txt");
-        assert!(!root.join("config").exists());
-        let dir = config_dir(&options).unwrap();
-        assert_eq!(dir, root.join("config"));
-        assert!(dir.is_dir());
-        assert_eq!(config_dir(&options).unwrap(), dir);
         let _ = std::fs::remove_dir_all(&root);
     }
 

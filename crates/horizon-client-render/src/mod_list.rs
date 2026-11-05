@@ -59,35 +59,6 @@ pub const DIR: &str = "horizon-mods";
 pub const NATIVE_DIR: &str = "horizon-native-mods";
 /// Why a native mod installed in [`NATIVE_DIR`] doesn't run in this game.
 pub const NOT_BUILT: &str = "Installed, not built into this game: build the game with it in the launcher (Settings > Native mods), then play the instance that build is in.";
-/// Where the launcher installs native mods (`<id>.hnmod`), beside [`DIR`]. They run only in a
-/// game the launcher built with them.
-pub const NATIVE_DIR: &str = "horizon-native-mods";
-/// Why a native mod installed in [`NATIVE_DIR`] doesn't run in this game.
-pub const NOT_BUILT: &str = "Installed, not built into this game: build the game with it in the launcher (Settings > Native mods), then play the instance that build is in.";
-
-/// Native mods that start off: they are in the Mods list from the first run, and the player turns
-/// them on there (an unfinished preview, say). A mod's line in `horizon-mods.txt` overrides this.
-/// Add a native mod's id here to ship it off by default.
-pub const DEFAULT_OFF: &[&str] = &["punchy"];
-
-/// Whether `id` ships off: a [`DEFAULT_OFF`] native mod, or on Android one of the
-/// [`ANDROID_BUNDLED`] modules. Holds even before `horizon-mods.txt` exists, so a new player
-/// starts with them off; installing one from the Zenkai source turns it on.
-pub fn ships_off(id: &str) -> bool {
-    if DEFAULT_OFF.contains(&id) {
-        return true;
-    }
-    #[cfg(target_os = "android")]
-    if ANDROID_BUNDLED.iter().any(|(b, _, _)| *b == id) {
-        return true;
-    }
-    false
-}
-
-/// Whether `id` is one of the modules the Store's Zenkai source offers.
-pub fn is_zenkai(id: &str) -> bool {
-    ANDROID_BUNDLED.iter().any(|(b, _, _)| *b == id)
-}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModList {
