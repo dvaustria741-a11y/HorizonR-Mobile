@@ -266,8 +266,9 @@ pub struct PackPost {
     /// What draws the clouds, after entities, and this frame's clouds.
     clouds: Option<Pass>,
     cloud_draw: Option<Clouds>,
-    /// The pack has `gbuffers_clouds`, even one that writes nothing (a pack drawing its own
-    /// clouds discards vanilla's): the game's clouds are not drawn.
+    /// The pack draws the clouds (`gbuffers_clouds` or its fallback), even with a program that
+    /// writes nothing (a pack drawing its own clouds discards vanilla's): the game's clouds are
+    /// not drawn.
     hides_clouds: bool,
     /// What draws rain and snow (the same program, each with its kind's sprite as `texture`),
     /// after translucent terrain, this frame's weather and the sprites' generation bound.
