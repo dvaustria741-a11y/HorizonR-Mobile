@@ -759,6 +759,31 @@ mod tests {
     }
 
     #[test]
+    fn a_vertex_shader_samples_textures_at_mip_zero() {
+        let vsh = "#version 120\nuniform sampler2D noisetex;\nvarying vec4 tint;\n\
+                   void main() {\n    tint = texture2D(noisetex, gl_Vertex.xy);\n    \
+                   gl_Position = ftransform();\n}\n";
+        let fsh = "#version 120\nvarying vec4 tint;\nvoid main() { gl_FragData[0] = tint; }\n";
+        let files = [
+            ("shaders/gbuffers_terrain.vsh", vsh),
+            ("shaders/gbuffers_terrain.fsh", fsh),
+        ];
+        let pack = Pack::from_zip_bytes("P.zip", zip(&files)).unwrap();
+        let m = Macros::standard();
+        let inputs = GbuffersInputs {
+            body: "    hz_Vertex = vec4(0.0, 0.0, 0.0, 1.0);\n".into(),
+            ..Default::default()
+        };
+        translate_gbuffers(
+            &preprocess(&pack, "gbuffers_terrain.vsh", &m),
+            &preprocess(&pack, "gbuffers_terrain.fsh", &m),
+            Target::Buffers,
+            &inputs,
+        )
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    }
+
+    #[test]
     fn the_alpha_test_discards_below_its_reference() {
         assert_eq!(
             AlphaTest::parse("GREATER 0.1"),

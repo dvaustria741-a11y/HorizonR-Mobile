@@ -65,6 +65,17 @@ pub fn preprocess(pack: &Pack, path: &str, macros: &Macros) -> Preprocessed {
         code: Vec::new(),
         texts: HashMap::new(),
     };
+    if path.ends_with(".vsh") {
+        // A vertex stage has no derivatives, so naga refuses `texture()` there; GL samples mip 0.
+        // A pack that defines its own `texture` macros replaces these.
+        for name in ["texture", "texture2D", "texture3D"] {
+            run.macros.define_function(
+                name,
+                vec!["s".into(), "uv".into()],
+                "textureLod(s, uv, 0.0)",
+            );
+        }
+    }
     run.file(path, 0, Origin::default());
     if run.conditionals.open() {
         run.diagnose(Origin::default(), "`#if` without `#endif`");
