@@ -1832,6 +1832,7 @@ dependencies = [
  "sha2",
  "unicode-bidi",
  "ureq",
+ "url",
  "wgpu",
  "winit",
  "xxhash-rust",

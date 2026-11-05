@@ -3567,16 +3567,6 @@ impl Hub {
                     events.push(HostEvent::Packet(conn, Box::new(S::Interact(p))));
                     held = self.move_queued(i);
                 }
-                // handleAttack and handleInteract are the game's too: a move queued
-                // behind them would move the player (or land them on the ground,
-                // losing a falling attack's critical hit) before the game checks
-                // their reach and state.
-                S::Interact(p) => {
-                    events.push(HostEvent::Packet(conn, Box::new(S::Interact(p))));
-                    if self.move_queued(i) {
-                        break;
-                    }
-                }
                 // ContainerInput's codec (ByIdMap, OutOfBoundsStrategy.ZERO) reads an
                 // unknown click type as PICKUP.
                 S::ContainerClick(mut p) => {
