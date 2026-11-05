@@ -92,6 +92,8 @@ struct Program {
     /// `world0/gbuffers_terrain` (no extension).
     stem: String,
     fixed: Vec<Fixed>,
+    /// The normal the vertex shader reads: `gl_Normal`, or `vaNormal` in a core-style pack.
+    seed: &'static str,
 }
 
 /// Applies the rule program by program, keeping each one whose pack still loads as before.
@@ -221,7 +223,8 @@ fn analyze(files: &Files) -> Vec<Program> {
                 fixed.push(Fixed { name: name.clone(), ty: ty.clone(), space: *space });
             }
         }
-        out.push(Program { stem: stem.to_owned(), fixed });
+        let seed = if vsh.contains("vaNormal") { "vaNormal" } else { "gl_Normal" };
+        out.push(Program { stem: stem.to_owned(), fixed, seed });
     }
     out
 }
@@ -615,13 +618,14 @@ fn wrap(text: &str, program: &Program, vertex: bool) -> String {
     if !out.ends_with('\n') {
         out.push('\n');
     }
-    out.push_str(&format!("\n// {NAME} (horizon-shaderport)\n#undef main\n{storage} vec3 hz_nfix_vpos;\n"));
+    out.push_str(&format!("\n// {NAME} (horizon-shaderport)\n#undef main\n{storage} vec3 hz_nfix_vpos;\n{storage} vec3 hz_nfix_vn;\n"));
     if vertex {
         out.push_str("void main() {\n    hz_pack_main();\n");
         for f in &program.fixed {
             out.push_str(&format!("    hz_nfix_in_{0} = {0};\n", f.name));
         }
-        out.push_str("    hz_nfix_vpos = (gl_ModelViewMatrix * gl_Vertex).xyz;\n}\n");
+        out.push_str("    hz_nfix_vpos = (gl_ModelViewMatrix * gl_Vertex).xyz;\n");
+        out.push_str(&format!("    hz_nfix_vn = vec3({});\n}}\n", program.seed));
     } else {
         out.push_str(FRAGMENT_FRAME);
         out.push_str("void main() {\n    hz_nfix_frame();\n");
@@ -656,6 +660,13 @@ void hz_nfix_frame() {
     float hz_m = max(hz_a.x, max(hz_a.y, hz_a.z));
     if (hz_m > 0.97) hz_w = step(vec3(hz_m), hz_a) * sign(hz_w);
     hz_w = normalize(hz_w);
+    // Horizon gives some draws the real normal already (flat draws, or the face index in the
+    // vertex colour): nothing to rotate then.
+    if (dot(hz_nfix_vn, hz_nfix_vn) > 0.25 && dot(normalize(hz_nfix_vn), hz_w) > 0.9) {
+        hz_nfix_rw = mat3(1.0);
+        hz_nfix_rv = mat3(1.0);
+        return;
+    }
     vec3 hz_t = abs(hz_w.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), hz_w));
     hz_nfix_rw = mat3(hz_t, hz_w, cross(hz_t, hz_w));
     hz_nfix_rv = hz_v * hz_nfix_rw * transpose(hz_v);

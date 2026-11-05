@@ -137,6 +137,15 @@ const FACE: &str = "    uint hz_q = (uint(gl_VertexIndex) & ~3u) * 6u;\n    \
         }\n    \
     }\n";
 
+/// GLSL: the normal of a vertex from the face index the mesher put in its colour (0 down, 1 up,
+/// 2 north, 3 south, 4 west, 5 east; anything else keeps the constant `(0, 1, 0)`).
+const FACE_FROM_COLOR: &str = "    uint hz_f = uint(round(hz_v_color.a * 255.0)) >> 4u;\n    \
+    if (hz_f < 6u) {\n        \
+        uint hz_axis = hz_f >> 1u;\n        \
+        float hz_sign = (hz_f & 1u) == 0u ? -1.0 : 1.0;\n        \
+        hz_Normal = hz_sign * vec3(float(hz_axis == 2u), float(hz_axis == 0u), float(hz_axis == 1u));\n    \
+    }\n";
+
 impl PackAtlas {
     /// The vertex inputs of a gbuffers program drawing terrain (`TerrainVertex`, terrain.wgsl's
     /// `vs_terrain` or, for `flat` draws, `vs_terrain_flat`), in atlas coordinates.
@@ -187,6 +196,10 @@ impl PackAtlas {
         let mut body = body;
         if flat {
             body.push_str(FACE);
+        } else {
+            // Without the flat draws' quad reads, the mesher's face index in the colour's alpha
+            // (`mesher::FACE_BITS`) gives the real normal, as GL's `gl_Normal`.
+            body.push_str(FACE_FROM_COLOR);
         }
         declarations.push_str("vec2 hz_cell; vec2 hz_scale; vec4 hz_tangent;\n");
         let entity = if flat {
