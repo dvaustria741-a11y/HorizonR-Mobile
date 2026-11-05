@@ -1,0 +1,139 @@
+error[E0428]: the name `UseBranch` is defined multiple times
+  --> crates/horizon-world/src/level/interact.rs:42:1
+   |
+34 | pub enum UseBranch {
+   | ------------------ previous definition of the type `UseBranch` here
+...
+42 | pub enum UseBranch {
+   | ^^^^^^^^^^^^^^^^^^ `UseBranch` redefined here
+   |
+   = note: `UseBranch` must be defined only once in the type namespace of this module
+
+   Compiling jni-sys-macros v0.4.1
+   Compiling jni-sys v0.4.1
+   Compiling zerocopy-derive v0.8.60
+error[E0119]: conflicting implementations of trait `std::fmt::Debug` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:23
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                       ----- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                       ^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Clone` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:10
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |          ----- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |          ^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Copy` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:17
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                 ---- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                 ^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `StructuralPartialEq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:30
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              --------- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `PartialEq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:30
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              --------- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Eq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:41
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                                         -- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                                         ^^ conflicting implementation for `interact::UseBranch`
+
+   Compiling jni-sys v0.3.1
+   Compiling pulley-macros v48.0.8
+   Compiling pulley-interpreter v48.0.8
+   Compiling zerocopy v0.8.60
+   Compiling ndk-sys v0.6.0+11769913
+   Compiling cranelift-codegen-meta v0.135.8
+--
+error: could not compile `horizon-world` (lib) due to 7 previous errors
+warning: build failed, waiting for other jobs to finish...
+
+=== TAIL ===
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                       ^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Clone` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:10
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |          ----- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |          ^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Copy` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:17
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                 ---- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                 ^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `StructuralPartialEq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:30
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              --------- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `PartialEq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:30
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              --------- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                              ^^^^^^^^^ conflicting implementation for `interact::UseBranch`
+
+error[E0119]: conflicting implementations of trait `Eq` for type `interact::UseBranch`
+  --> crates/horizon-world/src/level/interact.rs:41:41
+   |
+33 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                                         -- first implementation here
+...
+41 | #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+   |                                         ^^ conflicting implementation for `interact::UseBranch`
+
+   Compiling jni-sys v0.3.1
+   Compiling pulley-macros v48.0.8
+   Compiling pulley-interpreter v48.0.8
+   Compiling zerocopy v0.8.60
+   Compiling ndk-sys v0.6.0+11769913
+   Compiling cranelift-codegen-meta v0.135.8
+   Compiling half v2.7.1
+   Compiling cranelift-codegen v0.135.8
+Some errors have detailed explanations: E0119, E0428.
+For more information about an error, try `rustc --explain E0119`.
+error: could not compile `horizon-world` (lib) due to 7 previous errors
+warning: build failed, waiting for other jobs to finish...
