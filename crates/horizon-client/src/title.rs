@@ -4832,41 +4832,6 @@ mod classic_tests {
     }
 
     #[test]
-    fn ban_notices_chain_into_the_title_and_gate_multiplayer() {
-        use crate::ban_notice::{BanDetails, Notice};
-        let mut title = Title::new(
-            PathBuf::new(),
-            Path::new("/nonexistent/horizon-test-resources"),
-        );
-        let multiplayer = |title: &Title| {
-            title
-                .buttons(427.0, 240.0)
-                .into_iter()
-                .find(|b| b.id == 4)
-                .unwrap()
-                .enabled
-        };
-        assert!(multiplayer(&title));
-        title.allows_multiplayer = false;
-        assert!(!multiplayer(&title));
-        // Gui.buildInitialScreens: each notice runs `next`, the last one opens the title.
-        let ban = BanDetails {
-            expires_ms: None,
-            reason: None,
-            reason_message: None,
-        };
-        title.ban_queue = [Notice::Name("Steve".into()), Notice::Skin].into();
-        title.mode = Mode::BanNotice(Notice::Multiplayer(ban));
-        assert_eq!(title.buttons(427.0, 240.0).len(), 3);
-        title.escape();
-        assert!(matches!(&title.mode, Mode::BanNotice(Notice::Name(n)) if n == "Steve"));
-        title.escape();
-        assert!(matches!(title.mode, Mode::BanNotice(Notice::Skin)));
-        title.next_ban_notice();
-        assert!(matches!(title.mode, Mode::Main));
-    }
-
-    #[test]
     fn the_bottom_text_button_opens_the_credits() {
         // TitleScreen.init's PlainTextButton: a press inside its drawn rect.
         let mut title = Title::new(

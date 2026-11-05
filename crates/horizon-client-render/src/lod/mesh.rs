@@ -368,34 +368,6 @@ fn heightmap(column: &Column, mut fluid: impl FnMut(&Span) -> bool) -> Column {
         spans,
     }
 }
-/// From this tile level up a cell is 64 blocks wide or more: the strata
-/// inside the ground cannot be told apart, so a column is its surface.
-const HEIGHTMAP_LEVEL: u8 = 6;
-/// `column` as a heightmap: its top solid span reaching down to the bottom of
-/// the world (so the walls toward lower neighbours are one face of the
-/// surface's material, merged along the cliff), and the fluid over it.
-fn heightmap(column: &Column, mut fluid: impl FnMut(&Span) -> bool) -> Column {
-    let Some((top, below)) = column.spans.split_last() else {
-        return column.clone();
-    };
-    let ground = |span: &Span| Span {
-        min: crate::chunk::MIN_Y as i16,
-        ..*span
-    };
-    let mut spans = Vec::with_capacity(2);
-    match below.last() {
-        Some(under) if fluid(top) => {
-            spans.push(ground(under));
-            spans.push(*top);
-        }
-        _ if fluid(top) => spans.push(*top),
-        _ => spans.push(ground(top)),
-    }
-    Column {
-        surface: column.surface,
-        spans,
-    }
-}
 fn mesh_columns_with_edges(
     key: TileKey,
     columns: &[&Column],

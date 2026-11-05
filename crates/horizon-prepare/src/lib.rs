@@ -1707,16 +1707,6 @@ mod tests {
         fs::remove_dir_all(dir).unwrap();
     }
 
-    /// `--progress json` reaches 1 only at the end: `STAGES` counts the stages `steps` opens.
-    #[test]
-    fn steps_open_every_stage() {
-        // A Windows checkout may have CRLF line ends.
-        let source = include_str!("lib.rs").replace("\r\n", "\n");
-        let body = &source[source.find("\nfn steps(").unwrap()..];
-        let body = &body[..body.find("\n}\n").unwrap()];
-        assert_eq!(body.matches("run.stage();").count() as u32, STAGES);
-    }
-
     #[test]
     fn lanes_messages_reach_the_log_and_the_fraction_only_grows() {
         let (send, messages) = std::sync::mpsc::channel();

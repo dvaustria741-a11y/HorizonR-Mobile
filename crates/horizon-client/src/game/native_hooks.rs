@@ -1857,112 +1857,6 @@ impl GameLevel<'_> {
     ) {
         mod_api::dispatch_smoke_source(self, mod_api::mods(), dimension, state, smoke);
     }
-    /// The redstone signal the block `state` at `pos` gives on its `face`, the
-    /// side that touches the block reading it: `BlockState.getDirectSignal`
-    /// when `direct` (what passes through a block it touches, as a lever's
-    /// does), else `getSignal`. `signal` holds vanilla's answer: change it when
-    /// the block is yours (0 to 15; anything else is clamped). Asked very often,
-    /// from inside the level's update, so answer from your own state: check the
-    /// block first, and don't read or change the world here. When the answer
-    /// changes, and once the block is placed, call
-    /// `native_update_signal_neighbors`. Authoritative servers only. API 38.
-    #[inline(always)]
-    pub(super) fn native_block_signal(
-        &self,
-        dimension: LevelDimension,
-        pos: BlockPos,
-        state: BlockStateId,
-        face: Direction,
-        direct: bool,
-        signal: &mut i32,
-    ) {
-        let _ = (dimension, pos, state, face, direct, signal);
-    }
-
-    /// `BlockState.isSignalSource`: set `source` for a block of yours that
-    /// gives a signal, so redstone wire beside it connects to it. Authoritative
-    /// servers only. API 38.
-    #[inline(always)]
-    pub(super) fn native_is_signal_source(&self, state: BlockStateId, source: &mut bool) {
-        let _ = (state, source);
-    }
-
-    /// An authoritative server's `ServerLevel.tickChunk` is about to
-    /// random-tick the block `state` at `pos` (`BlockState.randomTick`):
-    /// only blocks that tick randomly, a mod's as its vanilla template block
-    /// does. Bone meal's random ticks (`StemBlock.performBonemeal`) don't
-    /// fire it. Change the block with `native_set_block_property` and set
-    /// `handled` to skip the block's own random tick (a mod crop growing its
-    /// own way); a block changed without `handled` takes its own random tick
-    /// as it is now, if it still ticks randomly. Lava's fluid random tick
-    /// runs either way.
-    #[inline(always)]
-    pub(super) fn native_random_tick(
-        &mut self,
-        ticks: &mut Ticks,
-        dimension: LevelDimension,
-        pos: BlockPos,
-        state: BlockStateId,
-        handled: &mut bool,
-    ) {
-        let _ = (ticks, dimension, pos, state, handled);
-    }
-
-    /// An authoritative server is about to compute the state the block
-    /// `state` at `pos` takes now that its neighbour in `direction` is
-    /// `neighbour` (`BlockBehaviour.updateShape`). `state` may not be in the
-    /// world yet (a piston landing it): decide from `state`, not from the
-    /// block at `pos`. Answer only for your own blocks: put the new state in
-    /// `new` (`state` keeps the block as it is; air breaks it, with its drops,
-    /// on a neighbour update) and the block's own `updateShape` doesn't run,
-    /// nor the ticks it would schedule. The level is read-only, as vanilla's
-    /// `LevelReader`; ticks go through `native_schedule_block_tick` and
-    /// `native_schedule_fluid_tick` with `ticks` (`ScheduledTickAccess`). It
-    /// runs often, at least six times per `setBlock` that updates shapes
-    /// (more for redstone wire's diagonals and knock-on updates): keep it
-    /// short.
-    #[inline(always)]
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn native_update_shape(
-        &self,
-        ticks: &mut Ticks,
-        dimension: LevelDimension,
-        pos: BlockPos,
-        state: BlockStateId,
-        direction: Direction,
-        neighbour_pos: BlockPos,
-        neighbour: BlockStateId,
-        new: &mut Option<BlockStateId>,
-    ) {
-        let _ = (
-            ticks,
-            dimension,
-            pos,
-            state,
-            direction,
-            neighbour_pos,
-            neighbour,
-            new,
-        );
-    }
-
-    /// An authoritative server's `ServerLevel.tickBlock` is about to run a
-    /// due scheduled tick of the block `state` at `pos` (`BlockState.tick`):
-    /// the block is still the one the tick was scheduled for. Change the
-    /// block with `native_set_block_property` and set `handled` to skip the
-    /// block's own tick; a block changed without `handled` takes its own
-    /// tick as it is now, if it is still the tick's block.
-    #[inline(always)]
-    pub(super) fn native_tick_block(
-        &mut self,
-        ticks: &mut Ticks,
-        dimension: LevelDimension,
-        pos: BlockPos,
-        state: BlockStateId,
-        handled: &mut bool,
-    ) {
-        let _ = (ticks, dimension, pos, state, handled);
-    }
 }
 
 /// The camera shake native mods ask for (`native_camera_shake`): turns in
@@ -2580,26 +2474,6 @@ impl Game<'_> {
     pub(super) fn native_config_unloading(&mut self, config: &NativeConfigFile) {
         mod_api::dispatch_config_unloading(self, mod_api::mods(), config);
     }
-    /// The server is about to open its worlds: nothing of the world is
-    /// loaded yet (NeoForge's `ServerAboutToStartEvent`, "called before the
-    /// server begins loading anything"). Vanilla's `MinecraftServer.loadLevel`
-    /// start. Server-side: the single player server thread once Play is
-    /// pressed, a dedicated server once its settings are read. Each is
-    /// followed by `native_world_lifecycle`'s `WorldOpenReady` or
-    /// `WorldOpenFailed`. `dedicated` tells a dedicated server from the single
-    /// player one. API 44.
-    pub(super) fn native_server_about_to_start(&mut self, dedicated: bool) {
-        let _ = dedicated;
-    }
-    /// The server begins an orderly stop (NeoForge's `ServerStoppingEvent`):
-    /// the start of vanilla's `MinecraftServer.stopServer`, with the worlds
-    /// still loaded and the players still connected and not yet saved, so a
-    /// mod can save its own data or tell them. `native_world_lifecycle`'s
-    /// `WorldCloseFinal` follows once the worlds are saved. A server whose loop
-    /// fails stops without this (`WorldCloseFailed` reports it). API 44.
-    pub(super) fn native_server_stopping(&mut self, dedicated: bool) {
-        let _ = dedicated;
-    }
     /// The authoritative server tick's phases: `ServerTickStart` before any
     /// level is ticked (NeoForge's `ServerTickEvent.Pre`), `ServerTickEnd`
     /// after the last (`.Post`). Read blocks with `native_server_block`, by
@@ -2620,14 +2494,6 @@ impl Game<'_> {
     /// After a successful authoritative server level tick pass.
     pub(super) fn native_level_tick_post(&mut self, dimension: &str) {
         mod_api::dispatch_level_tick_post(self, mod_api::mods(), dimension);
-    }
-    /// Before an authoritative server level's tick pass. `dimension` is its ID.
-    pub(super) fn native_level_tick_pre(&mut self, dimension: &str) {
-        let _ = dimension;
-    }
-    /// After a successful authoritative server level tick pass.
-    pub(super) fn native_level_tick_post(&mut self, dimension: &str) {
-        let _ = dimension;
     }
     /// The HUD (not drawn under F1), after the minimap: place a box with
     /// `corners.place` (boxes stack away from their edge) and draw it with
@@ -2738,61 +2604,6 @@ impl Game<'_> {
         draws: &mut Option<Vec<horizon_client::hud_layout::GuiDraw>>,
     ) {
         mod_api::dispatch_health_hud(self, mod_api::mods(), inputs, wi, hi, draws);
-    }
-    /// A player right-clicks the entity `entity` (`Entity.getId`) of type
-    /// `kind` (`minecraft:cow`) with `self.hand`, holding `stack` (none in an
-    /// empty hand): where `Player.interactOn` starts, before the entity's own
-    /// `interact` and the item's `interactLivingEntity`. Set `claimed` to take
-    /// the click: the hand swings and neither runs. Asked once per hand, as
-    /// vanilla tries the main hand then the off hand. Server-side, for every
-    /// player of the world (the helpers read the acting one). API 29.
-    pub(super) fn native_interact_entity(
-        &mut self,
-        entity: i32,
-        kind: &str,
-        stack: Option<&ItemStack>,
-        claimed: &mut bool,
-    ) {
-        let _ = (entity, kind, stack, claimed);
-    }
-    /// A player left-clicks the block `state` at `pos`, `face` the face hit
-    /// (`[0, 1, 0]` is the top): where `ServerPlayerGameMode.handleBlockBreakAction`
-    /// takes a dig's start, after its reach, spawn protection and world border
-    /// checks, before `Block.attack` (a note block plays) or a creative break.
-    /// Set `canceled` to ignore the click: the block isn't attacked, dug or
-    /// broken on the server, and the player's client gets it back (its own
-    /// predicted crack still shows to the clicking player). Server-side, for
-    /// every player of the world (the helpers read the acting one). API 30.
-    pub(super) fn native_left_click_block(
-        &mut self,
-        pos: [i32; 3],
-        face: [i32; 3],
-        state: BlockStateId,
-        canceled: &mut bool,
-    ) {
-        let _ = (pos, face, state, canceled);
-    }
-    /// A living player's server tick ends (`ServerPlayer.tick`): once a tick
-    /// for every player in the world, after their digging, item use,
-    /// cooldowns, statistics and advancements. The helpers read that player.
-    /// Players still tick under `/tick freeze`; a dead player doesn't, nor
-    /// does one killed earlier in the same tick. API 31.
-    pub(super) fn native_player_tick(&mut self) {}
-    /// The player-health HUD rows, once a frame the HUD draws them
-    /// (`HealthHud::layout`, not under F1): `inputs` carries the health,
-    /// food, air and vehicle state the layout reads, `wi`/`hi` the screen's
-    /// GUI size. A mod that sets `draws` replaces every row — armour,
-    /// hearts, food, air and the heights (`left_height`/`right_height`)
-    /// above the hotbar are the answer's to give; `bubble_pop_sound` too.
-    /// Nothing set draws Horizon's own.
-    pub(super) fn native_health_hud(
-        &mut self,
-        inputs: &horizon_client::hud_layout::HealthInputs,
-        wi: i32,
-        hi: i32,
-        draws: &mut Option<Vec<horizon_client::hud_layout::GuiDraw>>,
-    ) {
-        let _ = (inputs, wi, hi, draws);
     }
     /// A key or mouse button went down or up, by its vanilla name
     /// (`key.keyboard.z`, `key.mouse.left`): keys on any screen (check
@@ -2922,14 +2733,6 @@ impl Game<'_> {
     /// Only finite values in 1..=179 degrees replace the computed FOV.
     pub(super) fn native_compute_fov(&self, partial: f32, camera: [f64; 3], degrees: &mut f32) {
         mod_api::dispatch_compute_fov(self, mod_api::mods(), partial, camera, degrees);
-    }
-    /// The commands `native_command` runs, by name and without their slash:
-    /// push the ones that are yours. Asked when a connection starts and
-    /// again when the server sends its own tree, so the chat box colours,
-    /// completes and lists them as the game's own; a name the game already
-    /// has keeps that command's behaviour. API 35.
-    pub(super) fn native_commands(&mut self, commands: &mut Vec<&'static str>) {
-        let _ = commands;
     }
     /// The zoom a native mod asks for, applied while playing (the spyglass's
     /// own view wins): set `zoom` when it is none yet.
@@ -3584,20 +3387,6 @@ impl Game<'_> {
         decorations: &mut Vec<NativeMapDecoration>,
     ) {
         mod_api::dispatch_map_decorations(self, mod_api::mods(), map, decorations);
-    }
-    /// What clients get of the block entity at `pos` when its `id` is
-    /// yours (`BlockEntity.getUpdateTag`): set `tag` to it, read from
-    /// `entity` alone. Asked on the server whenever a chunk holding it is
-    /// sent and whenever its block changes, on the server thread or, for a
-    /// saved chunk sent past the view distance (`lan::far`), another one; a client's copy of the block
-    /// entity (made by `native_block_entity` there) merges it into its `nbt`.
-    /// Leave it unset to send nothing. API 45.
-    pub(super) fn native_block_entity_update_tag(
-        pos: [i32; 3],
-        entity: &ModBlockEntity,
-        tag: &mut Option<Compound>,
-    ) {
-        let _ = (pos, entity, tag);
     }
     /// A menu opens on this client for block `block`, a mod's: set `screen`
     /// when the block is yours, to lay its screen out (`native_screen_draw`
@@ -8777,124 +8566,6 @@ impl Game<'_> {
         let _ = self.process_level_events();
         changed
     }
-    /// The random of the server level `dimension`: vanilla's `Level.random`
-    /// (`level.getRandom()`), the one its explosions, block drops and other
-    /// level draws use, so a mod's draws move vanilla's later ones as a Java
-    /// mod's do. Draw with `horizon_core::random::RandomSource` (`next_int_bound`,
-    /// `next_float`...). `None` on a client of a server, and for a level not
-    /// open: the Nether and the End open when someone first goes there and
-    /// close after 300 ticks with nobody in them (`close_idle_levels`). API 43.
-    pub(super) fn native_level_random(
-        &mut self,
-        dimension: &str,
-    ) -> Option<&mut horizon_core::random::LegacyRandom> {
-        if self.serving.is_none() && self.options.dedicated.is_none() {
-            return None;
-        }
-        let dim = match dimension {
-            "minecraft:overworld" => super::Dim::Overworld,
-            "minecraft:the_nether" => super::Dim::Nether,
-            "minecraft:the_end" => super::Dim::End,
-            _ => return None,
-        };
-        if dim == self.dim {
-            Some(&mut self.world.random)
-        } else {
-            self.levels
-                .parked_world_mut(dim)
-                .map(|world| &mut world.random)
-        }
-    }
-    /// The item entities of the server level `dimension` whose box meets
-    /// the box `min`..`max`, in the level's order: vanilla's
-    /// `Level.getEntitiesOfClass(ItemEntity.class, box, ENTITY_STILL_ALIVE)`, as a
-    /// hopper's `getItemsAtAndAbove` asks for its block and the one above
-    /// (`[x, y, z]`..`[x + 1, y + 2, z + 1]`). Empty for a level not in place
-    /// (as `native_set_block`) and on a client of a server. API 42.
-    pub(super) fn native_item_entities(
-        &self,
-        dimension: &str,
-        min: [f64; 3],
-        max: [f64; 3],
-    ) -> Vec<NativeItemEntity> {
-        if (self.serving.is_none() && self.options.dedicated.is_none())
-            || dimension != self.dim.id()
-        {
-            return Vec::new();
-        }
-        self.dropped
-            .iter()
-            .filter(|e| e.stack.count > 0 && box_meets(&e.bounds(), min, max))
-            .map(|e| NativeItemEntity {
-                id: e.id,
-                position: [e.position.x, e.position.y, e.position.z],
-                stack: e.stack.clone(),
-                pickup_delay: e.pickup_delay,
-            })
-            .collect()
-    }
-    /// Sets the stack of item entity `id` in the server level `dimension`, as
-    /// a hopper's `addItem` leaves what it couldn't take (`ItemEntity.setItem`);
-    /// an empty stack (count 0) removes the entity (`setItem(EMPTY)`, then
-    /// `discard`). Players see it on their next tracker update. False when the
-    /// level in place has no such item entity, or on a client. API 42.
-    pub(super) fn native_set_item_entity(
-        &mut self,
-        dimension: &str,
-        id: u32,
-        stack: ItemStack,
-    ) -> bool {
-        if (self.serving.is_none() && self.options.dedicated.is_none())
-            || dimension != self.dim.id()
-        {
-            return false;
-        }
-        let Some(i) = self.dropped.iter().position(|e| e.id == id) else {
-            return false;
-        };
-        if stack.count == 0 {
-            self.dropped.remove(i);
-        } else {
-            self.dropped[i].stack = stack;
-        }
-        true
-    }
-    /// Sets a block in the current authoritative level through `Level.setBlock`.
-    /// Returns false for another dimension, an invalid state, or no change.
-    /// `flags` selects vanilla's neighbour and shape updates; Horizon sends
-    /// every write to players whatever the flags. A block entity block gets
-    /// its block entity. API 24.
-    pub(super) fn native_set_block(
-        &mut self,
-        dimension: &str,
-        pos: [i32; 3],
-        state: BlockStateId,
-        flags: i32,
-    ) -> bool {
-        if (self.serving.is_none() && self.options.dedicated.is_none())
-            || dimension != self.dim.id()
-            || self.pack.assets.registry.state(state).is_none()
-        {
-            return false;
-        }
-        let at = BlockPos::new(pos[0], pos[1], pos[2]);
-        let previous = self.world.block(pos[0], pos[1], pos[2]);
-        let changed =
-            self.with_level(|b, level, ticks| b.set_block(level, ticks, at, state, flags));
-        let new = self.res.facts().get(state).name.clone();
-        let landed = self.world.block(pos[0], pos[1], pos[2]);
-        if changed
-            && self.res.facts().get(previous).name != new
-            && self.res.facts().get(landed).name == new
-            && let Some(entity) = self.new_block_entity(&new)
-        {
-            self.world
-                .block_entities
-                .insert((pos[0], pos[1], pos[2]), entity);
-        }
-        let _ = self.process_level_events();
-        changed
-    }
     /// The strongest redstone signal reaching the block at `pos` from its six
     /// neighbours, 0 to 15 (`SignalGetter.getBestNeighborSignal`, what a
     /// dispenser or a piston reads), in the level in place, `dimension`. 0 on
@@ -10702,43 +10373,6 @@ fn local_sound_ok(sound: &str, at: [f64; 3], volume: f32, pitch: f32, delay: i32
         && pitch.is_finite()
         && pitch >= 0.0
         && (0..=1200).contains(&delay)
-}
-
-/// `state` with its property `key` set to `value`; none when the block has
-/// no such property or value.
-fn with_property(
-    registry: &BlockRegistry,
-    state: BlockStateId,
-    key: &str,
-    value: &str,
-) -> Option<BlockStateId> {
-    let mut s = registry.state(state)?.clone();
-    match s.properties.get(key) {
-        Some(v) if v == value => return Some(state),
-        Some(_) => {}
-        None => return None,
-    }
-    s.properties.insert(key.into(), value.into());
-    registry.resolve(&s).ok()
-}
-
-/// The state a mod's property write changes `state` to; none when the block
-/// has no such property or value, or already has it: `LevelChunk.setBlockState`
-/// returns null for the same state, so `Level.setBlock` returns false.
-fn property_change(
-    registry: &BlockRegistry,
-    state: BlockStateId,
-    key: &str,
-    value: &str,
-) -> Option<BlockStateId> {
-    with_property(registry, state, key, value).filter(|&id| id != state)
-}
-
-/// `config/` beside `options`, made when missing.
-fn config_dir(options: &Path) -> Result<PathBuf, String> {
-    let dir = options.with_file_name("config");
-    fs::create_dir_all(&dir).map_err(|e| dir.display().to_string() + ": " + &e.to_string())?;
-    Ok(dir)
 }
 
 /// `v` within `lo..=hi`; `lo` when it is not a number.

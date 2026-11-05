@@ -201,54 +201,6 @@ fn blast_cause(
     Some((id, name))
 }
 
-/// A mob in a blast's reach: `hurtServer` when its team allows the damage
-/// (`hurtable`), then `pushFromExplosion` whatever that returned, so a mob
-/// that refuses the hit (invulnerable, in its hurt cooldown, a wither and an
-/// undead `cause`) is still pushed. `Entity.push` sets `needsSync`.
-fn hurt_and_push_mob(
-    m: &mut horizon_client::mobs::Mob,
-    hurtable: bool,
-    cause: Option<horizon_client::mobs::Species>,
-    (amount, source): (f32, horizon_client::mobs::Damage),
-    push: [f64; 3],
-) {
-    let shielded =
-        cause.is_some_and(|c| horizon_client::mobs::wither::shielded_from(m.species(), c));
-    if hurtable && !shielded {
-        m.damage(amount, source);
-    }
-    m.velocity = Vec3::new(
-        m.velocity.x + push[0],
-        m.velocity.y + push[1],
-        m.velocity.z + push[2],
-    );
-    m.needs_sync = true;
-}
-
-/// A blast's causing entity and its name (`Explosion.getIndirectSourceEntity`):
-/// the mob that owns the exploding projectile while it is in the level
-/// (`Projectile.getOwner` is null once it is removed), else the exploding
-/// mob. `live` names a mob in the level, `exploded` the mobs whose blast
-/// went off this tick and that already left it.
-fn blast_cause(
-    owner: Option<u32>,
-    exploding: Option<u32>,
-    live: impl Fn(u32) -> Option<Text>,
-    exploded: &[(u32, Text)],
-) -> Option<(u32, Text)> {
-    if let Some(owner) = owner {
-        return live(owner).map(|name| (owner, name));
-    }
-    let id = exploding?;
-    let name = live(id).or_else(|| {
-        exploded
-            .iter()
-            .rfind(|(m, _)| *m == id)
-            .map(|(_, n)| n.clone())
-    })?;
-    Some((id, name))
-}
-
 thread_local! {
     /// Client-side randomness (explosion sound pitch), separate from the level random.
     static CLIENT_RANDOM: std::cell::RefCell<LegacyRandom> = std::cell::RefCell::new(LegacyRandom::new(0x5eed));
@@ -1297,69 +1249,6 @@ mod tests {
             true
         ));
         assert!(blast_spares_decorations(true, Destroy, true, true));
-    }
-
-    /// The type a blast hurts with and the attacker its death message names
-    /// come from one cause (`DamageSources.explosion`): `player_explosion`
-    /// "blown up by" that mob, or `explosion` with no one when it has none.
-    fn blast_hurt(
-        owner: Option<u32>,
-        exploding: Option<u32>,
-        live: &[(u32, Text)],
-        exploded: &[(u32, Text)],
-    ) -> (&'static str, Option<(u32, Text)>) {
-        let find = |id| live.iter().find(|(m, _)| *m == id).map(|(_, n)| n.clone());
-        let cause = blast_cause(owner, exploding, find, exploded);
-        let kind = horizon_client::mobs::DamageKind::Explosion;
-        (
-            super::super::creatures::damage_type(kind, cause.is_some()),
-            cause,
-        )
-    }
-
-    #[test]
-    fn a_caused_blast_names_its_cause_under_player_explosion() {
-        let creeper = Text::translate("entity.minecraft.creeper", &[]);
-        let ghast = Text::translate("entity.minecraft.ghast", &[]);
-        // A creeper's blast: it left the mob list, its event named it.
-        assert_eq!(
-            blast_hurt(None, Some(7), &[], &[(7, creeper.clone())]),
-            ("minecraft:player_explosion", Some((7, creeper)))
-        );
-        // A ghast's fireball: its owner is still in the level.
-        assert_eq!(
-            blast_hurt(Some(3), None, &[(3, ghast.clone())], &[]),
-            ("minecraft:player_explosion", Some((3, ghast.clone())))
-        );
-        // The ghast was removed before its fireball landed: no owner.
-        assert_eq!(
-            blast_hurt(Some(3), None, &[], &[]),
-            ("minecraft:explosion", None)
-        );
-        // Nothing caused it.
-        assert_eq!(
-            blast_hurt(None, None, &[], &[]),
-            ("minecraft:explosion", None)
-        );
-        // A projectile's owner wins over the exploding mob, and a removed
-        // owner gives no cause even when a mob is exploding.
-        let zombie = Text::translate("entity.minecraft.zombie", &[]);
-        let live = [(3, ghast.clone()), (5, zombie.clone())];
-        assert_eq!(
-            blast_hurt(Some(3), Some(5), &live, &[]),
-            ("minecraft:player_explosion", Some((3, ghast)))
-        );
-        assert_eq!(
-            blast_hurt(Some(4), Some(5), &live, &[]),
-            ("minecraft:explosion", None)
-        );
-        // A mob still in the level is named as it is now, before its name
-        // in the exploded list.
-        let named = Text::literal("Bob".to_owned());
-        assert_eq!(
-            blast_hurt(None, Some(5), &live, &[(5, named)]),
-            ("minecraft:player_explosion", Some((5, zombie)))
-        );
     }
 
     /// The type a blast hurts with and the attacker its death message names

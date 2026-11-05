@@ -155,7 +155,6 @@ mod interaction_shapes;
 mod interactions;
 mod item_areas;
 mod item_draw;
-mod item_use;
 mod item_particles;
 mod item_use;
 mod jigsaw_blocks;

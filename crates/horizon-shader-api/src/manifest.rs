@@ -303,38 +303,6 @@ fn sprite_matches(pattern: &str, name: &str) -> bool {
     left.ends_with(tail)
 }
 
-/// A set of block sprites the material stage can tell apart: its bit in
-/// `MaterialInput.tags` is its index in the manifest.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct SpriteTag {
-    /// A WGSL identifier, for the pack's own reading and its errors.
-    pub id: String,
-    /// Sprite names such as `minecraft:block/glass` (the namespace defaults to
-    /// `minecraft`), each with at most one `*` matching any run of characters.
-    pub sprites: Vec<String>,
-}
-
-impl SpriteTag {
-    /// Whether the sprite `name` (`namespace:path`) is one of the tag's.
-    pub fn matches(&self, name: &str) -> bool {
-        self.sprites.iter().any(|pattern| {
-            let pattern = match pattern.contains(':') {
-                true => std::borrow::Cow::Borrowed(pattern.as_str()),
-                false => std::borrow::Cow::Owned(format!("minecraft:{pattern}")),
-            };
-            match pattern.split_once('*') {
-                None => pattern == name,
-                Some((head, tail)) => {
-                    name.len() >= head.len() + tail.len()
-                        && name.starts_with(head)
-                        && name.ends_with(tail)
-                }
-            }
-        })
-    }
-}
-
 /// One stage: the WGSL file that defines its function.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]

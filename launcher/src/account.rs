@@ -23,6 +23,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// The keychain service name every secret is stored under.
 pub const SERVICE: &str = "dev.playhorizon.launcher";
 const SCOPE: &str = "XboxLive.signin offline_access";
+#[cfg(target_os = "android")]
+pub const NOT_CONFIGURED: &str = "Microsoft sign-in is coming soon. Until then the game plays offline: single player, \
+     LAN and servers in offline mode work.";
+#[cfg(not(target_os = "android"))]
 pub const NOT_CONFIGURED: &str = "This build of the launcher has no Microsoft sign-in (HORIZON_MSA_CLIENT_ID), so it can't start the game.";
 /// What every Play says while no account in the launcher owns the game.
 pub const NEEDS_OWNER: &str =
@@ -94,19 +98,56 @@ fn request_to(method: &str, url: &str) -> ureq::Request {
 
 /// One request's result: the status and the JSON body (empty when there is none). Transport
 /// errors name the service, never the URL's query or the request.
-fn send(request: ureq::Request, body: Option<Body>, service: &str) -> Result<(u16, Value), String> {
-    let result = match body {
-        None => request.call(),
-        Some(Body::Form(fields)) => request.send_form(&fields),
-        Some(Body::Json(value)) => request.set("Accept", "application/json").send_json(value),
-    };
-    let response = match result {
-        Ok(r) => r,
-        Err(ureq::Error::Status(_, r)) => r,
-        Err(ureq::Error::Transport(_)) => {
-            return Err(format!(
-                "Could not reach {service}. Check your internet connection."
-            ));
+fn transient_network(kind: ureq::ErrorKind) -> bool {
+    matches!(
+        kind,
+        ureq::ErrorKind::Dns
+            | ureq::ErrorKind::ConnectionFailed
+            | ureq::ErrorKind::Io
+            | ureq::ErrorKind::ProxyConnect
+    )
+}
+fn contact_error(service: &str, kind: ureq::ErrorKind) -> String {
+    // Only a category is shown. Raw errors can contain URLs or request details.
+    format!("Could not reach {service} ({kind:?}). Check your internet connection.")
+}
+fn send_response(
+    request: ureq::Request,
+    body: Option<&Body<'_>>,
+) -> Result<ureq::Response, ureq::ErrorKind> {
+    // The legacy launcher endpoint has an immediate login_with_xbox fallback.
+    let retry_http = !request.url().ends_with("/launcher/login");
+    for attempt in 0..3u64 {
+        let request = request.clone();
+        let result = match body {
+            None => request.call(),
+            Some(Body::Form(fields)) => request.send_form(fields),
+            Some(Body::Json(value)) => request.set("Accept", "application/json").send_json(value),
+        };
+        match result {
+            Ok(r) => return Ok(r),
+            Err(ureq::Error::Status(status, r)) => {
+                let delay = r
+                    .header("Retry-After")
+                    .and_then(|h| h.parse::<u64>().ok())
+                    .unwrap_or(1 << attempt);
+                if retry_http
+                    && attempt < 2
+                    && (status == 429 || (500..600).contains(&status))
+                    && delay <= 30
+                {
+                    std::thread::sleep(Duration::from_secs(delay.max(1)));
+                    continue;
+                }
+                return Ok(r);
+            }
+            Err(ureq::Error::Transport(e)) => {
+                if attempt < 2 && transient_network(e.kind()) {
+                    std::thread::sleep(Duration::from_secs(1 << attempt));
+                    continue;
+                }
+                return Err(e.kind());
+            }
         }
     }
     unreachable!("bounded attempts always return")

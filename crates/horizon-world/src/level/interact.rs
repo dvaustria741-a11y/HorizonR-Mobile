@@ -37,14 +37,6 @@ pub enum UseBranch {
     /// `useWithoutItem`, after `useItemOn` asked to try with an empty hand.
     WithoutItem,
 }
-/// Which part of `BlockState` answered a use on a block.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UseBranch {
-    /// `useItemOn`, with the held item.
-    ItemOn,
-    /// `useWithoutItem`, after `useItemOn` asked to try with an empty hand.
-    WithoutItem,
-}
 
 /// `SelectableSlotContainer.getHitSlot`: the slot of a block with `rows` by
 /// `columns` slots on its front face (the way it `facing`) that the click at

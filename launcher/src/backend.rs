@@ -4472,54 +4472,6 @@ mod tests {
         }
     }
 
-    /// A canonical path loses Windows' verbatim prefix on a drive (horizon-mixins' output
-    /// check stats `\\?\C:`, the volume itself, which Windows refuses, os error 1), and keeps
-    /// it where there is no drive form.
-    #[test]
-    fn a_canonical_windows_path_loses_only_a_drives_verbatim_prefix() {
-        let plain = |p: &str| plain(PathBuf::from(p));
-        assert_eq!(
-            plain(r"\\?\C:\Users\me\AppData\Roaming\horizon-launcher\native"),
-            PathBuf::from(r"C:\Users\me\AppData\Roaming\horizon-launcher\native")
-        );
-        // A share has no drive form to fall back to; other paths have no prefix.
-        assert_eq!(
-            plain(r"\\?\UNC\server\share\native"),
-            PathBuf::from(r"\\?\UNC\server\share\native")
-        );
-        assert_eq!(
-            plain("/home/me/.local/share/horizon-launcher/native"),
-            PathBuf::from("/home/me/.local/share/horizon-launcher/native")
-        );
-    }
-
-    /// [#5189](https://github.com/horizon-rust/horizon/issues/5189): MinGW-w64's tools can't
-    /// read a non-ASCII path, so the build root is the data folder's resolved ASCII spelling —
-    /// which a link's target or a short (8.3) name already is.
-    #[test]
-    fn the_build_dir_is_a_path_the_tools_can_read() {
-        assert!(ascii(Path::new(
-            r"C:\Users\me\AppData\Roaming\horizon-launcher"
-        )));
-        assert!(!ascii(Path::new(
-            r"C:\Users\Кириченко Павло\AppData\Roaming\horizon-launcher"
-        )));
-        assert!(!ascii(Path::new("/høme/me/horizon-launcher")));
-        let built = build_dir();
-        assert!(ascii(&built) || cfg!(windows), "{}", built.display());
-        // Resolved: the build never sees a link in the path (where the answer is the data
-        // folder itself, so already resolved — Windows' other spellings aren't its own).
-        if ascii(&built) {
-            assert_eq!(
-                built,
-                built
-                    .canonicalize()
-                    .map(plain)
-                    .unwrap_or_else(|_| built.clone())
-            );
-        }
-    }
-
     /// The game program's mod API level is its mark's; a program from before the mark (0.2.68
     /// and older) or none at all serves level 0.
     #[test]

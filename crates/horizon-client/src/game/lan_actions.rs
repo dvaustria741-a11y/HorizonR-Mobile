@@ -1142,39 +1142,6 @@ impl Game<'_> {
         host.hub.sound(sound, at, 1.0, 1.0, source, Some(conn));
     }
 
-    /// `ServerLevel.broadcastDamageEvent` for a guest that took an unblocked hit.
-    fn guest_damage_broadcast(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        source: horizon_world::damage_source::DamageTypeId,
-    ) {
-        let Some(g) = host.hub.guest(conn) else {
-            return;
-        };
-        let (id, at) = (g.entity_id, g.position);
-        let kind = self
-            .motion
-            .health
-            .damage
-            .definition(source)
-            .map_or("minecraft:generic", |d| d.name.as_str());
-        host.hub.damage_event(id, kind, None, None, at);
-    }
-
-    /// `LivingEntity.playHurtSound` for a guest: the server's `Entity.playSound`
-    /// reaches every player around but the hurt one, whose own client plays it
-    /// from `handleDamageEvent` (#4149).
-    fn guest_hurt_sound(&mut self, host: &mut LanHost, conn: u32, sound: &str) {
-        let Some(g) = host.hub.guest(conn) else {
-            return;
-        };
-        let at = g.position;
-        let source = horizon_client::settings::sound_source(sound) as i32;
-        self.audio.play_unshared(sound, Some(at), 1.0, 1.0);
-        host.hub.sound(sound, at, 1.0, 1.0, source, Some(conn));
-    }
-
     /// `ServerLevel.players()` in turn: the host's own player, then each
     /// guest in the level in place with their state swapped in (`as_guest`).
     /// What reaches the players around a point (a beacon's powers, a splash
@@ -1493,51 +1460,6 @@ impl Game<'_> {
         self.guest_close_all(host, conn);
         host.hub
             .open_container(conn, menu, title, pos, slots, items, None);
-        true
-    }
-
-    /// `ContainerEntity.interactWithContainerVehicle` for a guest: the menu
-    /// the vehicle's own `MenuProvider.createMenu` builds - three rows of a
-    /// `ChestMenu` for a chest boat or a chest minecart, a `HopperMenu` for a
-    /// hopper minecart - titled with the vehicle's name.
-    fn lan_open_vehicle_container(
-        &mut self,
-        host: &mut LanHost,
-        conn: u32,
-        pos: (i32, i32, i32),
-    ) -> bool {
-        let entity_type = if let Some(cart) = self.carts.iter().find(|c| c.id as i32 == pos.2) {
-            cart.kind.id().to_owned()
-        } else if let Some(boat) = self.boats.iter().find(|b| b.id as i32 == pos.2) {
-            if !boat.chest {
-                return false;
-            }
-            boat.entity_type()
-        } else {
-            return false;
-        };
-        // `createMenu` (ChestMenu.threeRows or a HopperMenu), and
-        // `MenuProvider.getDisplayName`, the vehicle's name key.
-        let Some((menu, _)) = horizon_client::containers::vehicle_menu(&entity_type) else {
-            return false;
-        };
-        let title = horizon_protocol::text::translatable(
-            &horizon_client::containers::vehicle_menu_name(&entity_type),
-            &[],
-        );
-        let slots = Slots::Block(pos);
-        let Some(items) = host
-            .hub
-            .guest(conn)
-            .and_then(|g| slots.read(&self.world, g))
-        else {
-            return false;
-        };
-        // ServerPlayer.openMenu closes the menu that was open.
-        self.guest_container_closed(host, conn);
-        self.lan_station_closed(host, conn, None);
-        host.hub
-            .open_container(conn, menu, title, pos, slots, items);
         true
     }
 

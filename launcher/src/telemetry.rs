@@ -442,20 +442,6 @@ mod tests {
     }
 
     #[test]
-    fn the_stats_page_is_on_the_website() {
-        assert_eq!(
-            stats_url("https://playhorizon.dev").as_deref(),
-            Some("https://playhorizon.dev/stats")
-        );
-        assert_eq!(
-            stats_url("https://example.org/horizon/").as_deref(),
-            Some("https://example.org/horizon/stats")
-        );
-        assert_eq!(stats_url(""), None);
-        assert_eq!(stats_url("javascript:alert(1)"), None);
-    }
-
-    #[test]
     fn kinds_are_named_in_plain_words_or_short() {
         let names = |n: &[&str]| parse_kinds(&n.iter().map(|s| s.to_string()).collect::<Vec<_>>());
         assert_eq!(

@@ -6328,20 +6328,6 @@ impl Renderer {
             self.send_hdr_metadata();
         }
     }
-    /// HDR calibration's test picture (`crate::hdr_calibration`) while it runs, else None.
-    pub fn set_hdr_calibration(&mut self, calibration: Option<HdrCalibration>) {
-        let Some(hdr) = &mut self.hdr else {
-            return;
-        };
-        if hdr.calibration == calibration {
-            return;
-        }
-        let declared = hdr.declared_peak();
-        hdr.calibration = calibration;
-        if hdr.declared_peak() != declared {
-            self.send_hdr_metadata();
-        }
-    }
     fn send_hdr_metadata(&self) {
         if let (Some(surface), Some(hdr)) = (&self.surface, &self.hdr) {
             horizon_hdr::set_metadata(
@@ -11948,44 +11934,6 @@ mod tests {
         assert_eq!(os_reported(&info(Some(f32::NAN), Some(80.0))), None);
         assert_eq!(os_reported(&wgpu::DisplayHdrInfo::default()), None);
     }
-
-    #[test]
-    fn os_luminances_become_auto_values() {
-        let info = |max, white| wgpu::DisplayHdrInfo {
-            luminance: Some(wgpu::DisplayLuminance {
-                max_nits: max,
-                sdr_white_nits: white,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        // Windows' SDR content brightness slider runs 80..480 nits.
-        assert_eq!(
-            os_reported(&info(Some(998.4), Some(240.0))),
-            Some(Reported {
-                paper_white: 240,
-                peak: 998
-            })
-        );
-        assert_eq!(
-            os_reported(&info(Some(120.0), Some(1000.0))),
-            Some(Reported {
-                paper_white: 480,
-                peak: 480
-            })
-        );
-        // White above the calibrated peak (a Samsung QD-OLED's 380, the slider at 456).
-        assert_eq!(
-            os_reported(&info(Some(380.0), Some(456.0))),
-            Some(Reported {
-                paper_white: 456,
-                peak: 456
-            })
-        );
-        assert_eq!(os_reported(&info(Some(1000.0), None)), None);
-        assert_eq!(os_reported(&info(Some(f32::NAN), Some(80.0))), None);
-        assert_eq!(os_reported(&wgpu::DisplayHdrInfo::default()), None);
-    }
     #[test]
     fn surface_is_8_bit_and_not_srgb() {
         use super::surface_format;
@@ -13298,33 +13246,6 @@ fn os_reported(info: &wgpu::DisplayHdrInfo) -> Option<crate::graphics::Reported>
     Some(crate::graphics::Reported {
         paper_white,
         black: hundredths_of_a_nit(luminance.min_nits.unwrap_or(0.0)),
-        // Windows' SDR brightness slider can set white above the reported peak (480 against
-        // a calibrated 380): the highlights then stay at white instead of dropping below it.
-        peak: (peak.round() as u32).clamp(200, 10_000).max(paper_white),
-    })
-}
-fn log_os_reported(reported: Option<crate::graphics::Reported>) {
-    log_display(match reported {
-        Some(r) => format!(
-            "Horizon renderer: the system reports SDR white at {} nits and a peak of {} nits",
-            r.paper_white, r.peak
-        ),
-        None => "Horizon renderer: the system doesn't report the display's luminance".into(),
-    });
-}
-/// What the OS reports in absolute nits (Windows: DXGI's `MaxLuminance` and the SDR
-/// white level the brightness slider sets), which is HDR output's scale there: SDR
-/// white is Paper White, the display's peak is Peak Brightness. Both are kept within
-/// the settings' ranges. The OS's figures often come from the display's EDID and may
-/// run optimistic; the player's own value always wins.
-fn os_reported(info: &wgpu::DisplayHdrInfo) -> Option<crate::graphics::Reported> {
-    let luminance = info.luminance?;
-    let usable = |n: f32| n.is_finite() && n > 0.0;
-    let peak = luminance.max_nits.filter(|&n| usable(n))?;
-    let white = luminance.sdr_white_nits.filter(|&n| usable(n))?;
-    let paper_white = (white.round() as u32).clamp(80, 480);
-    Some(crate::graphics::Reported {
-        paper_white,
         // Windows' SDR brightness slider can set white above the reported peak (480 against
         // a calibrated 380): the highlights then stay at white instead of dropping below it.
         peak: (peak.round() as u32).clamp(200, 10_000).max(paper_white),

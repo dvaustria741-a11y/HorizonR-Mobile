@@ -261,41 +261,6 @@ mod section_mesh_tests {
         );
     }
 }
-
-#[cfg(test)]
-mod section_mesh_tests {
-    use super::*;
-
-    #[test]
-    fn compute_bounds_empty_solid_and_translucent() {
-        let mut mesh = SectionMesh::default();
-        assert_eq!(mesh.compute_bounds(), None);
-
-        let v1 = TerrainVertex::new([1.0, 2.0, 3.0], [0.0, 0.0], 0, 0, 0);
-        let v2 = TerrainVertex::new([4.0, 5.0, 6.0], [0.0, 0.0], 0, 0, 0);
-        mesh.solid.push(v1);
-        mesh.solid.push(v2);
-
-        let pad = glam::Vec3::splat(SectionMesh::BOUNDS_PAD);
-        assert_eq!(
-            mesh.compute_bounds(),
-            Some([
-                glam::Vec3::new(1.0, 2.0, 3.0) - pad,
-                glam::Vec3::new(4.0, 5.0, 6.0) + pad,
-            ])
-        );
-
-        let v3 = TerrainVertex::new([0.5, 7.0, 8.0], [0.0, 0.0], 0, 0, 0);
-        mesh.translucent.push(v3);
-        assert_eq!(
-            mesh.compute_bounds(),
-            Some([
-                glam::Vec3::new(0.5, 2.0, 3.0) - pad,
-                glam::Vec3::new(4.0, 7.0, 8.0) + pad,
-            ])
-        );
-    }
-}
 pub struct SectionMesh {
     pub solid: Vec<TerrainVertex>,
     /// The buckets `solid` is sorted in by the side its quads face: empty

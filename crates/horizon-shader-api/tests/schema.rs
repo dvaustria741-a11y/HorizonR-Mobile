@@ -268,33 +268,6 @@ fn sprite_tags_name_sprites_with_one_wildcard() {
 }
 
 #[test]
-fn sprite_tags_name_sprites_with_one_wildcard() {
-    let mut m = Manifest::parse(&sample_text()).unwrap();
-    m.tags.push(horizon_shader_api::SpriteTag {
-        id: "ice".into(),
-        sprites: vec!["minecraft:block/*ice".into()],
-    });
-    let sprites = [
-        ("minecraft:block/stone", 0),
-        ("minecraft:block/glass", 1),
-        ("minecraft:block/red_stained_glass", 2),
-        ("minecraft:block/red_stained_glass_pane_top", 3),
-        ("minecraft:block/packed_ice", 4),
-        ("minecraft:block/ice", 5),
-    ];
-    assert_eq!(
-        m.sprite_tags(sprites.iter().rev().copied()),
-        [(1, 1), (2, 1), (4, 2), (5, 2)]
-    );
-    // Two names on one layer (identical stills share it) give one entry, tags merged.
-    let shared = [
-        ("minecraft:block/glass", 7),
-        ("minecraft:block/packed_ice", 7),
-    ];
-    assert_eq!(m.sprite_tags(shared), [(7, 3)]);
-}
-
-#[test]
 fn the_smallest_manifest() {
     let m = Manifest::parse(
         "schema = 1\nid = \"p\"\nname = \"P\"\nversion = \"1\"\napi = \"0.1\"\n[[post]]\nfile = \"a.wgsl\"\n",

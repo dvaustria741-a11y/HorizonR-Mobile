@@ -92,22 +92,6 @@ fn spread(
     }
 }
 
-fn send_native_nearby(
-    host: &LanHost,
-    dimension: &str,
-    packet: Vec<u8>,
-    within_range: impl Fn([f64; 3]) -> bool,
-) {
-    for guest in host
-        .hub
-        .guests
-        .iter()
-        .filter(|g| g.placed && g.dimension == dimension && within_range(g.position))
-    {
-        guest.sender.send(packet.clone());
-    }
-}
-
 /// An ARGB colour as the options' RGBA.
 fn rgba(argb: i32) -> [f32; 4] {
     let c = |shift: i32| ((argb >> shift) & 255) as f32 / 255.0;

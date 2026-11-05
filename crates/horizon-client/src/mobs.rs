@@ -751,14 +751,6 @@ pub struct Aim {
     pub look: [f64; 3],
     pub feet: [f64; 3],
 }
-/// `source.getEntity()` of a blow, as `SulfurCube.knockback` reads it: `getEyePosition()`,
-/// `getLookAngle()` and `position()`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Aim {
-    pub eye: [f64; 3],
-    pub look: [f64; 3],
-    pub feet: [f64; 3],
-}
 /// A damage source: its type, the attacking entity and where it came from.
 #[derive(Clone, Copy, Debug)]
 pub struct Damage {
@@ -830,16 +822,6 @@ impl Damage {
             attacker,
             from: Some(from),
             attacker_species: None,
-        }
-    }
-    /// `DamageSources.fireworks(rocket, owner)`: `attacker` is the owner
-    /// (none for a rocket nobody fired), `from` the rocket's position, which
-    /// the knockback pushes away from (`calculateHorizontalHurtKnockbackDirection`).
-    pub fn fireworks(attacker: Option<Who>, from: [f64; 3]) -> Self {
-        Self {
-            kind: DamageKind::Fireworks,
-            attacker,
-            from: Some(from),
         }
     }
     pub fn mob(id: u32, from: [f64; 3]) -> Self {

@@ -581,17 +581,6 @@ impl HandSway {
             * glam::Mat4::from_rotation_x(x.to_radians())
             * glam::Mat4::from_rotation_y(y.to_radians())
     }
-    /// The hands' view space to camera-relative world space, turned by the
-    /// sway. The hand pass draws with the camera's view, whose rotation a
-    /// ridden boat's turn spreads over the frames of a tick
-    /// (`LocalPlayer.getViewYRot`): anything else swings the hands back and
-    /// forth by that turn, up to 10 degrees, 20 times a second (#4583).
-    pub fn to_world(&self, partial: f32, camera: &crate::camera::Camera) -> glam::Mat4 {
-        let [x, y] = self.rotation(partial, camera.x_rot, camera.y_rot);
-        crate::camera::view_matrix(camera.y_rot, camera.x_rot).inverse()
-            * glam::Mat4::from_rotation_x(x.to_radians())
-            * glam::Mat4::from_rotation_y(y.to_radians())
-    }
 }
 
 /// `HitResult` at the crosshair (`Minecraft.hitResult`).

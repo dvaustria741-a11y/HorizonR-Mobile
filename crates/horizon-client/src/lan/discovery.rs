@@ -160,15 +160,6 @@ impl Scanner {
             }),
         }
     }
-    #[cfg(test)]
-    pub(crate) fn for_tests(games: Vec<LanGame>) -> Self {
-        Self {
-            inner: Arc::new(ScanInner {
-                games: Arc::new(Mutex::new(games)),
-                stop: Arc::new(AtomicBool::new(false)),
-            }),
-        }
-    }
     /// The worlds announced since the scan started, in order (vanilla's
     /// list keeps them while the multiplayer screen is open).
     pub fn games(&self) -> Vec<LanGame> {
