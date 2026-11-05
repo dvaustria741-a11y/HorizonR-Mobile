@@ -1,156 +1,106 @@
-error[E0609]: no field `vertex` on type `std::option::Option<horizon_shaders::Program>`
-  --> crates/horizon-shaderport/src/gpu.rs:22:46
-   |
-22 |     for (stage, m) in [("vertex", &p.program.vertex), ("fragment", &p.program.fragment)] {
-   |                                              ^^^^^^ unknown field
-   |
-help: one of the expressions' fields has a field of the same name
-   |
-22 |     for (stage, m) in [("vertex", &p.program.unwrap().vertex), ("fragment", &p.program.fragment)] {
-   |                                              +++++++++
+error[E0433]: cannot find module or crate `url` in this scope
+   --> crates/horizon-client-lib/../horizon-client/src/official_install.rs:109:15
+    |
+109 |     let url = url::Url::parse(text)?;
+    |               ^^^ use of unresolved module or unlinked crate `url`
+    |
+    = help: if you wanted to use a crate named `url`, use `cargo add url` to add it to your `Cargo.toml`
 
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-  --> crates/horizon-shaderport/src/gpu.rs:22:79
+error[E0433]: cannot find module or crate `url` in this scope
+  --> crates/horizon-client-lib/../horizon-client/src/resource_install.rs:28:19
    |
-22 |     for (stage, m) in [("vertex", &p.program.vertex), ("fragment", &p.program.fragment)] {
-   |                                                                               ^^^^^^^^ unknown field
+28 |         let url = url::Url::parse(&self.url)?;
+   |                   ^^^ use of unresolved module or unlinked crate `url`
    |
-help: one of the expressions' fields has a field of the same name
-   |
-22 |     for (stage, m) in [("vertex", &p.program.vertex), ("fragment", &p.program.unwrap().fragment)] {
-   |                                                                               +++++++++
+   = help: if you wanted to use a crate named `url`, use `cargo add url` to add it to your `Cargo.toml`
 
-error[E0609]: no field `vertex` on type `std::option::Option<horizon_shaders::Program>`
-  --> crates/horizon-shaderport/src/gpu.rs:53:26
+warning: unused import: `Tempt`
+  --> crates/horizon-client-lib/../horizon-client/src/mobs/aquatic.rs:10:35
    |
-53 |     for m in [&p.program.vertex, &p.program.fragment] {
-   |                          ^^^^^^ unknown field
+10 |         RandomLookAround, Stroll, Tempt, TryFindWater, goal_clone, reduced,
+   |                                   ^^^^^
    |
-help: one of the expressions' fields has a field of the same name
-   |
-53 |     for m in [&p.program.unwrap().vertex, &p.program.fragment] {
-   |                          +++++++++
-
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-  --> crates/horizon-shaderport/src/gpu.rs:53:45
-   |
-53 |     for m in [&p.program.vertex, &p.program.fragment] {
-   |                                             ^^^^^^^^ unknown field
-   |
-help: one of the expressions' fields has a field of the same name
-   |
-53 |     for m in [&p.program.vertex, &p.program.unwrap().fragment] {
-   |                                             +++++++++
-
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/gpu.rs:162:24
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+--
+error[E0061]: this method takes 4 arguments but 3 arguments were supplied
+   --> crates/horizon-client-lib/../horizon-client/src/touch_ui.rs:418:15
     |
-162 |     let m = &p.program.fragment;
-    |                        ^^^^^^^^ unknown field
+418 |             k.draw(&mut ui, false, crate::gamepad::GlyphStyle::Xbox);
+    |               ^^^^-------------------------------------------------- argument #4 of type `bool` is missing
     |
-help: one of the expressions' fields has a field of the same name
+note: method defined here
+   --> crates/horizon-client-lib/../horizon-client/src/osk.rs:297:12
     |
-162 |     let m = &p.program.unwrap().fragment;
-    |                        +++++++++
-
-error[E0614]: type `u32` cannot be dereferenced
-   --> crates/horizon-shaderport/src/gpu.rs:183:75
+297 |     pub fn draw(&self, ui: &mut Ui, at_top: bool, glyphs: GlyphStyle, by_letter: bool) {
+    |            ^^^^                                                       ---------------
+help: provide the argument
     |
-183 |         (_, Some(naga::Binding::Location { location, .. })) => outs.push((*location, width(result.ty))),
-    |                                                                           ^^^^^^^^^ can't be dereferenced
-
-error[E0609]: no field `interface` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/gpu.rs:219:10
-    |
-219 |         .interface
-    |          ^^^^^^^^^ unknown field
-    |
-help: one of the expressions' fields has a field of the same name
-    |
-219 |         .unwrap().interface
-    |          +++++++++
-
-error[E0063]: missing fields `entity_geometry`, `lines` and `terrain_geometry` in initializer of `GameInputs`
-  --> crates/horizon-shaderport/src/load.rs:56:5
-   |
-56 |     GameInputs {
-   |     ^^^^^^^^^^ missing `entity_geometry`, `lines` and `terrain_geometry`
-
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/skyblend.rs:120:24
-    |
-120 |     let m = &p.program.fragment;
-    |                        ^^^^^^^^ unknown field
-    |
-help: one of the expressions' fields has a field of the same name
-    |
-120 |     let m = &p.program.unwrap().fragment;
-    |                        +++++++++
-
-Some errors have detailed explanations: E0063, E0609, E0614.
-For more information about an error, try `rustc --explain E0063`.
-error: could not compile `horizon-shaderport` (lib) due to 9 previous errors
+418 |             k.draw(&mut ui, false, crate::gamepad::GlyphStyle::Xbox, /* bool */);
+    |                                                                    ++++++++++++
+--
+error: could not compile `horizon-client-lib` (lib) due to 3 previous errors; 2 warnings emitted
 warning: build failed, waiting for other jobs to finish...
+warning: `horizon-shaderport` (lib) generated 2 warnings
 warning: `horizon-client-render` (lib) generated 4 warnings
 
 === TAIL ===
-  --> crates/horizon-shaderport/src/gpu.rs:53:45
+   Compiling horizon-client-lib v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-lib)
+error[E0433]: cannot find module or crate `url` in this scope
+   --> crates/horizon-client-lib/../horizon-client/src/official_install.rs:109:15
+    |
+109 |     let url = url::Url::parse(text)?;
+    |               ^^^ use of unresolved module or unlinked crate `url`
+    |
+    = help: if you wanted to use a crate named `url`, use `cargo add url` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `url` in this scope
+  --> crates/horizon-client-lib/../horizon-client/src/resource_install.rs:28:19
    |
-53 |     for m in [&p.program.vertex, &p.program.fragment] {
-   |                                             ^^^^^^^^ unknown field
+28 |         let url = url::Url::parse(&self.url)?;
+   |                   ^^^ use of unresolved module or unlinked crate `url`
    |
-help: one of the expressions' fields has a field of the same name
+   = help: if you wanted to use a crate named `url`, use `cargo add url` to add it to your `Cargo.toml`
+
+warning: unused import: `Tempt`
+  --> crates/horizon-client-lib/../horizon-client/src/mobs/aquatic.rs:10:35
    |
-53 |     for m in [&p.program.vertex, &p.program.unwrap().fragment] {
-   |                                             +++++++++
-
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/gpu.rs:162:24
-    |
-162 |     let m = &p.program.fragment;
-    |                        ^^^^^^^^ unknown field
-    |
-help: one of the expressions' fields has a field of the same name
-    |
-162 |     let m = &p.program.unwrap().fragment;
-    |                        +++++++++
-
-error[E0614]: type `u32` cannot be dereferenced
-   --> crates/horizon-shaderport/src/gpu.rs:183:75
-    |
-183 |         (_, Some(naga::Binding::Location { location, .. })) => outs.push((*location, width(result.ty))),
-    |                                                                           ^^^^^^^^^ can't be dereferenced
-
-error[E0609]: no field `interface` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/gpu.rs:219:10
-    |
-219 |         .interface
-    |          ^^^^^^^^^ unknown field
-    |
-help: one of the expressions' fields has a field of the same name
-    |
-219 |         .unwrap().interface
-    |          +++++++++
-
-error[E0063]: missing fields `entity_geometry`, `lines` and `terrain_geometry` in initializer of `GameInputs`
-  --> crates/horizon-shaderport/src/load.rs:56:5
+10 |         RandomLookAround, Stroll, Tempt, TryFindWater, goal_clone, reduced,
+   |                                   ^^^^^
    |
-56 |     GameInputs {
-   |     ^^^^^^^^^^ missing `entity_geometry`, `lines` and `terrain_geometry`
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-error[E0609]: no field `fragment` on type `std::option::Option<horizon_shaders::Program>`
-   --> crates/horizon-shaderport/src/skyblend.rs:120:24
+error[E0061]: this method takes 4 arguments but 3 arguments were supplied
+   --> crates/horizon-client-lib/../horizon-client/src/touch_ui.rs:418:15
     |
-120 |     let m = &p.program.fragment;
-    |                        ^^^^^^^^ unknown field
+418 |             k.draw(&mut ui, false, crate::gamepad::GlyphStyle::Xbox);
+    |               ^^^^-------------------------------------------------- argument #4 of type `bool` is missing
     |
-help: one of the expressions' fields has a field of the same name
+note: method defined here
+   --> crates/horizon-client-lib/../horizon-client/src/osk.rs:297:12
     |
-120 |     let m = &p.program.unwrap().fragment;
-    |                        +++++++++
+297 |     pub fn draw(&self, ui: &mut Ui, at_top: bool, glyphs: GlyphStyle, by_letter: bool) {
+    |            ^^^^                                                       ---------------
+help: provide the argument
+    |
+418 |             k.draw(&mut ui, false, crate::gamepad::GlyphStyle::Xbox, /* bool */);
+    |                                                                    ++++++++++++
 
-Some errors have detailed explanations: E0063, E0609, E0614.
-For more information about an error, try `rustc --explain E0063`.
-error: could not compile `horizon-shaderport` (lib) due to 9 previous errors
+   Compiling horizon-port-pack v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-port-pack)
+warning: unreachable pattern
+    --> crates/horizon-client-lib/../horizon-client/src/lan/hub.rs:3574:17
+     |
+3566 |                 S::Interact(p) => {
+     |                 -------------- matches all the relevant values
+...
+3574 |                 S::Interact(p) => {
+     |                 ^^^^^^^^^^^^^^ no value can reach this
+     |
+     = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+Some errors have detailed explanations: E0061, E0433.
+For more information about an error, try `rustc --explain E0061`.
+warning: `horizon-client-lib` (lib) generated 2 warnings
+error: could not compile `horizon-client-lib` (lib) due to 3 previous errors; 2 warnings emitted
 warning: build failed, waiting for other jobs to finish...
+warning: `horizon-shaderport` (lib) generated 2 warnings
 warning: `horizon-client-render` (lib) generated 4 warnings
