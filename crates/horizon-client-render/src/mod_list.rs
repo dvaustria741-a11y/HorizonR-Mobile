@@ -48,7 +48,7 @@ pub const ANDROID_BUNDLED: [(&str, &str, &str); 7] = [
     (
         "iris_horizon",
         "Iris",
-        "Iris-style shader pack menu inside Sodium's video settings (needs Sodium)",
+        "Iris-style Shader Packs and Shader Pack Settings screens (needs Sodium)",
     ),
 ];
 

@@ -4312,7 +4312,8 @@ object HorizonNativeBridge {
         ZenkaiMod("recipes", "Recipes", "Item recipes and uses beside the inventory", "1.0.0"),
         ZenkaiMod("smartf3", "SmartF3", "Configurable modules for the F3 debug screen", "1.0.0"),
         ZenkaiMod("punchy", "Punchy", "First-person hand and item animations (preview)", "0.1.2"),
-        ZenkaiMod("sodium_horizon", "Sodium", "Sodium-style Video Settings and non-lighting optimizations", "0.4.0")
+        ZenkaiMod("sodium_horizon", "Sodium", "Sodium-style Video Settings and non-lighting optimizations", "0.4.0"),
+        ZenkaiMod("iris_horizon", "Iris", "Iris-style Shader Packs and Shader Pack Settings screens (needs Sodium)", "0.1.0")
     )
 
     private fun zenkaiStoreItem(m: ZenkaiMod): StoreCatalogItem = StoreCatalogItem(
