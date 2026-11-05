@@ -2238,6 +2238,8 @@ async fn open_backend(
     // (`MC_GL_KHR_shader_subgroup_*`); storage buffers in vertex shaders, clearing and
     // atomics on images: their buffers and images. Filtering 32-bit float textures: shader
     // packs' RGBA32F buffers, which GL filters and mipmaps. Count draws: GPU culling's (`gpu_culling`).
+    let mobile = cfg!(target_os = "android");
+    let compatibility = crate::android_runtime::compatibility();
     let features = timing::GpuTimer::features(&adapter)
         | if compatibility {
             wgpu::Features::empty()
@@ -2246,10 +2248,17 @@ async fn open_backend(
         }
         | oit::features(&adapter)
         | (adapter.features()
-            & (wgpu::Features::INDIRECT_FIRST_INSTANCE
-                | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT
-                | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
-                | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM
+            & (if compatibility {
+                wgpu::Features::empty()
+            } else {
+                wgpu::Features::INDIRECT_FIRST_INSTANCE
+                    | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT
+                    | if mobile {
+                        wgpu::Features::empty()
+                    } else {
+                        wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
+                    }
+            } | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM
                 | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
                 | wgpu::Features::RG11B10UFLOAT_RENDERABLE
                 | wgpu::Features::SUBGROUP
@@ -2340,6 +2349,9 @@ const NO_GPU_DRIVER: &str = "No Vulkan or OpenGL graphics driver found: Horizon 
 /// driver: it leaves no panic or crash report, so the log's last line is the
 /// only sign of where the game stopped. The log file is written unbuffered;
 /// the flush is for loggers that buffer.
+fn gl_backend(adapter: &wgpu::Adapter) -> bool {
+    adapter.get_info().backend == wgpu::Backend::Gl
+}
 fn startup_step(step: std::fmt::Arguments) {
     log::info!("Horizon renderer: {step}");
     log::logger().flush();
@@ -2505,6 +2517,10 @@ impl Renderer {
         wide_frame: bool,
         shader_pack: bool,
     ) -> Result<Self> {
+        #[cfg(target_os = "android")]
+        let startup = (!offscreen && api != GraphicsApi::OpenGl)
+            .then(crate::android_runtime::graphics_startup::begin)
+            .flatten();
         let Opened {
             instance,
             surface,
@@ -3112,6 +3128,9 @@ impl Renderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        if gl_backend(&adapter) {
+            startup_step(format_args!("creating GLES sprite textures"));
+        }
         let prepared = match prepared {
             Some(prepared) => prepared.resplit(layers, split),
             None => PreparedTextures::with_split(
@@ -4482,6 +4501,10 @@ impl Renderer {
                 );
                 visbuffer::Visbuffer::new(&device, &bindings, f, frame_format, &sprite_constants)
             });
+        let base_vertex = adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::BASE_VERTEX);
         let multi_draw = device
             .features()
             .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE)
@@ -4536,6 +4559,7 @@ impl Renderer {
         let cull_env = std::env::var("HORIZON_GPU_CULL");
         let adapter_info = adapter.get_info();
         let cull = cull::Cull::supported(&adapter, &device)
+            .filter(|_| !crate::android_runtime::compatibility())
             .filter(|_| occlusion_culling_requested(&adapter_info, cull_env.as_deref().ok()))
             .map(|depth_test| match cull_env.as_deref() {
                 Ok("shader") => cull::DepthTest::InShader,
@@ -5671,7 +5695,15 @@ impl Renderer {
                 pass.set_bind_group(1, group, &[]);
             }
             pass.set_index_buffer(indices, wgpu::IndexFormat::Uint32);
-            if self.multi_draw {
+            if !self.base_vertex {
+                // GLES 3.0 lacks base-vertex draws. Rebase the bound attribute
+                // stream instead, keeping section-local indices and instance origins.
+                for d in &draws[i..i + run] {
+                    let offset = u64::from(d[3]) * std::mem::size_of::<TerrainVertex>() as u64;
+                    pass.set_vertex_buffer(0, vertices.slice(offset..));
+                    pass.draw_indexed(d[2]..d[2] + d[0], 0, d[4]..d[4] + 1);
+                }
+            } else if self.multi_draw {
                 let offset = (i - base as usize) as u64 * 20;
                 pass.multi_draw_indexed_indirect(indirect, offset, run as u32);
             } else {
