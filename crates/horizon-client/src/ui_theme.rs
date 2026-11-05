@@ -585,20 +585,11 @@ pub fn draw_boot(atlas: &HudAtlas, batch: &mut HudBatch, logs: &[String]) {
         batch.height,
         color::hex(0x000000, 255),
     );
-    // Android: the launcher's animated HorizonZ splash is the loading screen, so the engine
-    // paints pure black only (no "Horizon" wordmark, tagline or console lines) and the next
-    // thing the player sees is the game itself.
-    #[cfg(target_os = "android")]
-    let _ = logs;
-    #[cfg(not(target_os = "android"))]
-    {
-        wordmark(atlas, batch);
-        draw_boot_log(atlas, batch, logs);
-    }
+    wordmark(atlas, batch);
+    draw_boot_log(atlas, batch, logs);
 }
 
 /// The wordmark with its tagline, centred.
-#[cfg_attr(target_os = "android", allow(dead_code))]
 fn wordmark(atlas: &HudAtlas, batch: &mut HudBatch) {
     let mut ui = Ui::new(atlas, batch, (0.0, 0.0));
     let size = (ui.w / 16.0).clamp(DISPLAY, 96.0);

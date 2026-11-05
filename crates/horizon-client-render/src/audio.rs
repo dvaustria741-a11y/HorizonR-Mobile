@@ -61,6 +61,8 @@ struct Mixer {
     world_names: Vec<String>,
     /// The callback's cameras (position, basis, world), kept to be refilled without allocating.
     cameras: Vec<([f64; 3], Basis, u32)>,
+    /// Per-source gain/pan/step cache for one buffer, reused across callbacks.
+    voices: Vec<(ChannelId, [f32; 3], f64)>,
     limiter_peak: f32,
     /// The output device the stream was opened on (`Library.currentDeviceName`).
     #[cfg(feature = "audio")]
@@ -69,9 +71,6 @@ struct Mixer {
     #[cfg(feature = "audio")]
     device_lost: bool,
 }
-#[cfg(feature = "audio")]
-type DeviceProbe = (Option<String>, Option<String>, Vec<String>);
-
 /// A camera's forward, up and right vectors.
 type Basis = ([f64; 3], [f64; 3], [f64; 3]);
 impl Mixer {
@@ -186,6 +185,7 @@ struct Decode {
     key: String,
     file: PathBuf,
     channel: ChannelId,
+    looping: bool,
 }
 /// Give a channel waiting on its sound the decoded samples and start it, as
 /// the buffer future attaching and playing the source. A source stopped or
@@ -208,6 +208,18 @@ fn attach(mixer: &Mutex<Mixer>, channel: ChannelId, samples: Samples, looping: b
 type Stream = cpal::Stream;
 #[cfg(not(feature = "audio"))]
 type Stream = std::convert::Infallible;
+/// A level sound retained for the network broadcaster, in playback order.
+#[derive(Clone, Debug)]
+pub struct CapturedSound {
+    pub event: String,
+    pub position: [f64; 3],
+    pub volume: f32,
+    pub pitch: f32,
+    pub source: usize,
+    pub entity: Option<u32>,
+    pub except_entity: Option<u32>,
+}
+
 pub struct Audio {
     _stream: Option<Stream>,
     device_name: String,
@@ -224,7 +236,7 @@ pub struct Audio {
     source_override: Option<usize>,
     /// Positional sounds played since the last drain, kept while the world
     /// is open to the network so guests hear them too.
-    pub capture: Option<Vec<(String, [f64; 3], f32, f32)>>,
+    pub capture: Option<Vec<CapturedSound>>,
     /// How many times each positional sound played (the control socket's `status`),
     /// with or without an audio device.
     pub heard: std::collections::BTreeMap<String, u32>,
@@ -427,7 +439,7 @@ impl Backend for MixerBackend {
         let key = format!("{namespace}:{path}");
         let cached = self.cache.lock().ok().and_then(|mut c| c.get(&key));
         if let Some(samples) = cached {
-            attach(&self.mixer, channel, samples, false);
+            attach(&self.mixer, channel, samples, looping);
             return;
         }
         let decoder = self.decoder.get_or_insert_with(|| {
@@ -446,13 +458,18 @@ impl Backend for MixerBackend {
                             }
                             samples
                         });
-                        attach(&mixer, job.channel, samples, false);
+                        attach(&mixer, job.channel, samples, job.looping);
                     }
                 })
                 .expect("sound decoder thread");
             send
         });
-        let _ = decoder.send(Decode { key, file, channel });
+        let _ = decoder.send(Decode {
+            key,
+            file,
+            channel,
+            looping,
+        });
     }
     /// `alSourceStop`: any state becomes stopped, an initial source too (a
     /// sound still decoding then never starts).
@@ -545,9 +562,8 @@ fn mix(mixer: &mut Mixer, data: &mut [f32], channels: usize, rate: u32) {
         (forward, up, right)
     };
     // Every camera hearing (splitscreen: the other players' too), in the mixer's own buffer.
-    let mut cameras = std::mem::take(&mut mixer.cameras);
-    cameras.clear();
-    cameras.extend(
+    mixer.cameras.clear();
+    mixer.cameras.extend(
         std::iter::once((
             0,
             (mixer.listener, mixer.listener_yaw, mixer.listener_pitch),
@@ -566,10 +582,11 @@ fn mix(mixer: &mut Mixer, data: &mut [f32], channels: usize, rate: u32) {
             )
         }),
     );
-    let shared = cameras.len() > 1;
+    let shared = mixer.cameras.len() > 1;
     let dot = |a: [f64; 3], b: [f64; 3]| (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) as f32;
     // Gains and pans per source for this buffer.
-    let mut voices: Vec<(ChannelId, [f32; 3], f64)> = Vec::new();
+    let mut voices = std::mem::take(&mut mixer.voices);
+    voices.clear();
     for (id, c) in &mixer.channels {
         let Some((_, source_rate)) = &c.samples else {
             continue;
@@ -587,7 +604,8 @@ fn mix(mixer: &mut Mixer, data: &mut [f32], channels: usize, rate: u32) {
         };
         let length = |d: [f64; 3]| d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
         // The nearest camera hears it (one camera but in splitscreen).
-        let camera = cameras
+        let camera = mixer
+            .cameras
             .iter()
             .filter(|camera| c.relative || camera.2 == c.world)
             .min_by(|a, b| length(away(a.0)).total_cmp(&length(away(b.0))))
@@ -618,8 +636,7 @@ fn mix(mixer: &mut Mixer, data: &mut [f32], channels: usize, rate: u32) {
         let step = f64::from(*source_rate) / f64::from(rate) * f64::from(c.pitch.max(0.0));
         voices.push((*id, [left, right, gain], step));
     }
-    mixer.cameras = cameras;
-    for (id, [left, right, gain], step) in voices {
+    for (id, [left, right, gain], step) in voices.iter().copied() {
         let Some(c) = mixer.channels.get_mut(&id) else {
             continue;
         };
@@ -649,6 +666,7 @@ fn mix(mixer: &mut Mixer, data: &mut [f32], channels: usize, rate: u32) {
             c.position += step;
         }
     }
+    mixer.voices = voices;
     // Limit the whole buffer together, preserving waveform and stereo balance
     // instead of flattening each overloaded sample; release over 200 ms
     // (OpenAL Soft's output limiter, `ALC_OUTPUT_LIMITER_SOFT`, releases
@@ -691,17 +709,27 @@ fn open_device(
 ) -> Result<(cpal::Stream, cpal::SupportedStreamConfig)> {
     use cpal::SampleFormat as F;
     let config = device.default_output_config()?;
-    let stream = match config.sample_format() {
-        F::F32 => build_stream::<f32>(device, &config, mixer.clone()),
-        F::F64 => build_stream::<f64>(device, &config, mixer.clone()),
-        F::I16 => build_stream::<i16>(device, &config, mixer.clone()),
-        F::I32 => build_stream::<i32>(device, &config, mixer.clone()),
-        F::I8 => build_stream::<i8>(device, &config, mixer.clone()),
-        F::U16 => build_stream::<u16>(device, &config, mixer.clone()),
-        F::U32 => build_stream::<u32>(device, &config, mixer.clone()),
-        F::U8 => build_stream::<u8>(device, &config, mixer.clone()),
+    let build = |stream_config: &cpal::StreamConfig| match config.sample_format() {
+        F::F32 => build_stream::<f32>(device, &config, stream_config, mixer.clone()),
+        F::F64 => build_stream::<f64>(device, &config, stream_config, mixer.clone()),
+        F::I16 => build_stream::<i16>(device, &config, stream_config, mixer.clone()),
+        F::I32 => build_stream::<i32>(device, &config, stream_config, mixer.clone()),
+        F::I8 => build_stream::<i8>(device, &config, stream_config, mixer.clone()),
+        F::U16 => build_stream::<u16>(device, &config, stream_config, mixer.clone()),
+        F::U32 => build_stream::<u32>(device, &config, stream_config, mixer.clone()),
+        F::U8 => build_stream::<u8>(device, &config, stream_config, mixer.clone()),
         other => Err(format!("unsupported sample format {other}").into()),
-    }?;
+    };
+    let short = audio_stream_config(&config);
+    let stream = match build(&short) {
+        Ok(stream) => stream,
+        // A device that refuses the short fixed buffer still plays with cpal's default one.
+        Err(e) if short != config.config() => {
+            log::info!("Horizon: audio output refused a short buffer ({e}); using the default");
+            build(&config.config())?
+        }
+        Err(e) => return Err(e),
+    };
     stream.play()?;
     if let Ok(mut m) = mixer.lock() {
         m.device_name = device.name().unwrap_or_default();
@@ -782,10 +810,35 @@ fn cards_changed(seen: Option<&str>, cards: Option<&str>) -> bool {
         _ => true,
     }
 }
+
+/// The cpal `StreamConfig` to open an output stream with. On Linux the ALSA
+/// backend's `BufferSize::Default` means a ~100 ms buffer, so sound effects
+/// come out about 100 ms late: request a short fixed buffer there. Other
+/// platforms keep cpal's default behaviour.
+#[cfg(feature = "audio")]
+fn audio_stream_config(config: &cpal::SupportedStreamConfig) -> cpal::StreamConfig {
+    #[cfg(target_os = "linux")]
+    {
+        let range = match config.buffer_size() {
+            cpal::SupportedBufferSize::Range { min, max } => (*min, *max),
+            cpal::SupportedBufferSize::Unknown => (256, 4096),
+        };
+        let target = 1024u32.clamp(range.0, range.1);
+        let mut sc = config.config();
+        sc.buffer_size = cpal::BufferSize::Fixed(target);
+        sc
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        config.config()
+    }
+}
+
 #[cfg(feature = "audio")]
 fn build_stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
     device: &cpal::Device,
     config: &cpal::SupportedStreamConfig,
+    stream_config: &cpal::StreamConfig,
     mixer: Arc<Mutex<Mixer>>,
 ) -> Result<cpal::Stream> {
     let rate = config.sample_rate().0;
@@ -793,7 +846,7 @@ fn build_stream<T: cpal::SizedSample + cpal::FromSample<f32>>(
     let mut scratch = Vec::new();
     let on_error = mixer.clone();
     let stream = device.build_output_stream(
-        &config.config(),
+        stream_config,
         move |data: &mut [T], _| {
             scratch.resize(data.len(), 0.0f32);
             if let Ok(mut m) = mixer.lock() {
@@ -886,6 +939,17 @@ impl Audio {
         };
         let mut engine = SoundEngine::new(registry);
         engine.loaded = live;
+        #[cfg(feature = "audio")]
+        let cards = if live { card_fingerprint() } else { None };
+        // Where the cards gate the list (Linux, macOS), it starts empty: opening the
+        // output does not need it, and listing it probes every device; the first
+        // change fills it. Elsewhere it starts with every device listed, as before.
+        #[cfg(feature = "audio")]
+        let devices = if live && cards.is_none() {
+            output_devices()
+        } else {
+            Vec::new()
+        };
         Self {
             _stream: stream,
             device_name: target_device.to_owned(),
@@ -914,7 +978,9 @@ impl Audio {
             #[cfg(feature = "audio")]
             default_seen: None,
             #[cfg(feature = "audio")]
-            cards_seen: None,
+            cards_seen: cards,
+            #[cfg(feature = "audio")]
+            devices_seen: devices,
             #[cfg(feature = "audio")]
             devices_seen: Vec::new(),
             #[cfg(feature = "audio")]
@@ -1080,9 +1146,7 @@ impl Audio {
             #[cfg(feature = "audio")]
             devices_seen: self.devices_seen.clone(),
             #[cfg(feature = "audio")]
-            device_probe_started: std::time::Instant::now(),
-            #[cfg(feature = "audio")]
-            device_probe: None,
+            device_ticks: 0,
         }
     }
     /// Sync the volume options, refreshing the categories that changed
@@ -1147,20 +1211,42 @@ impl Audio {
         };
         if lost {
             log::info!("Horizon: audio device was lost");
-            self.default_seen = None;
-            self.devices_seen.clear();
-            self.device_probe_started = std::time::Instant::now();
+            self.default_seen = default_output_name();
+            self.cards_seen = card_fingerprint();
+            self.devices_seen = output_devices();
             return true;
         }
-        let mut found = None;
-        if let Some(result) = self.device_probe.as_ref().map(|probe| probe.try_recv()) {
-            match result {
-                Ok(value) => {
-                    found = Some(value);
-                    self.device_probe = None;
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.device_probe = None,
+        self.device_ticks += 1;
+        if self._stream.is_none() || self.device_ticks < 20 {
+            return false;
+        }
+        self.device_ticks = 0;
+        let default = default_output_name();
+        let cards = card_fingerprint();
+        // Listing the devices probes every one (on Linux every built-in PCM,
+        // printing ALSA's errors for the plugins this system lacks; on macOS
+        // every Core Audio device, about 90 ms with twenty of them); only the
+        // fingerprint's devices can change the list, and it is cheap.
+        if default == self.default_seen
+            && !cards_changed(self.cards_seen.as_deref(), cards.as_deref())
+        {
+            return false;
+        }
+        self.cards_seen = cards;
+        let devices = output_devices();
+        // Only a change in the device lists is looked at, as in vanilla: a
+        // preferred device that is listed but cannot open is not retried.
+        if default == self.default_seen && devices == self.devices_seen {
+            return false;
+        }
+        self.default_seen = default.clone();
+        let wanted = self.device_name.clone();
+        let available = devices.contains(&wanted);
+        self.devices_seen = devices;
+        if wanted.is_empty() {
+            let changed = default.as_deref().is_some_and(|d| d != current);
+            if changed {
+                log::info!("Horizon: system default audio device has changed");
             }
         }
         let mut changed = false;
@@ -1211,6 +1297,15 @@ impl Audio {
         self.sync_volumes();
         self.engine.tick(paused, ctx, &mut self.backend);
     }
+    /// The `uiSoundReserve` extra: positional sounds leave
+    /// `sound_engine::HEARD_RESERVE` static channels free (off: vanilla's pool).
+    pub fn set_listener_reserve(&mut self, on: bool) {
+        self.engine.listener_reserve = if on {
+            crate::sound_engine::HEARD_RESERVE
+        } else {
+            0
+        };
+    }
     /// `SoundManager.pauseAllExcept(MUSIC, UI)`.
     pub fn pause(&mut self) {
         self.engine.pause_all_except(
@@ -1229,8 +1324,13 @@ impl Audio {
     /// `SoundManager.reload` (resource packs changed): stop every sound, then
     /// read sound events and sound files from the new resource root.
     pub fn reload(&mut self, root: &Path) {
+        self.reload_with(root, SoundRegistry::load(root));
+    }
+    /// [`Self::reload`] with the root's sound events already read
+    /// (`SoundRegistry::load`, which a pack reload runs off the render thread).
+    pub fn reload_with(&mut self, root: &Path, registry: SoundRegistry) {
         self.stop_all();
-        self.engine.registry = SoundRegistry::load(root);
+        self.engine.registry = registry;
         self.backend.root = root.to_owned();
         let mut cache = self.backend.cache.lock().unwrap();
         cache.entries.clear();
@@ -1258,9 +1358,30 @@ impl Audio {
             self.play(event, Some(at), volume, pitch);
             return;
         }
+        self.play_after(
+            event,
+            at,
+            volume,
+            pitch,
+            (distance_sqr.sqrt() / 40.0 * 20.0) as i32,
+        );
+    }
+    /// `play` at a world position, starting `ticks` sound-engine ticks (20 a
+    /// second) from now: `SoundEngine.playDelayed`.
+    pub fn play_after(&mut self, event: &str, at: [f64; 3], volume: f32, pitch: f32, ticks: i32) {
         let seed = self.random.next_long();
         if let Some(capture) = self.capture.as_mut() {
-            capture.push((event.to_owned(), at, volume, pitch));
+            capture.push(CapturedSound {
+                event: event.to_owned(),
+                position: at,
+                volume,
+                pitch,
+                source: self.source_override.unwrap_or_else(|| {
+                    crate::settings::sound_source(&crate::sound_events::normalize(event))
+                }),
+                entity: None,
+                except_entity: None,
+            });
         }
         *self.heard.entry(event.to_owned()).or_default() += 1;
         self.sync_volumes();
@@ -1271,8 +1392,7 @@ impl Audio {
         let instance =
             SoundInstance::at(&event, source, volume, pitch, LegacyRandom::new(seed), at);
         let id = self.engine.add(instance, false);
-        self.engine
-            .play_delayed(id, (distance_sqr.sqrt() / 40.0 * 20.0) as i32);
+        self.engine.play_delayed(id, ticks);
     }
     /// `play` for this client only: a sound a packet's handler plays
     /// (`playLocalSound`), which the guests play from that packet themselves.
@@ -1300,6 +1420,66 @@ impl Audio {
         preview.preview(self, source, volume);
         self.preview = preview;
     }
+    /// An incoming entity-sound packet: retain its seed and category without rebroadcasting it.
+    pub fn play_entity_seeded(
+        &mut self,
+        event: &str,
+        source: usize,
+        volume: f32,
+        pitch: f32,
+        seed: i64,
+        entity: crate::sound_engine::SoundEntity,
+    ) {
+        *self.heard.entry(event.to_owned()).or_default() += 1;
+        let event = crate::sound_events::normalize(event);
+        let instance = SoundInstance::entity_bound(
+            &event,
+            source,
+            volume,
+            pitch,
+            LegacyRandom::new(seed),
+            entity,
+        );
+        self.play_instance(instance, false);
+    }
+    /// A level's entity overload: preserve the emitter and excluded player for
+    /// the server broadcaster while the local sound follows the same object.
+    pub fn play_bound(
+        &mut self,
+        event: &str,
+        source: usize,
+        volume: f32,
+        pitch: f32,
+        entity: crate::sound_engine::SoundEntity,
+        except_entity: Option<u32>,
+    ) {
+        if let Some(capture) = self.capture.as_mut() {
+            capture.push(CapturedSound {
+                event: event.to_owned(),
+                position: entity.state().position,
+                volume,
+                pitch,
+                source,
+                entity: Some(entity.id),
+                except_entity,
+            });
+        }
+        let seed = self.random.next_long();
+        self.play_entity_seeded(event, source, volume, pitch, seed, entity);
+    }
+    /// Removal belongs to the old object even if its numeric id is immediately reused.
+    pub fn remove_sound_entity(&mut self, id: u32) {
+        for entity in self
+            .engine
+            .bound_entities()
+            .into_iter()
+            .filter(|e| e.id == id)
+        {
+            let mut state = entity.state();
+            state.removed = true;
+            entity.update(state);
+        }
+    }
     /// `play` with the seed a sound packet carries.
     pub fn play_seeded(
         &mut self,
@@ -1310,7 +1490,17 @@ impl Audio {
         seed: i64,
     ) {
         if let (Some(capture), Some(at)) = (self.capture.as_mut(), at) {
-            capture.push((event.to_owned(), at, volume, pitch));
+            capture.push(CapturedSound {
+                event: event.to_owned(),
+                position: at,
+                volume,
+                pitch,
+                source: self.source_override.unwrap_or_else(|| {
+                    crate::settings::sound_source(&crate::sound_events::normalize(event))
+                }),
+                entity: None,
+                except_entity: None,
+            });
         }
         if at.is_some() {
             *self.heard.entry(event.to_owned()).or_default() += 1;
@@ -1367,6 +1557,13 @@ impl Audio {
     pub fn stop_and_release(&mut self, id: InstanceId) {
         self.stop_instance(id);
         self.release(id);
+    }
+    /// `SoundBufferLibrary.enumerate`: the decoded buffers kept and their bytes.
+    pub fn cache_stats(&self) -> (usize, usize) {
+        self.backend
+            .cache
+            .lock()
+            .map_or((0, 0), |c| (c.entries.len(), c.bytes))
     }
     /// Every sound event id (for command completion).
     /// The engine's table sizes and the mixer's channels (`status`).
@@ -1442,6 +1639,81 @@ impl Sounds for Audio {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn level_capture_keeps_order_category_entity_and_actor_exclusion() {
+        let mut audio = Audio::silent(Path::new("/nonexistent/horizon-entity-sound-test"));
+        audio.capture = Some(Vec::new());
+        let mut expected = audio.random.clone();
+        audio.play_on(
+            7,
+            "minecraft:block.amethyst_block.chime",
+            Some([1.0; 3]),
+            0.5,
+            1.0,
+        );
+        let entity = crate::sound_engine::SoundEntity::new(37, [2.123456789, 64.0, -3.0], false);
+        audio.play_bound(
+            "minecraft:block.amethyst_block.chime",
+            6,
+            2.0,
+            1.2,
+            entity,
+            Some(17),
+        );
+        let sounds = audio.capture.as_ref().unwrap();
+        assert_eq!(sounds.len(), 2);
+        assert_eq!(
+            (sounds[0].source, sounds[0].entity, sounds[0].except_entity),
+            (7, None, None)
+        );
+        let bound = &sounds[1];
+        assert_eq!(
+            (bound.source, bound.entity, bound.except_entity),
+            (6, Some(37), Some(17))
+        );
+        assert_eq!(bound.position, [2.123456789, 64.0, -3.0]);
+        assert_eq!((bound.volume, bound.pitch), (2.0, 1.2));
+        expected.next_long();
+        expected.next_long();
+        assert_eq!(audio.random.next_long(), expected.next_long());
+    }
+
+    #[test]
+    fn entity_sound_packets_neither_rebroadcast_nor_advance_the_local_seed_generator() {
+        let mut audio = Audio::silent(Path::new("/nonexistent/horizon-entity-sound-test"));
+        audio.capture = Some(Vec::new());
+        let mut expected = audio.random.clone();
+        let entity = crate::sound_engine::SoundEntity::new(7, [1.0, 2.0, 3.0], false);
+        audio.play_entity_seeded("minecraft:fixture.bound", 6, 0.7, 1.2, 42, entity);
+        assert!(audio.capture.as_ref().unwrap().is_empty());
+        assert_eq!(audio.random.next_long(), expected.next_long());
+    }
+    #[test]
+    fn removal_marks_only_existing_references_to_that_entity() {
+        use crate::sound_engine::SoundEntity;
+        let mut audio = Audio::silent(Path::new("/nonexistent/horizon-entity-sound-test"));
+        let old = SoundEntity::new(7, [0.0; 3], false);
+        let other = SoundEntity::new(8, [0.0; 3], false);
+        for entity in [old.clone(), other.clone()] {
+            audio.engine.add(
+                SoundInstance::entity_bound(
+                    "minecraft:fixture.bound",
+                    6,
+                    1.0,
+                    1.0,
+                    LegacyRandom::new(42),
+                    entity,
+                ),
+                true,
+            );
+        }
+        audio.remove_sound_entity(7);
+        let replacement = SoundEntity::new(7, [10.0; 3], false);
+        assert!(old.state().removed);
+        assert!(!other.state().removed);
+        assert!(!replacement.state().removed);
+    }
 
     #[test]
     fn button_click_uses_vanilla_ui_parameters_without_advancing_world_random() {
@@ -1833,23 +2105,6 @@ mod tests {
         let mut data = [0.0; 2];
         mix(&mut m, &mut data, 1, 48_000);
         assert_eq!(data, [0.5; 2]);
-    }
-    #[cfg(feature = "audio")]
-    #[test]
-    fn pending_device_discovery_does_not_block_tick() {
-        let mut audio = Audio::silent(Path::new("missing-audio-test-resources"));
-        audio.backend.mixer.lock().unwrap().device_name = "primary".into();
-        audio.default_seen = Some("primary".into());
-        audio.devices_seen = vec!["primary".into()];
-        let (tx, rx) = std::sync::mpsc::channel();
-        audio.device_probe = Some(rx);
-        assert!(!audio.should_change_device());
-        assert!(audio.device_probe.is_some());
-        tx.send((Some("headphones".into()), None, vec!["headphones".into()]))
-            .unwrap();
-        assert!(audio.should_change_device());
-        assert!(audio.device_probe.is_none());
-        assert_eq!(audio.default_seen.as_deref(), Some("headphones"));
     }
 
     #[test]
