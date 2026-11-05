@@ -60,7 +60,10 @@ pub(crate) fn inputs() -> GameInputs {
         entities: Some(terrain.clone()),
         clouds: Some(terrain.clone()),
         weather: Some(terrain.clone()),
-        hand: Some(terrain),
+        hand: Some(terrain.clone()),
+        lines: Some(terrain),
+        terrain_geometry: None,
+        entity_geometry: None,
     }
 }
 

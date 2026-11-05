@@ -117,7 +117,7 @@ fn stores_zero_alpha(m: &naga::Module, ep: &naga::EntryPoint, g: Handle<naga::Gl
 
 /// The buffers a sky program writes with alpha 0 everywhere, or `None` if some output does not.
 fn zero_alpha_buffers(p: &PostProgram) -> Option<Vec<u32>> {
-    let m = &p.program.fragment;
+    let m = &p.program.as_ref()?.fragment;
     let ep = m.entry_points.iter().find(|e| e.stage == naga::ShaderStage::Fragment)?;
     let outs = returned_globals(m, ep)?;
     let mut bufs = Vec::new();
