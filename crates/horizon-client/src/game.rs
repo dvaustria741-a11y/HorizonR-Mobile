@@ -16567,7 +16567,10 @@ impl Game<'_> {
         // does not open menus for spectators, so those never show it. An open
         // screen does not hide it: vanilla checks the HUD and the game mode, not the screen.
         let adventure = self.mode == horizon_client::command::args::GameMode::Adventure;
-        let outline = if !self.ui.hide_gui && (self.may_build() || adventure) {
+        let outline = if touch_target_visible
+            && !self.ui.hide_gui
+            && (self.may_build() || adventure)
+        {
             self.pick()
                 .filter(|h| {
                     self.may_build()
@@ -16591,11 +16594,25 @@ impl Game<'_> {
                         .is_ok_and(|models| {
                             models
                                 .iter()
-                                .map(|e| {
-                                    std::array::from_fn(|i| {
-                                        let k = i % 3;
-                                        p[k] + b[k] + e[i] * (b[k + 3] - b[k])
-                                    })
+                                .any(|(_, model)| model.faces.iter().any(|f| f.translucent))
+                        });
+                    let o = if f.outline_offset {
+                        self.pack
+                            .context
+                            .tables
+                            .offset(state, h.pos[0], h.pos[2])
+                            .unwrap_or([0.0; 3])
+                    } else {
+                        [0.0; 3]
+                    };
+                    let p = h.pos.map(f64::from);
+                    if let Some(b) = self.context_outline(h.pos, state) {
+                        return horizon_client::blocks::cube_edges()
+                            .iter()
+                            .map(|e| {
+                                std::array::from_fn(|i| {
+                                    let k = i % 3;
+                                    p[k] + b[k] + e[i] * (b[k + 3] - b[k])
                                 })
                             })
                             .collect();
