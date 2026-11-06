@@ -19,7 +19,7 @@ impl Game<'_> {
 
     pub(super) fn android_keypad_menu_key(
         &mut self,
-        events: &ActiveEventLoop,
+        events: &dyn EventLoopCtl,
         event: &winit::event::KeyEvent,
     ) -> Result<bool> {
         if !self.pad_in_menu()
@@ -68,7 +68,7 @@ impl Game<'_> {
     /// A freely moving physical pointer can use the same utility buttons as touch.
     pub(super) fn android_aux_mouse(
         &mut self,
-        events: &ActiveEventLoop,
+        events: &dyn EventLoopCtl,
         id: WindowId,
         event: &WindowEvent,
     ) -> bool {
@@ -118,7 +118,7 @@ impl Game<'_> {
             force: None,
             id: POINTER,
         };
-        self.window_event(events, id, WindowEvent::Touch(touch));
+        self.handle_window_event(events, id, WindowEvent::Touch(touch), input_trace::InputOrigin::User);
         true
     }
 
@@ -152,7 +152,7 @@ impl Game<'_> {
             if let Some(mapping) = name.strip_prefix("action:") {
                 let default = horizon_client::keybinds::KeyBinds::default_of(mapping);
                 let result = if let Some(key) = horizon_client::keybinds::key_code(default) {
-                    self.mapped_key(key, down, false)
+                    self.mapped_key(key, down, false, key, horizon_client::held::Source::Keyboard)
                 } else if let Some(button) = horizon_client::keybinds::mouse_button(default) {
                     self.android_custom_mouse(button, down)
                 } else {
@@ -199,7 +199,9 @@ impl Game<'_> {
             }
             for mapped in self.settings.keys.translate_all(key) {
                 let result = match mapped {
-                    Ok(code) => self.mapped_key(code, down, false),
+                    Ok(code) => {
+                        self.mapped_key(code, down, false, code, horizon_client::held::Source::Keyboard)
+                    }
                     Err(button) => self.android_custom_mouse(button, down),
                 };
                 if let Err(error) = result {
@@ -242,7 +244,7 @@ impl Game<'_> {
 
     fn android_menu_mouse(
         &mut self,
-        events: &ActiveEventLoop,
+        events: &dyn EventLoopCtl,
         id: WindowId,
         right: bool,
         down: bool,
@@ -255,7 +257,7 @@ impl Game<'_> {
         if matches!(self.screen, Screen::Inventory | Screen::Creative) {
             self.android_custom_mouse(button, down)
         } else {
-            self.window_event(
+            self.handle_window_event(
                 events,
                 id,
                 WindowEvent::MouseInput {
@@ -266,15 +268,14 @@ impl Game<'_> {
                     } else {
                         ElementState::Released
                     },
-                },
-            );
+                }, input_trace::InputOrigin::User);
             Ok(())
         }
     }
     pub(super) fn android_aux_touch(
         &mut self,
         t: &Touch,
-        events: &ActiveEventLoop,
+        events: &dyn EventLoopCtl,
         id: WindowId,
     ) -> Result<bool> {
         if t.phase == TouchPhase::Ended
@@ -380,14 +381,14 @@ impl Game<'_> {
                             if down {
                                 self.physical_keys.insert(key);
                             }
-                            self.mapped_key(key, down, false)?;
+                            self.mapped_key(key, down, false, key, horizon_client::held::Source::Keyboard)?;
                         } else {
                             if !self.pad.touch_ui.key_down(t.id, key) {
                                 return Ok(true);
                             }
                             self.physical_keys.insert(key);
                             if !self.debug_key(key, KeyAction::Press) {
-                                self.key_pressed(key)?;
+                                self.key_pressed(key, key)?;
                             }
                             if matches!(key, KeyCode::KeyT | KeyCode::Slash)
                                 && self.screen == Screen::Chat
@@ -583,7 +584,7 @@ impl Game<'_> {
             }
         }
     }
-    pub(super) fn android_menu_touch(&mut self, t: &Touch, events: &ActiveEventLoop, id: WindowId) {
+    pub(super) fn android_menu_touch(&mut self, t: &Touch, events: &dyn EventLoopCtl, id: WindowId) {
         if self.pad.touch_ui.virtual_mouse {
             self.android_virtual_touch(t, events, id);
             return;
@@ -593,17 +594,16 @@ impl Game<'_> {
         };
         let p = [t.location.x as f32 / b.scale, t.location.y as f32 / b.scale];
         let direct = self.pad.touch_ui.direct_pointer(t.id, p, t.phase);
-        self.window_event(
+        self.handle_window_event(
             events,
             id,
             WindowEvent::CursorMoved {
                 device_id: t.device_id,
                 position: t.location,
-            },
-        );
+            }, input_trace::InputOrigin::User);
         if direct {
             if t.phase != TouchPhase::Moved {
-                self.window_event(
+                self.handle_window_event(
                     events,
                     id,
                     WindowEvent::MouseInput {
@@ -614,8 +614,7 @@ impl Game<'_> {
                         } else {
                             ElementState::Released
                         },
-                    },
-                );
+                    }, input_trace::InputOrigin::User);
             }
             return;
         }
@@ -627,36 +626,34 @@ impl Game<'_> {
             Gesture::Tap => {
                 let field = crate::platform::field_at(p);
                 for state in [ElementState::Pressed, ElementState::Released] {
-                    self.window_event(
+                    self.handle_window_event(
                         events,
                         id,
                         WindowEvent::MouseInput {
                             device_id: t.device_id,
                             button: MouseButton::Left,
                             state,
-                        },
-                    );
+                        }, input_trace::InputOrigin::User);
                 }
                 if field || self.sign_edit.is_some() {
                     self.android_show_keyboard();
                 }
             }
-            Gesture::Scroll(y) => self.window_event(
+            Gesture::Scroll(y) => self.handle_window_event(
                 events,
                 id,
                 WindowEvent::MouseWheel {
                     device_id: t.device_id,
                     delta: MouseScrollDelta::LineDelta(0.0, y),
                     phase: TouchPhase::Moved,
-                },
-            ),
+                }, input_trace::InputOrigin::User),
             Gesture::None => {}
         }
     }
     pub(super) fn android_virtual_touch(
         &mut self,
         t: &Touch,
-        events: &ActiveEventLoop,
+        events: &dyn EventLoopCtl,
         id: WindowId,
     ) {
         let Some(b) = self.gui_scale() else {
@@ -671,7 +668,7 @@ impl Game<'_> {
             self.settings.touch.virtual_mouse_sensitivity,
             !self.pad.touch_ui.mouse_held(),
         );
-        self.window_event(
+        self.handle_window_event(
             events,
             id,
             WindowEvent::CursorMoved {
@@ -680,10 +677,9 @@ impl Game<'_> {
                     f64::from(position[0] * b.scale),
                     f64::from(position[1] * b.scale),
                 ),
-            },
-        );
+            }, input_trace::InputOrigin::User);
     }
-    pub(super) fn android_virtual_mouse_clicks(&mut self, events: &ActiveEventLoop) {
+    pub(super) fn android_virtual_mouse_clicks(&mut self, events: &dyn EventLoopCtl) {
         if !self.focused || !self.pad_in_menu() || !self.pad.touch_ui.virtual_mouse {
             self.pad.touch_ui.cancel_relative();
             for right in self.pad.touch_ui.release_all_mouse() {
@@ -712,15 +708,14 @@ impl Game<'_> {
             }
         } else if let Some(id) = self.window.as_ref().map(|w| w.id()) {
             for state in [ElementState::Pressed, ElementState::Released] {
-                self.window_event(
+                self.handle_window_event(
                     events,
                     id,
                     WindowEvent::MouseInput {
                         device_id: DeviceId::dummy(),
                         state,
                         button,
-                    },
-                );
+                    }, input_trace::InputOrigin::User);
             }
         }
     }

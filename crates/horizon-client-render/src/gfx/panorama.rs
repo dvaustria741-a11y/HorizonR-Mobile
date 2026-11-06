@@ -82,6 +82,18 @@ impl Faces {
         })
     }
 
+    /// The cube's side and texels as the GPU gets them: the original resolution, or on Android's
+    /// OpenGL ES a cube of at most 256 texels a side (an old GPU's texture limits), each texel
+    /// the average of the original texels it covers.
+    pub fn cube_texels(&self) -> (u32, Vec<u8>) {
+        let texels = self.texels();
+        #[cfg(target_os = "android")]
+        if crate::android_runtime::graphics_api() == crate::graphics::GraphicsApi::OpenGl {
+            return reduce_texels(self.size, texels, 256);
+        }
+        (self.size, texels)
+    }
+
     /// The cube's texels, layer after layer.
     pub fn texels(&self) -> Vec<u8> {
         if self.files.is_empty() {
@@ -96,6 +108,37 @@ impl Faces {
             .or_else(|| decode_faces(&self.files).ok().map(|(_, texels)| texels))
             .unwrap_or_else(|| vec![0; (self.size * self.size * 4 * 6) as usize])
     }
+}
+
+/// Six layers of `size`-texel squares averaged down to at most `maximum` texels a side.
+#[cfg(any(target_os = "android", test))]
+fn reduce_texels(size: u32, texels: Vec<u8>, maximum: u32) -> (u32, Vec<u8>) {
+    let side = size.min(maximum.max(1));
+    if side == size || size == 0 {
+        return (size, texels);
+    }
+    let face_bytes = (size * size * 4) as usize;
+    let mut pixels = Vec::with_capacity((side * side * 4 * 6) as usize);
+    for face in texels.chunks_exact(face_bytes) {
+        for y in 0..side {
+            let (y0, y1) = (y * size / side, (y + 1) * size / side);
+            for x in 0..side {
+                let (x0, x1) = (x * size / side, (x + 1) * size / side);
+                let mut sum = [0u64; 4];
+                for sy in y0..y1 {
+                    for sx in x0..x1 {
+                        let at = ((sy * size + sx) * 4) as usize;
+                        for channel in 0..4 {
+                            sum[channel] += u64::from(face[at + channel]);
+                        }
+                    }
+                }
+                let count = u64::from((x1 - x0) * (y1 - y0));
+                pixels.extend(sum.map(|value| ((value + count / 2) / count) as u8));
+            }
+        }
+    }
+    (side, pixels)
 }
 
 /// The faces' files decoded, side by side, into one array of six layers of
@@ -353,13 +396,14 @@ impl Panorama {
     }
 
     fn cube(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::BindGroup {
+        let (side, texels) = self.faces.cube_texels();
         let texture = device.create_texture_with_data(
             queue,
             &wgpu::TextureDescriptor {
                 label: Some("Title panorama cube"),
                 size: wgpu::Extent3d {
-                    width: self.faces.size,
-                    height: self.faces.size,
+                    width: side,
+                    height: side,
                     depth_or_array_layers: 6,
                 },
                 mip_level_count: 1,
@@ -370,7 +414,7 @@ impl Panorama {
                 view_formats: &[],
             },
             wgpu::util::TextureDataOrder::LayerMajor,
-            &self.faces.texels(),
+            &texels,
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::Cube),
@@ -505,16 +549,13 @@ mod tests {
 
     #[test]
     fn reduced_panorama_preserves_face_order_and_colours() {
-        let faces = Faces {
-            size: 4,
-            pixels: (0..6u8)
-                .flat_map(|face| [face, face + 10, face + 20, 255].repeat(16))
-                .collect(),
-        }
-        .reduced(2);
-        assert_eq!(faces.size, 2);
-        assert_eq!(faces.pixels.len(), 6 * 2 * 2 * 4);
-        for (face, pixels) in faces.pixels.chunks_exact(16).enumerate() {
+        let texels: Vec<u8> = (0..6u8)
+            .flat_map(|face| [face, face + 10, face + 20, 255].repeat(16))
+            .collect();
+        let (size, pixels) = reduce_texels(4, texels, 2);
+        assert_eq!(size, 2);
+        assert_eq!(pixels.len(), 6 * 2 * 2 * 4);
+        for (face, pixels) in pixels.chunks_exact(16).enumerate() {
             assert!(
                 pixels
                     .chunks_exact(4)

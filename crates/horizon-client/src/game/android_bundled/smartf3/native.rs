@@ -541,9 +541,6 @@ impl Game<'_> {
         if let Some((_, d)) = self.dragon_hit() {
             offer(d, "minecraft:ender_dragon".to_owned());
         }
-        if let Some((_, d)) = self.guest_hit() {
-            offer(d, "minecraft:player".to_owned());
-        }
         let (distance, kind) = best?;
         self.before_block(distance).then_some(kind)
     }

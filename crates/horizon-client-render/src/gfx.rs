@@ -164,8 +164,8 @@ mod cull;
 mod end_sky;
 pub mod entity_skin;
 mod flat;
-#[cfg(target_os = "android")]
 mod dyn_scale;
+#[cfg(target_os = "android")]
 mod frame_scale;
 mod frame_timing;
 

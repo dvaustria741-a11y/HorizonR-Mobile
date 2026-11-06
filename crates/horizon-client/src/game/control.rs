@@ -604,6 +604,17 @@ impl Game<'_> {
                 // Mods' keys (capability `input`) see the key as the keyboard
                 // hook does.
                 let action = arg(2)?;
+                // ScreenEvent.KeyPressed.Pre: the open screen hears of the
+                // press before it acts on it, as the window's key event hands
+                // it over. A cancelled press goes no further — not to the
+                // screens, not to `native_key` — and its release still comes.
+                if action != "up" && self.screen_key_pressed(physical, action == "repeat") {
+                    if action == "tap" {
+                        self.physical_keys.remove(&physical);
+                        self.native_key_event(physical, false, false);
+                    }
+                    return ok();
+                }
                 self.mod_key(physical, action != "up", action == "repeat");
                 self.native_key_event(physical, action != "up", action == "repeat");
                 if action == "tap" {
@@ -1226,6 +1237,7 @@ impl Game<'_> {
             Screen::CommandBlock => "command-block",
             Screen::BlockEditor => "block-editor",
             Screen::Win => "win",
+            Screen::DebugOptions => "debug-options",
             Screen::Mod => "mod",
         }
     }

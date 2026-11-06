@@ -378,8 +378,6 @@ fn search(index: &Index, query: &Query) -> Vec<Project> {
         .iter()
         .filter(|p| kind_of(&p.kind) == Some(query.kind) && matches(p, &query.text))
         .filter(|p| query.everything || p.versions.iter().any(|v| v.game == GAME))
-        // A WebAssembly mod stays in the index for the modpacks that need it, not in the browser.
-        .filter(|p| !p.versions.iter().filter(|v| v.game == GAME).all(needs_port))
         .collect();
     let day = |p: &index::Project, newest: bool| {
         let days = p.versions.iter().map(|v| v.published.as_str());

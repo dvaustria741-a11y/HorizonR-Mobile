@@ -19,14 +19,16 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-/// The tree the chat parses and completes with: a server's, once it has
-/// sent one (ClientPacketListener.commands), else the game's own.
-fn chat_tree<'a>(
+/// The tree the chat parses and completes with: the connection's
+/// (`Remote::chat_tree`: a server's once it has sent one, else the game's own,
+/// plus the commands native mods own, `chat_tree_for`), or, with no connection,
+/// the game's own plus the running WebAssembly mods' commands.
+pub(super) fn chat_tree<'a>(
     remote: &'a Option<super::remote::Remote>,
     mods: &'a super::mods::ModsState,
 ) -> &'a horizon_client::command::Dispatcher {
-    match remote.as_ref().and_then(|r| r.commands.as_ref()) {
-        Some(tree) => mods.remote_dispatcher().unwrap_or(tree),
+    match remote.as_ref() {
+        Some(server) => mods.remote_dispatcher().unwrap_or(&server.chat_tree),
         None => mods.dispatcher(),
     }
 }
@@ -1084,8 +1086,7 @@ impl Game<'_> {
             if let Some(line) = heard {
                 self.mods_chat(&line);
             }
-            self.lan_host_chat(message);
-            self.mod_player_chat(super::server_mods::Who::Local, message);
+            self.mod_player_chat(super::server_mods::Who::Local, &message);
         }
     }
     pub(super) fn chat_scroll(&mut self, amount: f32) {
@@ -1288,7 +1289,7 @@ impl Game<'_> {
             return;
         }
         if self.remote.is_some() {
-            self.send_chat(&format!("/{command}"));
+            self.send_unattended_command(command);
         } else if !self.local_server_mod_command(command) {
             self.run_command(command);
         }
@@ -1306,7 +1307,7 @@ impl Game<'_> {
         self.pvp.chat_search = !self.pvp.chat_search;
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
-            dispatcher: chat_tree(&self.remote),
+            dispatcher: chat_tree(&self.remote, &self.mods),
             registries: &self.ui.registries,
         };
         if let Some(screen) = self.ui.chat_screen.as_mut() {

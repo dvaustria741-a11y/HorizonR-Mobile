@@ -30,6 +30,21 @@ pub(super) struct Pads {
     pub(super) feed: Option<PadState>,
     /// The pad behind `feed`.
     feed_source: Option<PadId>,
+    #[cfg(target_os = "android")]
+    pub(super) custom_keys: std::collections::HashSet<KeyCode>,
+    #[cfg(target_os = "android")]
+    pub(super) hardware_keys: std::collections::HashSet<KeyCode>,
+    #[cfg(target_os = "android")]
+    last_input_mode: Option<horizon_client::android_gamepad::InputMode>,
+    #[cfg(target_os = "android")]
+    pub(super) touch_shield: bool,
+    #[cfg(target_os = "android")]
+    pub(super) touch: horizon_client::touch::TouchControls,
+    /// Keep a released tap's ray until the tick consumed its queued click.
+    #[cfg(target_os = "android")]
+    pub(super) touch_aim: Option<[f32; 2]>,
+    #[cfg(target_os = "android")]
+    pub(super) touch_ui: horizon_client::touch_ui::TouchUi,
     /// The real controllers and the DualSense's output.
     #[cfg(all(feature = "controllers", not(target_os = "android")))]
     devices: hardware::Devices,
@@ -76,7 +91,7 @@ struct Context {
     enabled: bool,
 }
 
-#[cfg(feature = "controllers")]
+#[cfg(all(feature = "controllers", not(target_os = "android")))]
 mod hardware;
 #[cfg(test)]
 mod parity_tests;
@@ -230,8 +245,56 @@ impl Game<'_> {
         }
     }
 
+    #[cfg(target_os = "android")]
+    pub(super) fn touch_shield_available(&self) -> bool {
+        self.held()
+            .into_iter()
+            .chain(self.offhand.as_ref())
+            .any(|s| self.blocks_attacks(s).is_some())
+    }
+    #[cfg(target_os = "android")]
+    pub(super) fn android_inventory_controls(&self) -> bool {
+        self.settings.touch.inventory_controls
+            && matches!(self.screen, Screen::Inventory | Screen::Creative)
+    }
     /// Once per loop iteration: read the pads and act on button changes.
     pub(super) fn poll_pads(&mut self, event_loop: &dyn EventLoopCtl) {
+        #[cfg(target_os = "android")]
+        if !matches!(self.screen, Screen::Playing | Screen::Options)
+            && self.pad.touch.editor.is_some()
+        {
+            self.pad.touch.cancel_editor();
+        }
+        #[cfg(target_os = "android")]
+        {
+            crate::performance::configure_gpu_profile(
+                crate::device_runtime::preferences().gpu_profile,
+                &crate::backend::game_home(),
+            );
+            self.pad.touch.inventory_mode = self.android_inventory_controls();
+            self.android_virtual_mouse_clicks(event_loop);
+            let active = horizon_client::android_runtime::active_input();
+            if self.pad.last_input_mode.replace(active).is_some_and(|old| {
+                old == horizon_client::android_gamepad::InputMode::KeyboardMouse && old != active
+            }) {
+                for key in std::mem::take(&mut self.pad.hardware_keys) {
+                    self.android_key_up(key);
+                }
+                horizon_client::android_runtime::clear_keypad();
+            }
+            if (self.pad_in_menu() && !self.android_inventory_controls())
+                || !self.focused
+                || (!crate::touch_visible() && !self.settings.keypad.enabled)
+            {
+                self.pad.touch.clear();
+                horizon_client::android_runtime::clear_keypad();
+            }
+            self.android_custom_events();
+        }
+        #[cfg(target_os = "android")]
+        if self.pad_in_menu() && self.android_inventory_controls() {
+            self.pad.touch.clear_world_gesture();
+        }
         self.pad.virtual_input = self.pad.injected != PadState::default();
         let context = self.pad_context();
         if let Some(old) = self.pad.context.filter(|old| *old != context) {
@@ -241,7 +304,7 @@ impl Game<'_> {
             self.pad_cancel_inputs(event_loop);
         }
         self.pad.context = Some(context);
-        if !self.settings.controller.enabled {
+        if !self.settings.controller.enabled && !cfg!(target_os = "android") {
             self.pad_output_off();
             self.pad_cancel_inputs(event_loop);
             self.pad.state = PadState::default();
@@ -249,6 +312,15 @@ impl Game<'_> {
             // The keyboard's menu focus follows its widget all the same.
             self.pad_menu_frame(event_loop);
             return;
+        }
+        #[cfg(target_os = "android")]
+        {
+            crate::platform::poll_gamepad_connections();
+            if !self.settings.controller.enabled || !self.focused {
+                horizon_client::android_runtime::clear_gamepads();
+            }
+            self.pad.touch.force_crosshair =
+                !crate::touch_visible() || self.settings.keypad.enabled;
         }
         let hardware = match self.pad.feed {
             Some(state) => state,
@@ -279,6 +351,51 @@ impl Game<'_> {
         self.ui.options.pad_by_letter =
             style == GlyphStyle::Nintendo && self.pad.by_letter(&self.settings.controller);
         let mut state = hardware.merge(&self.pad.injected);
+        #[cfg(target_os = "android")]
+        {
+            self.pad.touch.shield_available = self.touch_shield_available();
+            let mut touch = self.pad.touch.poll_state();
+            self.pad.touch_shield = crate::touch_visible()
+                && !self.pad_in_menu()
+                && self.touch_shield_available()
+                && if self.settings.touch.shield_button {
+                    self.pad.touch.shield_held()
+                } else {
+                    self.pad.touch.sneaking || touch.held(Button::RightStick)
+                };
+            if self.pad.touch_shield {
+                touch.triggers[0] = 1.0;
+            }
+            if let Some(point) = self.pad.touch.aim {
+                self.pad.touch_aim = Some(point);
+            }
+            if self.pad.touch.aim.is_some()
+                && self.pad.touch.holding
+                && (self.pad.touch.holding_use
+                    || self.touch_item_held_use()
+                    || self.touch_entity_accepts_use())
+            {
+                touch.triggers = [1.0, 0.0];
+                self.pad.touch.latch_use();
+            }
+            if let Some(held_use) = self.pad.touch.take_tap() {
+                if self.entity_targeted() && self.using.is_none() && self.screen == Screen::Playing
+                {
+                    // Resolve the entity attack now, never as held LMB. A mob
+                    // disappearing before the next tick cannot expose a block.
+                    if self.remote.is_some() {
+                        self.remote_start_attack();
+                    } else {
+                        self.attack();
+                    }
+                } else if !held_use {
+                    // Preserve normal block placement and empty-hand interaction.
+                    // Items with a use action wait for the long-press instead.
+                    touch.triggers[0] = 1.0;
+                }
+            }
+            state = state.merge(&touch);
+        }
         let activity = self.pad.activity.observe(&state, &self.settings.controller);
         for (i, (stick, deadzone)) in [
             (&mut state.left, self.settings.controller.move_deadzone),
@@ -336,10 +453,6 @@ impl Game<'_> {
             }
         }
         self.pad_menu_frame(event_loop);
-        #[cfg(target_os = "android")]
-        if state.triggers == [0.0; 2] && self.pad.late_releases.is_empty() {
-            self.pad.touch_aim = None;
-        }
     }
 
     fn pad_edge(&mut self, event_loop: &dyn EventLoopCtl, button: Button, down: bool) {
@@ -453,7 +566,7 @@ impl Game<'_> {
     }
 
     #[cfg(target_os = "android")]
-    pub(super) fn touch_entity_accepts_use(&self) -> bool {
+    pub(super) fn touch_entity_accepts_use(&mut self) -> bool {
         if [
             self.boat_hit().map(|h| h.1),
             self.cart_hit().map(|h| h.1),
@@ -475,7 +588,7 @@ impl Game<'_> {
     }
 
     #[cfg(target_os = "android")]
-    pub(super) fn touch_context_use(&self) -> bool {
+    pub(super) fn touch_context_use(&mut self) -> bool {
         if self.touch_entity_accepts_use()
             || [
                 self.boat_hit().map(|h| h.1),
@@ -567,6 +680,23 @@ impl Game<'_> {
             log::warn!("Horizon: controller action {action} has no handler");
             return Ok(());
         };
+        // The touch sprint button holds Ctrl itself, and toggles sprinting off with the
+        // touch controls' sprint toggle.
+        #[cfg(target_os = "android")]
+        if action == "key.sprint" {
+            if down {
+                self.keys.insert(KeyCode::ControlLeft);
+            } else {
+                self.keys.remove(&KeyCode::ControlLeft);
+                if crate::touch_visible()
+                    && self.settings.touch.sprint_toggle
+                    && let Some(player) = &mut self.player
+                {
+                    player.sprinting = false;
+                }
+            }
+            return Ok(());
+        }
         match route {
             Route::HotbarStep { next } => {
                 if down && self.screen == Screen::Playing {
@@ -575,7 +705,9 @@ impl Game<'_> {
                 Ok(())
             }
             Route::Sneak
-                if self.settings.controller.toggle_sneak && !self.settings.toggle_crouch =>
+                if self.settings.controller.toggle_sneak
+                    && !self.settings.toggle_crouch
+                    && !self.android_touch_descending() =>
             {
                 // A stick click flips sneaking instead of holding it, as
                 // vanilla's toggle crouch does: a screen opening releases it

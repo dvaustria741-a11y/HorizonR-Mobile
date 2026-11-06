@@ -692,3 +692,14 @@ mod tests {
         assert_eq!(c.stack.item, "minecraft:oak_planks");
     }
 }
+
+#[cfg(target_os = "android")]
+impl Game<'_> {
+    pub(super) fn mod_browser_edit_value(&self) -> String {
+        self.panel
+            .search
+            .as_ref()
+            .map(|s| s.value.clone())
+            .unwrap_or_default()
+    }
+}

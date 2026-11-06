@@ -12,8 +12,13 @@
 //!
 //! The Azure app (client ID) is Horizon's own and is configuration: `HORIZON_MSA_CLIENT_ID` at
 //! build time, or at run time to override it. Without one, sign-in says it is not configured.
+#[path = "account/session.rs"]
 pub mod session;
 
+#[cfg(target_os = "android")]
+use crate::launcher_skins as skins;
+#[cfg(not(target_os = "android"))]
+use crate::skins;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -450,6 +455,7 @@ struct Minecraft {
 fn minecraft_login(
     ep: &Endpoints,
     ms_access: &str,
+    legacy: bool,
     progress: &dyn Fn(session::Phase),
 ) -> Result<Minecraft, String> {
     progress(session::Phase::Xbox);
@@ -656,7 +662,7 @@ pub fn finish_sign_in_with_progress(
     ms: MsTokens,
     progress: &dyn Fn(session::Phase),
 ) -> Result<(Account, Secrets), String> {
-    let mc = minecraft_login(ep, &ms.access, progress)?;
+    let mc = minecraft_login(ep, &ms.access, ms.legacy, progress)?;
     progress(session::Phase::Ownership);
     if !owns_game(ep, &mc.token)? {
         return Err(DOES_NOT_OWN.into());
@@ -720,7 +726,7 @@ fn check_with(
         };
         // Microsoft can rotate its refresh credential even if a later service fails.
         secrets.refresh_token = ms.refresh;
-        match minecraft_login(ep, &ms.access, progress) {
+        match minecraft_login(ep, &ms.access, ms.legacy, progress) {
             Ok(mc) => {
                 secrets = Secrets {
                     owns: secrets.owns,
@@ -1619,14 +1625,19 @@ pub fn store() -> &'static dyn SecretStore {
     static STORE: OnceLock<Box<dyn SecretStore>> = OnceLock::new();
     STORE
         .get_or_init(|| {
-            #[cfg(all(not(test), any(target_os = "linux", target_os = "freebsd")))]
-            if std::env::var_os("HORIZON_NO_KEYCHAIN").is_none() {
-                return Box::new(Layered::new(Box::new(SystemStore), FileStore::launcher()));
+            #[cfg(all(target_os = "android", not(test)))]
+            return Box::new(crate::secure_store::AndroidStore);
+            #[cfg(any(not(target_os = "android"), test))]
+            {
+                #[cfg(all(not(test), any(target_os = "linux", target_os = "freebsd")))]
+                if std::env::var_os("HORIZON_NO_KEYCHAIN").is_none() {
+                    return Box::new(Layered::new(Box::new(SystemStore), FileStore::launcher()));
+                }
+                keychain_or_why().unwrap_or_else(|why| {
+                    let _ = NO_KEYCHAIN_WHY.set(why);
+                    Box::<MemoryStore>::default()
+                })
             }
-            keychain_or_why().unwrap_or_else(|why| {
-                let _ = NO_KEYCHAIN_WHY.set(why);
-                Box::<MemoryStore>::default()
-            })
         })
         .as_ref()
 }
@@ -1671,7 +1682,7 @@ pub struct Accounts {
     pub offline_selected: Option<String>,
     /// Each offline name's skin and cape (`skins`), by the name in lowercase.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub looks: std::collections::BTreeMap<String, crate::skins::Look>,
+    pub looks: std::collections::BTreeMap<String, skins::Look>,
 }
 
 /// Who plays, as the quick switch lists them.
@@ -1847,7 +1858,7 @@ impl Accounts {
         if self.offline.len() == before {
             return Err(format!("No offline name {name}."));
         }
-        crate::skins::forget(skins_dir, name);
+        skins::forget(skins_dir, name);
         if self
             .offline_selected
             .as_ref()
@@ -1859,7 +1870,7 @@ impl Accounts {
     }
 
     /// An offline name's look (the default: no skin of its own).
-    pub fn look(&self, name: &str) -> crate::skins::Look {
+    pub fn look(&self, name: &str) -> skins::Look {
         self.looks
             .get(&name.to_ascii_lowercase())
             .cloned()
@@ -1869,7 +1880,7 @@ impl Accounts {
     /// The game's variables for the offline name that plays: its skin and cape.
     pub fn look_env(&self) -> Vec<(&'static str, String)> {
         match self.name_arg() {
-            Some(name) => crate::skins::env(&crate::skins::dir(), name, &self.look(name)),
+            Some(name) => skins::env(&skins::dir(), name, &self.look(name)),
             None => Vec::new(),
         }
     }
@@ -2203,15 +2214,19 @@ pub struct SignIn {
 
 impl SignIn {
     pub fn start() -> Self {
-        Self::start_expected(None)
+        Self::start_with_client_id(client_id())
     }
 
     /// Restore this exact Minecraft identity without changing who currently plays.
     pub fn start_for(account: Account) -> Self {
-        Self::start_expected(Some(account))
+        Self::start_expected(Some(account), client_id())
     }
 
-    fn start_expected(expected: Option<Account>) -> Self {
+    pub fn start_with_client_id(configured_id: Option<String>) -> Self {
+        Self::start_expected(None, configured_id)
+    }
+
+    fn start_expected(expected: Option<Account>, configured_id: Option<String>) -> Self {
         use std::sync::atomic::Ordering;
         let state = std::sync::Arc::new(Mutex::new(SignInState::Starting));
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

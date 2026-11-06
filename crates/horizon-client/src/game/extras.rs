@@ -280,6 +280,7 @@ impl Game<'_> {
         if mod_panels {
             self.draw_mod_panels(batch, &mut corners);
         }
+        self.draw_pvp_hud(batch, &mut corners);
         self.native_hud(batch, &mut corners);
     }
     /// The height the status effect icons take at the top right

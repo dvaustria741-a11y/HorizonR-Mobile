@@ -1,9 +1,16 @@
 //! Android's native entry point. The simulation and renderer are shared with desktop.
 #![cfg(target_os = "android")]
 
+// Same layout as upstream's horizon-client `lib.rs`: the game and the native mod API live in
+// this crate, over the reusable client library. The Android-only modules below are what the
+// game's `crate::platform`, `crate::display`, ... paths resolve to, so the game cannot be
+// compiled as part of the horizon-client lib on Android.
+extern crate self as horizon_client;
+pub use horizon_client_lib::*;
 #[allow(dead_code, clippy::collapsible_match)]
 // Shared vanilla match structure and desktop harnesses.
-mod game;
+pub mod game;
+pub mod mod_api;
 #[path = "android/game_launch.rs"]
 mod game_launch;
 #[path = "android/launcher.rs"]
@@ -62,7 +69,18 @@ mod shader_catalog;
 #[rustfmt::skip]
 #[allow(dead_code)]
 #[path = "../../../launcher/src/skins.rs"]
-mod skins;
+// Not `skins`: the game's `horizon_client::skins` is the client library's.
+mod launcher_skins;
+// The launcher's own translations and native-mod folder are not in the app; the shared account
+// and browser code needs only these.
+mod i18n {
+    pub fn tr(en: &str) -> &str {
+        en
+    }
+}
+mod native_mods {
+    pub const INSTALLED: &str = "horizon-native-mods";
+}
 // The shared account protocol needs only the launcher's version and data path.
 mod backend {
     pub const VERSION: &str = if crate::PUBLIC_BUILD {
@@ -140,7 +158,7 @@ thread_local! {
     static APP: RefCell<Option<AndroidApp>> = const { RefCell::new(None) };
 }
 
-pub(crate) fn android_event_loop() -> Result<EventLoop<()>, winit::error::EventLoopError> {
+pub(crate) fn android_event_loop() -> std::result::Result<EventLoop<()>, winit::error::EventLoopError> {
     APP.with(|app| {
         EventLoop::builder()
             .with_android_app(

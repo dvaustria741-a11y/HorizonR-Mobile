@@ -173,7 +173,13 @@ impl Game<'_> {
     }
 
     pub(super) fn pad_focus_mode(&self) -> bool {
-        self.pad.menu.keyboard || self.pad_navigation_mode()
+        #[cfg(target_os = "android")]
+        if self.pad.menu.keyboard_focus {
+            return true;
+        }
+        (cfg!(target_os = "android") && self.settings.keypad.enabled)
+            || self.pad.menu.keyboard
+            || self.pad_navigation_mode()
     }
 
     /// Where focus can land: buttons drawn last frame, every registered
@@ -904,8 +910,26 @@ impl Game<'_> {
             .map_or(0.0, |t| now.duration_since(t).as_secs_f32().min(0.05));
         self.pad.menu.last_poll = Some(now);
         self.key_focus_frame();
-        let in_menu =
-            self.pad_in_menu() && (self.settings.controller.enabled || self.pad.menu.keyboard);
+        let keyboard_focus = {
+            #[cfg(target_os = "android")]
+            {
+                self.pad.menu.keyboard_focus
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                false
+            }
+        };
+        #[cfg(target_os = "android")]
+        let navigation = !crate::touch_visible() || self.settings.keypad.enabled || keyboard_focus;
+        #[cfg(not(target_os = "android"))]
+        let navigation = true;
+        let in_menu = navigation
+            && self.pad_in_menu()
+            && (self.settings.controller.enabled
+                || self.pad.menu.keyboard
+                || keyboard_focus
+                || (cfg!(target_os = "android") && self.settings.keypad.enabled));
         if !in_menu {
             let menu = &mut self.pad.menu;
             menu.keyboard = false;
@@ -915,6 +939,10 @@ impl Game<'_> {
             menu.repeat = None;
             menu.held = [false; 2];
             menu.focus = None;
+            #[cfg(target_os = "android")]
+            {
+                menu.keyboard_focus = false;
+            }
             menu.pending = None;
             menu.nudge = None;
             menu.osk = None;
@@ -1037,7 +1065,9 @@ impl Game<'_> {
                 self.pad_step(event_loop, button);
             }
         }
-        self.pad_auto_keyboard();
+        if !cfg!(target_os = "android") {
+            self.pad_auto_keyboard();
+        }
         // Vanilla's keyboard focus leaves the mouse pointer alone.
         self.pad_show_os_pointer(self.pad.menu.pos.is_none() || self.pad.menu.keyboard);
     }
@@ -1697,10 +1727,20 @@ impl Game<'_> {
             ui.finish();
             return;
         }
-        if !self.pad.in_use && !self.pad.menu.keyboard {
+        // The touch screen's virtual mouse points where the cursor is.
+        #[cfg(target_os = "android")]
+        let virtual_mouse = self.pad.touch_ui.virtual_mouse;
+        #[cfg(not(target_os = "android"))]
+        let virtual_mouse = false;
+        if !self.pad.in_use && !self.pad.menu.keyboard && !virtual_mouse {
             return;
         }
-        let Some((x, y)) = self.pad.menu.pos else {
+        let pointer = if virtual_mouse {
+            Some(self.cursor)
+        } else {
+            self.pad.menu.pos
+        };
+        let Some((x, y)) = pointer else {
             return;
         };
         if !virtual_mouse
@@ -1711,20 +1751,25 @@ impl Game<'_> {
             self.draw_pad_action_glyphs(batch);
             return;
         }
-        self.draw_pad_action_glyphs(batch);
-        // A crosshair centred on the point it clicks: inventories, and a
-        // screen with nothing to focus.
-        use horizon_client::pad_cursor;
-        let (left, top) = pad_cursor::origin((x, y));
-        batch.sprite_scaled(
-            &self.gui.atlas,
-            pad_cursor::SPRITE,
-            left,
-            top,
-            pad_cursor::DRAWN,
-            pad_cursor::DRAWN,
-            u32::MAX,
-        );
+        #[cfg(target_os = "android")]
+        horizon_client::touch_ui::draw_pointer(batch, &self.gui.atlas, (x, y));
+        #[cfg(not(target_os = "android"))]
+        {
+            self.draw_pad_action_glyphs(batch);
+            // A crosshair centred on the point it clicks: inventories, and a
+            // screen with nothing to focus.
+            use horizon_client::pad_cursor;
+            let (left, top) = pad_cursor::origin((x, y));
+            batch.sprite_scaled(
+                &self.gui.atlas,
+                pad_cursor::SPRITE,
+                left,
+                top,
+                pad_cursor::DRAWN,
+                pad_cursor::DRAWN,
+                u32::MAX,
+            );
+        }
     }
 
     /// The focus highlight, as vanilla's keyboard focus looks: buttons,

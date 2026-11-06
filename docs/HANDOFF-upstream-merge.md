@@ -31,6 +31,23 @@ Find a file's displaced hunks with a 3-way: `git merge-file -p --diff3 <mobile> 
 - Upstream moved game code into `horizon-client-lib` (its lib path is `../horizon-client/src/client_lib.rs`); `horizon-client`
   re-exports it. Mobile's `android_main.rs` still lives in horizon-client/src.
 
+## Batch 9 (host + forced-Android-cfg checked, not CI-compiled)
+- Android structure: `horizon-android` no longer depends on `horizon-client`. `android_main.rs` mirrors upstream's
+  `lib.rs` (`extern crate self as horizon_client; pub use horizon_client_lib::*; pub mod game; pub mod mod_api;`), and
+  `build.rs` runs `horizon_mod_api_gen` (Target::Client). The game is compiled once, in horizon-android, because
+  mobile's game tree uses `crate::platform`, `crate::display`, ... that only exist at its root. The launcher's
+  `skins.rs` is included as `launcher_skins` (account.rs aliases it) so `horizon_client::skins` is the lib's.
+  `i18n` and `native_mods` are tiny shims in android_main.rs. `zip` is 9.1.3 like the lib.
+- The WASM restore (revert of e7614d219) had left stale pre-upstream code in ~18 game/ files. Reconciled by hand:
+  levels, chat, control, mods (native helpers grafted in), native_recipes, lan_actions, extras, screens, game.rs tick.
+  `close_mod_screen` (native) vs `close_wasm_mod_screen`; `mod_use` (item) vs `mod_mouse_use` (WASM mouse).
+  `tell_native_now` (the "WASM mods stopped" notice) is intentionally not called.
+- 3-way re-applied with conflict markers read by hand: game/pad.rs, pad_menu.rs, startup_menu.rs, launcher/src/account.rs.
+- Panorama GLES downscale now lives in `Faces::cube_texels` (render crate), mobile's averaging kept.
+- Check without Android tooling: `cargo check -p horizon-client --lib --no-default-features` (host) and
+  `cargo rustc -p horizon-android --lib --profile check --no-default-features -- --cfg 'target_os="android"'
+  -A explicit_builtin_cfgs_in_flags`. The second shows winit-android / chacha20poly1305 / oo7 noise; ignore those.
+
 ## Loop that works
 1. Edit, commit, push to `upstream-shader-handler` (build-apk.yml runs on this branch; do not wait on it).
 2. When the user says the run finished, `git clone -b ci-errors` and read `errs/*.txt` (or the user uploads the logs zip).

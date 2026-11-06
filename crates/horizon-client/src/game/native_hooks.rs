@@ -9434,6 +9434,18 @@ impl Game<'_> {
     }
 }
 
+/// The own player's body pose hook: no mod poses it (Android client's stub, kept so the
+/// third-person and shadow views still set and clear `mobs::native_pose`).
+impl Game<'_> {
+    pub(super) fn native_player_pose(
+        &self,
+        partial: f32,
+        pose: &mut horizon_client::mobs::native_pose::NativePose,
+    ) {
+        let _ = (partial, pose);
+    }
+}
+
 /// A mob's kind as the hook points name it (`minecraft:zombie`).
 pub(super) fn mob_kind(mob: &horizon_client::mobs::Mob) -> String {
     ["minecraft:", mob.kind.id.trim_start_matches("minecraft:")].concat()

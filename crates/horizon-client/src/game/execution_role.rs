@@ -21,6 +21,12 @@ impl ExecutionRole {
     pub fn writes_singleplayer_player(self) -> bool {
         self != Self::DedicatedServer
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ExecutionRole::*;
+
     #[test]
     fn integrated_world_reopen_keeps_inventory_position_and_experience() {
         use horizon_client::save::Level;
