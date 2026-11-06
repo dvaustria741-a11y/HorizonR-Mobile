@@ -199,9 +199,7 @@ impl Game<'_> {
             }
             for mapped in self.settings.keys.translate_all(key) {
                 let result = match mapped {
-                    Ok(code) => {
-                        self.mapped_key(code, down, false, code, horizon_client::held::Source::Keyboard)
-                    }
+                    Ok(code) => self.mapped_key(code, down, false, key, horizon_client::held::Source::Keyboard),
                     Err(button) => self.android_custom_mouse(button, down),
                 };
                 if let Err(error) = result {

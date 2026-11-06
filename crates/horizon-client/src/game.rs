@@ -8168,6 +8168,10 @@ impl Game<'_> {
         raw: KeyCode,
         source: Source,
     ) -> Result<()> {
+        #[cfg(target_os = "android")]
+        if !pressed && self.android_custom_key_held(key) {
+            return Ok(());
+        }
         // Sneak and sprint are ToggleKeyMappings: a press (or a key
         // repeat) flips them when toggling; only releases reach them
         // behind a screen (KeyboardHandler.keyPress).
@@ -8442,6 +8446,11 @@ impl Game<'_> {
                 None
             };
             self.captured = self.capture_mode.is_some();
+            #[cfg(target_os = "android")]
+            {
+                self.captured =
+                    !crate::keyboard_mouse_input() || crate::platform::capture_mouse(true);
+            }
             // Windows already warped above, inside the clip's own position.
             #[cfg(not(any(target_os = "macos", target_os = "windows")))]
             if self.captured && self.focused {
@@ -8480,7 +8489,10 @@ impl Game<'_> {
             self.cursor = pos;
         }
         if !self.options.offscreen || self.split_window {
-            window.set_cursor_visible(!self.captured);
+            let pointer = !self.captured;
+            #[cfg(target_os = "android")]
+            let pointer = pointer && (!crate::touch_visible() || self.settings.keypad.enabled);
+            window.set_cursor_visible(pointer);
         }
     }
     /// A Linux window manager can release the native pointer grab while the
@@ -8770,7 +8782,7 @@ impl Game<'_> {
             self.fire_screen_render_post(&mut batch);
             return batch;
         }
-        if self.screen == Screen::Options {
+        if self.screen == Screen::Options && !self.touch_editing() {
             if self.title.is_none() {
                 self.flush_skin_slots();
                 self.update_remote_skins();
@@ -8803,6 +8815,9 @@ impl Game<'_> {
             for found in title.lan_found_narrations((w, h)) {
                 self.say_system_queued(&found);
             }
+        }
+        if self.touch_editing() && self.title.is_some() {
+            return batch;
         }
         if self.title.is_some() {
             // TitleScreen.extractRenderState, then ToastManager over it: vanilla
@@ -8899,7 +8914,11 @@ impl Game<'_> {
                         offhand_pop: (f32::from(g.hotbar_pop[9]) - partial).max(0.0),
                         attack: (indicator == 2).then_some(strength),
                     };
-                    let draws = hud_layout::hotbar(wi, hi, &inputs);
+                    #[cfg(target_os = "android")]
+                    let attack_left = Some(g.settings.touch.attack_indicator_left);
+                    #[cfg(not(target_os = "android"))]
+                    let attack_left = None;
+                    let draws = hud_layout::hotbar_with_attack_side(wi, hi, &inputs, attack_left);
                     hud_layout::paint(batch, &g.gui.atlas, &draws);
                     for d in &draws {
                         if let hud_layout::GuiDraw::Item { slot, x, y, .. } = *d {
@@ -8918,14 +8937,14 @@ impl Game<'_> {
             self.gui_layer("minecraft:effects", &mut batch, |g, batch| {
                 // The PvP & HUD effects widget takes the icons' place.
                 if !g.pvp_effects_shown() {
-                    g.draw_effect_icons(batch);
+                    horizon_client::hud::inset_overlay(batch, margins, |b| g.draw_effect_icons(b));
                 }
             });
             // Hud: the action bar and titles draw over the hotbar (nextStratum).
             self.gui_layer("minecraft:boss_overlay", &mut batch, |g, batch| {
-                g.draw_boss_bars(batch);
+                horizon_client::hud::inset_overlay(batch, margins, |b| g.draw_boss_bars(b));
             });
-            self.draw_extras(&mut batch);
+            horizon_client::hud::inset_overlay(&mut batch, margins, |b| self.draw_extras(b));
             self.draw_mod_shapes(&mut batch);
         }
         if show_hud {
@@ -9072,13 +9091,13 @@ impl Game<'_> {
                 g.draw_overlay_message(batch, bar_height);
             });
             self.gui_layer("minecraft:title", &mut batch, |g, batch| {
-                g.draw_title(batch);
+                horizon_client::hud::inset_overlay(batch, margins, |b| g.draw_title(b));
             });
             self.gui_layer("minecraft:scoreboard_sidebar", &mut batch, |g, batch| {
-                g.draw_scoreboard(batch);
+                horizon_client::hud::inset_overlay(batch, margins, |b| g.draw_scoreboard(b));
             });
             self.gui_layer("minecraft:subtitle_overlay", &mut batch, |g, batch| {
-                g.draw_subtitles(batch);
+                horizon_client::hud::inset_overlay(batch, margins, |b| g.draw_subtitles(b));
             });
         }
         let atlas = &self.gui.atlas;
@@ -9157,12 +9176,18 @@ impl Game<'_> {
         // prompts, books and sign editors drawn over gameplay keep it, draw
         // after this point and so over what a mod drew.
         self.fire_screen_render_post(&mut batch);
-        self.draw_saving_indicator(&mut batch);
+        horizon_client::hud::inset_overlay(&mut batch, margins, |b| self.draw_saving_indicator(b));
         // ToastManager.extractRenderState: F1 hides the toasts too.
-        self.draw_toasts(&mut batch, !show_hud);
-        self.draw_tutorial_toasts(&mut batch, !show_hud);
-        self.draw_pack_toasts(&mut batch, !show_hud);
-        self.draw_music_toast(&mut batch, !show_hud);
+        horizon_client::hud::inset_overlay(&mut batch, margins, |b| self.draw_toasts(b, !show_hud));
+        horizon_client::hud::inset_overlay(&mut batch, margins, |b| {
+            self.draw_tutorial_toasts(b, !show_hud)
+        });
+        horizon_client::hud::inset_overlay(&mut batch, margins, |b| {
+            self.draw_pack_toasts(b, !show_hud)
+        });
+        horizon_client::hud::inset_overlay(&mut batch, margins, |b| {
+            self.draw_music_toast(b, !show_hud)
+        });
         if self.server_packs.prompt.is_none() {
             self.remote_hud(&mut batch);
             self.draw_sign_editor(&mut batch);
@@ -12500,7 +12525,7 @@ impl Game<'_> {
         match action {
             // A splitscreen player's title never ends the process (P1's does).
             Action::Quit if self.options.split_guest => {}
-            Action::Quit => event_loop.exit(),
+            Action::Quit => crate::game::exit_app(event_loop),
             Action::Options => self.open_options(true),
             Action::Accessibility => {
                 self.open_options_at(true, horizon_client::options_ui::Page::Accessibility)
