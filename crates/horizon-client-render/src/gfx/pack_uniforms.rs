@@ -404,7 +404,46 @@ impl FrameUniforms {
         };
         self.values.clear();
         self.values.extend(NAMES.iter().map(|n| value(n)));
+        if self.frame % 180 == 0 {
+            self.log_sky_values();
+        }
         self.frame = (self.frame + 1) % 720_720;
+    }
+
+    /// A line of the values a pack's sky and cloud shaders read, every few seconds, for
+    /// diagnosing a wrong sky: `HZ-SKYDBG` in the log.
+    fn log_sky_values(&self) {
+        let get = |name: &str| -> Vec<f32> {
+            match index(name).and_then(|i| self.values.get(i)) {
+                Some(Value::F(f)) => f[..components(name).min(16)].to_vec(),
+                Some(Value::I(i)) => i[..components(name).min(3)].iter().map(|&v| v as f32).collect(),
+                None => Vec::new(),
+            }
+        };
+        let r = |v: Vec<f32>| -> Vec<f32> { v.iter().map(|x| (x * 1000.0).round() / 1000.0).collect() };
+        let mv = get("gbufferModelView");
+        let inv = get("gbufferProjectionInverse");
+        log::warn!(
+            "HZ-SKYDBG skyColor={:?} fogColor={:?} fogStart={:?} fogEnd={:?} far={:?} near={:?} \
+             view={:?}x{:?} modelViewUp={:?} projInv22w={:?} projInv33w={:?} sunPos={:?} \
+             worldTime={:?} eyeInWater={:?} rain={:?} sunAngle={:?}",
+            r(get("skyColor")),
+            r(get("fogColor")),
+            r(get("fogStart")),
+            r(get("fogEnd")),
+            r(get("far")),
+            r(get("near")),
+            r(get("viewWidth")),
+            r(get("viewHeight")),
+            r(mv.get(4..7).map(<[f32]>::to_vec).unwrap_or_default()),
+            r(inv.get(11..12).map(<[f32]>::to_vec).unwrap_or_default()),
+            r(inv.get(15..16).map(<[f32]>::to_vec).unwrap_or_default()),
+            r(get("sunPosition")),
+            get("worldTime"),
+            get("isEyeInWater"),
+            r(get("rainStrength")),
+            r(get("sunAngle")),
+        );
     }
 
     /// `hz_fog_color` and `hz_fog` of the translator's block (the compatibility `gl_Fog`).
