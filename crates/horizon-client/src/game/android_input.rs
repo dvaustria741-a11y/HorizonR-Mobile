@@ -152,7 +152,7 @@ impl Game<'_> {
             if let Some(mapping) = name.strip_prefix("action:") {
                 let default = horizon_client::keybinds::KeyBinds::default_of(mapping);
                 let result = if let Some(key) = horizon_client::keybinds::key_code(default) {
-                    self.mapped_key(key, down, false)
+                    self.mapped_key(key, down, false, key, horizon_client::held::Source::Keyboard)
                 } else if let Some(button) = horizon_client::keybinds::mouse_button(default) {
                     self.android_custom_mouse(button, down)
                 } else {
@@ -199,7 +199,7 @@ impl Game<'_> {
             }
             for mapped in self.settings.keys.translate_all(key) {
                 let result = match mapped {
-                    Ok(code) => self.mapped_key(code, down, false),
+                    Ok(code) => self.mapped_key(code, down, false, key, horizon_client::held::Source::Keyboard),
                     Err(button) => self.android_custom_mouse(button, down),
                 };
                 if let Err(error) = result {
@@ -380,7 +380,7 @@ impl Game<'_> {
                             if down {
                                 self.physical_keys.insert(key);
                             }
-                            self.mapped_key(key, down, false)?;
+                            self.mapped_key(key, down, false, key, horizon_client::held::Source::Keyboard)?;
                         } else {
                             if !self.pad.touch_ui.key_down(t.id, key) {
                                 return Ok(true);
