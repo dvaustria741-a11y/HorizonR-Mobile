@@ -1,35 +1,35 @@
-error: mismatched closing delimiter: `}`
-     --> crates/horizon-client/src/game.rs:16583:21
-      |
-16583 |                 .map(|h| {
-      |                     ^ unclosed delimiter
-...
-16607 |                 })
-      |                 ^ mismatched closing delimiter
-
 error: unexpected closing delimiter: `}`
-     --> crates/horizon-client/src/game.rs:16974:5
+     --> crates/horizon-client/src/game.rs:17839:1
       |
-16281 |     fn render(&mut self) -> Result<bool> {
-      |                                          - the nearest open delimiter
+17740 |             } else {
+      |                    - the nearest open delimiter
 ...
-16607 |                 })
+17786 |                 });
       |                  - missing open `(` for this delimiter
 ...
-16974 |     }
-      |     ^ unexpected closing delimiter
+17839 | }
+      | ^ unexpected closing delimiter
 
-error: could not compile `horizon-client` (lib) due to 2 previous errors
+error: could not compile `horizon-client` (lib) due to 1 previous error
 warning: build failed, waiting for other jobs to finish...
 warning: `horizon-client-render` (lib) generated 4 warnings
 warning: `horizon-client-lib` (lib) generated 1 warning (run `cargo fix --lib -p horizon-client-lib` to apply 1 suggestion)
 
 === TAIL ===
+     | ------------- method in this implementation
+...
+4974 |     fn replacement_context(&self) -> ReplacementContext {
+     |        ^^^^^^^^^^^^^^^^^^^
+
+warning: method `end` is never used
+  --> crates/horizon-client-render/src/gfx/frame_timing.rs:50:19
+   |
+10 | impl FrameTiming {
+   | ---------------- method in this implementation
+...
 50 |     pub(super) fn end(
    |                   ^^^
 
-   Compiling horizon-mcp v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-mcp)
-   Compiling mio v1.2.4
    Compiling horizon-android v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-android)
    Compiling horizon-shaderport v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-shaderport)
 warning: function `apply_one` is never used
@@ -49,7 +49,6 @@ warning: method `skipped_names` is never used
 315 |     pub fn skipped_names(&self) -> Vec<String> {
     |            ^^^^^^^^^^^^^
 
-   Compiling horizon-port-pack v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-port-pack)
    Compiling horizon-client-lib v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-lib)
 warning: unused import: `Tempt`
   --> crates/horizon-client-lib/../horizon-client/src/mobs/aquatic.rs:10:35
@@ -59,29 +58,21 @@ warning: unused import: `Tempt`
    |
    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
+   Compiling horizon-port-pack v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-port-pack)
 warning: `horizon-shaderport` (lib) generated 2 warnings
-error: mismatched closing delimiter: `}`
-     --> crates/horizon-client/src/game.rs:16583:21
-      |
-16583 |                 .map(|h| {
-      |                     ^ unclosed delimiter
-...
-16607 |                 })
-      |                 ^ mismatched closing delimiter
-
 error: unexpected closing delimiter: `}`
-     --> crates/horizon-client/src/game.rs:16974:5
+     --> crates/horizon-client/src/game.rs:17839:1
       |
-16281 |     fn render(&mut self) -> Result<bool> {
-      |                                          - the nearest open delimiter
+17740 |             } else {
+      |                    - the nearest open delimiter
 ...
-16607 |                 })
+17786 |                 });
       |                  - missing open `(` for this delimiter
 ...
-16974 |     }
-      |     ^ unexpected closing delimiter
+17839 | }
+      | ^ unexpected closing delimiter
 
-error: could not compile `horizon-client` (lib) due to 2 previous errors
+error: could not compile `horizon-client` (lib) due to 1 previous error
 warning: build failed, waiting for other jobs to finish...
 warning: `horizon-client-render` (lib) generated 4 warnings
 warning: `horizon-client-lib` (lib) generated 1 warning (run `cargo fix --lib -p horizon-client-lib` to apply 1 suggestion)
