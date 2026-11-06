@@ -618,8 +618,8 @@ impl Game<'_> {
     fn mod_runs(&self) -> Runs {
         match self.options.execution_role {
             ExecutionRole::IntegratedServer | ExecutionRole::DedicatedServer => Runs::Server,
-            ExecutionRole::Client if self.options.server_thread => Runs::Client,
-            ExecutionRole::Client => Runs::Both,
+            // The client always has its integrated server on a thread of its own.
+            ExecutionRole::Client => Runs::Client,
         }
     }
     /// The Mods page's rows, from what loaded.
@@ -761,7 +761,7 @@ impl Game<'_> {
         if self.mods.font_widths.is_empty() {
             let atlas = &self.gui.atlas;
             self.mods.font_widths = (0..FONT_CHARS)
-                .map(|c| char::from_u32(c).map_or(6.0, |c| atlas.glyph_cell(c).1))
+                .map(|c| char::from_u32(c).map_or(6.0, |c| atlas.glyph_cell(c).advance))
                 .collect();
         }
         let (recipes, known_recipes) = self.mod_recipes();
@@ -769,7 +769,7 @@ impl Game<'_> {
             player,
             clock,
             gui_size: self.gui_size(),
-            held: self.mod_held(),
+            held: self.wasm_mod_held(),
             frame: self.frame_reading(),
             mappings,
             cps,
@@ -800,7 +800,7 @@ impl Game<'_> {
                 hit.point,
                 self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]),
             ),
-            None => self.lod_ray(eye, dir, reach)?,
+            None => self.wasm_lod_ray(eye, dir, reach)?,
         };
         let distance = (0..3).map(|i| (point[i] - eye[i]).powi(2)).sum::<f64>();
         let hit = horizon_mods::Hit {
@@ -817,7 +817,7 @@ impl Game<'_> {
     /// Past the resident chunks: the view walked across the distant
     /// terrain's ground heights (`Lod::ground`), a block at a time. Columns in
     /// loaded chunks are left to `clip_ray`, which has already missed them.
-    fn lod_ray(
+    fn wasm_lod_ray(
         &self,
         eye: [f64; 3],
         dir: [f64; 3],
@@ -896,7 +896,7 @@ impl Game<'_> {
         if !self.mods.mods.is_running() {
             return;
         }
-        self.tick_mod_use();
+        self.tick_wasm_mod_use();
         let snapshot = self.mod_snapshot();
         self.mods.mods.set_snapshot(snapshot);
         self.mods.mods.tick(self.ticks);

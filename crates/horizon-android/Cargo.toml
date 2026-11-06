@@ -19,6 +19,7 @@ horizon-cosmetics = { path = "../horizon-cosmetics" }
 horizon-optifine = { path = "../horizon-optifine" }
 horizon-narrator = { path = "../horizon-narrator" }
 horizon-chat-filter = { path = "../horizon-chat-filter" }
+chacha20poly1305 = "0.10"
 fs4 = { version = "1.1.0", default-features = false, features = ["sync"] }
 unicode-bidi = "0.3.18"
 horizon-client-render = { path = "../horizon-client-render" }

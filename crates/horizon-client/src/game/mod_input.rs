@@ -64,7 +64,7 @@ pub(super) struct ModFarTerrain {
 #[cfg(feature = "mods")]
 impl Game<'_> {
     /// The main hand's stack as `input` shows it; none when it is empty.
-    pub(super) fn mod_held(&self) -> Option<HeldItem> {
+    pub(super) fn wasm_mod_held(&self) -> Option<HeldItem> {
         let stack = self.inventory.get(self.selected)?.as_ref()?;
         Some(HeldItem {
             id: stack.item.to_string(),
@@ -81,7 +81,7 @@ impl Game<'_> {
         if !pressed {
             return self.stop_mod_use();
         }
-        let Some(item) = self.mod_held().filter(|h| self.mods.mods.claims(&h.id)) else {
+        let Some(item) = self.wasm_mod_held().filter(|h| self.mods.mods.claims(&h.id)) else {
             return false;
         };
         self.mods.mods.use_start(&item);
@@ -103,12 +103,12 @@ impl Game<'_> {
     }
     /// Once a tick: a claimed use stops when its item leaves the hand or a
     /// screen opens, as vanilla's `releaseUsingItem`.
-    pub(super) fn tick_mod_use(&mut self) {
+    pub(super) fn tick_wasm_mod_use(&mut self) {
         let Some(u) = &self.mods.using else {
             return;
         };
         let still = self
-            .mod_held()
+            .wasm_mod_held()
             .is_some_and(|h| h.id == u.item.id && h.slot == u.item.slot);
         if !still || self.screen != Screen::Playing {
             self.stop_mod_use();
