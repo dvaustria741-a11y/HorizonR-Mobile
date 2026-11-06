@@ -16004,6 +16004,14 @@ impl Game<'_> {
         });
     }
     fn render(&mut self) -> Result<bool> {
+        #[cfg(target_os = "android")]
+        let device_preferences = crate::device_runtime::preferences();
+        #[cfg(target_os = "android")]
+        let _native_frame = crate::device_runtime::frame(
+            device_preferences.performance_hints,
+            device_preferences.display_hz,
+            self.focused,
+        );
         // The window's GPU holds the atlas: its copy in memory is kept
         // compressed (a no-op once it is).
         if self.renderer.is_some() {
@@ -16409,6 +16417,36 @@ impl Game<'_> {
         });
         // GUI hooks project against this frame's camera, including its bob/spin and FOV.
         let mut hud = horizon_client::spans::time("hud", || self.hud(size));
+        #[cfg(target_os = "android")]
+        {
+            self.pad.touch.auxiliary_only =
+                self.settings.keypad.enabled && self.pad.touch.editor.is_none();
+        }
+        #[cfg(target_os = "android")]
+        if self.pad.touch.editor.is_some()
+            || ((crate::touch_visible() || self.settings.keypad.enabled)
+                && (!self.pad_in_menu() || self.android_inventory_controls()))
+        {
+            self.pad.touch.context_use =
+                self.pad.touch.settings.contextual_interact && self.touch_context_use();
+            self.pad.touch.vertical_movement = self.player.as_ref().is_some_and(|p| p.flying);
+            self.pad.touch.swimming = self.player.as_ref().is_some_and(|p| p.swimming);
+            self.pad.touch.mounted = self.riding.is_some();
+            self.pad.touch.shield_available = self.touch_shield_available();
+            self.pad.touch.sneaking = self.keys.contains(&KeyCode::ShiftLeft);
+            self.pad.touch.break_progress = self.touch_mining_progress();
+            self.pad.touch.draw(&mut hud, &self.gui.atlas);
+        }
+        #[cfg(target_os = "android")]
+        {
+            if (crate::touch_visible() || self.settings.keypad.enabled)
+                && self.pad.touch.editor.is_none()
+            {
+                self.pad
+                    .touch_ui
+                    .draw(&mut hud, &self.gui.atlas, self.pad_in_menu());
+            }
+        }
         self.flush_ime(&mut hud);
         self.native_gui_render_post(&mut hud, self.ui.hide_gui, self.focused);
         self.resolve_inline_profiles(&hud.inline_profiles);
@@ -17078,6 +17116,10 @@ impl Game<'_> {
     }
     /// A mouse button while playing (window or control socket).
     fn play_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
+        #[cfg(target_os = "android")]
+        if !pressed && self.android_custom_mouse_held(button) {
+            return Ok(());
+        }
         // A mod's claimed item takes the use button (capability `input`).
         if self.mod_mouse_use(button, pressed) {
             return Ok(());
@@ -17692,7 +17734,19 @@ impl ApplicationHandler for Game<'_> {
             self.native_input_key(&event, modifiers);
         }
     }
-    fn device_event(&mut self, event_loop: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
+    fn device_event(&mut self, event_loop: &ActiveEventLoop, device: DeviceId, event: DeviceEvent) {
+        #[cfg(target_os = "android")]
+        if self.focused
+            && self.settings.controller.enabled
+            && horizon_client::android_runtime::gamepad_event(
+                winit::platform::android::native_device_id(device),
+                &event,
+            )
+        {
+            return;
+        }
+        #[cfg(not(target_os = "android"))]
+        let _ = device;
         // A composited view renders offscreen but its keyboard/mouse owner still
         // controls a visible native window. A headless offscreen run never does.
         if self.pending_save.is_none()
@@ -17707,6 +17761,14 @@ impl ApplicationHandler for Game<'_> {
                 self.pad_yield_input(event_loop);
             }
             // MouseHandler.onMove with the pointer grabbed; applied once per frame.
+            #[cfg(target_os = "android")]
+            {
+                if !horizon_client::android_runtime::note_input(
+                    horizon_client::android_gamepad::InputMode::KeyboardMouse,
+                ) {
+                    return;
+                }
+            }
             self.note_input(
                 input_trace::InputOrigin::User,
                 input_trace::TraceKind::Motion { x, y },
@@ -17716,6 +17778,16 @@ impl ApplicationHandler for Game<'_> {
         }
     }
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        #[cfg(target_os = "android")]
+        self.android_apply_display_scale();
+        #[cfg(target_os = "android")]
+        self.android_poll_keyboard();
+        #[cfg(target_os = "android")]
+        if let Some(renderer) = &mut self.renderer {
+            renderer.set_detailed_gpu_timing(
+                crate::performance::active() || crate::device_runtime::preferences().gpu_profile,
+            );
+        }
         self.idle(event_loop);
     }
     /// The application is ending. On macOS, Quit (Cmd+Q) ends it through

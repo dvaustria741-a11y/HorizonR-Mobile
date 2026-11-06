@@ -1760,6 +1760,15 @@ impl Game<'_> {
         self.remote.as_ref().is_some_and(|r| r.online_mode)
     }
 
+    #[cfg(target_os = "android")]
+    pub(super) fn touch_mining_progress(&self) -> f32 {
+        self.remote
+            .as_ref()
+            .and_then(|r| r.destroying.map(|d| d.2))
+            .or_else(|| self.mining.as_ref().map(|m| m.progress))
+            .unwrap_or(0.0)
+    }
+
     /// `ClientSuggestionProvider.customCompletionSuggestions` of the server
     /// connection (none without one).
     pub(super) fn remote_custom_completions(&self) -> std::collections::BTreeSet<String> {
