@@ -1,78 +1,2562 @@
-error: unexpected closing delimiter: `}`
-     --> crates/horizon-client/src/game.rs:17839:1
-      |
-17740 |             } else {
-      |                    - the nearest open delimiter
-...
-17786 |                 });
-      |                  - missing open `(` for this delimiter
-...
-17839 | }
-      | ^ unexpected closing delimiter
+error: the `#[test]` attribute may only be used on a free function
+  --> crates/horizon-client/src/game/execution_role.rs:24:5
+   |
+24 |     #[test]
+   |     ^^^^^^^ the `#[test]` macro causes a function to be run as a test and has no effect on non-functions
+   |
+help: replace with conditional compilation to make the item only exist when tests are being run
+   |
+24 -     #[test]
+24 +     #[cfg(test)]
+   |
 
-error: could not compile `horizon-client` (lib) due to 1 previous error
-warning: build failed, waiting for other jobs to finish...
-warning: `horizon-client-render` (lib) generated 4 warnings
-warning: `horizon-client-lib` (lib) generated 1 warning (run `cargo fix --lib -p horizon-client-lib` to apply 1 suggestion)
+error[E0432]: unresolved import `crate::game::official_zoom`
+ --> crates/horizon-client/src/game/android_bundled/zoom/zoom_key.rs:7:9
+  |
+7 |     use crate::game::official_zoom as zoom;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_zoom` in `game`
+  |
+help: consider importing this module instead
+  |
+7 |     use crate::game::android_bundled::official_zoom as zoom;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_zoom`
+ --> crates/horizon-client/src/game/android_bundled/zoom/zoom_wheel.rs:6:9
+  |
+6 |     use crate::game::official_zoom as zoom;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_zoom` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::official_zoom as zoom;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_zoom`
+ --> crates/horizon-client/src/game/android_bundled/zoom/zoom_list.rs:6:9
+  |
+6 |     use crate::game::official_zoom as zoom;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_zoom` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::official_zoom as zoom;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_zoom`
+ --> crates/horizon-client/src/game/android_bundled/zoom/zoom_settings.rs:6:9
+  |
+6 |     use crate::game::official_zoom as zoom;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_zoom` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::official_zoom as zoom;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_zoom`
+ --> crates/horizon-client/src/game/android_bundled/zoom/zoom_click.rs:6:9
+  |
+6 |     use crate::game::official_zoom as zoom;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_zoom` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::official_zoom as zoom;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_minimap`
+ --> crates/horizon-client/src/game/android_bundled/minimap/minimap_list.rs:6:9
+  |
+6 |     use crate::game::official_minimap as m;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_minimap` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::official_minimap as m;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_minimap`
+ --> crates/horizon-client/src/game/android_bundled/minimap/minimap_settings.rs:6:9
+  |
+6 |     use crate::game::official_minimap as m;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_minimap` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::official_minimap as m;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_minimap`
+ --> crates/horizon-client/src/game/android_bundled/minimap/minimap_click.rs:6:9
+  |
+6 |     use crate::game::official_minimap as m;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_minimap` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::official_minimap as m;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_minimap`
+ --> crates/horizon-client/src/game/android_bundled/minimap/minimap_minimap.rs:9:9
+  |
+9 |     use crate::game::official_minimap as m;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_minimap` in `game`
+  |
+help: consider importing this module instead
+  |
+9 |     use crate::game::android_bundled::official_minimap as m;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_recipes`
+  --> crates/horizon-client/src/game/android_bundled/recipes/glue.rs:12:5
+   |
+12 | use crate::game::official_recipes as m;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_recipes` in `game`
+   |
+help: consider importing this module instead
+   |
+12 | use crate::game::android_bundled::official_recipes as m;
+   |                  +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_recipes`
+ --> crates/horizon-client/src/game/android_bundled/recipes/recipes_list.rs:6:9
+  |
+6 |     use crate::game::official_recipes as m;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_recipes` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::official_recipes as m;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_recipes`
+ --> crates/horizon-client/src/game/android_bundled/recipes/recipes_settings.rs:6:9
+  |
+6 |     use crate::game::official_recipes as m;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_recipes` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::official_recipes as m;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_recipes`
+ --> crates/horizon-client/src/game/android_bundled/recipes/recipes_click.rs:7:9
+  |
+7 |     use crate::game::official_recipes as m;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_recipes` in `game`
+  |
+help: consider importing this module instead
+  |
+7 |     use crate::game::android_bundled::official_recipes as m;
+  |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::official_recipes`
+  --> crates/horizon-client/src/game/android_bundled/recipes/recipes_event.rs:10:9
+   |
+10 |     use crate::game::official_recipes as m;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `official_recipes` in `game`
+   |
+help: consider importing this module instead
+   |
+10 |     use crate::game::android_bundled::official_recipes as m;
+   |                      +++++++++++++++++
+
+error[E0432]: unresolved import `crate::game::smartf3`
+ --> crates/horizon-client/src/game/android_bundled/smartf3/smartf3_list.rs:6:9
+  |
+6 |     use crate::game::smartf3 as sf;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ no `smartf3` in `game`
+  |
+help: consider importing this module instead
+  |
+6 |     use crate::game::android_bundled::smartf3 as sf;
+  |                      +++++++++++++++++
+
+error[E0433]: cannot find `display` in `crate`
+  --> crates/horizon-client/src/game/android_input.rs:13:40
+   |
+13 |             && let Err(error) = crate::display::apply(window, renderer)
+   |                                        ^^^^^^^ could not find `display` in the crate root
+
+error[E0433]: cannot find `display` in `crate`
+  --> crates/horizon-client/src/game/android_input.rs:15:20
+   |
+15 |             crate::display::set_scale(crate::display::RenderScale::default());
+   |                    ^^^^^^^ could not find `display` in the crate root
+
+error[E0433]: cannot find `display` in `crate`
+  --> crates/horizon-client/src/game/android_input.rs:15:46
+   |
+15 |             crate::display::set_scale(crate::display::RenderScale::default());
+   |                                              ^^^^^^^ could not find `display` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+  --> crates/horizon-client/src/game/android_input.rs:26:23
+   |
+26 |             || crate::platform::active()
+   |                       ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:362:35
+    |
+362 |                         if crate::platform::active() {
+    |                                   ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:363:36
+    |
+363 | ...                   crate::platform::hide();
+    |                              ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:373:36
+    |
+373 | ...                   crate::platform::hide();
+    |                              ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:463:20
+    |
+463 |             crate::platform::show_multiline(&initial);
+    |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:465:20
+    |
+465 |             crate::platform::show(&initial);
+    |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `documents` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:470:38
+    |
+470 |         if let Some(notice) = crate::documents::poll() {
+    |                                      ^^^^^^^^^ could not find `documents` in the crate root
+
+error[E0433]: cannot find `gallery` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:478:30
+    |
+478 |         for result in crate::gallery::poll() {
+    |                              ^^^^^^^ could not find `gallery` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:483:27
+    |
+483 |         for out in crate::platform::poll() {
+    |                           ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:489:24
+    |
+489 |                 crate::platform::hide();
+    |                        ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:496:42
+    |
+496 |         if !self.pad_in_menu() && crate::platform::active() {
+    |                                          ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:497:20
+    |
+497 |             crate::platform::hide();
+    |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `device_runtime` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:508:50
+    |
+508 |                 "gpu_profiling_requested":crate::device_runtime::preferences().gpu_profile,
+    |                                                  ^^^^^^^^^^^^^^ could not find `device_runtime` in the crate root
+
+error[E0433]: cannot find `device_runtime` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:519:72
+    |
+519 | ...enderer,"android_native":crate::device_runtime::diagnostics(),"android_power":crate::platform::performance_power(),
+    |                                    ^^^^^^^^^^^^^^ could not find `device_runtime` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:519:125
+    |
+519 | ...:diagnostics(),"android_power":crate::platform::performance_power(),
+    |                                          ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:564:20
+    |
+564 |             crate::platform::cancel_vibration();
+    |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/android_input.rs:628:36
+    |
+628 |                 let field = crate::platform::field_at(p);
+    |                                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `gallery` in `crate`
+    --> crates/horizon-client/src/game/chat.rs:1664:40
+     |
+1664 |             if let Err(error) = crate::gallery::save(&path) {
+     |                                        ^^^^^^^ could not find `gallery` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+  --> crates/horizon-client/src/game/ime.rs:50:27
+   |
+50 |         let want = crate::platform::active();
+   |                           ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `mod_api_host` in `super`
+    --> crates/horizon-client/src/game/native_hooks.rs:1586:25
+     |
+1586 |             &mut super::mod_api_host::LevelTicks { level: self, ticks },
+     |                         ^^^^^^^^^^^^ could not find `mod_api_host` in `super`
+
+error[E0433]: cannot find `mod_api_host` in `super`
+    --> crates/horizon-client/src/game/native_hooks.rs:1622:25
+     |
+1622 |             &mut super::mod_api_host::LevelTicks { level: self, ticks },
+     |                         ^^^^^^^^^^^^ could not find `mod_api_host` in `super`
+
+error[E0433]: cannot find `mod_api_host` in `super`
+    --> crates/horizon-client/src/game/native_hooks.rs:1697:25
+     |
+1697 |             &mut super::mod_api_host::LevelTicks { level: self, ticks },
+     |                         ^^^^^^^^^^^^ could not find `mod_api_host` in `super`
+
+error[E0433]: cannot find `mod_api_host` in `super`
+    --> crates/horizon-client/src/game/native_hooks.rs:1818:25
+     |
+1818 |             &mut super::mod_api_host::LevelTicks { level: self, ticks },
+     |                         ^^^^^^^^^^^^ could not find `mod_api_host` in `super`
+
+error[E0433]: cannot find `backend` in `crate`
+  --> crates/horizon-client/src/game/packs.rs:44:31
+   |
+44 |             let home = crate::backend::data_dir();
+   |                               ^^^^^^^ could not find `backend` in the crate root
+
+error[E0433]: cannot find `document_store` in `crate`
+  --> crates/horizon-client/src/game/packs.rs:46:24
+   |
+46 |                 crate::document_store::folder_id(crate::document_store::profile(&home), folder);
+   |                        ^^^^^^^^^^^^^^ could not find `document_store` in the crate root
+
+error[E0433]: cannot find `document_store` in `crate`
+  --> crates/horizon-client/src/game/packs.rs:46:57
+   |
+46 |                 crate::document_store::folder_id(crate::document_store::profile(&home), folder);
+   |                                                         ^^^^^^^^^^^^^^ could not find `document_store` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+  --> crates/horizon-client/src/game/packs.rs:47:24
+   |
+47 |             if !crate::platform::open_documents(&id) {
+   |                        ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+  --> crates/horizon-client/src/game/packs.rs:69:12
+   |
+69 |     crate::platform::open_url(uri);
+   |            ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/pad.rs:145:20
+    |
+145 |             crate::platform::cancel_vibration();
+    |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/pad.rs:150:24
+    |
+150 |                 crate::platform::cancel_vibration();
+    |                        ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/pad.rs:158:20
+    |
+158 |             crate::platform::vibrate(pulse);
+    |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/pad.rs:686:24
+    |
+686 |                 crate::platform::display_rotation()
+    |                        ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `device_runtime` in `crate`
+   --> crates/horizon-client/src/game/pad.rs:690:32
+    |
+690 |             let delta = crate::device_runtime::gyro(
+    |                                ^^^^^^^^^^^^^^ could not find `device_runtime` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+   --> crates/horizon-client/src/game/sign_edit.rs:371:20
+    |
+371 |             crate::platform::hide();
+    |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game/startup_menu.rs:1031:23
+     |
+1031 |             if crate::platform::active() {
+     |                       ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game/startup_menu.rs:1032:24
+     |
+1032 |                 crate::platform::hide();
+     |                        ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game/startup_menu.rs:1035:20
+     |
+1035 |             crate::platform::hide();
+     |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game/startup_menu.rs:1092:39
+     |
+1092 | ...                   if crate::platform::active() {
+     |                                 ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game/startup_menu.rs:1093:40
+     |
+1093 | ...                   crate::platform::hide();
+     |                              ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game/startup_menu.rs:1104:40
+     |
+1104 | ...                   crate::platform::show(&initial);
+     |                              ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game/startup_menu.rs:1108:36
+     |
+1108 | ...                   crate::platform::hide();
+     |                              ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game/startup_menu.rs:1186:40
+     |
+1186 |                     let field = crate::platform::field_at(p);
+     |                                        ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game/startup_menu.rs:1207:32
+     |
+1207 |                         crate::platform::show(&initial);
+     |                                ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game.rs:8687:20
+     |
+8687 |             crate::platform::capture_mouse(false);
+     |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+    --> crates/horizon-client/src/game.rs:8752:62
+     |
+8752 |                     !crate::keyboard_mouse_input() || crate::platform::capture_mouse(true);
+     |                                                              ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `documents` in `crate`
+    --> crates/horizon-client/src/game.rs:9497:16
+     |
+9497 |         crate::documents::draw(&mut batch, &self.gui.atlas);
+     |                ^^^^^^^^^ could not find `documents` in the crate root
+
+error[E0433]: cannot find `display` in `crate`
+     --> crates/horizon-client/src/game.rs:17899:30
+      |
+17899 |                 match crate::display::prepare(window) {
+      |                              ^^^^^^^ could not find `display` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+     --> crates/horizon-client/src/game.rs:18147:23
+      |
+18147 |             if crate::platform::active() {
+      |                       ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+     --> crates/horizon-client/src/game.rs:18148:24
+      |
+18148 |                 crate::platform::hide();
+      |                        ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+     --> crates/horizon-client/src/game.rs:18152:20
+      |
+18152 |             crate::platform::hide();
+      |                    ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `platform` in `crate`
+     --> crates/horizon-client/src/game.rs:18363:35
+      |
+18363 |                         if crate::platform::field_at(p) {
+      |                                   ^^^^^^^^ could not find `platform` in the crate root
+
+error[E0433]: cannot find `device_runtime` in `crate`
+     --> crates/horizon-client/src/game.rs:18430:24
+      |
+18430 |                 crate::device_runtime::suspend();
+      |                        ^^^^^^^^^^^^^^ could not find `device_runtime` in the crate root
+
+error[E0433]: cannot find `performance` in `crate`
+     --> crates/horizon-client/src/game.rs:19736:61
+      |
+19736 | ...                   performance_sample = crate::performance::record(
+      |                                                   ^^^^^^^^^^^ could not find `performance` in the crate root
+
+error[E0433]: cannot find `performance` in `crate`
+     --> crates/horizon-client/src/game.rs:19749:32
+      |
+19749 |                         crate::performance::submit(sample, self.android_performance_context());
+      |                                ^^^^^^^^^^^ could not find `performance` in the crate root
+
+error[E0433]: cannot find `diagnostics` in `crate`
+     --> crates/horizon-client/src/game.rs:22564:16
+      |
+22564 |         crate::diagnostics::heartbeat(
+      |                ^^^^^^^^^^^ could not find `diagnostics` in the crate root
+
+error[E0433]: cannot find `backend` in `crate`
+     --> crates/horizon-client/src/game.rs:22800:35
+      |
+22800 |                 let home = crate::backend::game_home();
+      |                                   ^^^^^^^ could not find `backend` in the crate root
+
+error[E0433]: cannot find `diagnostics` in `crate`
+     --> crates/horizon-client/src/game.rs:22801:24
+      |
+22801 |                 crate::diagnostics::record_error(&error.to_string());
+      |                        ^^^^^^^^^^^ could not find `diagnostics` in the crate root
+
+error[E0425]: cannot find type `UsageError` in module `game`
+     --> crates/horizon-client/src/entry.rs:178:38
+      |
+  178 |         let usage = error.is::<game::UsageError>();
+      |                                      ^^^^^^^^^^ not found in `game`
+      |
+note: found an item that was configured out
+     --> crates/horizon-client/src/game.rs:22919:22
+      |
+22918 | #[cfg(not(target_os = "android"))]
+      |          ----------------------- the item is gated here
+22919 | pub use launch_api::{UsageError, exit_code};
+      |                      ^^^^^^^^^^
+note: struct `crate::game::launch_api::UsageError` exists but is inaccessible
+     --> crates/horizon-client/src/game/launch_api.rs:123:1
+--
+error[E0433]: cannot find `exit_code` in `game`
+     --> crates/horizon-client/src/entry.rs:193:19
+      |
+  193 |             game::exit_code::USAGE
+      |                   ^^^^^^^^^ could not find `exit_code` in `game`
+      |
+note: found an item that was configured out
+     --> crates/horizon-client/src/game.rs:22919:34
+      |
+22918 | #[cfg(not(target_os = "android"))]
+      |          ----------------------- the item is gated here
+22919 | pub use launch_api::{UsageError, exit_code};
+      |                                  ^^^^^^^^^
+note: module `crate::game::launch_api::exit_code` exists but is inaccessible
+     --> crates/horizon-client/src/game/launch_api.rs:91:1
+--
+error[E0433]: cannot find `exit_code` in `game`
+     --> crates/horizon-client/src/entry.rs:195:19
+      |
+  195 |             game::exit_code::ERROR
+      |                   ^^^^^^^^^ could not find `exit_code` in `game`
+      |
+note: found an item that was configured out
+     --> crates/horizon-client/src/game.rs:22919:34
+      |
+22918 | #[cfg(not(target_os = "android"))]
+      |          ----------------------- the item is gated here
+22919 | pub use launch_api::{UsageError, exit_code};
+      |                                  ^^^^^^^^^
+note: module `crate::game::launch_api::exit_code` exists but is inaccessible
+     --> crates/horizon-client/src/game/launch_api.rs:91:1
+--
+error[E0425]: cannot find function `keyboard_mouse_input` in the crate root
+  --> crates/horizon-client/src/game/android_input.rs:76:70
+   |
+76 |         if !self.settings.keypad.enabled || (self.captured && crate::keyboard_mouse_input()) {
+   |                                                                      ^^^^^^^^^^^^^^^^^^^^ not found in the crate root
+
+error[E0433]: cannot find `official_zoom` in `game`
+  --> crates/horizon-client/src/game/android_bundled/zoom/zoom_zoom.rs:10:40
+   |
+10 |         && game.native_on(crate::game::official_zoom::ID)
+   |                                        ^^^^^^^^^^^^^ could not find `official_zoom` in `game`
+   |
+help: consider importing this module
+   |
+ 5 + use crate::game::android_bundled::official_zoom;
+   |
+help: if you import `official_zoom`, refer to it directly
+   |
+10 -         && game.native_on(crate::game::official_zoom::ID)
+10 +         && game.native_on(official_zoom::ID)
+   |
+--
+error[E0433]: cannot find `official_zoom` in `game`
+  --> crates/horizon-client/src/game/android_bundled/zoom/zoom_zoom.rs:11:60
+   |
+11 |         && let Some((factor, smooth, turn)) = crate::game::official_zoom::view()
+   |                                                            ^^^^^^^^^^^^^ could not find `official_zoom` in `game`
+   |
+help: consider importing this module
+   |
+ 5 + use crate::game::android_bundled::official_zoom;
+   |
+help: if you import `official_zoom`, refer to it directly
+   |
+11 -         && let Some((factor, smooth, turn)) = crate::game::official_zoom::view()
+11 +         && let Some((factor, smooth, turn)) = official_zoom::view()
+   |
+--
+error[E0433]: cannot find `official_recipes_glue` in `game`
+ --> crates/horizon-client/src/game/android_bundled/recipes/recipes_frame.rs:6:18
+  |
+6 |     crate::game::official_recipes_glue::frame(game);
+  |                  ^^^^^^^^^^^^^^^^^^^^^ could not find `official_recipes_glue` in `game`
+  |
+help: consider importing this module
+  |
+5 + use crate::game::android_bundled::official_recipes_glue;
+  |
+help: if you import `official_recipes_glue`, refer to it directly
+  |
+6 -     crate::game::official_recipes_glue::frame(game);
+6 +     official_recipes_glue::frame(game);
+  |
+--
+error[E0433]: cannot find `official_recipes_glue` in `game`
+  --> crates/horizon-client/src/game/android_bundled/recipes/recipes_event.rs:14:18
+   |
+14 |     crate::game::official_recipes_glue::event(game, event);
+   |                  ^^^^^^^^^^^^^^^^^^^^^ could not find `official_recipes_glue` in `game`
+   |
+help: consider importing this module
+   |
+ 5 + use crate::game::android_bundled::official_recipes_glue;
+   |
+help: if you import `official_recipes_glue`, refer to it directly
+   |
+14 -     crate::game::official_recipes_glue::event(game, event);
+14 +     official_recipes_glue::event(game, event);
+   |
+--
+error[E0433]: cannot find `smartf3` in `game`
+ --> crates/horizon-client/src/game/android_bundled/smartf3/smartf3_settings.rs:6:31
+  |
+6 |     if mod_id == crate::game::smartf3::ID {
+  |                               ^^^^^^^ could not find `smartf3` in `game`
+  |
+help: consider importing this module
+  |
+5 + use crate::game::android_bundled::smartf3;
+  |
+help: if you import `smartf3`, refer to it directly
+  |
+6 -     if mod_id == crate::game::smartf3::ID {
+6 +     if mod_id == smartf3::ID {
+  |
+--
+error[E0433]: cannot find `smartf3` in `game`
+ --> crates/horizon-client/src/game/android_bundled/smartf3/smartf3_click.rs:7:31
+  |
+7 |     if mod_id == crate::game::smartf3::ID {
+  |                               ^^^^^^^ could not find `smartf3` in `game`
+  |
+help: consider importing this module
+  |
+6 + use crate::game::android_bundled::smartf3;
+  |
+help: if you import `smartf3`, refer to it directly
+  |
+7 -     if mod_id == crate::game::smartf3::ID {
+7 +     if mod_id == smartf3::ID {
+  |
+--
+error[E0425]: cannot find value `Client` in this scope
+  --> crates/horizon-client/src/game/execution_role.rs:35:22
+   |
+35 |         for role in [Client, IntegratedServer, DedicatedServer] {
+   |                      ^^^^^^ not found in this scope
+   |
+help: consider importing one of these unit variants
+   |
+ 5 + use crate::game::execution_role::ExecutionRole::Client;
+   |
+ 5 + use crate::mod_api::NativeConfigKind::Client;
+   |
+
+error[E0425]: cannot find value `IntegratedServer` in this scope
+  --> crates/horizon-client/src/game/execution_role.rs:35:30
+   |
+35 |         for role in [Client, IntegratedServer, DedicatedServer] {
+   |                              ^^^^^^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing one of these unit variants
+   |
+ 5 + use crate::game::execution_role::ExecutionRole::IntegratedServer;
+   |
+ 5 + use crate::mod_api::NativeAuthority::IntegratedServer;
+   |
+
+error[E0425]: cannot find value `DedicatedServer` in this scope
+  --> crates/horizon-client/src/game/execution_role.rs:35:48
+   |
+35 |         for role in [Client, IntegratedServer, DedicatedServer] {
+   |                                                ^^^^^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing one of these unit variants
+   |
+ 5 + use crate::game::execution_role::ExecutionRole::DedicatedServer;
+   |
+ 5 + use crate::mod_api::NativeAuthority::DedicatedServer;
+   |
+
+error[E0425]: cannot find value `integrated` in this scope
+    --> crates/horizon-client/src/game/lan_actions.rs:3256:13
+     |
+3256 |         if !integrated && (!host.settings.guest_commands || !allowed) {
+     |             ^^^^^^^^^^
+     |
+help: you might have meant to use the available field
+     |
+3256 |         if !self.integrated && (!host.settings.guest_commands || !allowed) {
+     |             +++++
+
+error[E0425]: cannot find value `integrated` in this scope
+    --> crates/horizon-client/src/game/lan_actions.rs:3275:13
+     |
+3275 |             integrated,
+     |             ^^^^^^^^^^
+     |
+help: you might have meant to use the available field
+     |
+3275 |             integrated: self.integrated,
+     |             +++++++++++++++++
+
+error[E0425]: cannot find function `save_input_mode` in the crate root
+   --> crates/horizon-client/src/game/options.rs:327:28
+    |
+327 |                     crate::save_input_mode();
+    |                            ^^^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `built_with_native_mods` in module `crate::game::mods`
+   --> crates/horizon-client/src/game/packs.rs:525:40
+    |
+525 |     let mod_image = crate::game::mods::built_with_native_mods();
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^ not found in `crate::game::mods`
+
+error[E0425]: cannot find function `touch_visible` in the crate root
+   --> crates/horizon-client/src/game/pad.rs:684:27
+    |
+684 |                 && crate::touch_visible();
+    |                           ^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `touch_visible` in the crate root
+    --> crates/horizon-client/src/game/pad_menu.rs:1136:37
+     |
+1136 |         let show = show && (!crate::touch_visible() || self.settings.keypad.enabled);
+     |                                     ^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find value `virtual_mouse` in this scope
+    --> crates/horizon-client/src/game/pad_menu.rs:1706:13
+     |
+1706 |         if !virtual_mouse
+     |             ^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `built_with_native_mods` in module `crate::game::mods`
+    --> crates/horizon-client/src/game.rs:2102:48
+     |
+2102 |             let mod_image = crate::game::mods::built_with_native_mods();
+     |                                                ^^^^^^^^^^^^^^^^^^^^^^ not found in `crate::game::mods`
+
+error[E0425]: cannot find function `keyboard_mouse_input` in the crate root
+    --> crates/horizon-client/src/game.rs:3548:20
+     |
+3548 |             crate::keyboard_mouse_input()
+     |                    ^^^^^^^^^^^^^^^^^^^^ not found in the crate root
+
+error[E0422]: cannot find struct, variant or union type `MotionWorld` in this scope
+    --> crates/horizon-client/src/game.rs:7898:13
+     |
+7898 |             MotionWorld {
+     |             ^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `MIN_Y` in this scope
+    --> crates/horizon-client/src/game.rs:8111:42
+     |
+8111 |         if player.position.y < f64::from(MIN_Y - 64) {
+     |                                          ^^^^^ not found in this scope
+
+error[E0425]: cannot find function `keyboard_mouse_input` in the crate root
+    --> crates/horizon-client/src/game.rs:8752:29
+     |
+8752 |                     !crate::keyboard_mouse_input() || crate::platform::capture_mouse(true);
+     |                             ^^^^^^^^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `touch_visible` in the crate root
+    --> crates/horizon-client/src/game.rs:8794:47
+     |
+8794 |             let pointer = pointer && (!crate::touch_visible() || self.settings.keypad.enabled);
+     |                                               ^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `touch_visible` in the crate root
+     --> crates/horizon-client/src/game.rs:15091:25
+      |
+15091 |                 !crate::touch_visible() || self.settings.keypad.enabled;
+      |                         ^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `touch_input` in the crate root
+     --> crates/horizon-client/src/game.rs:15097:24
+      |
+15097 |                 crate::touch_input(!self.settings.keypad.enabled);
+      |                        ^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `keyboard_mouse_input` in the crate root
+     --> crates/horizon-client/src/game.rs:18072:33
+      |
+18072 |             let before = crate::keyboard_mouse_input();
+      |                                 ^^^^^^^^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `keyboard_mouse_input` in the crate root
+     --> crates/horizon-client/src/game.rs:18079:34
+      |
+18079 |             if !before && crate::keyboard_mouse_input() && self.captured {
+      |                                  ^^^^^^^^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `touch_input` in the crate root
+     --> crates/horizon-client/src/game.rs:18086:45
+      |
+18086 |             WindowEvent::Touch(_) => crate::touch_input(true),
+      |                                             ^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `touch_input` in the crate root
+     --> crates/horizon-client/src/game.rs:18094:24
+      |
+18094 |                 crate::touch_input(false)
+      |                        ^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `touch_visible` in the crate root
+     --> crates/horizon-client/src/game.rs:18252:28
+      |
+18252 |                 if !crate::touch_visible() && !self.settings.keypad.enabled {
+      |                            ^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find value `horizontal_steps` in this scope
+     --> crates/horizon-client/src/game.rs:18953:34
+      |
+18953 | ...                   [horizontal_steps, vertical_steps],
+      |                        ^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `bundle` in this scope
+     --> crates/horizon-client/src/game.rs:18999:29
+      |
+18999 |                         && !bundle
+      |                             ^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `android_event_loop` in the crate root
+     --> crates/horizon-client/src/game.rs:22914:19
+      |
+22914 |     return crate::android_event_loop();
+      |                   ^^^^^^^^^^^^^^^^^^ not found in the crate root
+
+error[E0425]: cannot find function `register_components` in module `mods`
+     --> crates/horizon-client/src/game.rs:22995:11
+      |
+22995 |     mods::register_components(&vanilla_root)?;
+      |           ^^^^^^^^^^^^^^^^^^^ not found in `mods`
+
+error[E0425]: cannot find function `register_standalone_models` in module `mods`
+     --> crates/horizon-client/src/game.rs:22996:11
+      |
+22996 |     mods::register_standalone_models();
+      |           ^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in `mods`
+
+error[E0603]: function `chat_tree` is private
+   --> crates/horizon-client/src/game/command_blocks.rs:341:38
+    |
+341 |             dispatcher: super::chat::chat_tree(&self.remote, &self.mods),
+    |                                      ^^^^^^^^^ private function
+    |
+note: the function `chat_tree` is defined here
+   --> crates/horizon-client/src/game/chat.rs:24:1
+    |
+ 24 | / fn chat_tree<'a>(
+ 25 | |     remote: &'a Option<super::remote::Remote>,
+ 26 | |     mods: &'a super::mods::ModsState,
+ 27 | | ) -> &'a horizon_client::command::Dispatcher {
+...   |
+ 32 | | }
+--
+error[E0603]: function `chat_tree` is private
+   --> crates/horizon-client/src/game/command_blocks.rs:591:38
+    |
+591 |             dispatcher: super::chat::chat_tree(&self.remote, &self.mods),
+    |                                      ^^^^^^^^^ private function
+    |
+note: the function `chat_tree` is defined here
+   --> crates/horizon-client/src/game/chat.rs:24:1
+    |
+ 24 | / fn chat_tree<'a>(
+ 25 | |     remote: &'a Option<super::remote::Remote>,
+ 26 | |     mods: &'a super::mods::ModsState,
+ 27 | | ) -> &'a horizon_client::command::Dispatcher {
+...   |
+ 32 | | }
+--
+error[E0603]: function `chat_tree` is private
+   --> crates/horizon-client/src/game/command_blocks.rs:700:38
+    |
+700 |             dispatcher: super::chat::chat_tree(&self.remote, &self.mods),
+    |                                      ^^^^^^^^^ private function
+    |
+note: the function `chat_tree` is defined here
+   --> crates/horizon-client/src/game/chat.rs:24:1
+    |
+ 24 | / fn chat_tree<'a>(
+ 25 | |     remote: &'a Option<super::remote::Remote>,
+ 26 | |     mods: &'a super::mods::ModsState,
+ 27 | | ) -> &'a horizon_client::command::Dispatcher {
+...   |
+ 32 | | }
+--
+error[E0603]: function `chat_tree` is private
+   --> crates/horizon-client/src/game/command_blocks.rs:736:38
+    |
+736 |             dispatcher: super::chat::chat_tree(&self.remote, &self.mods),
+    |                                      ^^^^^^^^^ private function
+    |
+note: the function `chat_tree` is defined here
+   --> crates/horizon-client/src/game/chat.rs:24:1
+    |
+ 24 | / fn chat_tree<'a>(
+ 25 | |     remote: &'a Option<super::remote::Remote>,
+ 26 | |     mods: &'a super::mods::ModsState,
+ 27 | | ) -> &'a horizon_client::command::Dispatcher {
+...   |
+ 32 | | }
+--
+error[E0603]: function `chat_tree` is private
+   --> crates/horizon-client/src/game/command_blocks.rs:750:42
+    |
+750 |                 dispatcher: super::chat::chat_tree(&self.remote, &self.mods),
+    |                                          ^^^^^^^^^ private function
+    |
+note: the function `chat_tree` is defined here
+   --> crates/horizon-client/src/game/chat.rs:24:1
+    |
+ 24 | / fn chat_tree<'a>(
+ 25 | |     remote: &'a Option<super::remote::Remote>,
+ 26 | |     mods: &'a super::mods::ModsState,
+ 27 | | ) -> &'a horizon_client::command::Dispatcher {
+...   |
+ 32 | | }
+--
+error[E0603]: function `chat_tree` is private
+   --> crates/horizon-client/src/game/command_blocks.rs:823:38
+    |
+823 |             dispatcher: super::chat::chat_tree(&self.remote, &self.mods),
+    |                                      ^^^^^^^^^ private function
+    |
+note: the function `chat_tree` is defined here
+   --> crates/horizon-client/src/game/chat.rs:24:1
+    |
+ 24 | / fn chat_tree<'a>(
+ 25 | |     remote: &'a Option<super::remote::Remote>,
+ 26 | |     mods: &'a super::mods::ModsState,
+ 27 | | ) -> &'a horizon_client::command::Dispatcher {
+...   |
+ 32 | | }
+--
+error[E0603]: function `chat_tree` is private
+   --> crates/horizon-client/src/game/command_blocks.rs:897:38
+    |
+897 |             dispatcher: super::chat::chat_tree(&self.remote, &self.mods),
+    |                                      ^^^^^^^^^ private function
+    |
+note: the function `chat_tree` is defined here
+   --> crates/horizon-client/src/game/chat.rs:24:1
+    |
+ 24 | / fn chat_tree<'a>(
+ 25 | |     remote: &'a Option<super::remote::Remote>,
+ 26 | |     mods: &'a super::mods::ModsState,
+ 27 | | ) -> &'a horizon_client::command::Dispatcher {
+...   |
+ 32 | | }
+--
+error[E0603]: function `chat_tree` is private
+   --> crates/horizon-client/src/game/dialogs.rs:345:50
+    |
+345 |                         dispatcher: super::chat::chat_tree(&self.remote, &self.mods),
+    |                                                  ^^^^^^^^^ private function
+    |
+note: the function `chat_tree` is defined here
+   --> crates/horizon-client/src/game/chat.rs:24:1
+    |
+ 24 | / fn chat_tree<'a>(
+ 25 | |     remote: &'a Option<super::remote::Remote>,
+ 26 | |     mods: &'a super::mods::ModsState,
+ 27 | | ) -> &'a horizon_client::command::Dispatcher {
+...   |
+ 32 | | }
+--
+error[E0603]: function `item_has_use` is private
+     --> crates/horizon-client/src/game.rs:3520:21
+      |
+ 3520 |             remote::item_has_use(info)
+      |                     ^^^^^^^^^^^^ private function
+      |
+note: the function `item_has_use` is defined here
+     --> crates/horizon-client/src/game/remote.rs:10487:1
+      |
+10487 | fn item_has_use(info: &horizon_client::items::ItemInfo) -> bool {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `parked_worlds` found for struct `levels::Levels` in the current scope
+   --> crates/horizon-client/src/game/memory.rs:74:56
+    |
+ 74 |         std::iter::once(&self.world).chain(self.levels.parked_worlds())
+    |                                                        ^^^^^^^^^^^^^
+    |
+   ::: crates/horizon-client/src/game/levels.rs:124:1
+    |
+124 | pub(super) struct Levels {
+    | ------------------------ method `parked_worlds` not found for this struct
+    |
+help: there is a method `parked_mobs` with a similar name, but with different arguments
+   --> crates/horizon-client/src/game/levels.rs:170:5
+    |
+170 |     pub(super) fn parked_mobs(&self, dim: Dim) -> Option<&[Mob]> {
+--
+error[E0592]: duplicate definitions with name `mod_use`
+  --> crates/horizon-client/src/game/item_use.rs:64:5
+   |
+64 |     pub(super) fn mod_use(&self, stack: &ItemStack) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `mod_use`
+   |
+  ::: crates/horizon-client/src/game/mod_input.rs:77:5
+   |
+77 |     pub(super) fn mod_use(&mut self, button: MouseButton, pressed: bool) -> bool {
+   |     ---------------------------------------------------------------------------- other definition for `mod_use`
+
+error[E0592]: duplicate definitions with name `tick_mod_use`
+   --> crates/horizon-client/src/game/item_use.rs:83:5
+    |
+ 83 |     pub(super) fn tick_mod_use(&mut self, slot: usize, ticks: u32, stack: &ItemStack) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `tick_mod_use`
+    |
+   ::: crates/horizon-client/src/game/mod_input.rs:106:5
+    |
+106 |     pub(super) fn tick_mod_use(&mut self) {
+    |     ------------------------------------- other definition for `tick_mod_use`
+
+error[E0592]: duplicate definitions with name `mod_held`
+   --> crates/horizon-client/src/game/mod_input.rs:67:5
+    |
+ 67 |     pub(super) fn mod_held(&self) -> Option<HeldItem> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `mod_held`
+    |
+   ::: crates/horizon-client/src/game/native_claimed_items.rs:121:5
+    |
+121 |     fn mod_held(&self, slot: usize) -> Option<NativeHeldItem> {
+    |     --------------------------------------------------------- other definition for `mod_held`
+
+error[E0592]: duplicate definitions with name `lod_ray`
+   --> crates/horizon-client/src/game/mods.rs:571:5
+    |
+571 | /     fn lod_ray(
+572 | |         &self,
+573 | |         eye: [f64; 3],
+574 | |         dir: [f64; 3],
+575 | |         reach: f64,
+576 | |     ) -> Option<([i32; 3], [f64; 3], horizon_world::registry::BlockStateId)> {
+    | |____________________________________________________________________________^ duplicate definitions for `lod_ray`
+    |
+   ::: crates/horizon-client/src/game/native_claimed_items.rs:173:5
+    |
+173 | /     fn lod_ray(
+174 | |         &self,
+--
+error[E0592]: duplicate definitions with name `close_mod_screen`
+    --> crates/horizon-client/src/game/mods.rs:985:5
+     |
+ 985 |     pub(super) fn close_mod_screen(&mut self, tell: bool) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate definitions for `close_mod_screen`
+     |
+    ::: crates/horizon-client/src/game/native_hooks.rs:9078:5
+     |
+9078 |     pub(super) fn close_mod_screen(&mut self) {
+     |     ----------------------------------------- other definition for `close_mod_screen`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+  --> crates/horizon-client/src/game/android_input.rs:98:14
+   |
+98 |             .touch_ui
+   |              ^^^^^^^^ unknown field
+   |
+   = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:101:25
+    |
+101 |             || self.pad.touch_ui.owns_key(POINTER)
+    |                         ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:102:25
+    |
+102 |             || self.pad.touch.owns_pointer(POINTER)
+    |                         ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:103:49
+    |
+103 |             || (!self.pad_in_menu() && self.pad.touch.auxiliary_at(normalized));
+    |                                                 ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:126:18
+    |
+126 |         self.pad.touch.held_custom_tokens().any(|token| {
+    |                  ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:142:18
+    |
+142 |         self.pad.touch.held_custom_tokens().any(|token| {
+    |                  ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:151:38
+    |
+151 |         for (name, down) in self.pad.touch.key_events() {
+    |                                      ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `custom_keys` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:173:26
+    |
+173 |                 self.pad.custom_keys.insert(key);
+    |                          ^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `custom_keys` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:175:26
+    |
+175 |                 self.pad.custom_keys.remove(&key);
+    |                          ^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `hardware_keys` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:177:25
+    |
+177 |             if self.pad.hardware_keys.contains(&key) {
+    |                         ^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:281:51
+    |
+281 |             && let Some((right, last)) = self.pad.touch_ui.release_mouse(t.id)
+    |                                                   ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:289:22
+    |
+289 |             self.pad.touch_ui.cancel();
+    |                      ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:293:53
+    |
+293 |         if t.phase == TouchPhase::Ended && self.pad.touch_ui.owns_key(t.id) {
+    |                                                     ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:294:41
+    |
+294 |             if let Some(key) = self.pad.touch_ui.key_up(t.id) {
+    |                                         ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:304:14
+    |
+304 |             .touch_ui
+    |              ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:308:26
+    |
+308 |                 self.pad.touch.clear();
+    |                          ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:309:26
+    |
+309 |                 self.pad.touch.ignore(t.id);
+    |                          ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:312:44
+    |
+312 |                         let was = self.pad.touch_ui.key_held(KeyCode::F3);
+    |                                            ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:313:34
+    |
+313 |                         self.pad.touch_ui.f3_latched = !self.pad.touch_ui.f3_latched;
+    |                                  ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:313:66
+    |
+313 |                         self.pad.touch_ui.f3_latched = !self.pad.touch_ui.f3_latched;
+    |                                                                  ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:314:44
+    |
+314 |                         let now = self.pad.touch_ui.key_held(KeyCode::F3);
+    |                                            ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:326:34
+    |
+326 |                         self.pad.touch_ui.expanded = false;
+    |                                  ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:329:45
+    |
+329 |                         let held = self.pad.touch_ui.key_held(KeyCode::F3);
+    |                                             ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:338:34
+    |
+338 |                         self.pad.touch_ui.expanded = false;
+    |                                  ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:341:37
+    |
+341 |                         if self.pad.touch_ui.press_mouse(t.id, right) {
+    |                                     ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:354:47
+    |
+354 |                         for right in self.pad.touch_ui.release_all_mouse() {
+    |                                               ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:357:34
+    |
+357 |                         self.pad.touch_ui.cancel();
+    |                                  ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:358:34
+    |
+358 |                         self.pad.touch_ui.virtual_mouse ^= true;
+    |                                  ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:360:46
+    |
+360 |                     Action::More => self.pad.touch_ui.expanded = !self.pad.touch_ui.expanded,
+    |                                              ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:360:76
+    |
+360 |                     Action::More => self.pad.touch_ui.expanded = !self.pad.touch_ui.expanded,
+    |                                                                            ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:369:60
+    |
+369 |                         if key != KeyCode::F3 && !self.pad.touch_ui.key_held(KeyCode::F3) {
+    |                                                            ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:370:38
+    |
+370 | ...                   self.pad.touch_ui.expanded = false;
+    |                                ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:385:42
+    |
+385 | ...                   if !self.pad.touch_ui.key_down(t.id, key) {
+    |                                    ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+     --> crates/horizon-client/src/game/android_input.rs:390:38
+      |
+  390 | ...                   self.key_pressed(key)?;
+      |                            ^^^^^^^^^^^----- argument #2 of type `winit::keyboard::KeyCode` is missing
+      |
+note: method defined here
+     --> crates/horizon-client/src/game.rs:17142:8
+      |
+17142 |     fn key_pressed(&mut self, key: KeyCode, raw: KeyCode) -> Result<()> {
+      |        ^^^^^^^^^^^                          ------------
+help: provide the argument
+      |
+  390 |                                 self.key_pressed(key, /* winit::keyboard::KeyCode */)?;
+      |                                                     ++++++++++++++++++++++++++++++++
+--
+error[E0599]: no method named `mod_browser_edit_value` found for mutable reference `&mut game::Game<'_>` in the current scope
+   --> crates/horizon-client/src/game/android_input.rs:445:18
+    |
+445 |             self.mod_browser_edit_value()
+    |                  ^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: there is a method `book_edit_value` with a similar name
+    |
+445 -             self.mod_browser_edit_value()
+445 +             self.book_edit_value()
+    |
+
+error[E0609]: no field `custom_keys` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:536:21
+    |
+536 |         if self.pad.custom_keys.contains(&key) {
+    |                     ^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:550:18
+    |
+550 |         self.pad.touch_ui.cancel_relative();
+    |                  ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:551:31
+    |
+551 |         for right in self.pad.touch_ui.release_all_mouse() {
+    |                               ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `hardware_keys` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:563:22
+    |
+563 |             self.pad.hardware_keys.clear();
+    |                      ^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:565:22
+    |
+565 |             self.pad.touch.clear();
+    |                      ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_aim` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:566:22
+    |
+566 |             self.pad.touch_aim = None;
+    |                      ^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:567:25
+    |
+567 |             if self.pad.touch.editor.is_some() {
+    |                         ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:568:26
+    |
+568 |                 self.pad.touch.cancel_editor();
+    |                          ^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:573:29
+    |
+573 |         for key in self.pad.touch_ui.release_keys() {
+    |                             ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:587:21
+    |
+587 |         if self.pad.touch_ui.virtual_mouse {
+    |                     ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:595:31
+    |
+595 |         let direct = self.pad.touch_ui.direct_pointer(t.id, p, t.phase);
+    |                               ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:624:14
+    |
+624 |             .touch_ui
+    |              ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:665:33
+    |
+665 |         let position = self.pad.touch_ui.relative_touch(
+    |                                 ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:672:23
+    |
+672 |             !self.pad.touch_ui.mouse_held(),
+    |                       ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:687:62
+    |
+687 |         if !self.focused || !self.pad_in_menu() || !self.pad.touch_ui.virtual_mouse {
+    |                                                              ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:688:22
+    |
+688 |             self.pad.touch_ui.cancel_relative();
+    |                      ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:689:35
+    |
+689 |             for right in self.pad.touch_ui.release_all_mouse() {
+    |                                   ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0609]: no field `touch_ui` on type `Pads`
+   --> crates/horizon-client/src/game/android_input.rs:698:36
+    |
+698 |         let Some(right) = self.pad.touch_ui.relative_click(true) else {
+    |                                    ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `feed`, `state`, `in_use`, `style`, `menu`
+
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+  --> crates/horizon-client/src/game/android_bundled/zoom/zoom_click.rs:13:15
+   |
+13 |     for (key, value) in settings.stored() {
+   |               ^^^^^ doesn't have a size known at compile-time
+   |
+   = help: the trait `Sized` is not implemented for `str`
+   = note: all local variables must have a statically known size
+
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+  --> crates/horizon-client/src/game/android_bundled/zoom/zoom_click.rs:13:5
+   |
+13 | /     for (key, value) in settings.stored() {
+14 | |         game.native_set_setting(zoom::ID, key, &value);
+15 | |     }
+   | |_____^ doesn't have a size known at compile-time
+   |
+   = help: within `(&str, str)`, the trait `Sized` is not implemented for `str`
+   = note: required because it appears within the type `(&str, str)`
+note: required by an implicit `Sized` bound in `std::option::Option`
+  --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/option.rs:600:0
+
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+  --> crates/horizon-client/src/game/android_bundled/minimap/minimap_click.rs:13:15
+   |
+13 |     for (key, value) in settings.stored() {
+   |               ^^^^^ doesn't have a size known at compile-time
+   |
+   = help: the trait `Sized` is not implemented for `str`
+   = note: all local variables must have a statically known size
+
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+  --> crates/horizon-client/src/game/android_bundled/minimap/minimap_click.rs:13:5
+   |
+13 | /     for (key, value) in settings.stored() {
+14 | |         game.native_set_setting(m::ID, key, &value);
+15 | |     }
+   | |_____^ doesn't have a size known at compile-time
+   |
+   = help: within `(&str, str)`, the trait `Sized` is not implemented for `str`
+   = note: required because it appears within the type `(&str, str)`
+note: required by an implicit `Sized` bound in `std::option::Option`
+  --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/option.rs:600:0
+
+error[E0599]: no method named `guest_hit` found for reference `&game::Game<'_>` in the current scope
+   --> crates/horizon-client/src/game/android_bundled/smartf3/native.rs:544:36
+    |
+544 |         if let Some((_, d)) = self.guest_hit() {
+    |                                    ^^^^^^^^^
+    |
+help: there is a method `guest_hit_by` with a similar name, but with different arguments
+   --> crates/horizon-client/src/game/lan_mobs.rs:327:5
+    |
+327 | /     pub(super) fn guest_hit_by<R>(
+328 | |         &mut self,
+329 | |         host: &mut LanHost,
+330 | |         conn: u32,
+331 | |         f: impl FnOnce(&mut Self) -> R,
+332 | |     ) -> Option<R> {
+--
+error[E0599]: no method named `attachment_map_quiet` found for mutable reference `&mut game::Game<'_>` in the current scope
+  --> crates/horizon-client/src/game/attachment_sync.rs:53:18
+   |
+52 |               _ => self
+   |  __________________-
+53 | |                 .attachment_map_quiet(holder)
+   | |                 -^^^^^^^^^^^^^^^^^^^^ method not found in `&mut game::Game<'_>`
+   | |_________________|
+   |
+
+error[E0599]: no method named `attachment_map_quiet` found for mutable reference `&mut game::Game<'_>` in the current scope
+   --> crates/horizon-client/src/game/attachment_sync.rs:111:32
+    |
+111 |             let Ok(map) = self.attachment_map_quiet(holder) else {
+    |                                ^^^^^^^^^^^^^^^^^^^^ method not found in `&mut game::Game<'_>`
+
+error[E0609]: no field `commands` on type `&Remote`
+  --> crates/horizon-client/src/game/chat.rs:28:42
+   |
+28 |     match remote.as_ref().and_then(|r| r.commands.as_ref()) {
+   |                                          ^^^^^^^^ unknown field
+   |
+   = note: available fields are: `session`, `brand`, `features`, `quiet_commands`, `mod_net` ... and 41 others
+
+error[E0599]: no method named `lan_host_chat` found for mutable reference `&mut game::Game<'_>` in the current scope
+    --> crates/horizon-client/src/game/chat.rs:1087:18
+     |
+1087 |             self.lan_host_chat(message);
+     |                  ^^^^^^^^^^^^^
+     |
+help: there is a method `lan_host` with a similar name, but with different arguments
+    --> crates/horizon-client/src/game/lan.rs:1344:5
+     |
+1344 | /     pub(super) fn lan_host(
+1345 | |         &mut self,
+1346 | |         settings: LanSettings,
+1347 | |         net: NetConfig,
+1348 | |         config: HubConfig,
+1349 | |     ) -> Result<()> {
+--
+error[E0308]: mismatched types
+    --> crates/horizon-client/src/game/chat.rs:1088:66
+     |
+1088 |             self.mod_player_chat(super::server_mods::Who::Local, message);
+     |                  ---------------                                 ^^^^^^^ expected `&str`, found `String`
+     |                  |
+     |                  arguments to this method are incorrect
+     |
+note: method defined here
+    --> crates/horizon-client/src/game/server_mods.rs:423:32
+     |
+ 423 |         pub(in crate::game) fn mod_player_chat(&mut self, who: Who, text: &str) {
+     |                                ^^^^^^^^^^^^^^^                      ----------
+help: consider borrowing here
+     |
+--
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+    --> crates/horizon-client/src/game/chat.rs:1309:25
+     |
+1309 |             dispatcher: chat_tree(&self.remote),
+     |                         ^^^^^^^^^-------------- argument #2 of type `&ModsState` is missing
+     |
+note: function defined here
+    --> crates/horizon-client/src/game/chat.rs:24:4
+     |
+  24 | fn chat_tree<'a>(
+     |    ^^^^^^^^^
+  25 |     remote: &'a Option<super::remote::Remote>,
+  26 |     mods: &'a super::mods::ModsState,
+     |     --------------------------------
+help: provide the argument
+--
+error[E0599]: no variant or associated item named `DebugOptions` found for enum `game::Screen` in the current scope
+   --> crates/horizon-client/src/game/control.rs:268:21
+    |
+268 |             Screen::DebugOptions => self.debug_options_type(text),
+    |                     ^^^^^^^^^^^^ variant or associated item not found in `game::Screen`
+    |
+   ::: crates/horizon-client/src/game.rs:825:1
+    |
+825 | enum Screen {
+    | ----------- variant or associated item `DebugOptions` not found for this enum
+
+error[E0599]: no method named `server_far_terrain` found for reference `&game::Game<'_>` in the current scope
+    --> crates/horizon-client/src/game/control.rs:1346:120
+     |
+1346 | ...lf.integrated.is_some() { "integrated" } else if self.server_far_terrain().is_some() { "server" } else if self.remote.is_some()...
+     |                                                          ^^^^^^^^^^^^^^^^^^
+     |
+help: there is a method `mod_far_terrain` with a similar name
+     |
+1346 -             "source": if self.lod.is_none() { "none" } else if self.integrated.is_some() { "integrated" } else if self.server_far_terrain().is_some() { "server" } else if self.remote.is_some() { "server-terrain" } else { "local" },
+1346 +             "source": if self.lod.is_none() { "none" } else if self.integrated.is_some() { "integrated" } else if self.mod_far_terrain().is_some() { "server" } else if self.remote.is_some() { "server-terrain" } else { "local" },
+     |
+
+error[E0599]: no variant or associated item named `DebugOptions` found for enum `game::Screen` in the current scope
+   --> crates/horizon-client/src/game/debug_keys.rs:284:35
+    |
+284 |         if self.screen != Screen::DebugOptions {
+    |                                   ^^^^^^^^^^^^ variant or associated item not found in `game::Screen`
+    |
+   ::: crates/horizon-client/src/game.rs:825:1
+    |
+825 | enum Screen {
+    | ----------- variant or associated item `DebugOptions` not found for this enum
+
+error[E0599]: no variant or associated item named `DebugOptions` found for enum `game::Screen` in the current scope
+   --> crates/horizon-client/src/game/debug_options.rs:104:21
+    |
+104 |             Screen::DebugOptions => self.close_debug_options(),
+    |                     ^^^^^^^^^^^^ variant or associated item not found in `game::Screen`
+    |
+   ::: crates/horizon-client/src/game.rs:825:1
+    |
+825 | enum Screen {
+    | ----------- variant or associated item `DebugOptions` not found for this enum
+
+error[E0599]: no variant or associated item named `DebugOptions` found for enum `game::Screen` in the current scope
+   --> crates/horizon-client/src/game/debug_options.rs:112:39
+    |
+112 |                 self.screen = Screen::DebugOptions;
+    |                                       ^^^^^^^^^^^^ variant or associated item not found in `game::Screen`
+    |
+   ::: crates/horizon-client/src/game.rs:825:1
+    |
+825 | enum Screen {
+    | ----------- variant or associated item `DebugOptions` not found for this enum
+
+error[E0599]: no method named `parked_world` found for struct `levels::Levels` in the current scope
+   --> crates/horizon-client/src/game/dedicated/report.rs:163:30
+    |
+163 |                 (self.levels.parked_world(dim), self.levels.parked_mobs(dim))
+    |                              ^^^^^^^^^^^^
+    |
+   ::: crates/horizon-client/src/game/levels.rs:124:1
+    |
+124 | pub(super) struct Levels {
+    | ------------------------ method `parked_world` not found for this struct
+    |
+help: there is a method `parked_mobs` with a similar name
+    |
+163 -                 (self.levels.parked_world(dim), self.levels.parked_mobs(dim))
+163 +                 (self.levels.parked_mobs(dim), self.levels.parked_mobs(dim))
+--
+error[E0599]: no method named `parked_world` found for struct `levels::Levels` in the current scope
+   --> crates/horizon-client/src/game/dedicated/status.rs:89:29
+    |
+ 89 |                 self.levels.parked_world(dim),
+    |                             ^^^^^^^^^^^^
+    |
+   ::: crates/horizon-client/src/game/levels.rs:124:1
+    |
+124 | pub(super) struct Levels {
+    | ------------------------ method `parked_world` not found for this struct
+    |
+help: there is a method `parked_mobs` with a similar name
+    |
+ 89 -                 self.levels.parked_world(dim),
+ 89 +                 self.levels.parked_mobs(dim),
+--
+error[E0599]: no method named `recipes_received_now` found for mutable reference `&mut game::Game<'_>` in the current scope
+   --> crates/horizon-client/src/game/extras.rs:66:14
+    |
+ 66 |         self.recipes_received_now();
+    |              ^^^^^^^^^^^^^^^^^^^^
+    |
+help: there is a method `recipe_give` with a similar name, but with different arguments
+   --> crates/horizon-client/src/game/native_recipes.rs:119:5
+    |
+119 |     pub(super) fn recipe_give(&mut self, item: &str, count: u32) -> Result<(), String> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no variant or associated item named `DebugOptions` found for enum `game::Screen` in the current scope
+   --> crates/horizon-client/src/game/ime.rs:28:21
+    |
+ 28 |             Screen::DebugOptions => self
+    |                     ^^^^^^^^^^^^ variant or associated item not found in `game::Screen`
+    |
+   ::: crates/horizon-client/src/game.rs:825:1
+    |
+825 | enum Screen {
+    | ----------- variant or associated item `DebugOptions` not found for this enum
+
+error[E0599]: no variant or associated item named `DebugOptions` found for enum `game::Screen` in the current scope
+   --> crates/horizon-client/src/game/ime.rs:134:25
+    |
+134 |                 Screen::DebugOptions => self.debug_options_type(&text),
+    |                         ^^^^^^^^^^^^ variant or associated item not found in `game::Screen`
+    |
+   ::: crates/horizon-client/src/game.rs:825:1
+    |
+825 | enum Screen {
+    | ----------- variant or associated item `DebugOptions` not found for this enum
+
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+  --> crates/horizon-client/src/game/item_use.rs:75:18
+   |
+75 |         if !self.mod_use(stack) {
+   |                  ^^^^^^^-------
+   |                         ||
+   |                         |expected `MouseButton`, found `&ItemStack`
+   |                         argument #2 of type `bool` is missing
+   |
+note: method defined here
+  --> crates/horizon-client/src/game/mod_input.rs:77:19
+   |
+77 |     pub(super) fn mod_use(&mut self, button: MouseButton, pressed: bool) -> bool {
+   |                   ^^^^^^^            -------------------  -------------
+help: provide the argument
+--
+error[E0599]: no method named `guest_attachments_into` found for mutable reference `&mut game::Game<'_>` in the current scope
+    --> crates/horizon-client/src/game/lan.rs:1529:14
+     |
+1529 |         self.guest_attachments_into(guest);
+     |              ^^^^^^^^^^^^^^^^^^^^^^ method not found in `&mut game::Game<'_>`
+
+error[E0425]: cannot find function `native_declared` in this scope
+   --> crates/horizon-client/src/game/mods.rs:220:37
+    |
+220 |         let declared: Vec<String> = native_declared()
+    |                                     ^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `register_mob_effects` in this scope
+   --> crates/horizon-client/src/game/mods.rs:239:21
+    |
+239 |                     register_mob_effects(&[]);
+    |                     ^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `announced_entry` in this scope
+   --> crates/horizon-client/src/game/mods.rs:249:49
+    |
+249 |             Ok(_) if announce => announced.push(announced_entry(m, path)),
+    |                                                 ^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `native_declared` in this scope
+   --> crates/horizon-client/src/game/mods.rs:254:27
+    |
+254 |     let (blocks, items) = native_declared();
+    |                           ^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `register_mob_effects` in this scope
+   --> crates/horizon-client/src/game/mods.rs:285:13
+    |
+285 |             register_mob_effects(&mods);
+    |             ^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `register_entity_types` in this scope
+   --> crates/horizon-client/src/game/mods.rs:286:13
+    |
+286 |             register_entity_types(&mods);
+    |             ^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `register_menu_types` in this scope
+   --> crates/horizon-client/src/game/mods.rs:287:13
+    |
+287 |             register_menu_types(&mods);
+    |             ^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `register_mob_effects` in this scope
+   --> crates/horizon-client/src/game/mods.rs:292:13
+    |
+292 |             register_mob_effects(&[]);
+    |             ^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `register_entity_types` in this scope
+   --> crates/horizon-client/src/game/mods.rs:293:13
+    |
+293 |             register_entity_types(&[]);
+    |             ^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `register_menu_types` in this scope
+   --> crates/horizon-client/src/game/mods.rs:294:13
+    |
+294 |             register_menu_types(&[]);
+    |             ^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0609]: no field `server_thread` on type `game::Options`
+   --> crates/horizon-client/src/game/mods.rs:373:51
+    |
+373 |             ExecutionRole::Client if self.options.server_thread => Runs::Client,
+    |                                                   ^^^^^^^^^^^^^ unknown field
+    |
+    = note: available fields are: `resources`, `distance`, `distance_override`, `seed`, `creative` ... and 31 others
+
+error[E0609]: no field `commands` on type `&Remote`
+   --> crates/horizon-client/src/game/mods.rs:443:29
+    |
+443 |             .and_then(|r| r.commands.as_ref())
+    |                             ^^^^^^^^ unknown field
+    |
+    = note: available fields are: `session`, `brand`, `features`, `quiet_commands`, `mod_net` ... and 41 others
+
+error[E0609]: no field `1` on type `Glyph`
+   --> crates/horizon-client/src/game/mods.rs:515:80
+    |
+515 |                 .map(|c| char::from_u32(c).map_or(6.0, |c| atlas.glyph_cell(c).1))
+    |                                                                                ^ unknown field
+    |
+    = note: available fields are: `rect`, `left`, `top`, `right`, `bottom` ... and 2 others
+
+error[E0034]: multiple applicable items in scope
+   --> crates/horizon-client/src/game/mods.rs:650:14
+    |
+650 |         self.tick_mod_use();
+    |              ^^^^^^^^^^^^ multiple `tick_mod_use` found
+    |
+note: candidate #1 is defined in an impl for the type `game::Game<'_>`
+   --> crates/horizon-client/src/game/item_use.rs:83:5
+    |
+ 83 |     pub(super) fn tick_mod_use(&mut self, slot: usize, ticks: u32, stack: &ItemStack) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `game::Game<'_>`
+   --> crates/horizon-client/src/game/mod_input.rs:106:5
+    |
+106 |     pub(super) fn tick_mod_use(&mut self) {
+--
+error[E0034]: multiple applicable items in scope
+    --> crates/horizon-client/src/game/mods.rs:785:30
+     |
+ 785 |                         self.close_mod_screen(false);
+     |                              ^^^^^^^^^^^^^^^^ multiple `close_mod_screen` found
+     |
+note: candidate #1 is defined in an impl for the type `game::Game<'_>`
+    --> crates/horizon-client/src/game/mods.rs:985:5
+     |
+ 985 |     pub(super) fn close_mod_screen(&mut self, tell: bool) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `game::Game<'_>`
+    --> crates/horizon-client/src/game/native_hooks.rs:9078:5
+     |
+9078 |     pub(super) fn close_mod_screen(&mut self) {
+--
+error[E0034]: multiple applicable items in scope
+    --> crates/horizon-client/src/game/mods.rs:1017:18
+     |
+1017 |             self.close_mod_screen(false);
+     |                  ^^^^^^^^^^^^^^^^ multiple `close_mod_screen` found
+     |
+note: candidate #1 is defined in an impl for the type `game::Game<'_>`
+    --> crates/horizon-client/src/game/mods.rs:985:5
+     |
+ 985 |     pub(super) fn close_mod_screen(&mut self, tell: bool) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `game::Game<'_>`
+    --> crates/horizon-client/src/game/native_hooks.rs:9078:5
+     |
+9078 |     pub(super) fn close_mod_screen(&mut self) {
+--
+error[E0034]: multiple applicable items in scope
+    --> crates/horizon-client/src/game/mods.rs:1195:18
+     |
+1195 |             self.close_mod_screen(true);
+     |                  ^^^^^^^^^^^^^^^^ multiple `close_mod_screen` found
+     |
+note: candidate #1 is defined in an impl for the type `game::Game<'_>`
+    --> crates/horizon-client/src/game/mods.rs:985:5
+     |
+ 985 |     pub(super) fn close_mod_screen(&mut self, tell: bool) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `game::Game<'_>`
+    --> crates/horizon-client/src/game/native_hooks.rs:9078:5
+     |
+9078 |     pub(super) fn close_mod_screen(&mut self) {
+--
+error[E0599]: no method named `native_authoritative` found for mutable reference `&mut game::Game<'_>` in the current scope
+    --> crates/horizon-client/src/game/native_chunk_tickets.rs:27:33
+     |
+  27 |         if !namespaced || !self.native_authoritative() {
+     |                                 ^^^^^^^^^^^^^^^^^^^^
+     |
+help: there is a method `native_sprite` with a similar name, but with different arguments
+    --> crates/horizon-client/src/game/native_hooks.rs:8936:5
+     |
+8936 | /     pub(super) fn native_sprite(
+8937 | |         &self,
+8938 | |         batch: &mut HudBatch,
+8939 | |         name: &str,
+8940 | |         src: [f32; 4],
+8941 | |         dst: [f32; 4],
+--
+error[E0034]: multiple applicable items in scope
+   --> crates/horizon-client/src/game/native_claimed_items.rs:215:31
+    |
+215 |         let Some(item) = self.mod_held(slot) else {
+    |                               ^^^^^^^^ multiple `mod_held` found
+    |
+note: candidate #1 is defined in an impl for the type `game::Game<'_>`
+   --> crates/horizon-client/src/game/mod_input.rs:67:5
+    |
+ 67 |     pub(super) fn mod_held(&self) -> Option<HeldItem> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: candidate #2 is defined in an impl for the type `game::Game<'_>`
+   --> crates/horizon-client/src/game/native_claimed_items.rs:121:5
+    |
+121 |     fn mod_held(&self, slot: usize) -> Option<NativeHeldItem> {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1175:13
+     |
+1175 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1195:37
+     |
+1195 |         mod_api::dispatch_block_exp(self, mod_api::mods(), dimension, pos, block, experience);
+     |                                     ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1208:41
+     |
+1208 |         mod_api::dispatch_block_changed(self, mod_api::mods(), dimension, pos, old, new);
+     |                                         ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1225:13
+     |
+1225 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1245:40
+     |
+1245 |         mod_api::dispatch_leaves_decay(self, mod_api::mods(), dimension, pos, cancel);
+     |                                        ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1260:43
+     |
+1260 |         mod_api::dispatch_moisture_change(self, mod_api::mods(), dimension, pos, from, to, cancel);
+     |                                           ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1267:41
+     |
+1267 |         mod_api::dispatch_sponge_absorb(self, mod_api::mods(), dimension, pos);
+     |                                         ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1282:38
+     |
+1282 |         mod_api::dispatch_block_fade(self, mod_api::mods(), dimension, pos, from, to, cancel);
+     |                                      ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1297:38
+     |
+1297 |         mod_api::dispatch_block_form(self, mod_api::mods(), dimension, pos, from, to, cancel);
+     |                                      ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1309:43
+     |
+1309 |         mod_api::dispatch_dragon_egg_form(self, mod_api::mods(), dimension, pos, cancel);
+     |                                           ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1324:13
+     |
+1324 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1348:40
+     |
+1348 |         mod_api::dispatch_block_spread(self, mod_api::mods(), dimension, kind, from, to, canceled);
+     |                                        ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1365:13
+     |
+1365 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1384:38
+     |
+1384 |         mod_api::dispatch_block_burn(self, mod_api::mods(), dimension, pos, cancel);
+     |                                      ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1399:45
+     |
+1399 |         mod_api::dispatch_note_block_change(self, mod_api::mods(), context, new_note, cancel);
+     |                                             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1416:13
+     |
+1416 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1437:37
+     |
+1437 |         mod_api::dispatch_bell_ring(self, mod_api::mods(), dimension, player, pos, cancel);
+     |                                     ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1455:13
+     |
+1455 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1485:13
+     |
+1485 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1515:13
+     |
+1515 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1531:44
+     |
+1531 |         mod_api::dispatch_is_signal_source(self, mod_api::mods(), state, source);
+     |                                            ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1541:45
+     |
+1541 |         mod_api::dispatch_has_analog_output(self, mod_api::mods(), state, output);
+     |                                             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1564:41
+     |
+1564 |         mod_api::dispatch_analog_output(self, mod_api::mods(), dimension, pos, state, face, output);
+     |                                         ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1651:39
+     |
+1651 |         mod_api::dispatch_can_survive(self, mod_api::mods(), dimension, pos, state, survives);
+     |                                       ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1671:13
+     |
+1671 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1737:13
+     |
+1737 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1770:13
+     |
+1770 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelRandomHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1794:13
+     |
+1794 |             self,
+     |             ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelRandomHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:697:1
+     |
+ 697 | pub trait LevelRandomHost: LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1843:37
+     |
+1843 |         mod_api::dispatch_fire_odds(self, mod_api::mods(), dimension, state, odds);
+     |                                     ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::GameLevel<'_>: mod_api::LevelHost` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:1858:40
+     |
+1858 |         mod_api::dispatch_smoke_source(self, mod_api::mods(), dimension, state, smoke);
+     |                                        ^^^^ unsatisfied trait bound
+     |
+help: the trait `mod_api::LevelHost` is not implemented for `game::GameLevel<'_>`
+    --> crates/horizon-client/src/game.rs:919:1
+     |
+ 919 | struct GameLevel<'w> {
+     | ^^^^^^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> crates/horizon-client/src/mod_api.rs:682:1
+     |
+ 682 | pub trait LevelHost {
+--
+error[E0277]: the trait bound `game::Game<'_>: generated_host::Host` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:2188:40
+     |
+2188 |         mod_api::dispatch_client_start(self, mod_api::mods());
+     |                                        ^^^^ unsatisfied trait bound
+     |
+help: the trait `generated_host::Host` is not implemented for `game::Game<'_>`
+    --> crates/horizon-client/src/game.rs:2335:1
+     |
+2335 | struct Game<'a> {
+     | ^^^^^^^^^^^^^^^
+help: this trait has no implementations, consider adding one
+    --> /home/runner/work/HorizonR-Mobile/HorizonR-Mobile/target/aarch64-linux-android/release/build/horizon-client-5eb5db240c456885/out/mod_api_generated_host.rs:7:1
+     |
+   7 | pub trait Host {
+--
+error[E0277]: the trait bound `game::Game<'_>: generated_host::Host` is not satisfied
+    --> crates/horizon-client/src/game/native_hooks.rs:2192:48
+     |
+2192 |         mod_api::dispatch_client_disconnecting(self, mod_api::mods());
+     |                                                ^^^^ unsatisfied trait bound
+     |
+help: the trait `generated_host::Host` is not implemented for `game::Game<'_>`
+    --> crates/horizon-client/src/game.rs:2335:1
+     |
+2335 | struct Game<'a> {
 
 === TAIL ===
-warning: method `end` is never used
-  --> crates/horizon-client-render/src/gfx/frame_timing.rs:50:19
    |
-10 | impl FrameTiming {
-   | ---------------- method in this implementation
+30 |             | Self::Mod => true,
+   |               --------- matches all the relevant values
 ...
-50 |     pub(super) fn end(
-   |                   ^^^
-
-   Compiling horizon-client v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client)
-   Compiling horizon-chat-filter v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-chat-filter)
-   Compiling horizon-anticheat v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-anticheat)
-   Compiling horizon-mcp v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-mcp)
-   Compiling mio v1.2.4
-   Compiling horizon-android v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-android)
-   Compiling horizon-shaderport v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-shaderport)
-   Compiling horizon-port-pack v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-port-pack)
-warning: function `apply_one` is never used
-   --> crates/horizon-shaderport/src/fix.rs:199:8
-    |
-199 | pub fn apply_one(files: &mut Files, eval: &Eval, name: &str) -> Result<usize, String> {
-    |        ^^^^^^^^^
-    |
-    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `skipped_names` is never used
-   --> crates/horizon-shaderport/src/load.rs:315:12
-    |
-286 | impl Eval {
-    | --------- method in this implementation
-...
-315 |     pub fn skipped_names(&self) -> Vec<String> {
-    |            ^^^^^^^^^^^^^
-
-   Compiling horizon-client-lib v0.1.0 (/home/runner/work/HorizonR-Mobile/HorizonR-Mobile/crates/horizon-client-lib)
-warning: unused import: `Tempt`
-  --> crates/horizon-client-lib/../horizon-client/src/mobs/aquatic.rs:10:35
+39 |             | Self::Mod => false,
+   |               ^^^^^^^^^ no value can reach this
    |
-10 |         RandomLookAround, Stroll, Tempt, TryFindWater, goal_clone, reduced,
-   |                                   ^^^^^
-   |
-   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+   = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
 
-warning: `horizon-shaderport` (lib) generated 2 warnings
-error: unexpected closing delimiter: `}`
-     --> crates/horizon-client/src/game.rs:17839:1
-      |
-17740 |             } else {
-      |                    - the nearest open delimiter
+error[E0004]: non-exhaustive patterns: `horizon_client_lib::options_ui::Event::Volume(_, _)`, `horizon_client_lib::options_ui::Event::ToggleRecording`, `horizon_client_lib::options_ui::Event::ExportRepro` and 2 more not covered
+    --> crates/horizon-client/src/game/startup_menu.rs:560:19
+     |
+ 560 |             match event {
+     |                   ^^^^^ patterns `horizon_client_lib::options_ui::Event::Volume(_, _)`, `horizon_client_lib::options_ui::Event::ToggleRecording`, `horizon_client_lib::options_ui::Event::ExportRepro` and 2 more not covered
+     |
+note: `horizon_client_lib::options_ui::Event` defined here
+    --> crates/horizon-client-render/src/options_ui.rs:1666:1
+     |
+1666 | pub enum Event {
+     | ^^^^^^^^^^^^^^
 ...
-17786 |                 });
-      |                  - missing open `(` for this delimiter
+1680 |     Volume(usize, f32),
+     |     ------ not covered
 ...
-17839 | }
-      | ^ unexpected closing delimiter
+1722 |     ToggleRecording,
+     |     --------------- not covered
+1723 |     /// The AI Agent page's export button.
+1724 |     ExportRepro,
+     |     ----------- not covered
+...
+1730 |     ListMusicTracks,
+     |     --------------- not covered
+1731 |     /// A Music page row: play this track of this event now.
+1732 |     PlayMusicTrack(String, String),
+     |     -------------- not covered
+     = note: the matched value is of type `horizon_client_lib::options_ui::Event`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern as shown, or multiple match arms
+     |
+ 673 ~                 Event::ButtonClick | Event::CopyAgentDetails => {},
+ 674 +                 _ => todo!()
+     |
 
-error: could not compile `horizon-client` (lib) due to 1 previous error
+error[E0308]: mismatched types
+    --> crates/horizon-client/src/game.rs:8131:21
+     |
+8131 |                     kind,
+     |                     ^^^^ expected `String`, found `str`
+     |
+help: try using a conversion method
+     |
+8131 |                     kind: kind.to_string(),
+     |                     +++++     ++++++++++++
+
+Some errors have detailed explanations: E0004, E0034, E0061, E0277, E0308, E0422, E0425, E0432, E0433...
+For more information about an error, try `rustc --explain E0004`.
+warning: `horizon-client` (lib) generated 4 warnings
+error: could not compile `horizon-client` (lib) due to 771 previous errors; 4 warnings emitted
 warning: build failed, waiting for other jobs to finish...
 warning: `horizon-client-render` (lib) generated 4 warnings
 warning: `horizon-client-lib` (lib) generated 1 warning (run `cargo fix --lib -p horizon-client-lib` to apply 1 suggestion)
