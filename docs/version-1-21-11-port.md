@@ -65,9 +65,21 @@ without the variable; Mojang's files are not in the repository.
 - **Singleplayer:** `HORIZON_TARGET_VERSION` (set by the launcher from the selected version) makes the engine refuse
   singleplayer for a release it is not pinned to, with a message; it never opens a 26.3 world under another name.
 
+## Java exporters on 1.21.11 (mappings supplied)
+
+With Mojang's `client_mappings` file: `tools/RemapJar.java` remaps the obfuscated client jar to Mojang names (the JDK's
+built-in ASM; all 10,291 mapped classes remapped; names checked by reflection), and `tools/export_1_21_11.py` compiles
+and runs the exporters against it. The exporters need almost no change: with a `mods/horizon/src/test/java-1.21.11`
+overlay (`getLightBlock`, `ItemStack.getTags`, `BlockState.CODEC`; searched before the 26.3 sources, which stay as
+they are) the gameplay-facts, entity-types, block-behaviour and structure-block exporters compile and run. Results:
+29,671 state facts, and the engine's own `BlockFacts` loader reads them
+(`horizon-items/tests/blocks_1_21_11.rs`). Left: `ParityData` (registry layering and data-component initializers
+changed) blocks the creative-tabs and command-suggestion exporters; the oracles (`VanillaSimpleBlockOracle`,
+`VanillaCommandParseOracle`, `VanillaBlockLandingOracle`, `VanillaPlacementOracle`, ...) have 60-odd API-difference
+errors; the client exporters, the tag bundle and the collision cache are not yet produced.
+
 ## Still blocked
 
-- The Java exporters (block behaviours, collisions, entity and mob data) compile against Mojang-named classes; the
-  1.21.11 jars are obfuscated and Mojang's mapping files are not reachable from the sandbox. Without them the engine's
-  `blocks/` bundle, and so chunk generation and the rest of singleplayer, cannot be prepared for 1.21.11.
+- The rest of the exporters and bundles listed above, and `horizon-prepare` itself, which is still pinned to 26.3's
+  jars, pack formats and Java 25: it does not yet prepare 1.21.11.
 - Gameplay logic differences 1.21.11 -> 26.3 (mobs, items, trades, loot) are unmeasured without decompiled sources.
