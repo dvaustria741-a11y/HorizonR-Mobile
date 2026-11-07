@@ -14732,7 +14732,7 @@ impl Game<'_> {
             &self.gui,
             None,
             None,
-            self.settings.horizon.api,
+            rendering_api(&self.settings),
             self.settings.horizon.translucent_batching,
             self.settings.horizon.wide_frame(),
             shader_packs::picked_pack_draws_flat(&self.settings),
@@ -14773,7 +14773,7 @@ impl Game<'_> {
             gui,
             self.renderer.as_ref(),
             None,
-            self.settings.horizon.api,
+            rendering_api(&self.settings),
             self.settings.horizon.translucent_batching,
             self.settings.horizon.wide_frame(),
             shader_packs::picked_pack_draws_flat(&self.settings),
@@ -21712,6 +21712,18 @@ fn build_renderer(
         wide_frame,
         shader_pack,
     ))?;
+    finish_renderer(&mut renderer, pack, atlas, filtering)?;
+    Ok(renderer)
+}
+
+/// What a world renderer needs once it exists, whether `build_renderer` made it or the
+/// loading screen's worker prepared it (`Loading::prepare_renderer`).
+fn finish_renderer(
+    renderer: &mut Renderer,
+    pack: &PackResources,
+    atlas: &horizon_client::hud::HudAtlas,
+    filtering: (i32, i32),
+) -> Result<()> {
     renderer.hud.sprite_animations = atlas
         .sprite_animations
         .iter()
@@ -21727,7 +21739,7 @@ fn build_renderer(
     renderer
         .hud
         .set_cit_glints(&renderer.device, &renderer.queue, cit_glints);
-    Ok(renderer)
+    Ok(())
 }
 
 /// The loading screen's renderer: one atlas (the boot screen's until the
@@ -22159,6 +22171,88 @@ impl Loading {
             || self.menu.pending.is_some()
             || self.ui_at.is_none_or(|at| at.elapsed() >= TITLE_FRAME_WAIT)
     }
+    /// Keep window/input/lifecycle events flowing while Vulkan creates the
+    /// full game's textures and pipelines. The worker never owns a surface.
+    fn prepare_renderer(&mut self) -> Result<()> {
+        if self.menu.reload_packs {
+            return Ok(());
+        }
+        if let Some(job) = &self.renderer_job {
+            if !job.is_finished() {
+                return Ok(());
+            }
+            let job = self.renderer_job.take().unwrap();
+            self.prepared_renderer = Some(job.join().map_err(|_| "renderer worker panicked")??);
+            return Ok(());
+        }
+        if !cfg!(target_os = "android") || self.prepared_renderer.is_some() {
+            return Ok(());
+        }
+        let Some(Ok(loaded)) = &mut self.loaded else {
+            return Ok(());
+        };
+        // Without the worker's textures the renderer makes its own on the main thread.
+        if loaded.renderer_cpu.is_none() {
+            return Ok(());
+        }
+        let Some(previous) = &self.renderer else {
+            return Ok(());
+        };
+        let options = self.options.as_ref().ok_or("loading already finished")?;
+        if options.offscreen || previous.info.backend != wgpu::Backend::Vulkan {
+            return Ok(());
+        }
+        let gui = self.gui.as_ref().ok_or("missing menu bundle")?;
+        let window = self.window.clone().ok_or("window closed")?;
+        let context = previous.background_context();
+        let assets = loaded.pack.render.clone();
+        let forcefield = loaded.pack.forcefield.clone();
+        let panorama = gui.panorama.clone();
+        let hud = (gui.atlas.pixels().into_owned(), gui.atlas.width, gui.atlas.height);
+        let glint = gui.atlas.glint.clone();
+        let glint_armor = gui.atlas.glint_armor.clone();
+        let prepared = loaded.renderer_cpu.take();
+        let api = rendering_api(&self.settings);
+        let translucent_batching = self.settings.horizon.translucent_batching;
+        let wide_frame = self.settings.horizon.wide_frame();
+        let shader_pack = shader_packs::picked_pack_draws_flat(&self.settings);
+        self.renderer_job = Some(
+            std::thread::Builder::new()
+                .name("Renderer preparation".into())
+                .spawn(move || {
+                    let started = Instant::now();
+                    let pixels = assets.pixels.get();
+                    let result = pollster::block_on(Renderer::new_with_context(
+                        window,
+                        true,
+                        &pixels,
+                        assets.sprite_size,
+                        assets.sprite_minimum_size,
+                        assets.texture_layers,
+                        &assets.sprite_mips,
+                        &assets.animations,
+                        (&hud.0, hud.1, hud.2),
+                        (&glint.0, glint.1, glint.2),
+                        (&glint_armor.0, glint_armor.1, glint_armor.2),
+                        (&forcefield.2, forcefield.0),
+                        panorama,
+                        prepared,
+                        Some(context),
+                        api,
+                        translucent_batching,
+                        wide_frame,
+                        shader_pack,
+                    ))
+                    .map_err(|error| error.to_string());
+                    log::info!(
+                        "Horizon: background renderer prepared in {} ms",
+                        started.elapsed().as_millis()
+                    );
+                    result
+                })?,
+        );
+        Ok(())
+    }
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[cfg(target_os = "android")]
         if let Some(renderer) = &mut self.renderer {
@@ -22407,24 +22501,38 @@ impl Loading {
         let gui = self.gui.take().ok_or("missing menu bundle")?;
         let window = self.window.clone().ok_or("window closed")?;
         let renderer_at = Instant::now();
-        let renderer = startup::time("renderer.world", || {
-            build_renderer(
-                window.clone(),
-                options.offscreen,
-                &loaded.pack,
-                &gui,
-                self.renderer.as_ref(),
-                loaded.renderer_cpu,
-                self.settings.horizon.api,
-                self.settings.horizon.translucent_batching,
-                self.settings.horizon.wide_frame(),
-                shader_packs::picked_pack_draws_flat(&self.settings),
-                (
-                    self.settings.file.int("textureFiltering"),
-                    self.settings.file.int("maxAnisotropyBit"),
-                ),
-            )
-        })?;
+        let filtering = (
+            self.settings.file.int("textureFiltering"),
+            self.settings.file.int("maxAnisotropyBit"),
+        );
+        let renderer = if let Some(mut renderer) = self.prepared_renderer.take() {
+            startup::time("renderer.world", || -> Result<Renderer> {
+                renderer.activate_replacement(
+                    self.renderer.as_mut().ok_or("missing loading renderer")?,
+                )?;
+                // Glyphs are still being drawn into the loading atlas until this
+                // handoff; invalidate only now, after the new GPU atlas is ready.
+                gui.atlas.font.reset_cache();
+                finish_renderer(&mut renderer, &loaded.pack, &gui.atlas, filtering)?;
+                Ok(renderer)
+            })?
+        } else {
+            startup::time("renderer.world", || {
+                build_renderer(
+                    window.clone(),
+                    options.offscreen,
+                    &loaded.pack,
+                    &gui,
+                    self.renderer.as_ref(),
+                    loaded.renderer_cpu,
+                    rendering_api(&self.settings),
+                    self.settings.horizon.translucent_batching,
+                    self.settings.horizon.wide_frame(),
+                    shader_packs::picked_pack_draws_flat(&self.settings),
+                    filtering,
+                )
+            })?
+        };
         log::info!(
             "Horizon: world renderer ready after {} ms",
             self.started.elapsed().as_millis()
@@ -22552,7 +22660,15 @@ impl ApplicationHandler for App {
                     crate::game::exit_app(event_loop);
                     return;
                 }
-                match if loading.menu.reload_packs || !loading.ready_for_handoff() {
+                if let Err(error) = loading.prepare_renderer() {
+                    loading.error = Some(error);
+                    crate::game::exit_app(event_loop);
+                    return;
+                }
+                match if loading.menu.reload_packs
+                    || loading.renderer_job.is_some()
+                    || !loading.ready_for_handoff()
+                {
                     None
                 } else {
                     loading.loaded.take()

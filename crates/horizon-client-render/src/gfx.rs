@@ -1029,6 +1029,8 @@ pub struct ReplacementContext {
     config: wgpu::SurfaceConfiguration,
     present_modes: Vec<wgpu::PresentMode>,
     hdr_output: Option<hdr::Output>,
+    device_lost: Arc<std::sync::atomic::AtomicBool>,
+    reuse: Arc<reuse::Reuse>,
 }
 
 /// A frame to save as a PNG: F2's screenshot, an agent's `game_screenshot`,
@@ -2468,6 +2470,7 @@ impl Renderer {
     }
 }
 impl Renderer {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         window: Arc<Window>,
         offscreen: bool,
@@ -2489,6 +2492,52 @@ impl Renderer {
         wide_frame: bool,
         shader_pack: bool,
     ) -> Result<Self> {
+        Self::new_with_context(
+            window,
+            offscreen,
+            sprite_pixels,
+            sprite_size,
+            sprite_minimum_size,
+            layers,
+            sprite_mips,
+            animations,
+            hud_atlas,
+            glint,
+            glint_armor,
+            forcefield,
+            panorama_faces,
+            prepared,
+            previous.map(Self::replacement_context),
+            api,
+            translucent_batching,
+            wide_frame,
+            shader_pack,
+        )
+        .await
+    }
+    /// Build GPU resources without borrowing the renderer still drawing the menu.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_with_context(
+        window: Arc<Window>,
+        offscreen: bool,
+        sprite_pixels: &[u8],
+        sprite_size: u32,
+        sprite_minimum_size: u32,
+        layers: u32,
+        sprite_mips: &[crate::mipmap::Settings],
+        animations: &[SpriteAnimation],
+        hud_atlas: (&[u8], u32, u32),
+        glint: (&[u8], u32, u32),
+        glint_armor: (&[u8], u32, u32),
+        forcefield: (&[u8], u32),
+        panorama_faces: Arc<panorama::Faces>,
+        prepared: Option<PreparedTextures>,
+        mut previous: Option<ReplacementContext>,
+        api: GraphicsApi,
+        translucent_batching: bool,
+        wide_frame: bool,
+        shader_pack: bool,
+    ) -> Result<Self> {
         #[cfg(target_os = "android")]
         let startup = (!offscreen && api != GraphicsApi::OpenGl)
             .then(crate::android_runtime::graphics_startup::begin)
@@ -2500,7 +2549,7 @@ impl Renderer {
             device,
             queue,
             device_lost,
-        } = match previous {
+        } = match previous.as_mut() {
             // Reload resources on the same device; replacing live Vulkan
             // devices can invalidate the driver's swapchain state on the same
             // window.
@@ -2511,11 +2560,7 @@ impl Renderer {
                     surface: if offscreen {
                         None
                     } else {
-                        let spare = renderer
-                            .spare_surface
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .take();
+                        let spare = renderer.surface.take();
                         Some(match spare {
                             Some(surface) => surface,
                             None => renderer.instance.create_surface(window.clone())?,
@@ -2656,7 +2701,9 @@ impl Renderer {
         }
         // A renderer on the same device takes the previous one's shader
         // modules, layouts and pipelines where they come out the same.
-        let reuse = previous.map_or_else(Default::default, |r| r.reuse.clone());
+        let reuse = previous
+            .as_ref()
+            .map_or_else(Default::default, |r| r.reuse.clone());
         let generation = reuse.begin();
         let kept = reuse.on(&device);
         let pipelines_step = crate::spans::startup::step("renderer.pipelines_textures");
@@ -4969,6 +5016,8 @@ impl Renderer {
             config: self.config.clone(),
             present_modes: self.present_modes.clone(),
             hdr_output: self.hdr_output,
+            device_lost: self.device_lost.clone(),
+            reuse: self.reuse.clone(),
         }
     }
     fn replacement_context(&self) -> ReplacementContext {
