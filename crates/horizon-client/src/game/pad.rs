@@ -453,6 +453,10 @@ impl Game<'_> {
             }
         }
         self.pad_menu_frame(event_loop);
+        #[cfg(target_os = "android")]
+        if state.triggers == [0.0; 2] && self.pad.late_releases.is_empty() {
+            self.pad.touch_aim = None;
+        }
     }
 
     fn pad_edge(&mut self, event_loop: &dyn EventLoopCtl, button: Button, down: bool) {

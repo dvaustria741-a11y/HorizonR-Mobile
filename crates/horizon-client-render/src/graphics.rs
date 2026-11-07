@@ -718,7 +718,12 @@ impl Default for Graphics {
             far_detail: FarDetail::Full,
             blue_map: crate::bluemap::Settings::default(),
             cave_culling: true,
-            entity_culling: EntityCullingMode::Off,
+            // Phones are GPU- and CPU-bound: skip entities that are far or behind the camera.
+            entity_culling: if cfg!(target_os = "android") {
+                EntityCullingMode::Synchronous
+            } else {
+                EntityCullingMode::Off
+            },
             particle_culling: ParticleCullingMode::Off,
             leaf_culling: LeafCullingMode::Off,
             cache_shulker_boxes: false,
@@ -1023,7 +1028,10 @@ impl Graphics {
         // and render threads are raised above four cores, where vanilla
         // raises its server thread). Leaving two idled a core of a 4-thread
         // laptop while a world loaded: a teleport there took ~15% longer.
-        let auto = horizon_threads::worker_count().saturating_sub(1).max(1);
+        // Preserve the Android fork's render/server headroom until phone profiling.
+        let auto = horizon_threads::worker_count()
+            .saturating_sub(if cfg!(target_os = "android") { 2 } else { 1 })
+            .max(1);
         if self.battery { auto.div_ceil(2) } else { auto }
     }
     /// The frame cap battery mode adds: 60 in a world, 30 in menus without a
@@ -1402,7 +1410,12 @@ mod tests {
         let g = Graphics::default();
         assert_eq!(g.workers, 0);
         let cores = horizon_threads::worker_count();
-        assert_eq!(g.worker_threads(), cores.saturating_sub(1).max(1));
+        assert_eq!(
+            g.worker_threads(),
+            cores
+                .saturating_sub(if cfg!(target_os = "android") { 2 } else { 1 })
+                .max(1)
+        );
         // A manual count is the player's own choice, kept as asked.
         let manual = Graphics { workers: 3, ..g };
         assert_eq!(manual.worker_threads(), 3);
