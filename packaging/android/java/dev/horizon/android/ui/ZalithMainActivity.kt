@@ -1429,6 +1429,9 @@ fun ZalithCleanLauncherScreen(
     var selectedTab by remember { mutableStateOf(ZalithNavTab.HOME) }
     var storeInitialCategory by remember { mutableStateOf(StoreCategory.ALL) }
     var installStatus by remember { mutableStateOf<AssetInstallStatus>(HorizonNativeBridge.pollInstallProgress(context, config.enableSystemLog)) }
+    var selectedGameVersion by remember { mutableStateOf(GameVersions.selected(context)) }
+    // installStatus tracks the 26.3 install; a version without engine support has nothing installed.
+    val selectedInstallStatus = if (selectedGameVersion.engineSupported) installStatus else AssetInstallStatus()
     var skinDetectionBanner by remember { mutableStateOf<String?>(null) }
     var skinReloadCounter by remember { mutableIntStateOf(0) }
     var pendingCustomSkinName by remember { mutableStateOf("") }
@@ -1473,20 +1476,29 @@ fun ZalithCleanLauncherScreen(
 
     val triggerDownload = {
         selectedTab = ZalithNavTab.VERSIONS
-        val started = HorizonNativeBridge.startMinecraft26Download(context, config.enableSystemLog)
-        if (!started && installStatus.ready) {
-            onEnterGameHibernation()
+        if (!selectedGameVersion.engineSupported) {
+            Toast.makeText(context, selectedGameVersion.unsupportedReason, Toast.LENGTH_LONG).show()
+        } else {
+            val started = HorizonNativeBridge.startMinecraft26Download(context, config.enableSystemLog)
+            if (!started && installStatus.ready) {
+                onEnterGameHibernation()
+            }
         }
+        Unit
     }
 
     val handleLaunchOrDownload = {
-        if (!installStatus.ready && !installStatus.running) {
+        if (!selectedGameVersion.engineSupported) {
+            selectedTab = ZalithNavTab.VERSIONS
+            Toast.makeText(context, selectedGameVersion.unsupportedReason, Toast.LENGTH_LONG).show()
+        } else if (!installStatus.ready && !installStatus.running) {
             triggerDownload()
         } else if (!installStatus.running) {
             onEnterGameHibernation()
         } else {
             selectedTab = ZalithNavTab.VERSIONS
         }
+        Unit
     }
 
     // The launch dock (account + version + PLAY) floats at the bottom on Home and Game pages only.
@@ -1562,7 +1574,12 @@ fun ZalithCleanLauncherScreen(
 
                                 ZalithNavTab.VERSIONS -> CleanVersionsViewport(
                                     context = context,
-                                    installStatus = installStatus,
+                                    installStatus = selectedInstallStatus,
+                                    selectedVersion = selectedGameVersion,
+                                    onSelectVersion = { id ->
+                                        GameVersions.select(context, id)
+                                        selectedGameVersion = GameVersions.byId(id)
+                                    },
                                     onStartDownload = triggerDownload,
                                     onPauseDownload = {
                                         HorizonNativeBridge.pauseMinecraft26Download(context, config.enableSystemLog)
@@ -1649,7 +1666,12 @@ fun ZalithCleanLauncherScreen(
                     ZalithLaunchDock(
                         activeAccount = activeAccount,
                         activeSkinBitmap = activeSkinBitmap,
-                        installStatus = installStatus,
+                        installStatus = selectedInstallStatus,
+                        selectedVersion = selectedGameVersion,
+                        onSelectVersion = { id ->
+                            GameVersions.select(context, id)
+                            selectedGameVersion = GameVersions.byId(id)
+                        },
                         onOpenAccountScreen = { selectedTab = ZalithNavTab.ACCOUNTS },
                         onOpenVersions = { selectedTab = ZalithNavTab.VERSIONS },
                         onLaunchOrDownload = handleLaunchOrDownload
@@ -4120,12 +4142,20 @@ private fun CleanLogsViewport(
 private fun CleanVersionsViewport(
     context: android.content.Context,
     installStatus: AssetInstallStatus,
+    selectedVersion: GameVersion,
+    onSelectVersion: (String) -> Unit,
     onStartDownload: () -> Unit,
     onPauseDownload: () -> Unit,
     onResumeDownload: () -> Unit,
     onCancelDownload: () -> Unit,
     onSmartRepairAssets: () -> Unit
 ) {
+    if (!selectedVersion.engineSupported) {
+        // Every action below (download, verify, repair, delete) operates on the 26.3 install, so a
+        // version without engine support gets an informational panel instead of those controls.
+        UnsupportedVersionPanel(selectedVersion = selectedVersion, onSelectVersion = onSelectVersion)
+        return
+    }
     var logExpanded by remember { mutableStateOf(false) }
     var showCancelConfirmDialog by remember { mutableStateOf(false) }
     var showRepairConfirmDialog by remember { mutableStateOf(false) }
@@ -4367,7 +4397,7 @@ private fun CleanVersionsViewport(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "Minecraft 26.3",
+                                    text = selectedVersion.label,
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 15.sp,
                                     color = Color.White
@@ -8764,14 +8794,93 @@ private fun ZalithRamAllocationCard(
 }
 
 @Composable
+private fun UnsupportedVersionPanel(
+    selectedVersion: GameVersion,
+    onSelectVersion: (String) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = CardSlateBg.copy(alpha = 0.90f),
+        border = horizonGlassBorder(),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Game & Assets Minecraft",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = CardRowBg,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        MinecraftGrassCubeIcon(size = 44.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = selectedVersion.label,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 15.sp,
+                                color = Color.White
+                            )
+                            LavenderTagBadge(text = "Rust Engine")
+                        }
+                    }
+                    Text(
+                        text = selectedVersion.unsupportedReason,
+                        fontSize = 12.sp,
+                        color = MutedSubtitleText,
+                        lineHeight = 17.sp
+                    )
+                    Button(
+                        onClick = { onSelectVersion(GameVersions.DEFAULT_ID) },
+                        colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Switch back to ${GameVersions.byId(GameVersions.DEFAULT_ID).label}",
+                            color = SkyBlueDarkText,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ZalithLaunchDock(
     activeAccount: ZalithAccount,
     activeSkinBitmap: Bitmap,
     installStatus: AssetInstallStatus,
+    selectedVersion: GameVersion,
+    onSelectVersion: (String) -> Unit,
     onOpenAccountScreen: () -> Unit,
     onOpenVersions: () -> Unit,
     onLaunchOrDownload: () -> Unit
 ) {
+    var versionMenuOpen by remember { mutableStateOf(false) }
     val playTransition = rememberInfiniteTransition(label = "DockPlayPulse")
     val playGlow by playTransition.animateFloat(
         initialValue = 0.20f,
@@ -8855,37 +8964,66 @@ private fun ZalithLaunchDock(
                 }
             }
 
-            // Version chip (centre, takes the free space)
-            Row(
+            // Version chip (centre, takes the free space): tap to pick the version to install/launch
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(CardRowBg.copy(alpha = 0.75f))
-                    .animatedPressScale(onClick = onOpenVersions)
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(verticalArrangement = Arrangement.Center) {
-                    Text("Minecraft 26.3", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White, maxLines = 1)
-                    Text(
-                        text = if (installStatus.ready) "Ready"
-                        else if (installStatus.paused) "Paused (${installStatus.percent}%)"
-                        else if (installStatus.running) "${installStatus.percent}% (${installStatus.speedText.ifBlank { "Downloading" }})"
-                        else "Needs Download",
-                        fontSize = 11.sp,
-                        color = statusColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(CardRowBg.copy(alpha = 0.75f))
+                        .animatedPressScale(onClick = { versionMenuOpen = true })
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(verticalArrangement = Arrangement.Center) {
+                        Text(selectedVersion.label, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White, maxLines = 1)
+                        Text(
+                            text = if (!selectedVersion.engineSupported) "Engine port pending"
+                            else if (installStatus.ready) "Ready"
+                            else if (installStatus.paused) "Paused (${installStatus.percent}%)"
+                            else if (installStatus.running) "${installStatus.percent}% (${installStatus.speedText.ifBlank { "Downloading" }})"
+                            else "Needs Download",
+                            fontSize = 11.sp,
+                            color = statusColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MutedSubtitleText,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
-                Icon(
-                    Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MutedSubtitleText,
-                    modifier = Modifier.size(18.dp)
-                )
+                DropdownMenu(expanded = versionMenuOpen, onDismissRequest = { versionMenuOpen = false }) {
+                    GameVersions.all.forEach { v ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = if (v.id == selectedVersion.id) "${v.label}  ✓" else v.label,
+                                    fontWeight = if (v.id == selectedVersion.id) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            onClick = {
+                                versionMenuOpen = false
+                                onSelectVersion(v.id)
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Game & Assets") },
+                        onClick = {
+                            versionMenuOpen = false
+                            onOpenVersions()
+                        }
+                    )
+                }
             }
 
             // PLAY button (right) - keeps the glow + shimmer, adds breathing and a live progress fill
@@ -8964,7 +9102,8 @@ private fun ZalithLaunchDock(
                     }
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (installStatus.paused) "PAUSED"
+                        text = if (!selectedVersion.engineSupported) "UNAVAILABLE"
+                        else if (installStatus.paused) "PAUSED"
                         else if (installStatus.running) "${installStatus.percent}%"
                         else if (installStatus.ready) "PLAY"
                         else "INSTALL",
