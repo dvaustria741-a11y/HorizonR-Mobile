@@ -557,16 +557,15 @@ pub fn rows() -> Vec<(Page, Vec<(&'static str, Vec<Setting>)>)> {
             ],
         ),
     ];
-    // Only Windows and Linux have more than one graphics API, and translucent batching
-    // (Metal draws flat).
-    if cfg!(target_os = "macos") {
+    // Only Windows and Linux have more than one graphics API (Android picks its backend in the
+    // launcher's Settings), and translucent batching (Metal draws flat).
+    if cfg!(any(target_os = "macos", target_os = "android")) {
         for (_, groups) in &mut pages {
             for (_, rows) in groups {
                 rows.retain(|r| {
-                    !matches!(
-                        r.item,
-                        Item::Horizon(H::GraphicsApi | H::TranslucentBatching)
-                    )
+                    !matches!(r.item, Item::Horizon(H::GraphicsApi))
+                        && !(cfg!(target_os = "macos")
+                            && matches!(r.item, Item::Horizon(H::TranslucentBatching)))
                 });
             }
         }
@@ -966,7 +965,14 @@ impl H {
             H::HdrLighting => g.hdr_lighting = !g.hdr_lighting,
             H::BatteryMode => g.battery = !g.battery,
             H::ShadowCache => g.shadow_cache = !g.shadow_cache,
-            H::GraphicsApi => g.api = step(GraphicsApi::choices(), g.api, back),
+            H::GraphicsApi => {
+                // Android selects the backend before creating the renderer in
+                // launcher Settings. Stale/programmatic menu actions must not
+                // save a competing backend preference for the next launch.
+                if !cfg!(target_os = "android") {
+                    g.api = step(GraphicsApi::choices(), g.api, back);
+                }
+            }
             H::TranslucentBatching => g.translucent_batching = !g.translucent_batching,
             H::HdrSmoothGradients => g.hdr_smooth_gradients = !g.hdr_smooth_gradients,
             H::Pacing => {

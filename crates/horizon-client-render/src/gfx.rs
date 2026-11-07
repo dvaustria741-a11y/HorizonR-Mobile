@@ -7420,7 +7420,7 @@ impl Renderer {
                         &self.device,
                         &image,
                         self.frame_format,
-                        self.screenshot.is_some(),
+                        self.screenshot.is_some() && !scaled_presentation,
                     )
                     .unwrap_or(image)
             }

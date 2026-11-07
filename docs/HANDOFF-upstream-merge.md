@@ -48,6 +48,22 @@ Find a file's displaced hunks with a 3-way: `git merge-file -p --diff3 <mobile> 
   `cargo rustc -p horizon-android --lib --profile check --no-default-features -- --cfg 'target_os="android"'
   -A explicit_builtin_cfgs_in_flags`. The second shows winit-android / chacha20poly1305 / oo7 noise; ignore those.
 
+## Batches 12-15 (displaced mobile hunks, host-checked only)
+Host check that works here: `cargo check --locked -p horizon-client --lib --no-default-features --features mods`
+(default features need ALSA; `--no-default-features` alone hides the WASM-mod code). Not aarch64.
+- game.rs: device-runtime frame hook, touch HUD state/draw (+ `touch_mining_progress` in remote.rs), custom mouse hold,
+  gamepad/input-mode in `device_event`, display-scale/keyboard/GPU-timing prelude in `about_to_wait`,
+  `rendering_api()` in reload/finish paths, `exit_app` takes `&dyn EventLoopCtl`.
+- native_hooks.rs: `android_bundled::native_*` calls run before each `mod_api::dispatch_*`; Zenkai installed filter in
+  `list_native_mods`. pad.rs: `touch_aim` reset. graphics.rs: Android defaults (entity culling Synchronous, worker headroom 2).
+  graphics_ui.rs: Graphics API row hidden / not stepped on Android.
+- gfx.rs: `Renderer::new_with_context` (+ `ReplacementContext.device_lost/reuse`); `Renderer::new` wraps it.
+  game.rs `Loading::prepare_renderer` builds the world renderer on a worker (Android Vulkan only), `finish_renderer`
+  holds the post-creation steps shared with `build_renderer`; handoff waits while `renderer_job` runs.
+- Superseded by upstream (no action): GLES 256-layer sprite split (`layer_split` uses the adapter limit, `resplit`),
+  MemoryUsage device hint everywhere, shader-pack option UI (Option A), `legacy` login flag already in account.rs.
+- Not verified on a device: background renderer handoff, scaled presentation screenshot exclusion, GLES panorama.
+
 ## Loop that works
 1. Edit, commit, push to `upstream-shader-handler` (build-apk.yml runs on this branch; do not wait on it).
 2. When the user says the run finished, `git clone -b ci-errors` and read `errs/*.txt` (or the user uploads the logs zip).
