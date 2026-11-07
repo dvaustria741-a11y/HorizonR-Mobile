@@ -107,7 +107,8 @@ impl<'de> Deserialize<'de> for Properties {
     }
 }
 
-/// A state as BlockState::from_nbt reads it: a name, or `{"id", "properties"}`.
+/// A state as BlockState::from_nbt reads it: a name, or `{"id", "properties"}`. Minecraft 1.21.11 writes the
+/// keys `Name` and `Properties`; they are read as the same two.
 struct State(BlockState);
 
 impl<'de> Deserialize<'de> for State {
@@ -128,12 +129,16 @@ impl<'de> Deserialize<'de> for State {
                 let (mut id, mut properties) = (None, None);
                 while let Some(key) = map.next_key::<std::borrow::Cow<'de, str>>()? {
                     match &*key {
-                        "id" if id.is_some() => return Err(de::Error::duplicate_field("id")),
-                        "id" => id = Some(map.next_value::<String>()?),
-                        "properties" if properties.is_some() => {
+                        "id" | "Name" if id.is_some() => {
+                            return Err(de::Error::duplicate_field("id"));
+                        }
+                        "id" | "Name" => id = Some(map.next_value::<String>()?),
+                        "properties" | "Properties" if properties.is_some() => {
                             return Err(de::Error::duplicate_field("properties"));
                         }
-                        "properties" => properties = Some(map.next_value::<Properties>()?.0),
+                        "properties" | "Properties" => {
+                            properties = Some(map.next_value::<Properties>()?.0)
+                        }
                         _ => {
                             map.next_value::<IgnoredAny>()?;
                         }

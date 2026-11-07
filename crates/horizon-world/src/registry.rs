@@ -448,6 +448,44 @@ mod blocks_report_tests {
         assert!(BlockRegistry::from_blocks_report(gap.as_bytes()).is_err());
     }
 
+    /// The registry the Java export (`VanillaHeightmapOracle export`, `HORIZON_1_21_11_EXPORTS/facts.json`) gives
+    /// must be the one the data generator's report gives, flags included: it checks `from_blocks_report`'s rules
+    /// for air and fluid against `BlockState.isAir()` and `getFluidState()`.
+    #[test]
+    fn the_1_21_11_java_export_and_the_blocks_report_agree() {
+        let (Some(exports), Some(reports)) = (
+            std::env::var_os("HORIZON_1_21_11_EXPORTS"),
+            std::env::var_os("HORIZON_1_21_11_REPORTS"),
+        ) else {
+            return;
+        };
+        let facts = std::fs::File::open(std::path::Path::new(&exports).join("facts.json")).unwrap();
+        let (a, a_flags) = BlockRegistry::from_facts_json_with_flags(facts).unwrap();
+        let report =
+            std::fs::File::open(std::path::Path::new(&reports).join("blocks.json")).unwrap();
+        let (b, b_flags) = BlockRegistry::from_blocks_report(report).unwrap();
+        assert_eq!(a.len(), b.len());
+        let state_diffs = (0..a.len())
+            .filter(|&i| a.state(BlockStateId(i as u32)) != b.state(BlockStateId(i as u32)))
+            .count();
+        let bad: Vec<_> = (0..a.len()).filter(|&i| a_flags[i] != b_flags[i]).collect();
+        println!(
+            "{} states: {state_diffs} differ, {} flag differences; e.g. {:?}",
+            a.len(),
+            bad.len(),
+            bad.iter()
+                .take(6)
+                .map(|&i| (
+                    a.state(BlockStateId(i as u32)).map(|s| s.name.clone()),
+                    a_flags[i],
+                    b_flags[i]
+                ))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(state_diffs, 0);
+        assert!(bad.is_empty(), "{} flag differences", bad.len());
+    }
+
     /// The real 1.21.11 report, when `HORIZON_1_21_11_REPORTS` names the data generator's `reports` folder.
     #[test]
     fn the_1_21_11_blocks_report_loads_when_present() {

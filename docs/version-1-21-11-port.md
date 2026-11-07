@@ -71,9 +71,13 @@ With Mojang's `client_mappings` file: `tools/RemapJar.java` remaps the obfuscate
 built-in ASM; all 10,291 mapped classes remapped; names checked by reflection), and `tools/export_1_21_11.py` compiles
 and runs the exporters against it. The exporters need almost no change: with a `mods/horizon/src/test/java-1.21.11`
 overlay (`getLightBlock`, `ItemStack.getTags`, `BlockState.CODEC`; searched before the 26.3 sources, which stay as
-they are) the gameplay-facts, entity-types, block-behaviour and structure-block exporters compile and run. Results:
+they are) the registry facts (`VanillaHeightmapOracle export`), gameplay-facts, entity-types, block-behaviour and structure-block exporters compile and run. Results:
 29,671 state facts, and the engine's own `BlockFacts` loader reads them
-(`horizon-items/tests/blocks_1_21_11.rs`). Left: `ParityData` (registry layering and data-component initializers
+(`horizon-items/tests/blocks_1_21_11.rs`). The Java registry export and the datagen-report loader agree on all 29,671 states with no air/fluid flag
+difference, which checks the flag rules of `BlockRegistry::from_blocks_report`.
+Format difference found: 1.21.11 writes a block state as `{Name, Properties}`, 26.3 as `{id, properties}`; the registry
+loader now reads both, but chunk palettes in saves need the matching codec both ways (reading is not enough:
+singleplayer has to write 1.21.11 saves in 1.21.11's format, data version 4671). Left: `ParityData` (registry layering and data-component initializers
 changed) blocks the creative-tabs and command-suggestion exporters; the oracles (`VanillaSimpleBlockOracle`,
 `VanillaCommandParseOracle`, `VanillaBlockLandingOracle`, `VanillaPlacementOracle`, ...) have 60-odd API-difference
 errors; the client exporters, the tag bundle and the collision cache are not yet produced.

@@ -21,11 +21,14 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TESTS = ROOT / "mods/horizon/src/test"
 PARITY = "dev/horizonlab/parity"
+# exporter -> (output file, arguments before the output path): `VanillaHeightmapOracle export` writes the
+# registry's `facts.json`; the gameplay exporter writes `gameplay-facts.json`.
 EXPORTERS = {
-    "VanillaGameplayFactsExporter": "facts.json",
-    "VanillaEntityTypesExporter": "entity-types.json",
-    "VanillaBlockBehaviourExporter": "block-behaviours.json",
-    "VanillaStructureBlockExporter": "structure-blocks.json",
+    "VanillaHeightmapOracle": ("facts.json", ["export"]),
+    "VanillaGameplayFactsExporter": ("gameplay-facts.json", []),
+    "VanillaEntityTypesExporter": ("entity-types.json", []),
+    "VanillaBlockBehaviourExporter": ("block-behaviours.json", []),
+    "VanillaStructureBlockExporter": ("structure-blocks.json", []),
 }
 ASM = [f"--add-exports=java.base/jdk.internal.org.objectweb.asm{s}=ALL-UNNAMED" for s in ("", ".commons")]
 
@@ -62,7 +65,8 @@ def main():
     run(["java", "-m", "jdk.compiler/com.sun.tools.javac.Main", "-proc:none", "-encoding", "UTF-8", "-nowarn",
          "-cp", cp, "-sourcepath", f"{TESTS / 'java-1.21.11'}:{TESTS / 'java'}", "-d", str(out / "classes"), *sources])
     for n in names:
-        run(["java", "-Xmx1500m", "-cp", f"{out / 'classes'}:{cp}", f"dev.horizonlab.parity.{n}", str(out / EXPORTERS[n])])
+        file, before = EXPORTERS[n]
+        run(["java", "-Xmx1500m", "-cp", f"{out / 'classes'}:{cp}", f"dev.horizonlab.parity.{n}", *before, str(out / file)])
     return 0
 
 
