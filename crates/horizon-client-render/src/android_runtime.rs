@@ -128,7 +128,9 @@ pub fn graphics_api() -> crate::graphics::GraphicsApi {
     if OPEN_GL.load(Ordering::Relaxed) {
         crate::graphics::GraphicsApi::OpenGl
     } else {
-        crate::graphics::GraphicsApi::Vulkan
+        // Prefer Vulkan, with the launcher's GLES fallback when the device has no
+        // Vulkan adapter (modelled on starling-client/starling 7fc390041).
+        crate::graphics::GraphicsApi::Auto
     }
 }
 pub fn configure_gpu(batching: bool) {
