@@ -19480,6 +19480,8 @@ impl Game<'_> {
                         let cpu = now.elapsed().saturating_sub(r.last_wait).as_secs_f32() * 1000.0;
                         // Spans timed between frames (`idle`) come first.
                         let spans = horizon_client::spans::merge(&frame_spans);
+                        #[cfg(target_os = "android")]
+                        crate::performance::slow_frame(cpu, &spans);
                         let between = between.as_secs_f32() * 1000.0;
                         if cpu > threshold || between > threshold {
                             // The render thread's own CPU time in the frame:
@@ -22465,7 +22467,9 @@ impl Loading {
             match renderer.render(&frame) {
                 Ok(true) if self.gui.is_some() && self.menu.pending.is_none() => {
                     self.title_drawn = true;
-                    self.menu.perf.title_shown()
+                    self.menu.perf.title_shown();
+                    #[cfg(target_os = "android")]
+                    note_title_frame();
                 }
                 Ok(_) => {}
                 Err(e) => log::warn!("Horizon: loading screen frame failed: {e}"),
