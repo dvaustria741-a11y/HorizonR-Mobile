@@ -659,6 +659,14 @@ public final class HorizonActivity extends NativeActivity {
                     Os.setenv("HORIZON_NO_DISCORD", "1", true);
                 }
 
+                // The selected version decides whether the engine's older-server adapter is on; the process
+                // can outlive a launch, so an unselected version must switch it off again.
+                if (intent.getBooleanExtra("HORIZON_OLDER_SERVERS", false)) {
+                    Os.setenv("HORIZON_OLDER_SERVERS", "1", true);
+                } else {
+                    Os.unsetenv("HORIZON_OLDER_SERVERS");
+                }
+
                 String playerName = intent.getStringExtra("HORIZON_PLAYER_NAME");
                 if (playerName != null && !playerName.isEmpty()) {
                     Os.setenv("HORIZON_PLAYER_NAME", playerName, true);

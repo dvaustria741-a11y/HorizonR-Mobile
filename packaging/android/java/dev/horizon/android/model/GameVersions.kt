@@ -3,16 +3,18 @@ package dev.horizon.android.model
 import android.content.Context
 
 /**
- * A Minecraft version the launcher knows about.
+ * A Minecraft version the launcher offers.
  *
- * [engineSupported] is true only when the native Rust engine in this build can really run the version.
- * Versions without engine support are listed and selectable, but never installed or launched.
+ * Horizon's native Rust engine and its assets are Minecraft 26.3's. [joinsOlderServers] marks a version the
+ * engine reaches through its protocol adapter (`HORIZON_OLDER_SERVERS=1`, crates/horizon-protocol/src/adapter):
+ * it runs on the same engine and the same asset install as 26.3, and translates a server's packets. It is not
+ * a separate engine: singleplayer worlds are still 26.3 worlds, and the adapter is still in development.
  */
 data class GameVersion(
     val id: String,
     val label: String,
-    val engineSupported: Boolean,
-    val unsupportedReason: String = ""
+    val joinsOlderServers: Boolean = false,
+    val note: String = ""
 )
 
 object GameVersions {
@@ -21,14 +23,13 @@ object GameVersions {
     private const val KEY_SELECTED = "selected_version"
 
     val all: List<GameVersion> = listOf(
-        GameVersion(id = "26.3", label = "Minecraft 26.3", engineSupported = true),
+        GameVersion(id = "26.3", label = "Minecraft 26.3"),
         GameVersion(
             id = "1.21.11",
             label = "Minecraft 1.21.11",
-            engineSupported = false,
-            unsupportedReason = "The Rust engine in this build targets Minecraft 26.3 (protocol 777). " +
-                "Support for 1.21.11 (protocol 774) needs an engine port that is not done yet, " +
-                "so it cannot be installed or launched."
+            joinsOlderServers = true,
+            note = "Joins 1.21.11 servers through Horizon's protocol adapter (in development). " +
+                "Runs on the Rust engine and the shared 26.3 asset install; singleplayer worlds are 26.3 worlds."
         )
     )
 
