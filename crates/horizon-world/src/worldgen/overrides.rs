@@ -401,9 +401,16 @@ mod tests {
         assert_eq!(now.entries("features").count(), 1);
         // 1.21.11's names are read, and 26.3's new ones are not folders there.
         let mut old = WorldgenOverrides::with_layout(PackLayout::V1_21_11);
-        assert_eq!(old.add_file("p", feature, text("{\"a\":1}")), PackFile::Read);
         assert_eq!(
-            old.add_file("p", "data/minecraft/worldgen/configured_carver/cave.json", text("{}")),
+            old.add_file("p", feature, text("{\"a\":1}")),
+            PackFile::Read
+        );
+        assert_eq!(
+            old.add_file(
+                "p",
+                "data/minecraft/worldgen/configured_carver/cave.json",
+                text("{}")
+            ),
             PackFile::Read
         );
         assert_eq!(
@@ -411,7 +418,11 @@ mod tests {
             PackFile::NotRead("worldgen/feature".into())
         );
         assert_eq!(
-            old.add_file("p", "data/minecraft/worldgen/material_rule/r.json", text("{}")),
+            old.add_file(
+                "p",
+                "data/minecraft/worldgen/material_rule/r.json",
+                text("{}")
+            ),
             PackFile::NotRead("worldgen/material_rule".into())
         );
         let features = old.apply("features", BTreeMap::new());

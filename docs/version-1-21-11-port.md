@@ -42,3 +42,32 @@ pinned jar.
 
 Steps 1 and 2 need `piston-meta.mojang.com`, `piston-data.mojang.com`, `libraries.minecraft.net` and
 `resources.download.minecraft.net`.
+
+## Verified so far (real 1.21.11 data: the official server jar's datagen reports and datapack)
+
+Reproduce with the jar: `java -DbundlerMainClass=net.minecraft.data.Main -jar server.jar --reports --server --output out`,
+then `HORIZON_1_21_11_REPORTS=out/reports cargo test -p <crate> --test <name> -- --nocapture`. The tests do nothing
+without the variable; Mojang's files are not in the repository.
+
+- **Block states:** `BlockRegistry::from_blocks_report` loads the real `blocks.json`: 1166 blocks, 29,671 states
+  (ids contiguous), air and fluid columns from the block definitions, with no Java export.
+- **Packet ids:** `horizon-protocol/tests/adapter_1_21_11_ids.rs` checks the adapter's 774 tables against the real
+  `packets.json`: all 251 packets map to the pinned packet of the same name, 0 differ.
+- **Pack layout:** `PackLayout::V1_21_11` reads 1.21.11's `configured_feature` / `configured_carver` folders; the default
+  layout is 26.3's and is tested as unchanged.
+- **Worldgen data:** `horizon-port-pack`'s existing 26.2 -> 26.3 upgrader converts the real 1.21.11 worldgen data without
+  error (224 features, 4 carvers, 65 biomes, 35 density functions, 60 noises, 7 noise settings; nothing lossy; unconverted:
+  27 `random_patch` and about 25 other feature types that 26.3 writes as data, 3 `weird_scaled_sampler`). Compared with
+  vanilla 26.3's own files, the terrain-defining data comes out identical: noises 60/60, carvers 4/4, structure sets
+  20/20, template pools 188/188, world presets 6/6. Differences are mostly representation (shared vs inlined density
+  functions, block states as strings, biome mob-spawn categories); the rest are 26.x content changes. Whether the result
+  generates what 1.21.11 generates is not established: that needs a 1.21.11 oracle.
+- **Singleplayer:** `HORIZON_TARGET_VERSION` (set by the launcher from the selected version) makes the engine refuse
+  singleplayer for a release it is not pinned to, with a message; it never opens a 26.3 world under another name.
+
+## Still blocked
+
+- The Java exporters (block behaviours, collisions, entity and mob data) compile against Mojang-named classes; the
+  1.21.11 jars are obfuscated and Mojang's mapping files are not reachable from the sandbox. Without them the engine's
+  `blocks/` bundle, and so chunk generation and the rest of singleplayer, cannot be prepared for 1.21.11.
+- Gameplay logic differences 1.21.11 -> 26.3 (mobs, items, trades, loot) are unmeasured without decompiled sources.

@@ -1302,7 +1302,10 @@ mod tests {
     fn singleplayer_is_unavailable_only_for_another_release() {
         assert_eq!(super::unavailable_for(None), None);
         assert_eq!(super::unavailable_for(Some("")), None);
-        assert_eq!(super::unavailable_for(Some(horizon_core::VANILLA_VERSION)), None);
+        assert_eq!(
+            super::unavailable_for(Some(horizon_core::VANILLA_VERSION)),
+            None
+        );
         let message = super::unavailable_for(Some("1.21.11")).expect("another release");
         assert!(message.contains("1.21.11") && message.contains(horizon_core::VANILLA_VERSION));
     }

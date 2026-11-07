@@ -161,7 +161,11 @@ impl BlockRegistry {
         }
         let mut defaults = BTreeMap::new();
         for (id, state, default, ..) in &rows {
-            if *default && defaults.insert(state.name.clone(), i64::from(*id)).is_some() {
+            if *default
+                && defaults
+                    .insert(state.name.clone(), i64::from(*id))
+                    .is_some()
+            {
                 return Err(invalid("block has two default states"));
             }
         }
@@ -421,12 +425,24 @@ mod blocks_report_tests {
         }"#;
         let (registry, flags) = BlockRegistry::from_blocks_report(report.as_bytes()).unwrap();
         assert_eq!(registry.len(), 5);
-        assert_eq!(registry.default_state("minecraft:water"), Some(BlockStateId(1)));
+        assert_eq!(
+            registry.default_state("minecraft:water"),
+            Some(BlockStateId(1))
+        );
         // Ids are the report's, whatever order the file lists them in.
-        assert_eq!(registry.default_state("minecraft:oak_slab"), Some(BlockStateId(3)));
+        assert_eq!(
+            registry.default_state("minecraft:oak_slab"),
+            Some(BlockStateId(3))
+        );
         assert_eq!(
             flags,
-            vec![(true, false), (false, true), (false, true), (false, true), (false, false)]
+            vec![
+                (true, false),
+                (false, true),
+                (false, true),
+                (false, true),
+                (false, false)
+            ]
         );
         let gap = report.replace("\"id\": 4", "\"id\": 9");
         assert!(BlockRegistry::from_blocks_report(gap.as_bytes()).is_err());
