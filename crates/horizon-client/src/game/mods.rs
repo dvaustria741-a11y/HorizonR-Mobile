@@ -570,6 +570,9 @@ impl Game<'_> {
     pub(super) fn draw_mod_panels(&self, _batch: &mut HudBatch, _corners: &mut Corners) {}
     pub(super) fn open_mod_screen(&mut self, _owner: usize, _settings: bool) {}
     pub(super) fn close_wasm_mod_screen(&mut self, _tell: bool) {}
+    pub(super) fn has_wasm_mod_screen(&self) -> bool {
+        false
+    }
     pub(super) fn draw_mod_screen(&mut self, _batch: &mut HudBatch) {}
     pub(super) fn mod_screen_click(&mut self, _button: winit::event::MouseButton) {}
     pub(super) fn mod_screen_key(&mut self, _key: winit::keyboard::KeyCode) -> bool {
@@ -1250,6 +1253,10 @@ impl Game<'_> {
     }
     /// The mod's screen or settings page: its title over widgets stacked
     /// down the middle, a Done button, Esc to leave (vanilla's menus).
+    /// A WebAssembly mod's screen is up (`Screen::Mod` is also the native mods' screen).
+    pub(super) fn has_wasm_mod_screen(&self) -> bool {
+        self.mods.screen.is_some()
+    }
     pub(super) fn draw_mod_screen(&mut self, batch: &mut HudBatch) {
         let Some(ms) = self.mods.screen.as_mut() else {
             // The screen was dropped while it was up: back to the world,
@@ -1424,6 +1431,10 @@ impl Game<'_> {
     /// A click on the mod screen: Done leaves it, a `list` row is the mod's
     /// `ui-events::select`.
     pub(super) fn mod_screen_click(&mut self, button: MouseButton) {
+        // A native mod's screen is not this one's: its Done button is not at the bottom.
+        if self.mods.screen.is_none() {
+            return;
+        }
         // Key Binds: a mouse button pressed while waiting binds it.
         if self
             .mods

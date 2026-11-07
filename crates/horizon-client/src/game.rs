@@ -9150,6 +9150,7 @@ impl Game<'_> {
             Screen::Dead => self.draw_death_screen(&mut batch),
             Screen::Stats => self.draw_stats(&mut batch),
             Screen::Advancements => self.draw_advancements(&mut batch),
+            Screen::Mod if self.has_wasm_mod_screen() => self.draw_mod_screen(&mut batch),
             Screen::Mod => {}
             Screen::WorldOptions => self.draw_world_options(&mut batch),
             Screen::Friends => self.draw_friends_screen(&mut batch),
@@ -9168,7 +9169,6 @@ impl Game<'_> {
                 self.draw_creative(&mut batch);
             }
             Screen::Chat => self.draw_chat_screen(&mut batch),
-            Screen::Mod => self.draw_mod_screen(&mut batch),
             Screen::Playing | Screen::Options | Screen::Win => {}
         }
         // ScreenEvent.Render.Post: the open screen has drawn itself and its
@@ -20797,7 +20797,6 @@ impl Game<'_> {
                     log::warn!("Horizon: the cached world data is not reloaded: {e}");
                 }
             }
-            None => lan::forget_sync_data(),
         }
         let overlay = pack_files(&self.world_tables);
         self.adv.tree = Arc::new(horizon_client::advancements::Tree::load_with(
