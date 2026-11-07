@@ -5747,11 +5747,12 @@ object HorizonNativeBridge {
                 }
             }
             if (finalSubFolder == "shaderpacks") {
-                var shaderFile = normalizeImportedShaderPack(outFile, queryDisplayName(context, uri))
-                if (shaderFile == null) {
+                val normalizedShader = normalizeImportedShaderPack(outFile, queryDisplayName(context, uri))
+                if (normalizedShader == null) {
                     appendSystemLog("Import rejected: not a shader pack (needs a `shaders/` folder or horizon-shaders.toml)", logEnabled, context)
                     return null
                 }
+                var shaderFile: File = normalizedShader
                 if (shaderTranslator == ShaderTranslator.V2 && shaderFile.name.endsWith(".zip", ignoreCase = true)) {
                     translateShaderZip(context, shaderFile, logEnabled, onTranslateProgress)
                     if (shaderTranslationCancelled) {
@@ -5759,7 +5760,8 @@ object HorizonNativeBridge {
                         appendSystemLog("Shader pack import cancelled during translation; nothing was installed.", logEnabled, context)
                         return null
                     }
-                    shaderTranslationResult?.let { shaderFile = it }
+                    val translated = shaderTranslationResult
+                    if (translated != null) shaderFile = translated
                 }
                 appendSystemLog("Imported shader pack to shaderpacks/${shaderFile.name} (${shaderFile.length() / 1024} KB, ${shaderTranslator.label})", logEnabled, context)
                 return shaderFile
