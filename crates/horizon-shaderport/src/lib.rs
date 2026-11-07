@@ -20,6 +20,7 @@ mod glsl;
 mod gpu;
 mod gpu_fix;
 mod load;
+mod native;
 mod noise2d;
 mod normals;
 mod pbr;
@@ -47,8 +48,8 @@ pub struct PortOutcome {
     pub report: PathBuf,
 }
 
-/// Converts the pack at `path` (a `.zip` or a folder) and writes `<name>-horizon.zip` and
-/// `<name>-horizon.md` into `out`. A loader panic (naga has a few known ones) is returned as an
+/// Converts the pack at `path` (a `.zip` or a folder) and writes `<name>.hshader` (or, when nothing
+/// converts natively, `<name>-horizon.zip`) and `<name>-horizon.md` into `out`. A loader panic (naga has a few known ones) is returned as an
 /// error instead of unwinding into the caller.
 pub fn port_pack(path: &Path, out: &Path) -> Result<PortOutcome, String> {
     progress::reset();
@@ -184,12 +185,31 @@ fn port_inner(path: &Path, out: &Path) -> Result<PortOutcome, String> {
     }
     progress::stage("Saving the converted pack", 98, 99);
     std::fs::create_dir_all(out).map_err(|e| format!("{}: {e}", out.display()))?;
-    let stem = files.name.trim_end_matches(".zip").to_owned();
-    let zip = out.join(format!("{stem}-horizon.zip"));
-    files.write_zip(&zip)?;
+    let stem = files.name.trim_end_matches(".part").trim_end_matches(".zip").to_owned();
+    let mut report_text = fix::report(&files.name, &before, &after, &log);
+    // Translator V2 writes a native Horizon pack (`.hshader`: WGSL stages + horizon-shaders.toml). A pack
+    // none of whose programs can be expressed natively keeps the rewritten GLSL zip as a fallback.
+    progress::stage("Writing the native .hshader", 98, 99);
+    let zip = match native::convert(&files, &stem) {
+        Ok(n) => {
+            let path = out.join(format!("{stem}.hshader"));
+            let pack = horizon_shader_api::Pack::from_files(n.files).map_err(|e| format!("native pack: {e}"))?;
+            std::fs::write(&path, pack.package()?).map_err(|e| format!("{}: {e}", path.display()))?;
+            report_text.push_str(&format!("\n## Native `.hshader`\n\n{} native stage(s) written.\n", n.stages));
+            for note in &n.notes {
+                report_text.push_str(&format!("- {note}\n"));
+            }
+            path
+        }
+        Err(why) => {
+            let path = out.join(format!("{stem}-horizon.zip"));
+            files.write_zip(&path)?;
+            report_text.push_str(&format!("\n## Native `.hshader`\n\nNot written, the rewritten GLSL pack was kept: {why}\n"));
+            path
+        }
+    };
     let report = out.join(format!("{stem}-horizon.md"));
-    std::fs::write(&report, fix::report(&files.name, &before, &after, &log))
-        .map_err(|e| format!("{}: {e}", report.display()))?;
+    std::fs::write(&report, report_text).map_err(|e| format!("{}: {e}", report.display()))?;
     Ok(PortOutcome {
         name: files.name.clone(),
         before_loaded: before.loaded_count(),
@@ -255,6 +275,7 @@ mod tests {
             let o = port_pack(&root.join(pack), &out).unwrap_or_else(|e| panic!("{pack}: {e}"));
             assert!(o.after_skipped <= o.before_skipped, "{pack}: {o:?}");
             assert!(o.zip.is_file() && o.report.is_file());
+            assert!(o.zip.to_string_lossy().ends_with(".hshader"), "{pack}: {:?}", o.zip);
             assert_eq!(progress::current().percent, 100, "{pack}: a finished conversion reads 100%");
             let _ = std::fs::remove_dir_all(&out);
         }

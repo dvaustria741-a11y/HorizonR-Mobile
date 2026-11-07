@@ -576,6 +576,7 @@ object HorizonNativeBridge {
     ): String? {
         val outDir = File(context.cacheDir, "shaderport-${System.nanoTime()}")
         shaderTranslationCancelled = false
+        shaderTranslationResult = null
         val running = java.util.concurrent.atomic.AtomicBoolean(true)
         var poller: Thread? = null
         return try {
@@ -612,7 +613,15 @@ object HorizonNativeBridge {
             if (!converted.isFile || converted.length() <= 0L) return null
             val afterSkipped = parts[5].toIntOrNull() ?: 0
             val beforeSkipped = parts[3].toIntOrNull() ?: 0
-            converted.copyTo(zip, overwrite = true)
+            if (converted.name.endsWith(".hshader", ignoreCase = true)) {
+                // Translator v2's native output: a Horizon `.hshader` that replaces the downloaded zip.
+                val target = File(zip.parentFile, converted.name)
+                converted.copyTo(target, overwrite = true)
+                if (target.absolutePath != zip.absolutePath) zip.delete()
+                shaderTranslationResult = target
+            } else {
+                converted.copyTo(zip, overwrite = true)
+            }
             val summary = "${parts[2]} -> ${parts[4]} programs load, $beforeSkipped -> $afterSkipped skipped"
             appendSystemLog("Shader translator on '${zip.name}': $summary (${parts[6]} rules).", logEnabled, context)
             summary
@@ -625,6 +634,10 @@ object HorizonNativeBridge {
             outDir.deleteRecursively()
         }
     }
+
+    /** The `.hshader` the translation that just ran wrote next to the pack it was given (null: the pack was kept as a zip). */
+    @Volatile
+    var shaderTranslationResult: File? = null
 
     /** Set when the person cancelled the translation that just ran (the pack is then not installed). */
     @Volatile
@@ -5064,6 +5077,9 @@ object HorizonNativeBridge {
                 val destDir = File(profileHome, folder).apply { mkdirs() }
                 val part = File(destDir, "$canonicalName.part")
                 partFile = part
+                // Translator v2 turns the download into `<name>.hshader`; these then name what is installed.
+                var installSource = part
+                var installName = canonicalName
                 if (part.exists()) part.delete()
                 appendSystemLog("Downloading '${item.title}' from $sourceLabel: ${target.downloadUrl}", logEnabled, context)
 
@@ -5188,6 +5204,7 @@ object HorizonNativeBridge {
                         )
                     }
                     translateShaderZip(context, part, logEnabled, ::translating)
+                    shaderTranslationResult?.let { installSource = it; installName = it.name }
                     if (shaderTranslationCancelled || storeDownloadCancelled.get()) {
                         part.delete()
                         onProgress(StoreDownloadProgress())
@@ -5198,24 +5215,26 @@ object HorizonNativeBridge {
 
                 removeRecordedExternalPack(context, profileSlot, item, canonicalName, logEnabled)
 
-                val finalFile = File(destDir, canonicalName)
-                if (finalFile.exists()) finalFile.delete()
-                if (!part.renameTo(finalFile)) {
-                    part.copyTo(finalFile, overwrite = true)
-                    part.delete()
+                val finalFile = File(destDir, installName)
+                if (installSource.absolutePath != finalFile.absolutePath) {
+                    if (finalFile.exists()) finalFile.delete()
+                    if (!installSource.renameTo(finalFile)) {
+                        installSource.copyTo(finalFile, overwrite = true)
+                        installSource.delete()
+                    }
                 }
                 listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
-                    val copyTarget = File(File(base, folder).apply { mkdirs() }, canonicalName)
+                    val copyTarget = File(File(base, folder).apply { mkdirs() }, installName)
                     if (copyTarget.absolutePath != finalFile.absolutePath) {
                         finalFile.copyTo(copyTarget, overwrite = true)
                     }
                 }
-                setContentItemEnabled(context, folder, canonicalName, true, profileSlot, logEnabled)
-                saveStoreItemIcon(context, profileSlot, item.takeIf { it.iconUrl.isNotBlank() } ?: target, canonicalName)
-                recordInstalledStoreItem(context, profileSlot, item.id, target.version, canonicalName)
+                setContentItemEnabled(context, folder, installName, true, profileSlot, logEnabled)
+                saveStoreItemIcon(context, profileSlot, item.takeIf { it.iconUrl.isNotBlank() } ?: target, installName)
+                recordInstalledStoreItem(context, profileSlot, item.id, target.version, installName)
                 invalidateContentCaches()
                 onProgress(StoreDownloadProgress())
-                appendSystemLog("Installed '${item.title}' ($canonicalName) from $sourceLabel.", logEnabled, context)
+                appendSystemLog("Installed '${item.title}' ($installName) from $sourceLabel.", logEnabled, context)
                 onComplete(
                     true,
                     "Installed ${item.title} and enabled it in ${if (isShader) "Shader Packs" else "Resource Packs"}." +
@@ -5728,7 +5747,7 @@ object HorizonNativeBridge {
                 }
             }
             if (finalSubFolder == "shaderpacks") {
-                val shaderFile = normalizeImportedShaderPack(outFile, queryDisplayName(context, uri))
+                var shaderFile = normalizeImportedShaderPack(outFile, queryDisplayName(context, uri))
                 if (shaderFile == null) {
                     appendSystemLog("Import rejected: not a shader pack (needs a `shaders/` folder or horizon-shaders.toml)", logEnabled, context)
                     return null
@@ -5740,6 +5759,7 @@ object HorizonNativeBridge {
                         appendSystemLog("Shader pack import cancelled during translation; nothing was installed.", logEnabled, context)
                         return null
                     }
+                    shaderTranslationResult?.let { shaderFile = it }
                 }
                 appendSystemLog("Imported shader pack to shaderpacks/${shaderFile.name} (${shaderFile.length() / 1024} KB, ${shaderTranslator.label})", logEnabled, context)
                 return shaderFile

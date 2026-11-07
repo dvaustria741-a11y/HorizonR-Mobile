@@ -2170,6 +2170,7 @@ dependencies = [
 name = "horizon-shaderport"
 version = "0.1.0"
 dependencies = [
+ "horizon-shader-api",
  "horizon-shaders",
  "naga",
  "png 0.17.16",
