@@ -77,3 +77,13 @@ Use rustc only for single small crates if at all.
 
 ## User preferences
 Zen writes casual Filipino-English. Wants commits pushed so GitHub Actions builds; do not babysit/poll the run.
+
+## Batch 16 (host + forced-Android-cfg checked only; not CI-compiled, not run on a device)
+- Android `graphics_api()` returns `Auto` outside OpenGL mode (Vulkan, then the GLES fallback), as starling 7fc390041.
+- Menu background cache: `Frame::bg_cache` (a key from `Game::background_cache_key`: pause menu of a paused
+  single-player world, and the inventory, 250 ms after opening; inventory re-keys every 500 ms). The first frame with a key
+  draws the world and keeps the result (blurred when the menu blurs) in `MenuBlur`'s cache; frames with the same key
+  and size run `Renderer::replay_background` (kept image + HUD from `blur_at` on). Dropped on key `None`, resize,
+  `install_built_shader_pack` (`Renderer::invalidate_menu_blur`, new). Skipped with HDR, a pending screenshot, scaled
+  presentation or a non-opaque Android surface. Frame generation is off while a key is set.
+- Frozen while cached: world animation behind the menu (water, clouds, shader-pack time effects), GPU/pass timing.

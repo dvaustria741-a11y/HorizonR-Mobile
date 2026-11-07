@@ -1067,6 +1067,12 @@ pub struct Frame<'a> {
     /// `Screen.extractBlurredBackground`: blur the frame by this radius
     /// (`menuBackgroundBlurriness`) before the screen is drawn over it.
     pub menu_blur: Option<f32>,
+    /// Names the screen's background (the world and HUD under it) while it cannot change.
+    /// The frame that first carries a key draws the world as usual and keeps the result
+    /// (blurred, when the screen blurs); frames with the same key at the same size draw the
+    /// kept image and only the screen over it. `None` draws the world every frame and
+    /// drops what was kept.
+    pub bg_cache: Option<u64>,
     /// `Options.chunkSectionFadeInTime`, in seconds: how long a section takes to fade in once
     /// uploaded (0 draws it whole at once).
     pub chunk_fade: f32,
@@ -6693,6 +6699,8 @@ impl Renderer {
         dimension: i32,
         built: std::result::Result<Option<pack_post::PackPost>, pack_post::Refused>,
     ) -> std::result::Result<Option<(Vec<String>, Vec<String>)>, pack_post::Refused> {
+        // A kept menu background shows the world as the old pack drew it.
+        self.invalidate_menu_blur();
         let post = match built {
             Ok(post) => post,
             Err(e) => {
@@ -7381,6 +7389,7 @@ impl Renderer {
             && self.frame_format == self.config.format.remove_srgb_suffix()
             && !frame.title
             && frame.menu_blur.is_none()
+            && frame.bg_cache.is_none()
             && self.pack_post.as_ref().is_none_or(|p| p.1.is_none())
             && self.native.as_ref().is_none_or(|n| n.post.is_none())
             && (self.surface.is_none()
@@ -7506,6 +7515,27 @@ impl Renderer {
                     label: Some("Horizon frame"),
                 })
         });
+        // A screen over a world that cannot change (`Frame::bg_cache`): the world was drawn
+        // and kept by an earlier frame, so this one draws that image and the screen.
+        if checks.is_none()
+            && fg_frames.is_none()
+            && !reconfigure
+            && self.background_replays(frame, size)
+            && surface_frame
+                .as_ref()
+                .is_some_and(|f| f.texture == target_texture)
+            && let Some(surface_frame) = surface_frame
+        {
+            return self.replay_background(
+                frame,
+                size,
+                encoder,
+                &target_texture,
+                surface_frame,
+                has_section_copies,
+                started,
+            );
+        }
         // Horizon's own passes are timed like a shader pack's, from the frame's first pass.
         if self.own_timing.is_some() != self.pass_timing {
             self.own_timing = self
@@ -11213,7 +11243,14 @@ impl Renderer {
         let menu_blur = frame
             .menu_blur
             .filter(|_| self.config.usage.contains(wgpu::TextureUsages::COPY_SRC));
-        let blur_at = menu_blur.map_or(0, |_| frame.hud.blur_at);
+        let bg_key = frame
+            .bg_cache
+            .filter(|_| self.config.usage.contains(wgpu::TextureUsages::COPY_SRC));
+        let blur_at = if menu_blur.is_some() || bg_key.is_some() {
+            frame.hud.blur_at
+        } else {
+            0
+        };
         self.hud.draw_range(
             encoder,
             view_target,
@@ -11241,6 +11278,24 @@ impl Renderer {
                 );
         } else if let Some(blur) = &mut self.menu_blur {
             blur.release();
+        }
+        // The background as it stands now (blurred, when the screen blurs): later frames
+        // with the same key draw it instead of the world.
+        if let Some(key) = bg_key {
+            let format = self.frame_format;
+            let device = &self.device;
+            let software = is_software(self.info.device_type);
+            self.menu_blur
+                .get_or_insert_with(|| crate::menu_blur::MenuBlur::new(device, format, software))
+                .store(
+                    &self.device,
+                    encoder,
+                    target_texture,
+                    [self.config.width, self.config.height],
+                    key,
+                );
+        } else if let Some(blur) = &mut self.menu_blur {
+            blur.invalidate_cache();
         }
         self.hud.draw_range(
             encoder,
@@ -11330,6 +11385,83 @@ pub(crate) fn copy_frame(
 impl Renderer {
     /// Take in the frame the submit thread submitted: start its readbacks and, offscreen,
     /// keep at most two frames ahead of the GPU, as a frame submitted in place does.
+    /// Drop the kept menu background (`Frame::bg_cache`): what it shows changed under it,
+    /// as when a shader pack is installed.
+    pub fn invalidate_menu_blur(&mut self) {
+        if let Some(blur) = &mut self.menu_blur {
+            blur.invalidate_cache();
+        }
+    }
+    /// Whether this frame can draw the kept menu background instead of the world: the key
+    /// and size match, and the frame is the plain swapchain's (no HDR, no screenshot, no
+    /// first-frame bookkeeping).
+    fn background_replays(&self, frame: &Frame, size: [u32; 2]) -> bool {
+        #[cfg(target_os = "android")]
+        let opaque = self.config.alpha_mode == wgpu::CompositeAlphaMode::Opaque;
+        #[cfg(not(target_os = "android"))]
+        let opaque = true;
+        !frame.title
+            && opaque
+            && self.hdr.is_none()
+            && self.hdr_marker.is_none()
+            && self.screenshot.is_none()
+            && self.first_frame == FirstFrame::Drawn
+            && frame.bg_cache.is_some_and(|key| {
+                self.menu_blur
+                    .as_ref()
+                    .is_some_and(|blur| blur.cache_hit(key, size))
+            })
+    }
+    /// The frame of `background_replays`: the kept background, then the screen over it.
+    /// Uploads, patches and section copies go out as in a full frame.
+    #[allow(clippy::too_many_arguments)]
+    fn replay_background(
+        &mut self,
+        frame: &Frame,
+        size: [u32; 2],
+        mut encoder: wgpu::CommandEncoder,
+        target_texture: &wgpu::Texture,
+        surface_frame: wgpu::SurfaceTexture,
+        has_section_copies: bool,
+        started: Instant,
+    ) -> Result<bool> {
+        self.hud.prepare(
+            &self.device,
+            &mut self.uploads,
+            &mut encoder,
+            frame.hud,
+            size,
+        );
+        let view_target = target_texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(self.frame_format),
+            ..Default::default()
+        });
+        if let Some(blur) = &self.menu_blur {
+            blur.replay(&self.device, &self.queue, &mut encoder, &view_target);
+        }
+        self.hud.draw_range(
+            &mut encoder,
+            &view_target,
+            &self.depth,
+            frame.hud,
+            size,
+            frame.hud.blur_at..frame.hud.vertices.len() as u32,
+            None,
+        );
+        self.uploads.finish(&encoder);
+        if has_section_copies {
+            self.section_copy_bytes = 0;
+            self.section_uploads.finish(&encoder);
+        }
+        self.queue.submit([encoder.finish()]);
+        if self.config.present_mode == wgpu::PresentMode::Fifo {
+            self.window.pre_present_notify();
+        }
+        self.queue.present(surface_frame);
+        self.last_wait += self.queue.take_waited();
+        self.last_encode = started.elapsed().saturating_sub(self.last_wait);
+        Ok(true)
+    }
     fn land_frame(&mut self) {
         let Some(offscreen) = self.deferred.take() else {
             return;

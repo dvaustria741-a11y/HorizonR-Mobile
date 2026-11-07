@@ -3102,6 +3102,9 @@ struct Game<'a> {
     spawn_counts: HashMap<Dim, (i32, [i32; 8])>,
     /// PauseScreen.showPauseMenu (false after F3+Escape).
     pause_menu: bool,
+    /// When the screen now open became one whose background can be kept
+    /// (`background_cache_key`); `None` while none is.
+    bg_cache_since: Option<Instant>,
     pause_focus: Option<u8>,
     death_focus: Option<u8>,
     /// MultiPlayerGameMode.previousLocalPlayerMode (F3+N goes back to it).
@@ -16563,6 +16566,7 @@ impl Game<'_> {
         let glowing = std::mem::take(self.glowing_vertices.get_mut());
         let shadow_only = std::mem::take(self.shadow_only_vertices.get_mut());
         let skin = std::mem::take(self.skin_frame.get_mut());
+        let bg_cache = self.background_cache_key();
         let frame = Frame {
             weather: &weather,
             weather_time: horizon_client::weather::Time::new(self.world.game_time, alpha as f32),
@@ -16698,6 +16702,7 @@ impl Game<'_> {
                 .boss_overlay
                 .darken_amount(self.clock.fraction() as f32),
             menu_blur: self.menu_blur(),
+            bg_cache,
             post_effects: horizon_client::post_chain::Request {
                 effects: &requested_post_effects,
                 root: &self.options.resources,
@@ -16828,6 +16833,45 @@ impl Game<'_> {
         let mut radius = (blurred && radius >= 1.0).then_some(radius);
         self.native_menu_background(&mut radius);
         radius.filter(|r| r.is_finite() && (1.0..=64.0).contains(r))
+    }
+    /// Names the menu background the renderer may keep instead of drawing the world again
+    /// (`Frame::bg_cache`). Only over the pause menu of a paused single-player world and
+    /// over the inventory, a quarter second after the screen opened so the world has
+    /// settled. The paused world cannot change, so its key stays the same until the screen
+    /// does; the inventory leaves the world running, so its key changes twice a second and
+    /// the background follows at that rate. Everything else (any other screen, the title,
+    /// loading, a prompt, a book, a dialog) draws the world every frame and drops the kept
+    /// image. The renderer also drops it on a resize and when a shader pack is installed;
+    /// the key covers the screen, the blur radius and the picked pack.
+    fn background_cache_key(&mut self) -> Option<u64> {
+        let eligible = self.title.is_none()
+            && self.player.is_some()
+            && !self.remote_loading()
+            && !self.dialog_open()
+            && self.book.is_none()
+            && self.server_packs.prompt.is_none()
+            && ((self.screen == Screen::Paused && self.pause_menu && self.pause)
+                || self.screen == Screen::Inventory);
+        if !eligible {
+            self.bg_cache_since = None;
+            return None;
+        }
+        let age = self
+            .bg_cache_since
+            .get_or_insert_with(Instant::now)
+            .elapsed();
+        if age < Duration::from_millis(250) {
+            return None;
+        }
+        use std::hash::{Hash, Hasher};
+        let mut hash = std::collections::hash_map::DefaultHasher::new();
+        std::mem::discriminant(&self.screen).hash(&mut hash);
+        self.settings.menu_blur.hash(&mut hash);
+        self.settings.horizon.shader_pack.hash(&mut hash);
+        if !self.pause {
+            (age.as_millis() / 500).hash(&mut hash);
+        }
+        Some(hash.finish())
     }
     /// `LevelExtractor` / `LevelRenderer`: the world border wall this frame.
     fn border_draw(
@@ -20261,6 +20305,7 @@ impl<'a> Game<'a> {
             rendered_mobs: Default::default(),
             spawn_counts: HashMap::new(),
             pause_menu: true,
+            bg_cache_since: None,
             pause_focus: None,
             death_focus: None,
             previous_mode: None,
@@ -21900,6 +21945,7 @@ pub(crate) fn loading_frame(hud: &HudBatch) -> Frame<'_> {
         chunk_fade: 0.0,
         post_effects: horizon_client::post_chain::Request::none(),
         menu_blur: None,
+        bg_cache: None,
     }
 }
 
