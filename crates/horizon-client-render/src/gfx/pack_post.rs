@@ -859,6 +859,20 @@ fn sampler(
     })
 }
 
+/// A pipeline layout counts its slice's length against the device's bind group limit, empty
+/// slots included. Programs that use only the low groups drop the unused tail, so a device
+/// with 4 groups (Adreno, Mali) still builds them; groups 4 and 5 are bound only by passes
+/// that use them.
+fn used_groups<'a, 'b>(
+    groups: &'b [Option<&'a wgpu::BindGroupLayout>],
+) -> &'b [Option<&'a wgpu::BindGroupLayout>] {
+    let used = groups
+        .iter()
+        .rposition(Option::is_some)
+        .map_or(0, |i| i + 1);
+    &groups[..used]
+}
+
 /// Runs `create` and returns its validation error, if any, or the backend's (a shader the
 /// driver's compiler refuses is an internal error). A panic while it runs is an error too:
 /// naga's backends turn a module they cannot write into a panic as the driver gets the pipeline
@@ -1645,14 +1659,14 @@ fn build_pass(
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(&p.name),
-            bind_group_layouts: &[
+            bind_group_layouts: used_groups(&[
                 Some(&layout),
                 geometry.and_then(|g| g.table),
                 draw.then_some(draws),
                 geometry.and_then(|g| g.ids),
                 (!interface.buffers.is_empty()).then_some(&pack.buffers.layout),
                 pack.indices.filter(|_| reads_indices),
-            ],
+            ]),
             ..Default::default()
         });
         let module = |mut m: naga::Module| {
@@ -1828,13 +1842,13 @@ fn build_compute(
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(&name),
-            bind_group_layouts: &[
+            bind_group_layouts: used_groups(&[
                 Some(&layout),
                 None,
                 None,
                 None,
                 (!interface.buffers.is_empty()).then_some(&pack.buffers.layout),
-            ],
+            ]),
             ..Default::default()
         });
         let mut module = c.module;

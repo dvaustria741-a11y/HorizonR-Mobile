@@ -19435,6 +19435,18 @@ impl Game<'_> {
                     horizon_client::spans::time("recover_device", || self.recover_device())?;
                     self.observe_fullscreen();
                     self.sync_ime();
+                    #[cfg(target_os = "android")]
+                    {
+                        let phase = if self.screen == Screen::Playing {
+                            "in_world"
+                        } else {
+                            "in_game_menu"
+                        };
+                        crate::diagnostics::heartbeat(
+                            phase,
+                            || serde_json::json!({"gpu":self.renderer.as_ref().map(|r| &r.info.name)}),
+                        );
+                    }
                     let now = Instant::now();
                     let frame_cpu = self
                         .options

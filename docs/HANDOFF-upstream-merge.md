@@ -87,3 +87,8 @@ Zen writes casual Filipino-English. Wants commits pushed so GitHub Actions build
   `install_built_shader_pack` (`Renderer::invalidate_menu_blur`, new). Skipped with HDR, a pending screenshot, scaled
   presentation or a non-opaque Android surface. Frame generation is off while a key is set.
 - Frozen while cached: world animation behind the menu (water, clouds, shader-pack time effects), GPU/pass timing.
+
+## Batch 17 (host + forced-Android-cfg checked only; not CI-compiled, not run on a device)
+- 735b97488 built green on CI.
+- Pack pipelines skipped on a 4-bind-group device (Adreno 619 log, MakeUp-UltraFast: every program "Bind group layout count 6 exceeds device bind group limit 4"): `pack_post.rs` built its pipeline layouts as a fixed 6-slot array (table, draws, ids, buffers, indices) and wgpu counts the slice length, empty slots included. New `used_groups` drops the trailing `None`s in `build_pass` and `build_compute`, so programs that only use groups 0-3 fit. Groups 4 (buffers) and 5 (indices) are still bound only by passes that use them. Packs that really need SSBO buffers (group 4) or a geometry stage reading indices (group 5) still cannot build on a 4-group device: the shaders' `@group` numbers are fixed, so that needs renumbering, not done.
+- In-game diagnostics heartbeat: `Game` RedrawRequested calls `diagnostics::heartbeat` on Android (`in_world` while on the Playing screen, `in_game_menu` otherwise, with the GPU name). The heartbeat dedupes per phase for 5 s and skips if the diagnostic lock is busy.
