@@ -6185,6 +6185,7 @@ object HorizonNativeBridge {
             putExtra("HORIZON_NO_DISCORD", !config.discordRichPresence)
             putExtra("HORIZON_PLAYER_NAME", activeAccount.username)
             putExtra("HORIZON_OLDER_SERVERS", GameVersions.selected(context).joinsOlderServers)
+            putExtra("HORIZON_TARGET_VERSION", GameVersions.selected(context).id)
             putExtra("HORIZON_ORIENTATION", config.orientation.serdeKey)
             putExtra("HORIZON_WGPU_BACKEND", if (config.renderer == HorizonRendererMode.OPENGL) "gl" else "vulkan")
             putExtra("HORIZON_RAM_ALLOCATION_MB", config.ramAllocationMb)

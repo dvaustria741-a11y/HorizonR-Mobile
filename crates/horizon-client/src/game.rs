@@ -12573,6 +12573,14 @@ impl Game<'_> {
         creative: bool,
         create: Option<&horizon_client::title::WorldOptions>,
     ) -> Result<()> {
+        // A release this engine is not pinned to has no singleplayer: say so, and open nothing.
+        if let Some(message) = horizon_client::net::singleplayer_unavailable() {
+            log::warn!("Horizon: {message}");
+            if let Some(title) = self.title.as_mut() {
+                title.failed(message);
+            }
+            return Ok(());
+        }
         // openWorldLoadLevelData: an existing world whose level data does not read opens
         // RecoverWorldDataScreen instead.
         if create.is_none()

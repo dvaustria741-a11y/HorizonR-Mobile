@@ -667,6 +667,15 @@ public final class HorizonActivity extends NativeActivity {
                     Os.unsetenv("HORIZON_OLDER_SERVERS");
                 }
 
+                // The release the launcher asked for. The engine refuses singleplayer for one it is not
+                // pinned to rather than opening a world of its own version under that name.
+                String targetVersion = intent.getStringExtra("HORIZON_TARGET_VERSION");
+                if (targetVersion != null && !targetVersion.isEmpty()) {
+                    Os.setenv("HORIZON_TARGET_VERSION", targetVersion, true);
+                } else {
+                    Os.unsetenv("HORIZON_TARGET_VERSION");
+                }
+
                 String playerName = intent.getStringExtra("HORIZON_PLAYER_NAME");
                 if (playerName != null && !playerName.isEmpty()) {
                     Os.setenv("HORIZON_PLAYER_NAME", playerName, true);

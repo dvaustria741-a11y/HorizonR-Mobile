@@ -95,6 +95,81 @@ impl BlockRegistry {
         Self::from_facts(facts)
     }
 
+    /// The registry of a data generator `blocks.json` report (`reports/blocks.json`: per block its
+    /// `definition`, `properties` and `states` with each state's `id`, `default` and `properties`), with
+    /// each state's `(air, fluid)` columns. The state ids must be the contiguous `0..n` the game numbers
+    /// its states by. This needs no Java export: it is how a release whose exporters have not been
+    /// ported (1.21.11) gets its block states.
+    ///
+    /// The columns are `BlockState.isAir()` and `!getFluidState().isEmpty()`, read off the block's
+    /// definition: air is the `minecraft:air` definition; fluid is the `minecraft:liquid` definition,
+    /// the blocks that hold water by themselves (bubble column, kelp, seagrass), and any state with
+    /// `waterlogged=true`.
+    pub fn from_blocks_report(reader: impl io::Read) -> io::Result<(Self, Vec<(bool, bool)>)> {
+        let report: serde_json::Value = serde_json::from_reader(io::BufReader::new(reader))
+            .map_err(|e| invalid(e.to_string()))?;
+        let blocks = report
+            .as_object()
+            .ok_or_else(|| invalid("blocks report is not an object"))?;
+        let mut rows: Vec<(u32, BlockState, bool, bool, bool)> = Vec::new();
+        for (name, block) in blocks {
+            let definition = block["definition"]["type"].as_str().unwrap_or_default();
+            let air = definition == "minecraft:air";
+            let holds_water = definition == "minecraft:liquid"
+                || matches!(
+                    name.as_str(),
+                    "minecraft:bubble_column"
+                        | "minecraft:kelp"
+                        | "minecraft:kelp_plant"
+                        | "minecraft:seagrass"
+                        | "minecraft:tall_seagrass"
+                );
+            let states = block["states"]
+                .as_array()
+                .ok_or_else(|| invalid("block has no states"))?;
+            for state in states {
+                let id = state["id"]
+                    .as_u64()
+                    .and_then(|id| u32::try_from(id).ok())
+                    .ok_or_else(|| invalid("state has no id"))?;
+                let mut properties = crate::block_state_properties::BlockProperties::new();
+                if let Some(map) = state["properties"].as_object() {
+                    for (key, value) in map {
+                        let value = value
+                            .as_str()
+                            .ok_or_else(|| invalid("state property is not a string"))?;
+                        properties.insert(key.clone(), value.to_owned());
+                    }
+                }
+                let waterlogged = properties.get("waterlogged").is_some_and(|v| v == "true");
+                let default = state["default"].as_bool().unwrap_or(false);
+                rows.push((
+                    id,
+                    BlockState {
+                        name: name.clone(),
+                        properties,
+                    },
+                    default,
+                    air,
+                    holds_water || waterlogged,
+                ));
+            }
+        }
+        rows.sort_by_key(|row| row.0);
+        if rows.iter().enumerate().any(|(i, row)| row.0 as usize != i) {
+            return Err(invalid("block state ids are not contiguous from 0"));
+        }
+        let mut defaults = BTreeMap::new();
+        for (id, state, default, ..) in &rows {
+            if *default && defaults.insert(state.name.clone(), i64::from(*id)).is_some() {
+                return Err(invalid("block has two default states"));
+            }
+        }
+        let flags = rows.iter().map(|row| (row.3, row.4)).collect();
+        let states = rows.into_iter().map(|row| row.1).collect();
+        Ok((Self::from_states(states, defaults)?, flags))
+    }
+
     fn from_facts(facts: facts::Facts) -> io::Result<(Self, Vec<(bool, bool)>)> {
         let flags = facts.states.iter().map(|r| (r.air, r.fluid)).collect();
         let states = facts.states.into_iter().map(|r| r.state).collect();
@@ -324,5 +399,57 @@ impl<'r> BlockTableFile<'r> {
             read_checked: 2,
         }
         .checked(what)
+    }
+}
+
+#[cfg(test)]
+mod blocks_report_tests {
+    use super::*;
+
+    #[test]
+    fn a_blocks_report_makes_a_registry_with_its_flags() {
+        let report = r#"{
+          "minecraft:air": {"definition": {"type": "minecraft:air"}, "properties": {},
+            "states": [{"id": 0, "default": true}]},
+          "minecraft:water": {"definition": {"type": "minecraft:liquid"}, "properties": {"level": ["0", "1"]},
+            "states": [{"id": 1, "default": true, "properties": {"level": "0"}},
+                       {"id": 2, "properties": {"level": "1"}}]},
+          "minecraft:oak_slab": {"definition": {"type": "minecraft:slab"},
+            "properties": {"waterlogged": ["true", "false"]},
+            "states": [{"id": 4, "properties": {"waterlogged": "false"}},
+                       {"id": 3, "default": true, "properties": {"waterlogged": "true"}}]}
+        }"#;
+        let (registry, flags) = BlockRegistry::from_blocks_report(report.as_bytes()).unwrap();
+        assert_eq!(registry.len(), 5);
+        assert_eq!(registry.default_state("minecraft:water"), Some(BlockStateId(1)));
+        // Ids are the report's, whatever order the file lists them in.
+        assert_eq!(registry.default_state("minecraft:oak_slab"), Some(BlockStateId(3)));
+        assert_eq!(
+            flags,
+            vec![(true, false), (false, true), (false, true), (false, true), (false, false)]
+        );
+        let gap = report.replace("\"id\": 4", "\"id\": 9");
+        assert!(BlockRegistry::from_blocks_report(gap.as_bytes()).is_err());
+    }
+
+    /// The real 1.21.11 report, when `HORIZON_1_21_11_REPORTS` names the data generator's `reports` folder.
+    #[test]
+    fn the_1_21_11_blocks_report_loads_when_present() {
+        let Some(dir) = std::env::var_os("HORIZON_1_21_11_REPORTS") else {
+            return;
+        };
+        let file = std::fs::File::open(std::path::Path::new(&dir).join("blocks.json")).unwrap();
+        let (registry, flags) = BlockRegistry::from_blocks_report(file).unwrap();
+        assert_eq!(registry.len(), 29_671);
+        let air = registry.default_state("minecraft:air").unwrap();
+        assert_eq!(flags[air.0 as usize], (true, false));
+        let water = registry.default_state("minecraft:water").unwrap();
+        assert_eq!(flags[water.0 as usize], (false, true));
+        println!(
+            "1.21.11: {} states, {} air, {} fluid",
+            registry.len(),
+            flags.iter().filter(|f| f.0).count(),
+            flags.iter().filter(|f| f.1).count()
+        );
     }
 }

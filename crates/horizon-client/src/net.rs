@@ -565,6 +565,22 @@ pub fn older_servers_enabled() -> bool {
     std::env::var_os("HORIZON_OLDER_SERVERS").is_some_and(|v| v == "1")
 }
 
+/// The Minecraft release the launcher asked for (`HORIZON_TARGET_VERSION`), when it is not the one this
+/// engine is pinned to. Singleplayer runs the engine's own rules and data, so for such a release it is
+/// unavailable: it must never open a world of the pinned version under another release's name.
+pub fn singleplayer_unavailable() -> Option<String> {
+    unavailable_for(std::env::var("HORIZON_TARGET_VERSION").ok().as_deref())
+}
+
+fn unavailable_for(target: Option<&str>) -> Option<String> {
+    let target = target.filter(|t| !t.is_empty() && *t != horizon_core::VANILLA_VERSION)?;
+    Some(format!(
+        "Singleplayer is not available for Minecraft {target} yet: this engine's world rules and data \
+         are Minecraft {} (the {target} engine port is not finished). You can still join {target} servers.",
+        horizon_core::VANILLA_VERSION
+    ))
+}
+
 /// The older release a server speaks, by its status ping, when Horizon can translate it; `None` for the
 /// pinned version, an unknown one, a failed ping, or with the feature off.
 fn older_server(address: &str) -> Option<horizon_protocol::adapter::ServerVersion> {
@@ -1282,6 +1298,15 @@ fn continues_after_failed_join(lan: bool, signed_in: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn singleplayer_is_unavailable_only_for_another_release() {
+        assert_eq!(super::unavailable_for(None), None);
+        assert_eq!(super::unavailable_for(Some("")), None);
+        assert_eq!(super::unavailable_for(Some(horizon_core::VANILLA_VERSION)), None);
+        let message = super::unavailable_for(Some("1.21.11")).expect("another release");
+        assert!(message.contains("1.21.11") && message.contains(horizon_core::VANILLA_VERSION));
+    }
+
     use super::*;
 
     fn pack(namespace: &str, id: &str, version: &str) -> cfg::KnownPack {

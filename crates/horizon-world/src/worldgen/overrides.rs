@@ -37,6 +37,40 @@ const KINDS: [(&str, &str); 16] = [
     ("worldgen/structure_set", "structure_sets"),
     ("worldgen/template_pool", "template_pools"),
 ];
+/// The folders of Minecraft 1.21.11's data packs (`PackLayout::V1_21_11`), the bundle each joins. 1.21.11 calls
+/// features and carvers `configured_feature` and `configured_carver`, and has no `block_state_provider`,
+/// `material_condition` or `material_rule` folders: those are written inline where they are used.
+const KINDS_1_21_11: [(&str, &str); 13] = [
+    ("dimension", DIMENSIONS),
+    ("dimension_type", DIMENSION_TYPES),
+    ("worldgen/biome", "biomes"),
+    ("worldgen/configured_carver", "carvers"),
+    ("worldgen/configured_feature", "features"),
+    ("worldgen/density_function", "densities"),
+    ("worldgen/noise", "noises"),
+    ("worldgen/noise_settings", "settings"),
+    ("worldgen/placed_feature", "placed_features"),
+    ("worldgen/processor_list", "processor_lists"),
+    ("worldgen/structure", "structures"),
+    ("worldgen/structure_set", "structure_sets"),
+    ("worldgen/template_pool", "template_pools"),
+];
+/// Which release's data pack folder names a set of packs uses. The engine is pinned to one release
+/// (`Current`); `V1_21_11` reads the earlier release's names, for the 1.21.11 port.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum PackLayout {
+    #[default]
+    Current,
+    V1_21_11,
+}
+impl PackLayout {
+    fn kinds(self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Self::Current => &KINDS,
+            Self::V1_21_11 => &KINDS_1_21_11,
+        }
+    }
+}
 /// Tag folders the chunk generator reads, and the tag bundle each joins.
 const TAG_KINDS: [(&str, &str); 3] = [
     ("tags/block", "block_tags"),
@@ -139,12 +173,21 @@ impl LevelHeight {
 /// Replacement and added bundle entries, and tag files, from data packs.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct WorldgenOverrides {
+    /// The folder names the packs use.
+    layout: PackLayout,
     /// Bundle name → id → the highest pack's JSON text for it.
     entries: BTreeMap<String, BTreeMap<String, String>>,
     /// Tag bundle name → (tag id, pack id, tag file text), lowest pack first.
     tags: BTreeMap<String, Vec<(String, String, String)>>,
 }
 impl WorldgenOverrides {
+    /// Overrides read with `layout`'s folder names (`PackLayout::Current` for `default()`).
+    pub fn with_layout(layout: PackLayout) -> Self {
+        Self {
+            layout,
+            ..Self::default()
+        }
+    }
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty() && self.tags.is_empty()
     }
@@ -177,7 +220,9 @@ impl WorldgenOverrides {
         let Some((_, rest)) = file.strip_prefix("data/").and_then(|r| r.split_once('/')) else {
             return PackFile::Other;
         };
-        if let Some((bundle, id)) = KINDS
+        if let Some((bundle, id)) = self
+            .layout
+            .kinds()
             .iter()
             .find_map(|(kind, bundle)| Some((bundle, resource_id(file, kind)?)))
         {
@@ -336,6 +381,42 @@ mod tests {
         assert_eq!(merged["minecraft:other"], "kept");
         assert_eq!(merged["pack:new"], "new");
         assert_eq!(o.apply("densities", BTreeMap::new()).len(), 0);
+    }
+
+    #[test]
+    fn the_1_21_11_layout_reads_its_own_folder_names_and_the_default_is_unchanged() {
+        let text = |t: &str| {
+            let t = t.to_owned();
+            move || Some(t)
+        };
+        let feature = "data/minecraft/worldgen/configured_feature/oak.json";
+        let renamed = "data/minecraft/worldgen/feature/oak.json";
+        // The default layout is 26.3's: the old folder name is still not read.
+        let mut now = WorldgenOverrides::default();
+        assert_eq!(
+            now.add_file("p", feature, text("{}")),
+            PackFile::NotRead("worldgen/configured_feature".into())
+        );
+        assert_eq!(now.add_file("p", renamed, text("{}")), PackFile::Read);
+        assert_eq!(now.entries("features").count(), 1);
+        // 1.21.11's names are read, and 26.3's new ones are not folders there.
+        let mut old = WorldgenOverrides::with_layout(PackLayout::V1_21_11);
+        assert_eq!(old.add_file("p", feature, text("{\"a\":1}")), PackFile::Read);
+        assert_eq!(
+            old.add_file("p", "data/minecraft/worldgen/configured_carver/cave.json", text("{}")),
+            PackFile::Read
+        );
+        assert_eq!(
+            old.add_file("p", renamed, text("{}")),
+            PackFile::NotRead("worldgen/feature".into())
+        );
+        assert_eq!(
+            old.add_file("p", "data/minecraft/worldgen/material_rule/r.json", text("{}")),
+            PackFile::NotRead("worldgen/material_rule".into())
+        );
+        let features = old.apply("features", BTreeMap::new());
+        assert_eq!(features["minecraft:oak"], "{\"a\":1}");
+        assert_eq!(old.apply("carvers", BTreeMap::new()).len(), 1);
     }
 
     #[test]
