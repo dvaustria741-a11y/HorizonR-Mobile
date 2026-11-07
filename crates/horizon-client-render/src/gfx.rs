@@ -59,7 +59,78 @@ pub use entity_batch::{
     TEXT_POLYGON_OFFSET_OVERLAY, TRANSLUCENT_GLINT_ITEM_OVERLAY, TRANSLUCENT_ITEM_OVERLAY,
     TRANSLUCENT_PARTICLE_OVERLAY, WATER_MASK_OVERLAY, mark_oit,
 };
+pub use pack_post::{PackPost, Refused};
 pub use view::{View, ViewSet};
+
+/// The GPU state `PackPost::new` reads, cloned out of the renderer so a worker thread can create
+/// a shader pack's pipelines (seconds on a phone) while the game keeps drawing.
+pub struct ShaderPackBuildContext {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    adapter: wgpu::Adapter,
+    frame_format: wgpu::TextureFormat,
+    atlas: Option<(wgpu::TextureView, [u32; 2])>,
+    sprite_rects: Vec<u32>,
+    material_maps: Option<[wgpu::TextureView; 2]>,
+    lightmap: wgpu::TextureView,
+    gui_size: [u32; 2],
+    flat_layout: Option<wgpu::BindGroupLayout>,
+    pack_terrain_flat: bool,
+    celestial: Option<wgpu::TextureView>,
+    clouds: wgpu::BindGroupLayout,
+}
+
+impl ShaderPackBuildContext {
+    /// Builds the pipelines of `post`: what `Renderer::set_shader_pack` did inline.
+    pub fn build(
+        self,
+        post: horizon_shaders::Post,
+        block_ids: &[i32],
+    ) -> std::result::Result<pack_post::PackPost, pack_post::Refused> {
+        let instance = wgpu::vertex_attr_array![5=>Float32x4];
+        let vertex = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<TerrainVertex>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &TERRAIN_ATTRIBUTES,
+        };
+        let instances = wgpu::VertexBufferLayout {
+            array_stride: 16,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &instance,
+        };
+        let buffers = [Some(vertex), Some(instances)];
+        let flat = self.pack_terrain_flat;
+        let world = pack_post::World {
+            atlas: self.atlas.clone(),
+            sprite_rects: &self.sprite_rects,
+            material_maps: self.material_maps.clone(),
+            lightmap: self.lightmap.clone(),
+            gui_size: self.gui_size,
+            terrain: self.atlas.as_ref().map(|_| pack_post::Geometry {
+                buffers: if flat { &buffers[..1] } else { &buffers },
+                table: self.flat_layout.as_ref().filter(|_| flat),
+                depth_write: true,
+                atlas: None,
+                material_maps: true,
+                ids: None,
+                cull: true,
+            }),
+            block_ids,
+            celestial: self.celestial.clone(),
+            clouds: Some(&self.clouds),
+            weather: true,
+            hand: true,
+        };
+        pack_post::PackPost::new(
+            &self.device,
+            &self.queue,
+            &self.adapter,
+            post,
+            self.frame_format,
+            world,
+        )
+    }
+}
 
 /// Window.getAppropriateLineWidth, in framebuffer pixels.
 pub fn outline_width(width: u32) -> f32 {
@@ -6578,66 +6649,51 @@ impl Renderer {
             self.pack_atlas = None;
             self.pack_material_atlases = None;
         }
-        let instance = wgpu::vertex_attr_array![5=>Float32x4];
-        let vertex = wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<TerrainVertex>() as u64,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &TERRAIN_ATTRIBUTES,
-        };
-        let instances = wgpu::VertexBufferLayout {
-            array_stride: 16,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &instance,
-        };
-        let buffers = [Some(vertex), Some(instances)];
-        let flat = self.pack_terrain_flat;
-        let sprite_rects = self
-            .pack_atlas
-            .as_ref()
-            .map_or_else(Vec::new, |a| a.rects_table());
-        let post = pack.map(|post| {
-            let world = pack_post::World {
-                atlas: self.pack_atlas.as_ref().map(|a| (a.view.clone(), a.size())),
-                sprite_rects: &sprite_rects,
-                material_maps: self
-                    .pack_material_atlases
-                    .as_ref()
-                    .map(|a| [a[0].view.clone(), a[1].view.clone()]),
-                lightmap: self.lightmap_view.clone(),
-                gui_size: self
-                    .hud
-                    .atlas_texture
-                    .as_ref()
-                    .map_or([1, 1], |t| [t.width(), t.height()]),
-                terrain: self.pack_atlas.as_ref().map(|_| pack_post::Geometry {
-                    buffers: if flat { &buffers[..1] } else { &buffers },
-                    table: self.flat.as_ref().filter(|_| flat).map(|f| &f.draw_layout),
-                    depth_write: true,
-                    atlas: None,
-                    material_maps: true,
-                    ids: None,
-                    cull: true,
-                }),
-                block_ids,
-                celestial: self
-                    .hud
-                    .atlas_texture
-                    .as_ref()
-                    .map(|t| t.create_view(&Default::default())),
-                clouds: Some(&self.cloud_bindings),
-                weather: true,
-                hand: true,
-            };
-            pack_post::PackPost::new(
-                &self.device,
-                &self.queue,
-                &self.adapter,
-                post,
-                self.frame_format,
-                world,
-            )
-        });
-        let post = match post.transpose() {
+        let built = pack.map(|post| self.shader_pack_build_context().build(post, block_ids));
+        self.install_built_shader_pack(dimension, built.transpose())
+    }
+    /// A copy of the GPU state a pack's pipelines are built against (`ShaderPackBuildContext`).
+    pub fn shader_pack_build_context(&self) -> ShaderPackBuildContext {
+        ShaderPackBuildContext {
+            device: self.device.clone(),
+            queue: self.queue.clone(),
+            adapter: self.adapter.clone(),
+            frame_format: self.frame_format,
+            atlas: self.pack_atlas.as_ref().map(|a| (a.view.clone(), a.size())),
+            sprite_rects: self
+                .pack_atlas
+                .as_ref()
+                .map_or_else(Vec::new, |a| a.rects_table()),
+            material_maps: self
+                .pack_material_atlases
+                .as_ref()
+                .map(|a| [a[0].view.clone(), a[1].view.clone()]),
+            lightmap: self.lightmap_view.clone(),
+            gui_size: self
+                .hud
+                .atlas_texture
+                .as_ref()
+                .map_or([1, 1], |t| [t.width(), t.height()]),
+            flat_layout: self.flat.as_ref().map(|f| f.draw_layout.clone()),
+            pack_terrain_flat: self.pack_terrain_flat,
+            celestial: self
+                .hud
+                .atlas_texture
+                .as_ref()
+                .map(|t| t.create_view(&Default::default())),
+            clouds: self.cloud_bindings.clone(),
+        }
+    }
+    /// Runs a `PackPost` built with `shader_pack_build_context` (here or on a worker thread) from
+    /// now on, for the dimension `dimension`: what `set_shader_pack` does once it is built. Returns
+    /// the programs that run and the notes of loading them, or why the pack can't run: the
+    /// dimension then runs without a pack.
+    pub fn install_built_shader_pack(
+        &mut self,
+        dimension: i32,
+        built: std::result::Result<Option<pack_post::PackPost>, pack_post::Refused>,
+    ) -> std::result::Result<Option<(Vec<String>, Vec<String>)>, pack_post::Refused> {
+        let post = match built {
             Ok(post) => post,
             Err(e) => {
                 self.pack_post = Some((dimension, None));

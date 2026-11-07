@@ -864,6 +864,11 @@ fn sampler(
 /// naga's backends turn a module they cannot write into a panic as the driver gets the pipeline
 /// (#3525), which a pack's program must not turn into a crash.
 fn checked<T>(device: &wgpu::Device, create: impl FnOnce() -> T) -> Result<T, String> {
+    if cfg!(target_os = "android") {
+        // Yield briefly between pipeline compilations: Mali's driver compiler holds one lock, and
+        // back-to-back builds on the loader thread would starve the render thread's submissions.
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
     let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let internal = device.push_error_scope(wgpu::ErrorFilter::Internal);
     let value = crate::crash::contain(create);
