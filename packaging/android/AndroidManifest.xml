@@ -61,6 +61,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name="dev.horizon.android.controls.ControlEditorActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation|uiMode|density"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- Dedicated :game process with single-shot launch token and clean finish on quit -->
         <activity
             android:name="dev.horizon.android.HorizonActivity"

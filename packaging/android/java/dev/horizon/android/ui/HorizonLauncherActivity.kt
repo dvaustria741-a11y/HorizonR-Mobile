@@ -97,6 +97,11 @@ import dev.horizon.android.HorizonActivity
 import dev.horizon.android.bridge.*
 import dev.horizon.android.model.*
 import dev.horizon.android.ui.theme.HorizonLauncherTheme
+import dev.horizon.android.controls.ControlEditorActivity
+import dev.horizon.android.controls.ControlSettings
+import dev.horizon.android.controls.ui.ControlsSettings as TouchControlsSettings
+import dev.horizon.android.controls.ui.ControlsTheme
+import dev.horizon.android.controls.ui.LayoutSettings as TouchLayoutSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -8318,6 +8323,18 @@ private fun CleanSettingsViewport(
                                 valueSuffix = "%",
                                 onValueChange = { onConfigChange(config.copy(gyroSensitivityPercent = it)) }
                             )
+                        }
+
+                        val touchControls = remember { ControlSettings(context) }
+                        ControlsTheme {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                TouchLayoutSettings(
+                                    settings = touchControls,
+                                    onEdit = { context.startActivity(Intent(context, ControlEditorActivity::class.java)) },
+                                    onChange = {}
+                                )
+                                TouchControlsSettings(settings = touchControls, onChange = {})
+                            }
                         }
 
                         Surface(
