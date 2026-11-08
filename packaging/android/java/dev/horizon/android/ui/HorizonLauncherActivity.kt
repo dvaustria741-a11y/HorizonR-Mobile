@@ -8276,14 +8276,38 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.CONTROLS -> {
+                        val touchControls = remember { ControlSettings(context) }
+                        var zalithController by remember { mutableStateOf(touchControls.overlayEnabled) }
+                        // null stands for Zalith Controller: the editable touch layouts drawn over the game.
                         LauncherSettingDropdownCard(
                             title = "Input Mode (v0.7.5)",
-                            description = "Select primary input host (Auto follows active touch, mouse, or controller input)",
-                            selectedItem = config.inputHost,
-                            options = HorizonInputHost.entries,
-                            itemLabel = { it.label },
-                            onSelect = { onConfigChange(config.copy(inputHost = it)) }
+                            description = "Select primary input host (Auto follows active touch, mouse, or controller input). Zalith Controller draws the editable touch layouts below over the game",
+                            selectedItem = if (zalithController) null else config.inputHost,
+                            options = listOf(
+                                HorizonInputHost.AUTO,
+                                null,
+                                HorizonInputHost.TOUCH,
+                                HorizonInputHost.KEYBOARD_MOUSE,
+                                HorizonInputHost.CONTROLLER
+                            ),
+                            itemLabel = { it?.label ?: "Zalith Controller (editable touch layouts)" },
+                            onSelect = { choice ->
+                                zalithController = choice == null
+                                touchControls.overlayEnabled = choice == null
+                                onConfigChange(config.copy(inputHost = choice ?: HorizonInputHost.AUTO))
+                            }
                         )
+
+                        ControlsTheme {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                TouchLayoutSettings(
+                                    settings = touchControls,
+                                    onEdit = { context.startActivity(Intent(context, ControlEditorActivity::class.java)) },
+                                    onChange = {}
+                                )
+                                TouchControlsSettings(settings = touchControls, onChange = {})
+                            }
+                        }
 
                         LauncherSettingToggleCard(
                             title = "On-Screen Touch Keypad",
@@ -8323,18 +8347,6 @@ private fun CleanSettingsViewport(
                                 valueSuffix = "%",
                                 onValueChange = { onConfigChange(config.copy(gyroSensitivityPercent = it)) }
                             )
-                        }
-
-                        val touchControls = remember { ControlSettings(context) }
-                        ControlsTheme {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TouchLayoutSettings(
-                                    settings = touchControls,
-                                    onEdit = { context.startActivity(Intent(context, ControlEditorActivity::class.java)) },
-                                    onChange = {}
-                                )
-                                TouchControlsSettings(settings = touchControls, onChange = {})
-                            }
                         }
 
                         Surface(

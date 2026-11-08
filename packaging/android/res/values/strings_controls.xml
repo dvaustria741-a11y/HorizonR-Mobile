@@ -19,8 +19,7 @@
     <string name="controls_import_failed">Could not import: %1$s</string>
     <string name="controls_imported">Layout imported: %1$s</string>
     <string name="controls_layout">Layout</string>
-    <string name="controls_overlay">Show these controls in the game</string>
-    <string name="controls_overlay_hint">Draws the selected layout over the game and sends its buttons, sticks and look to the engine. Off keeps the game\'s own touch controls. Experimental: turn it off if a game will not start.</string>
+    <string name="controls_overlay_hint">Choose Input Mode → Zalith Controller to draw this layout over the game. Experimental: if a game will not start, pick another input mode.</string>
     <string name="controls_long_press">Hold time to break blocks</string>
     <string name="controls_opacity">Button opacity</string>
     <string name="controls_sensitivity">Camera sensitivity</string>

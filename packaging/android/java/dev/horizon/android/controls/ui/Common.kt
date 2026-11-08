@@ -28,21 +28,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
-val Purple = Color(0xFF57197F)
+val Slate = Color(0xFF394952)
 
 val ControlsColors = darkColorScheme(
-    primary = Color(0xFFD2A8F5),
-    onPrimary = Color(0xFF2A0B40),
-    primaryContainer = Purple,
-    onPrimaryContainer = Color(0xFFF3E4FF),
+    primary = Color(0xFF8BE0FF),
+    onPrimary = Color(0xFF0E2430),
+    primaryContainer = Slate,
+    onPrimaryContainer = Color(0xFFE3F4FB),
     secondary = Color(0xFFFFC857),
-    secondaryContainer = Color(0xFF3B2050),
-    onSecondaryContainer = Color(0xFFF3E4FF),
-    background = Color(0xFF140A1C),
-    surface = Color(0xFF1E1129),
-    surfaceVariant = Color(0xFF2B1A3A),
-    onSurface = Color(0xFFEDE0F5),
-    onSurfaceVariant = Color(0xFFCDBBDA),
+    secondaryContainer = Color(0xFF2A3136),
+    onSecondaryContainer = Color(0xFFE3F4FB),
+    background = Color(0xFF14181B),
+    surface = Color(0xFF22282C),
+    surfaceVariant = Color(0xFF2A3136),
+    onSurface = Color(0xFFE6EAEC),
+    onSurfaceVariant = Color(0xFF9EA8B0),
     error = Color(0xFFFF8A80),
 )
 

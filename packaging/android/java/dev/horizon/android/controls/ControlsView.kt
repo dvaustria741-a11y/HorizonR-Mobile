@@ -100,8 +100,8 @@ class ControlsView(
     private var movieStart = 0L
 
     private val defaultStyle = Style(
-        fill = Color.argb(110, 0x57, 0x19, 0x7F),
-        fillPressed = Color.argb(235, 0x57, 0x19, 0x7F),
+        fill = Color.argb(120, 24, 24, 28),
+        fillPressed = Color.argb(215, 120, 120, 130),
         text = Color.WHITE,
         textPressed = Color.WHITE,
         stroke = Color.argb(170, 255, 255, 255),
@@ -872,7 +872,7 @@ class ControlsView(
             guideY?.let { canvas.drawLine(0f, it, width.toFloat(), it, stroke) }
         }
         if (showHandle) {
-            fill.color = alpha(Color.argb(170, 0x57, 0x19, 0x7F), opacity.coerceAtLeast(0.50f))
+            fill.color = alpha(Color.argb(170, 24, 24, 28), opacity.coerceAtLeast(0.50f))
             canvas.drawRoundRect(menuRect, 8f * density, 8f * density, fill)
             text.color = Color.WHITE
             text.textSize = 13f * scaledDensity

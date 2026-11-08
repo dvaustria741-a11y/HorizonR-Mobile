@@ -1,6 +1,6 @@
 package dev.horizon.android.controls
 
-import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup
@@ -33,10 +33,7 @@ class ControlEditorActivity : ComponentActivity(), ControlsHost {
         )
         controls.setEditMode(true)
         val root = FrameLayout(this).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF000000.toInt(), 0xFF3A3A3A.toInt(), 0xFF57197F.toInt(), 0xFF8E8E8E.toInt(), 0xFFFFFFFF.toInt(), 0xFF5A5A5A.toInt()),
-            )
+            background = ColorDrawable(0xFF14181B.toInt())
         }
         root.addView(controls, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(ComposeView(this).apply {
