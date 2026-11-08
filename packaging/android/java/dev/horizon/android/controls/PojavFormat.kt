@@ -16,6 +16,7 @@ internal object PojavFormat {
     private const val MAIN = "zalith"
     private const val GUI = "zalith_gui"
     private const val MARGIN_DP = 2f
+    private val VARIABLE = Regex("\\$\\{(\\w+)\\}")
 
     private class Screen(val width: Float, val height: Float, val density: Float)
 
@@ -164,8 +165,12 @@ internal object PojavFormat {
             "width" to w, "height" to h, "screen_width" to screen.width, "screen_height" to screen.height,
             "margin" to MARGIN_DP * screen.density, "preferred_scale" to 100f,
         )
-        val text = Regex("\\$\\{(\\w+)}").replace(expression) { m -> (vars[m.groupValues[1]] ?: 0f).toString() }
-        return runCatching { Expression(text, screen.density).parse().toFloat() }.getOrDefault(0f)
+        // Android's regex engine (ICU) rejects an unescaped '}' ("Syntax error in regexp pattern"), so escape
+        // it. Kept inside runCatching so one bad expression falls back to 0 instead of failing the whole layout.
+        return runCatching {
+            val text = VARIABLE.replace(expression) { m -> (vars[m.groupValues[1]] ?: 0f).toString() }
+            Expression(text, screen.density).parse().toFloat()
+        }.getOrDefault(0f)
     }
 
     private fun JSONObject.objects(name: String): List<JSONObject> =
