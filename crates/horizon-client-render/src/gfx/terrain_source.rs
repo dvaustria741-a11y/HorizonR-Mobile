@@ -49,9 +49,11 @@ fn gles_source(source: &str) -> String {
         ("layer", "codes.x"),
         ("emission", "codes.y"),
         ("fade", "codes.z"),
+        ("emissive_layer", "codes.w"),
         ("spherical", "distances.x"),
         ("cylindrical", "distances.y"),
         ("visibility", "distances.z"),
+        ("height", "distances.w"),
     ] {
         for variable in ["in", "out"] {
             body = body.replace(
@@ -67,10 +69,11 @@ fn gles_source(source: &str) -> String {
 const PACKED_INTERFACE: &str = "struct TerrainOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    @location(1) @interpolate(flat) codes: vec3<u32>,
+    @location(1) @interpolate(flat) codes: vec4<u32>,
     @location(2) color: vec4<f32>,
-    @location(3) distances: vec3<f32>,
+    @location(3) distances: vec4<f32>,
     @location(4) local: vec3<f32>,
+    @location(5) scene: vec2<f32>,
 }
 ";
 
