@@ -123,6 +123,19 @@ oracle's is not, so carving is the likely cause; that has not been checked (one 
 
 ## Still blocked
 
-- The rest of the exporters and bundles listed above, and `horizon-prepare` itself, which is still pinned to 26.3's
-  jars, pack formats and Java 25: it does not yet prepare 1.21.11.
+- The rest of the exporters and bundles listed above.
+- **`horizon-prepare` for 1.21.11: started, not done.** Done: it reads another version's lock file
+  (`--lock research-lock-1.21.11.json` or `HORIZON_PREPARE_LOCK`; only a plain `research-lock*.json` name is accepted, and
+  the default stays 26.3's `research-lock.json`), `research-lock-1.21.11.json` pins the version JSON, client and server
+  jars and client mappings by sha1 (Java 21, data version 4671), and the import of an obfuscated release no longer stops
+  with "targets unobfuscated releases": it needs the lock to pin the client mappings, checks the file the player names with
+  `--client-mappings` against that pin (or an `accepted_client_mappings_sha1` entry of the lock; none is committed) and keeps
+  it as `jars/client_mappings.txt`. Tested: the lock-name rules and both locks' pins (unit tests); a real run on the
+  1.21.11 files got through the version JSON, the mappings and the client jar. Not done: it stops at the client libraries
+  (Mojang's `libraries.minecraft.net` files, which the sandbox does not have), so the later stages never ran for 1.21.11:
+  the remap of the client jar (`tools/RemapJar.java`) is not part of the preparer, the exporters still compile against an
+  unobfuscated jar with `--release 25` and no `java-1.21.11` overlay, the pack formats and the asset index are 26.3's.
+  The `client.txt` supplied for this work is not Mojang's published file (its sha1 differs from the version JSON's, it is
+  270 bytes longer and its header is an MIT-licence text, not Mojang's), so the repository lock correctly refuses it;
+  the exporters ran on it, since only the mapping lines matter to them.
 - Gameplay logic differences 1.21.11 -> 26.3 (mobs, items, trades, loot) are unmeasured without decompiled sources.

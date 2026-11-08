@@ -1,0 +1,13 @@
+{
+  "minecraft": {
+    "version": "1.21.11",
+    "manifest_sha1": "35f8a9bc4874e2c95e51b3ad21e043a33776f7c2",
+    "client_sha1": "ba2df812c2d12e0219c489c4cd9a5e1f0760f5bd",
+    "server_sha1": "64bb6d763bed0a9f1d632ec347938594144943ed",
+    "client_mappings_sha1": "031a68bebf55d824f66d6573d8c752f0e1bf232a",
+    "server_mappings_sha1": "5621e9253f05fd57872bbe7f8ddf5f9a7d525955",
+    "java_major": 21,
+    "data_version": 4671,
+    "note": "Pins for the 1.21.11 port (docs/version-1-21-11-port.md): select with `horizon-prepare --lock research-lock-1.21.11.json`. The hashes are of the files Mojang published for 1.21.11; the files themselves are not in the repository. 1.21.11 is obfuscated: the client mappings are needed to run the exporters."
+  }
+}

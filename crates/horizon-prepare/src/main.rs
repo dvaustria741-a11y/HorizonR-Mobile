@@ -36,6 +36,7 @@ Usage: horizon-prepare [--prepare] [--server-jar PATH] [--minecraft-dir PATH] [-
   --client-jar PATH     The pinned client jar, where --minecraft-dir has none
   --libraries-dir PATH  The folder of the client's libraries (Maven layout)
   --assets-dir PATH     The asset store, with indexes/ and objects/
+  --client-mappings PATH  Mojang's client mappings (an obfuscated release, 1.21.11, only)
                         (each of these four replaces what --minecraft-dir would give; an earlier
                         import beside --root that is still verified is reused instead)
   --java-home PATH      A Java runtime of the pinned version that your launcher manages, tried
@@ -57,7 +58,7 @@ Usage: horizon-prepare [--prepare] [--server-jar PATH] [--minecraft-dir PATH] [-
                         pinned Minecraft and Java, the resources' layout, the options) and exit 0
 
 Needs Minecraft played once from the official launcher, and Java of the version
-research-lock.json pins. Releases use a runtime; development or changed exporters need a JDK.
+research-lock.json pins (`--lock research-lock-1.21.11.json` or HORIZON_PREPARE_LOCK: another version's lock file). Releases use a runtime; development or changed exporters need a JDK.
 compile-exporters builds and validates a release bundle from the already imported pinned jars.
 The resources go to <root>/.local/horizon-client/<version>, or --output; pass that to
 horizon-client --resources. Exit codes: 0 done, 1 failed (or --check found gaps), 2 a refused
@@ -85,7 +86,10 @@ fn default_root() -> Option<PathBuf> {
     }
     let cwd = std::env::current_dir().ok()?;
     cwd.ancestors()
-        .find(|d| d.join("research-lock.json").is_file())
+        .find(|d| {
+            d.join(horizon_prepare::artifacts::DEFAULT_LOCK_FILE)
+                .is_file()
+        })
         .map(Path::to_path_buf)
 }
 
@@ -146,9 +150,19 @@ fn main() -> ExitCode {
                 value("--libraries-dir").map(|v| options.inputs.libraries_dir = Some(v))
             }
             "--assets-dir" => value("--assets-dir").map(|v| options.inputs.assets_dir = Some(v)),
+            "--client-mappings" => {
+                value("--client-mappings").map(|v| options.inputs.client_mappings = Some(v))
+            }
             "--java-home" => value("--java-home").map(|v| options.java_home = Some(v)),
             "--root" => value("--root").map(|v| root = Some(v)),
             "--output" => value("--output").map(|v| options.output = Some(v)),
+            // The lock file of another game version in the version folder: `research-lock-1.21.11.json`.
+            "--lock" => value("--lock").map(|v| {
+                // Nothing else runs yet: the arguments are read before any thread starts.
+                unsafe {
+                    std::env::set_var(horizon_prepare::artifacts::LOCK_FILE_ENV, v);
+                }
+            }),
             "--check" if inline.is_none() => {
                 check = true;
                 Ok(())

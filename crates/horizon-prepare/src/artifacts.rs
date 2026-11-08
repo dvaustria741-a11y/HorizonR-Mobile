@@ -33,16 +33,52 @@ pub struct Lock {
     pub directory: PathBuf,
 }
 
+/// The lock file read when `LOCK_FILE_ENV` is not set.
+pub const DEFAULT_LOCK_FILE: &str = "research-lock.json";
+/// Names the lock file in the version folder (`research-lock-1.21.11.json`), for a preparation of another game
+/// version than the one the crate is built for. Only a plain `research-lock*.json` file name is accepted.
+pub const LOCK_FILE_ENV: &str = "HORIZON_PREPARE_LOCK";
+
+/// The lock file name `HORIZON_PREPARE_LOCK` asks for, or the default.
+pub fn lock_file_name() -> Result<String, String> {
+    checked_lock_file_name(std::env::var(LOCK_FILE_ENV).ok().as_deref())
+}
+
+fn checked_lock_file_name(chosen: Option<&str>) -> Result<String, String> {
+    match chosen.map(str::to_owned) {
+        Some(name) if !name.is_empty() => {
+            let plain = name.starts_with("research-lock")
+                && name.ends_with(".json")
+                && name
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b));
+            if plain && !name.contains("..") {
+                Ok(name)
+            } else {
+                Err(format!(
+                    "{LOCK_FILE_ENV}={name}: not a research-lock*.json file name"
+                ))
+            }
+        }
+        _ => Ok(DEFAULT_LOCK_FILE.to_string()),
+    }
+}
+
 impl Lock {
     pub fn read(root: &Path) -> Result<Lock, String> {
-        let json = read_json(&root.join("research-lock.json"))?;
+        Self::read_file(root, &lock_file_name()?)
+    }
+
+    /// The lock in `root`'s file `file`.
+    pub fn read_file(root: &Path, file: &str) -> Result<Lock, String> {
+        let json = read_json(&root.join(file))?;
         let game = json
             .get("minecraft")
-            .ok_or("research-lock.json has no minecraft")?;
+            .ok_or_else(|| format!("{file} has no minecraft"))?;
         let version = game
             .get("version")
             .and_then(Value::as_str)
-            .ok_or("research-lock.json has no minecraft version")?
+            .ok_or_else(|| format!("{file} has no minecraft version"))?
             .to_string();
         if version.is_empty()
             || !version
@@ -56,7 +92,7 @@ impl Lock {
         let java_major = game
             .get("java_major")
             .and_then(Value::as_i64)
-            .ok_or("research-lock.json has no java_major")?;
+            .ok_or_else(|| format!("{file} has no java_major"))?;
         let directory = root.join(".local/minecraft").join(&version);
         Ok(Lock {
             json,
@@ -156,6 +192,8 @@ pub struct Inputs {
     pub client_jar: Option<PathBuf>,
     pub libraries_dir: Option<PathBuf>,
     pub assets_dir: Option<PathBuf>,
+    /// Mojang's `client_mappings` file for an obfuscated release (`--client-mappings`).
+    pub client_mappings: Option<PathBuf>,
 }
 
 impl GameFiles {
@@ -688,13 +726,50 @@ pub fn import(
         &files.hint(&lock.version),
     )?;
     let downloads = manifest.get("downloads");
-    if downloads.and_then(|d| d.get("client_mappings")).is_some()
-        || downloads.and_then(|d| d.get("server_mappings")).is_some()
-    {
-        return Err(
-            "This workflow targets unobfuscated releases. Older releases need a remapping stage."
-                .into(),
-        );
+    let obfuscated = downloads.and_then(|d| d.get("client_mappings")).is_some()
+        || downloads.and_then(|d| d.get("server_mappings")).is_some();
+    if obfuscated {
+        // An obfuscated release (1.21.11 is the last) needs the lock to pin the client mappings and the player to
+        // name that file: the remapped jar is what the exporters run against. 26.3's lock pins none.
+        let Ok(pin) = lock.pin("client_mappings_sha1") else {
+            return Err(
+                "This version is obfuscated and its lock pins no client mappings (client_mappings_sha1)".into(),
+            );
+        };
+        if downloads
+            .and_then(|d| d.get("client_mappings"))
+            .and_then(|d| d.get("sha1"))
+            .and_then(Value::as_str)
+            != Some(pin)
+        {
+            return Err("The version JSON's client mappings differ from the lock's".into());
+        }
+        let source = inputs
+            .client_mappings
+            .as_ref()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| expand_user(p))
+            .ok_or(
+                "This version is obfuscated: name Mojang's client mappings with --client-mappings",
+            )?;
+        // Mojang's file, or one the lock lists (`accepted_client_mappings_sha1`): none is listed in the repository.
+        let found = digest(&source, "sha1")?;
+        let pinned = if lock.listed("accepted_client_mappings_sha1", &found) {
+            found.as_str()
+        } else {
+            pin
+        };
+        import_copy(
+            &source,
+            &lock.directory.join("jars/client_mappings.txt"),
+            pinned,
+            "sha1",
+            "",
+        )?;
+        log(&format!(
+            "Imported client mappings from {}",
+            source.display()
+        ));
     }
     let id = manifest
         .get("id")
@@ -1520,6 +1595,7 @@ mod tests {
             client_jar: Some(own.join("instance/minecraft.jar")),
             libraries_dir: Some(own.join("shared/libs")),
             assets_dir: None,
+            client_mappings: None,
         };
         let lock = Lock::read(&fixture.target).unwrap();
         let server = old.join("jars/server.jar");
@@ -1646,5 +1722,43 @@ mod tests {
             safe_relative("a/b.jar").unwrap(),
             Path::new("a").join("b.jar")
         );
+    }
+
+    #[test]
+    fn the_lock_file_is_the_default_or_a_plain_research_lock_name() {
+        assert_eq!(checked_lock_file_name(None).unwrap(), "research-lock.json");
+        assert_eq!(
+            checked_lock_file_name(Some("")).unwrap(),
+            "research-lock.json"
+        );
+        assert_eq!(
+            checked_lock_file_name(Some("research-lock-1.21.11.json")).unwrap(),
+            "research-lock-1.21.11.json"
+        );
+        for bad in [
+            "../research-lock.json",
+            "/etc/passwd",
+            "research-lock/../x.json",
+            "other.json",
+            "research-lock..json",
+            "research-lock.txt",
+        ] {
+            assert!(checked_lock_file_name(Some(bad)).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_1_21_11_lock_pins_an_obfuscated_release_on_java_21() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let lock = Lock::read_file(&root, "research-lock-1.21.11.json").unwrap();
+        assert_eq!((lock.version.as_str(), lock.java_major), ("1.21.11", 21));
+        assert_eq!(lock.pin("client_sha1").unwrap().len(), 40);
+        assert_eq!(lock.pin("server_sha1").unwrap().len(), 40);
+        assert_eq!(lock.pin("client_mappings_sha1").unwrap().len(), 40);
+        assert!(lock.manifest_accepted(lock.pin("manifest_sha1").unwrap()));
+        // 26.3's lock is untouched: its own version, Java 25, no mappings.
+        let current = Lock::read_file(&root, DEFAULT_LOCK_FILE).unwrap();
+        assert_eq!((current.version.as_str(), current.java_major), ("26.3", 25));
+        assert!(current.pin("client_mappings_sha1").is_err());
     }
 }
