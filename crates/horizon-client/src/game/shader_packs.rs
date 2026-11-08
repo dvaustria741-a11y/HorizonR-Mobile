@@ -16,6 +16,19 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 
 /// The values the player chose for pack `name`'s options (`shaderpacks/<name>.txt`).
+
+/// Logs the renderer's notes about a pack: a program that was skipped or refused is a WARN,
+/// the rest (which pass draws what, uniforms left at their defaults) is routine and goes to INFO.
+fn log_pack_notes(name: &str, notes: &[String]) {
+    for note in notes {
+        if note.contains(": skipped:") || note.contains("refused") {
+            log::warn!("shader pack {name}: {note}");
+        } else {
+            log::info!("shader pack {name}: {note}");
+        }
+    }
+}
+
 fn chosen_shader_options(name: &str) -> BTreeMap<String, String> {
     let file = Game::shader_packs_dir().join(horizon_shaders::chosen_file(name));
     std::fs::read_to_string(file)
@@ -451,17 +464,13 @@ impl Game<'_> {
         let report = renderer
             .install_built_shader_pack(dimension, built.map(Some))
             .map_err(|refused| {
-                for note in refused.notes {
-                    log::warn!("shader pack {name}: {note}");
-                }
+                log_pack_notes(name, &refused.notes);
                 refused.reason
             });
         match report {
             Ok(report) => {
                 if let Some((programs, notes)) = report {
-                    for note in notes {
-                        log::warn!("shader pack {name}: {note}");
-                    }
+                    log_pack_notes(name, &notes);
                     log::info!(
                         "shader pack {name}: folder `{folder}`, {} programs ({}) in {} ms",
                         programs.len(),
@@ -510,16 +519,12 @@ impl Game<'_> {
         let report = renderer
             .set_shader_pack(dimension, Some(post), &table)
             .map_err(|refused| {
-                for note in refused.notes {
-                    log::warn!("shader pack {name}: {note}");
-                }
+                log_pack_notes(name, &refused.notes);
                 refused.reason
             });
         match report {
             Ok(Some((programs, notes))) => {
-                for note in notes {
-                    log::warn!("shader pack {name}: {note}");
-                }
+                log_pack_notes(name, &notes);
                 log::info!(
                     "shader pack {name}: folder `{}`, {} programs ({}) in {} ms",
                     folder,
@@ -588,7 +593,7 @@ impl Game<'_> {
             .as_ref()
             .is_some_and(|r| r.shader_pack_dimension() != Some(dimension))
         {
-            if cfg!(target_os = "android") {
+            if cfg!(target_os = "android") && self.settings.horizon.pack_workers {
                 // A phone takes seconds to translate a pack's programs and build their pipelines:
                 // two workers do it while the game keeps drawing, and a later frame installs the
                 // result. The frame the pack is picked on does no more than open it.

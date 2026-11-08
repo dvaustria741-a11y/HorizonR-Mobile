@@ -16858,7 +16858,8 @@ impl Game<'_> {
     /// image. The renderer also drops it on a resize and when a shader pack is installed;
     /// the key covers the screen, the blur radius and the picked pack.
     fn background_cache_key(&mut self) -> Option<u64> {
-        let eligible = self.title.is_none()
+        let eligible = self.settings.horizon.menu_background_cache
+            && self.title.is_none()
             && self.player.is_some()
             && !self.remote_loading()
             && !self.dialog_open()

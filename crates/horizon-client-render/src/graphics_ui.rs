@@ -104,6 +104,8 @@ pub enum H {
     HdrLighting,
     BatteryMode,
     ShadowCache,
+    MenuBackgroundCache,
+    PackWorkers,
     GraphicsApi,
     TranslucentBatching,
     HdrSmoothGradients,
@@ -402,6 +404,16 @@ pub fn rows() -> Vec<(Page, Vec<(&'static str, Vec<Setting>)>)> {
                             H::ShadowCache,
                             Saves,
                             "Reuses the pack shadow map when sun, view and world match. Off by default.",
+                        ),
+                        h(
+                            H::MenuBackgroundCache,
+                            Saves,
+                            "Keeps the world behind the pause menu instead of redrawing it. Off redraws it live.",
+                        ),
+                        h(
+                            H::PackWorkers,
+                            None,
+                            "Android: loads shader packs on worker threads. Off loads them in one step.",
                         ),
                     ],
                 ),
@@ -842,6 +854,10 @@ impl H {
             }
             H::BatteryMode => labelled("Battery Mode", on_off(g.battery)),
             H::ShadowCache => labelled("Shadow Cache", on_off(g.shadow_cache)),
+            H::MenuBackgroundCache => {
+                labelled("Menu Background Cache", on_off(g.menu_background_cache))
+            }
+            H::PackWorkers => labelled("Pack Worker Threads", on_off(g.pack_workers)),
             H::GraphicsApi => labelled("Graphics API", g.api.label()),
             // These two are greyed out where the device can't (`Item::blocked`): Off, as
             // they are there, while the saved value waits for a device that can.
@@ -965,6 +981,8 @@ impl H {
             H::HdrLighting => g.hdr_lighting = !g.hdr_lighting,
             H::BatteryMode => g.battery = !g.battery,
             H::ShadowCache => g.shadow_cache = !g.shadow_cache,
+            H::MenuBackgroundCache => g.menu_background_cache = !g.menu_background_cache,
+            H::PackWorkers => g.pack_workers = !g.pack_workers,
             H::GraphicsApi => {
                 // Android selects the backend before creating the renderer in
                 // launcher Settings. Stale/programmatic menu actions must not
@@ -1076,6 +1094,8 @@ impl Item {
             Item::Horizon(H::HdrLighting) => g.hdr_lighting,
             Item::Horizon(H::BatteryMode) => g.battery,
             Item::Horizon(H::ShadowCache) => g.shadow_cache,
+            Item::Horizon(H::MenuBackgroundCache) => g.menu_background_cache,
+            Item::Horizon(H::PackWorkers) => g.pack_workers,
             Item::Horizon(H::TranslucentBatching) => {
                 g.translucent_batching && crate::graphics::translucent_batching_offered()
             }
@@ -1146,6 +1166,8 @@ impl Item {
                     | H::FrameGeneration
                     | H::BatteryMode
                     | H::ShadowCache
+                    | H::MenuBackgroundCache
+                    | H::PackWorkers
                     | H::GraphicsApi
                     | H::TranslucentBatching
                     | H::HdrSmoothGradients
