@@ -82,6 +82,27 @@ changed) blocks the creative-tabs and command-suggestion exporters; the oracles 
 `VanillaCommandParseOracle`, `VanillaBlockLandingOracle`, `VanillaPlacementOracle`, ...) have 60-odd API-difference
 errors; the client exporters, the tag bundle and the collision cache are not yet produced.
 
+## The generator loads 1.21.11's data
+
+`tools/assemble_worldgen_1_21_11.py` assembles the directory `GeneratorData::load` reads from the datagen output, the
+upgraded worldgen data, the Java exports and the jar's 1,202 structure templates, and
+`horizon-world/tests/generator_1_21_11.rs` loads it: `GeneratorData::load: ok` (65 biomes, 224 features, 258 placed
+features, 60 noises, 81 density functions, 7 noise settings, 34 structures, 20 structure sets, 188 template pools,
+tags 204/2/68). Differences between the versions that the loader found on the way:
+
+- **Heightmap tags.** 26.3 reads the block tags `blocks_motion_in_heightmap(_no_leaves)`; 1.21.11 asks
+  `BlockState.blocksMotion()`. `Vanilla1_21_11MotionTagsExporter` writes the tags from the game's own method:
+  912 blocks (901 without leaves). Against 26.3's real tag, every block of both versions is in it except 24 sign
+  blocks that 1.21.11 counts as blocking motion and 26.3 does not: a real behaviour change, not an export error.
+  `resin_brick_wall` has 2 of 324 states that differ and cannot be one tag entry.
+- **Carvers.** 26.3 has one `uncarvable` tag (bedrock); 1.21.11 gives each carver a `replaceable` block list (the
+  upgrade drops it). The assembler derives the Overworld's table (1,114 blocks); Nether and End carving need a
+  table per dimension, and `GeneratorData` has one table, so they are wrong until it is split. Open.
+- **Material conditions and block-state providers** are inline in 1.21.11 (no `conditions` or `state_providers`
+  bundle): the loader takes an empty `conditions` bundle.
+
+Loading is not generating: nothing yet compares a generated 1.21.11 chunk with the real game's.
+
 ## Still blocked
 
 - The rest of the exporters and bundles listed above, and `horizon-prepare` itself, which is still pinned to 26.3's
