@@ -159,18 +159,64 @@ impl PalettedContainer {
     }
 }
 
+/// The keys a saved block state uses: Minecraft 26.3 writes `{id, properties}`, 1.21.11 `{Name, Properties}`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StateKeys {
+    /// `{id, properties}` (26.3).
+    Modern,
+    /// `{Name, Properties}` (1.21.11).
+    Classic,
+}
+impl StateKeys {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Modern => "id",
+            Self::Classic => "Name",
+        }
+    }
+    fn properties(self) -> &'static str {
+        match self {
+            Self::Modern => "properties",
+            Self::Classic => "Properties",
+        }
+    }
+}
+
+/// How a version saves a chunk: its `DataVersion` and its block-state keys.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChunkFormat {
+    pub data_version: i32,
+    pub keys: StateKeys,
+}
+impl ChunkFormat {
+    /// The version the engine is built for (26.3).
+    pub const CURRENT: Self = Self {
+        data_version: DATA_VERSION,
+        keys: StateKeys::Modern,
+    };
+    /// Minecraft 1.21.11 (data version 4671).
+    pub const V1_21_11: Self = Self {
+        data_version: 4671,
+        keys: StateKeys::Classic,
+    };
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BlockState {
     pub name: String,
     pub properties: BlockProperties,
 }
 impl BlockState {
+    /// 26.3's `{id, properties}`.
     pub fn to_nbt(&self) -> Tag {
+        self.to_nbt_as(StateKeys::Modern)
+    }
+    pub fn to_nbt_as(&self, keys: StateKeys) -> Tag {
         let mut map = Compound::new();
-        map.insert(key("id"), Tag::String(key(&self.name)));
+        map.insert(key(keys.name()), Tag::String(key(&self.name)));
         if !self.properties.is_empty() {
             map.insert(
-                key("properties"),
+                key(keys.properties()),
                 Tag::Compound(
                     self.properties
                         .iter()
@@ -181,18 +227,24 @@ impl BlockState {
         }
         Tag::Compound(map)
     }
+    /// Reads 26.3's `{id, properties}` (or a bare name).
     pub fn from_nbt(tag: &Tag) -> io::Result<Self> {
+        Self::from_nbt_as(tag, StateKeys::Modern)
+    }
+    /// Reads the state in the given format only: a 1.21.11 `Name` is not an `id` and the other way round, so a
+    /// save of one version is never read as the other's.
+    pub fn from_nbt_as(tag: &Tag, keys: StateKeys) -> io::Result<Self> {
         if let Tag::String(name) = tag {
             return Ok(Self {
                 name: name.to_string().map_err(|e| invalid(e.to_string()))?,
                 properties: BlockProperties::new(),
             });
         }
-        let Some(Tag::String(name)) = tag.get("id") else {
-            return Err(invalid("block state is missing id"));
+        let Some(Tag::String(name)) = tag.get(keys.name()) else {
+            return Err(invalid(format!("block state is missing {}", keys.name())));
         };
         let mut properties = Vec::new();
-        if let Some(tag) = tag.get("properties") {
+        if let Some(tag) = tag.get(keys.properties()) {
             let Tag::Compound(map) = tag else {
                 return Err(invalid("block properties are not a compound"));
             };
@@ -217,9 +269,14 @@ impl BlockState {
 pub struct ChunkData {
     root: NamedTag,
     position: ChunkPos,
+    format: ChunkFormat,
 }
 impl ChunkData {
     pub fn new(root: NamedTag) -> io::Result<Self> {
+        Self::new_as(root, ChunkFormat::CURRENT)
+    }
+    /// A chunk saved in `format`'s version: its `DataVersion` must be that version's.
+    pub fn new_as(root: NamedTag, format: ChunkFormat) -> io::Result<Self> {
         let Some(Tag::Int(x)) = root.tag.get("xPos") else {
             return Err(invalid("chunk is missing xPos"));
         };
@@ -230,9 +287,10 @@ impl ChunkData {
         let Some(Tag::Int(version)) = root.tag.get("DataVersion") else {
             return Err(invalid("chunk is missing DataVersion"));
         };
-        if *version != DATA_VERSION {
+        if *version != format.data_version {
             return Err(invalid(format!(
-                "expected DataVersion {DATA_VERSION}, got {version}; data fixing is not implemented"
+                "expected DataVersion {}, got {version}; data fixing is not implemented",
+                format.data_version
             )));
         }
         let Some(Tag::List(sections)) = root.tag.get("sections") else {
@@ -247,7 +305,14 @@ impl ChunkData {
                 return Err(invalid("duplicate section Y"));
             }
         }
-        Ok(Self { root, position })
+        Ok(Self {
+            root,
+            position,
+            format,
+        })
+    }
+    pub fn format(&self) -> ChunkFormat {
+        self.format
     }
     pub fn position(&self) -> ChunkPos {
         self.position
@@ -314,14 +379,16 @@ impl ChunkData {
             return Ok(None);
         };
         let palette = PalettedContainer::from_nbt(container, 4096, 4)?;
-        Ok(Some(BlockState::from_nbt(
+        Ok(Some(BlockState::from_nbt_as(
             palette.get(block.section_index())?,
+            self.format.keys,
         )?))
     }
 
     /// Storage-only mutation. The caller must arrange simulation-derived updates
     /// before treating this as a gameplay block placement.
     pub fn set_block_data(&mut self, block: BlockPos, state: BlockState) -> io::Result<BlockState> {
+        let keys = self.format.keys;
         let index = self
             .section_index(block)?
             .ok_or_else(|| invalid("section is not present"))?;
@@ -332,8 +399,8 @@ impl ChunkData {
             .get_mut("block_states")
             .ok_or_else(|| invalid("section has no block-state data"))?;
         let mut palette = PalettedContainer::from_nbt(container, 4096, 4)?;
-        let old = BlockState::from_nbt(palette.get(block.section_index())?)?;
-        palette.set(block.section_index(), state.to_nbt())?;
+        let old = BlockState::from_nbt_as(palette.get(block.section_index())?, keys)?;
+        palette.set(block.section_index(), state.to_nbt_as(keys))?;
         *container = palette.to_nbt();
         Ok(old)
     }
@@ -411,11 +478,18 @@ impl<'r> BlockSection<'r> {
         })
     }
     pub fn from_nbt(tag: &Tag, registry: &'r BlockRegistry) -> io::Result<Self> {
+        Self::from_nbt_as(tag, registry, StateKeys::Modern)
+    }
+    pub fn from_nbt_as(
+        tag: &Tag,
+        registry: &'r BlockRegistry,
+        keys: StateKeys,
+    ) -> io::Result<Self> {
         let container = PalettedContainer::from_nbt(tag, 4096, 4)?;
         let resolved = container
             .palette
             .iter()
-            .map(|tag| registry.resolve(&BlockState::from_nbt(tag)?))
+            .map(|tag| registry.resolve(&BlockState::from_nbt_as(tag, keys)?))
             .collect::<io::Result<Vec<_>>>()?;
         let first_index = container.storage.as_ref().map_or(0, |s| s.get(0).unwrap()) as usize;
         let mut section = Self::uniform(resolved[first_index], registry)?;
@@ -634,6 +708,9 @@ impl<'r> BlockSection<'r> {
         Ok(())
     }
     pub fn to_nbt(&self) -> io::Result<Tag> {
+        self.to_nbt_as(StateKeys::Modern)
+    }
+    pub fn to_nbt_as(&self, keys: StateKeys) -> io::Result<Tag> {
         let mut map = self.extra.clone();
         let palette = self
             .palette
@@ -641,7 +718,7 @@ impl<'r> BlockSection<'r> {
             .map(|id| {
                 self.registry
                     .state(*id)
-                    .map(BlockState::to_nbt)
+                    .map(|state| state.to_nbt_as(keys))
                     .ok_or_else(|| invalid("state ID outside registry"))
             })
             .collect::<io::Result<Vec<_>>>()?;

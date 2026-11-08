@@ -75,9 +75,14 @@ they are) the registry facts (`VanillaHeightmapOracle export`), gameplay-facts, 
 29,671 state facts, and the engine's own `BlockFacts` loader reads them
 (`horizon-items/tests/blocks_1_21_11.rs`). The Java registry export and the datagen-report loader agree on all 29,671 states with no air/fluid flag
 difference, which checks the flag rules of `BlockRegistry::from_blocks_report`.
-Format difference found: 1.21.11 writes a block state as `{Name, Properties}`, 26.3 as `{id, properties}`; the registry
-loader now reads both, but chunk palettes in saves need the matching codec both ways (reading is not enough:
-singleplayer has to write 1.21.11 saves in 1.21.11's format, data version 4671). Left: `ParityData` (registry layering and data-component initializers
+Format difference found: 1.21.11 writes a block state as `{Name, Properties}`, 26.3 as `{id, properties}`. The chunk
+codec now has both (`horizon_world::chunk`): `StateKeys::{Modern, Classic}`, `ChunkFormat::{CURRENT, V1_21_11}` (data
+version 4671, `Name`/`Properties`), `BlockState::{to_nbt_as, from_nbt_as}`, `BlockSection::{to_nbt_as, from_nbt_as}` and
+`ChunkData::new_as`, whose `block` and `set_block_data` read and write the chunk's own keys. Each format is read strictly
+as itself (a 1.21.11 section is an error to the 26.3 reader and the other way round) and `new`, `to_nbt` and `from_nbt`
+stay 26.3's. Tested (`chunk_format_1_21_11.rs`): keys written and read per format, data-version gate, editing a 1.21.11
+chunk, and all 29,671 real 1.21.11 states through a Classic section round trip. Not done: block entities, entities and
+other NBT that embed block states, and nothing yet selects `V1_21_11` for a save: singleplayer stays unavailable. Left: `ParityData` (registry layering and data-component initializers
 changed) blocks the creative-tabs and command-suggestion exporters; the oracles (`VanillaSimpleBlockOracle`,
 `VanillaCommandParseOracle`, `VanillaBlockLandingOracle`, `VanillaPlacementOracle`, ...) have 60-odd API-difference
 errors; the client exporters, the tag bundle and the collision cache are not yet produced.
