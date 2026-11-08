@@ -89,18 +89,23 @@ tabs with 3,914 item entries (`creative-tabs.json`) and 122 command suggestions 
 nothing compares them with the game's own client or with what the engine reads, and the engine's loaders for them
 (`horizon-client`) were not built here (ALSA).
 
-**Oracles: 182 of 316 `Vanilla*Oracle` classes do not compile against 1.21.11** (one javac pass over all of them with the
-overlay, 1,415 errors; the other 134 compile, none was run). Sorted by the errors' symbols (`oracle_buckets` kind, from
-that pass; not committed):
+**Oracles.** An earlier count in this document ("182 of 316 do not compile, 134 do") was wrong: javac stops at missing
+packages before it checks method bodies, so the first pass under-reported. Counted again, in steps:
 
-- 67 use APIs 1.21.11 does not have at all (the new renderer, `Hud`/`GuiGraphicsExtractor`, the density-function
-  compiler and `DensitySampler`, `world.clock`, `ItemStackTemplate`, sprite/cuboid model packages). They test 26.x-only
-  code, so there is nothing to port: they have no 1.21.11 counterpart.
-- 72 fail with 1 to 3 errors. The commonest cause is the `ServerLevel`/`LocalPlayer`/`ServerChunkCache`/`ServerPlayer`
-  constructors the oracles subclass with 26.3's signatures (about 80 errors over 27+ oracles), then `bindComponents`,
-  `BlockState.FULL_CODEC`, `EntityTypes` (renamed `EntityType` fields), `Registries.BLOCK_TRANSFORMER` and `Feature.DIRECT_CODEC`
-  (26.3-only). Each is a per-oracle edit; none is done.
-- 43 fail with more (for example `VanillaChunkGenerationOracle` 33, `VanillaCommandExecOracle` 22, `VanillaDataFixOracle` 21).
+- 62 of the 316 `Vanilla*Oracle` classes import or name a package or class 1.21.11 does not have
+  (`levelgen.densityfunction`, `client.renderer.block.dispatch`, `resources.model.cuboid` and `.sprite`, `GuiGraphicsExtractor`,
+  `Hud`, `world.clock`, `material.rule`, `renderpearl`). They test 26.x-only code and have no 1.21.11 counterpart.
+- `tools/port_oracles_1_21_11.py` writes patched copies (the 26.3 sources stay untouched; `export_1_21_11.py` runs it and
+  searches the copies first) for four mechanical differences: `ServerLevel`'s extra `RandomSequences` argument,
+  `BlockState.FULL_CODEC` to `CODEC`, `builtInRegistryHolder().bindComponents` to `Compat.bind` (a hand-written overlay
+  that sets the item's final `components` field), `EntityTypes` to `EntityType` and `ChunkPos.pack` to `asLong`.
+  101 oracles needed at least one patch (this was counted before the last two rules; 122 after).
+- Of the other 254, **112 compile together with no error** (a single javac pass; none was run, so none counts as ported)
+  and 146 fail with 808 errors. The commonest remaining causes: oracles that bootstrap their own registry layers with
+  26.3 names (`RegistryLayer.WORLD`, `RegistryDataLoader.WORLD_REGISTRIES`, `DATA_COMPONENT_INITIALIZERS`, about 50 errors),
+  `Feature.DIRECT_CODEC` and `WorldCarver.DIRECT_CODEC` (21), `ItemStackTemplate` (18), LWJGL OpenAL `AL10` (19; the client
+  libraries are not in the sandbox) and overridden methods that changed (`clockManager`, `getNextEntityId`, `blit`, ...).
+  Each is a per-oracle edit; the next rule to add is the registry-layer bootstrap, copying `ParityData`'s 1.21.11 version.
 
 The client exporters, the tag bundle and the collision cache are not yet produced.
 

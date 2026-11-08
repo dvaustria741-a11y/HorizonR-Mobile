@@ -61,12 +61,17 @@ def main():
     libs = sorted(str(j) for j in pathlib.Path(a.libraries).rglob("*.jar"))
     cp = ":".join([str(mapped), *libs])
     names = a.exporters.split(",")
+    # 26.3 sources that compile against 1.21.11 after mechanical renames are patched copies (port_oracles_1_21_11.py).
+    run(["python3", str(ROOT / "tools/port_oracles_1_21_11.py"), "--out", str(out / "patched")])
     sources = []
     for n in names:
-        overlay = TESTS / "java-1.21.11" / PARITY / f"{n}.java"
-        sources.append(str(overlay if overlay.is_file() else TESTS / "java" / PARITY / f"{n}.java"))
+        for candidate in (out / "patched" / PARITY / f"{n}.java", TESTS / "java-1.21.11" / PARITY / f"{n}.java",
+                          TESTS / "java" / PARITY / f"{n}.java"):
+            if candidate.is_file():
+                sources.append(str(candidate))
+                break
     run(["java", "-m", "jdk.compiler/com.sun.tools.javac.Main", "-proc:none", "-encoding", "UTF-8", "-nowarn",
-         "-cp", cp, "-sourcepath", f"{TESTS / 'java-1.21.11'}:{TESTS / 'java'}", "-d", str(out / "classes"), *sources])
+         "-cp", cp, "-sourcepath", f"{out / 'patched'}:{TESTS / 'java-1.21.11'}:{TESTS / 'java'}", "-d", str(out / "classes"), *sources])
     for n in names:
         file, before = EXPORTERS[n]
         run(["java", "-Xmx1500m", "-cp", f"{out / 'classes'}:{cp}", f"dev.horizonlab.parity.{n}", *before, str(out / file)])
