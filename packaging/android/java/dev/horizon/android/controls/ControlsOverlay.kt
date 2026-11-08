@@ -144,16 +144,16 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
                 when (current) {
                     OverlayUi.MENU -> OverlayMenu(
                         settings = settings,
-                        onClose = { setUi(OverlayUi.NONE) },
+                        onClose = { switchUi(OverlayUi.NONE) },
                         onPause = {
-                            setUi(OverlayUi.NONE)
+                            switchUi(OverlayUi.NONE)
                             toggleMenu()
                         },
-                        onEdit = { setUi(OverlayUi.EDIT) },
+                        onEdit = { switchUi(OverlayUi.EDIT) },
                         onLayout = { reloadLayout() },
                         onSettingsChanged = { view?.reloadSettings() },
                     )
-                    OverlayUi.EDIT -> view?.let { ControlEditor(it, settings) { setUi(OverlayUi.NONE) } }
+                    OverlayUi.EDIT -> view?.let { ControlEditor(it, settings) { switchUi(OverlayUi.NONE) } }
                     OverlayUi.NONE -> {}
                 }
             }
@@ -167,7 +167,7 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
         view?.setLayout(ControlLayouts.load(activity, settings.layout, activity.getString(R.string.controls_default_name)))
     }
 
-    private fun setUi(next: OverlayUi) {
+    private fun switchUi(next: OverlayUi) {
         val v = view ?: return
         if (next != OverlayUi.NONE) ensureCompose()
         val was = ui
@@ -184,7 +184,7 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
     }
 
     override fun openMenu() {
-        handler.post { if (ui == OverlayUi.NONE) setUi(OverlayUi.MENU) }
+        handler.post { if (ui == OverlayUi.NONE) switchUi(OverlayUi.MENU) }
     }
 
     private fun setPassThrough(on: Boolean) {
