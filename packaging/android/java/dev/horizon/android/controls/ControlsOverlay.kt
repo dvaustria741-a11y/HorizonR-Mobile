@@ -46,8 +46,29 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
         override fun run() {
             val v = view ?: return
             v.setCaptured(HorizonBridge.isCaptured())
+            publishGameArea(v)
             handler.postDelayed(this, 100)
         }
+    }
+
+    private var publishedArea = floatArrayOf(Float.NaN, 0f, 0f, 0f)
+
+    /**
+     * The overlay covers the whole display, display cutout included, but the game's window may start after
+     * it (the black strip beside a notch). The engine needs the game window's rectangle in the overlay's
+     * pixels, or the cursor and forwarded touches land that far off from where they are drawn.
+     */
+    private fun publishGameArea(v: ControlsView) {
+        val game = activity.findViewById<View>(android.R.id.content) ?: activity.window.decorView
+        if (game.width <= 0 || game.height <= 0 || v.width <= 0 || v.height <= 0) return
+        val g = IntArray(2)
+        val o = IntArray(2)
+        game.getLocationOnScreen(g)
+        v.getLocationOnScreen(o)
+        val next = floatArrayOf((g[0] - o[0]).toFloat(), (g[1] - o[1]).toFloat(), game.width.toFloat(), game.height.toFloat())
+        if (next.contentEquals(publishedArea)) return
+        publishedArea = next
+        HorizonBridge.setArea(next[0], next[1], next[2], next[3])
     }
 
     val showing: Boolean get() = dialog != null

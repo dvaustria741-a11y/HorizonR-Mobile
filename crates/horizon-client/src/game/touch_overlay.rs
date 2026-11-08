@@ -53,6 +53,13 @@ impl AtomicF32 {
 /// The overlay view's size in pixels, as it last reported it (`nativeSetScale`).
 static VIEW_W: AtomicF32 = AtomicF32::new();
 static VIEW_H: AtomicF32 = AtomicF32::new();
+/// Where the game's window sits inside the overlay view, in the overlay's pixels (`nativeSetArea`).
+/// The overlay covers the whole display, display cutout included, but the game's window may not, so
+/// a point of the overlay is only the same point of the game once this offset is taken off.
+static AREA_X: AtomicF32 = AtomicF32::new();
+static AREA_Y: AtomicF32 = AtomicF32::new();
+static AREA_W: AtomicF32 = AtomicF32::new();
+static AREA_H: AtomicF32 = AtomicF32::new();
 /// The game surface's size, and the GUI's scale and size in GUI pixels (what the HUD is laid out
 /// in), published by the game thread every frame.
 static SURFACE_W: AtomicF32 = AtomicF32::new();
@@ -128,8 +135,15 @@ fn drain() -> Vec<Input> {
 
 /// A point in the overlay view's pixels, in the game surface's.
 fn surface_point(x: f32, y: f32) -> (f64, f64) {
-    let (vw, vh) = (VIEW_W.get(), VIEW_H.get());
     let (sw, sh) = (SURFACE_W.get(), SURFACE_H.get());
+    let (aw, ah) = (AREA_W.get(), AREA_H.get());
+    if aw > 0.0 && ah > 0.0 && sw > 0.0 && sh > 0.0 {
+        // The game window's rectangle in the overlay, scaled to the surface (which can be rendered smaller).
+        let px = ((x - AREA_X.get()) / aw * sw).clamp(0.0, sw);
+        let py = ((y - AREA_Y.get()) / ah * sh).clamp(0.0, sh);
+        return (f64::from(px), f64::from(py));
+    }
+    let (vw, vh) = (VIEW_W.get(), VIEW_H.get());
     if vw <= 0.0 || vh <= 0.0 || sw <= 0.0 || sh <= 0.0 {
         return (f64::from(x), f64::from(y));
     }
@@ -245,6 +259,22 @@ pub extern "system" fn Java_dev_horizon_android_controls_HorizonBridge_nativeSet
 ) {
     VIEW_W.set(width);
     VIEW_H.set(height);
+}
+
+/// The game window's rectangle inside the overlay view, in the overlay's pixels.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_horizon_android_controls_HorizonBridge_nativeSetArea(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+    width: jfloat,
+    height: jfloat,
+) {
+    AREA_X.set(x);
+    AREA_Y.set(y);
+    AREA_W.set(width);
+    AREA_H.set(height);
 }
 
 #[unsafe(no_mangle)]
