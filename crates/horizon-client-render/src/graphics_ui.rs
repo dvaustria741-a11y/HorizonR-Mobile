@@ -321,11 +321,6 @@ pub fn rows() -> Vec<(Page, Vec<(&'static str, Vec<Setting>)>)> {
                             "World pixels per screen pixel. Below 100% is faster on the GPU.",
                         ),
                         h(
-                            H::DynamicResolution,
-                            High,
-                            "Lowers the resolution while frames run slow, then restores it.",
-                        ),
-                        h(
                             H::Antialiasing,
                             Medium,
                             "Smooths jagged edges. FXAA: softer. TAA: smoothest, moving things may trail.",
@@ -463,6 +458,14 @@ pub fn rows() -> Vec<(Page, Vec<(&'static str, Vec<Setting>)>)> {
                         H::BatteryMode,
                         None,
                         "60 FPS cap (30 in menus or unfocused), half the workers: less power.",
+                    )],
+                ),
+                (
+                    "Resolution",
+                    vec![h(
+                        H::DynamicResolution,
+                        High,
+                        "Lowers the resolution while frames run slow, then restores it.",
                     )],
                 ),
             ],

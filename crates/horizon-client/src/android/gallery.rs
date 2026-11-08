@@ -160,6 +160,18 @@ fn pending(env: &mut JNIEnv<'_>, values: &JObject<'_>, value: i32) -> jni::error
     Ok(())
 }
 fn write(request: Request) -> Result<String> {
+    let result = write_attached(&request);
+    // The request's GlobalRefs must drop while this thread is attached, or the jni crate logs a
+    // WARN about a detached thread: `write_attached`'s own attachment is gone by now.
+    // SAFETY: the same live VM; a `JavaVM` is a plain handle that does not destroy it.
+    if let Ok(vm) = unsafe { JavaVM::from_raw(request.vm.get_java_vm_pointer()) } {
+        let attached = vm.attach_current_thread();
+        drop(request);
+        drop(attached);
+    }
+    result
+}
+fn write_attached(request: &Request) -> Result<String> {
     use std::os::fd::FromRawFd;
     let mut env = request.vm.attach_current_thread()?;
     if request.sdk <= 28 {

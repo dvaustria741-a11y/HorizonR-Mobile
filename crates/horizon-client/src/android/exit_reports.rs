@@ -197,7 +197,16 @@ pub fn collect(home: &Path) {
     let _ = std::fs::write(dir.join("android-exits.json"), json!({"schema":2,"collection_status":"pending","collected_at_ms":crate::diagnostics::timestamp()}).to_string());
     let output = dir.clone();
     let spawn = std::thread::Builder::new().name("Android exit history".into()).spawn(move || {
-        let result = vm.attach_current_thread().and_then(|mut env| env.with_local_frame(32,|env|query(env,activity.as_obj(),&dir)));
+        // `activity` is a GlobalRef: it must drop while this thread is still attached, or the jni
+        // crate logs a WARN about a detached thread.
+        let result = match vm.attach_current_thread() {
+            Ok(mut env) => {
+                let result = env.with_local_frame(32,|env|query(env,activity.as_obj(),&dir));
+                drop(activity);
+                result
+            }
+            Err(e) => Err(e),
+        };
         let report = result.unwrap_or_else(|e|json!({"schema":2,"collection_status":"failed","error":e.to_string(),"exits":[]}));
         if let Ok(bytes)=serde_json::to_vec_pretty(&report) { let _=std::fs::write(dir.join("android-exits.json"),bytes); }
         if let Ok(entries)=std::fs::read_dir(&dir) {
