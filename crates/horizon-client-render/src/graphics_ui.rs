@@ -1013,8 +1013,15 @@ impl H {
         }
     }
 }
+/// The Worker Threads slider's top. On Android `available_parallelism` can report far fewer
+/// cores than the phone has (2 on a Snapdragon 695 with 8), so the slider goes to 8 there.
 fn max_workers() -> u32 {
-    std::thread::available_parallelism().map_or(8, |n| n.get() as u32)
+    let cores = std::thread::available_parallelism().map_or(8, |n| n.get() as u32);
+    if cfg!(target_os = "android") {
+        cores.max(8)
+    } else {
+        cores
+    }
 }
 
 impl Item {
