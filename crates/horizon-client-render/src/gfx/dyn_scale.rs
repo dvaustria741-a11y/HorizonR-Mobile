@@ -9,7 +9,7 @@ const WINDOW: u32 = 30;
 /// The scale steps by this much, so a change (which rebuilds the world's
 /// render targets) happens at most once a window.
 const STEP: f32 = 0.1;
-/// Lowest share of the chosen scale the controller goes to.
+/// Lowest share of the chosen scale the controller goes to unless `set_floor` says otherwise.
 const FLOOR: f32 = 0.6;
 /// Lower the scale when the window's average is this far over budget.
 const OVER: f32 = 1.12;
@@ -25,6 +25,8 @@ pub(super) struct DynScale {
     /// Frame budget in milliseconds.
     target_ms: f32,
     factor: f32,
+    /// Lowest `factor` the controller goes to.
+    floor: f32,
     sum_ms: f32,
     frames: u32,
     /// Windows at or under budget in a row.
@@ -40,6 +42,7 @@ impl DynScale {
             enabled,
             target_ms: 1000.0 / TARGET_FPS,
             factor: 1.0,
+            floor: FLOOR,
             sum_ms: 0.0,
             frames: 0,
             calm: 0,
@@ -74,6 +77,19 @@ impl DynScale {
         (self.factor() - before).abs() > f32::EPSILON
     }
 
+    /// Sets the lowest share of the chosen resolution scale to go to
+    /// (0.25..=1.0); true when `factor` changed.
+    pub(super) fn set_floor(&mut self, floor: f32) -> bool {
+        let floor = floor.clamp(0.25, 1.0);
+        if (self.floor - floor).abs() < 1e-4 {
+            return false;
+        }
+        self.floor = floor;
+        let before = self.factor();
+        self.factor = self.factor.max(floor);
+        (self.factor() - before).abs() > f32::EPSILON
+    }
+
     /// Takes one frame's time; true when `factor` changed.
     pub(super) fn update(&mut self, frame_ms: f32) -> bool {
         if !self.enabled || !frame_ms.is_finite() || frame_ms <= 0.0 {
@@ -100,7 +116,7 @@ impl DynScale {
                 self.raised = false;
             }
             self.calm = 0;
-            self.factor = (self.factor - STEP).max(FLOOR);
+            self.factor = (self.factor - STEP).max(self.floor);
         } else if average <= self.target_ms * UNDER {
             self.calm += 1;
             if self.calm >= self.wait && self.factor < 1.0 {
@@ -162,6 +178,18 @@ mod tests {
         // Over a 60 fps cap's budget, the same frames are slow.
         scale.configure(true, 60.0);
         assert!(run(&mut scale, 33.0, WINDOW));
+    }
+
+    #[test]
+    fn the_floor_sets_how_low_the_scale_goes() {
+        let mut scale = DynScale::new(true);
+        assert!(!scale.set_floor(FLOOR));
+        scale.set_floor(0.3);
+        run(&mut scale, 25.0, WINDOW * 20);
+        assert!((scale.factor() - 0.3).abs() < 1e-4);
+        // Raising the floor lifts a scale that is under it.
+        assert!(scale.set_floor(0.8));
+        assert!((scale.factor() - 0.8).abs() < 1e-4);
     }
 
     #[test]

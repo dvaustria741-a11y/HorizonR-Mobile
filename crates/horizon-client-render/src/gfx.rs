@@ -6629,10 +6629,11 @@ impl Renderer {
     }
     /// Automatic render scale: while frames take longer than `target_fps`
     /// allows (the frame cap, at most 60), the world renders below the
-    /// Resolution Scale setting, down to 60% of it, and returns to it once
-    /// there is room.
-    pub fn set_dynamic_scale(&mut self, enabled: bool, target_fps: f32) {
-        if self.dyn_scale.configure(enabled, target_fps) {
+    /// Resolution Scale setting, down to `floor` of it (the Dynamic Resolution
+    /// slider), and returns to it once there is room.
+    pub fn set_dynamic_scale(&mut self, enabled: bool, target_fps: f32, floor: f32) {
+        let floor_changed = self.dyn_scale.set_floor(floor);
+        if self.dyn_scale.configure(enabled, target_fps) || floor_changed {
             self.world_post.scale = (self.scale_base * self.dyn_scale.factor()).clamp(0.25, 2.0);
         }
     }

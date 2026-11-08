@@ -653,6 +653,8 @@ pub struct Graphics {
     pub resolution_scale: u32,
     /// Lower the world's resolution while frames run slow, up to `resolution_scale` again once they don't.
     pub dynamic_resolution: bool,
+    /// Lowest world resolution Dynamic Resolution goes to, as a percentage of the window's (30..=100).
+    pub dynamic_resolution_min: u32,
     /// FXAA over the world.
     pub fxaa: bool,
     /// TAA over the world (FXAA is off while it is on).
@@ -755,6 +757,7 @@ impl Default for Graphics {
             resolution_scale: 100,
             // Phones are GPU-bound more often than not; elsewhere it is opt-in.
             dynamic_resolution: cfg!(target_os = "android"),
+            dynamic_resolution_min: 50,
             fxaa: false,
             taa: false,
             upscaling: Upscaling::Native,
@@ -876,6 +879,9 @@ impl Graphics {
                 "workers" => g.workers = number(g.workers).min(64),
                 "resolutionScale" => g.resolution_scale = number(g.resolution_scale).clamp(50, 200),
                 "dynamicResolution" => g.dynamic_resolution = flag(g.dynamic_resolution),
+                "dynamicResolutionMin" => {
+                    g.dynamic_resolution_min = number(g.dynamic_resolution_min).clamp(30, 100)
+                }
                 "fxaa" => g.fxaa = flag(g.fxaa),
                 "taa" => g.taa = flag(g.taa),
                 "upscaling" => g.upscaling = Upscaling::parse(value),
@@ -926,7 +932,7 @@ impl Graphics {
     }
     pub fn serialize(&self) -> String {
         let mut text = format!(
-            "preset:{}\nlodDistance:{}\nfarDetail:{}\ncaveCulling:{}\nentityCulling:{}\nparticleCulling:{}\nleafCulling:{}\nblockEntityCacheShulkerBoxes:{}\nblockEntityCacheSigns:{}\nblockEntityCacheDecoratedPots:{}\nblockEntityCacheBells:{}\nblockEntityCacheChests:{}\nblockEntityCacheBanners:{}\nblockEntityCacheCopperGolemStatues:{}\nchunkUpdates:{}\nuploadBudgetKiB:{}\ntextureBudgetMiB:{}\nsky:{}\nfog:{}\nweather:{}\nanimatedTextures:{}\nditherCutoutMips:{}\npresentMode:{}\nframePacing:{}\nworkers:{}\noverlay:{}\nresolutionScale:{}\ndynamicResolution:{}\nfxaa:{}\ntaa:{}\nupscaling:{}\nscreenshotQuality:{}\nframeGeneration:{}\nhdr:{}\nhdrPaperWhite:{}\nhdrPeak:{}\nhdrBlackLevel:{}\nhdrUiBrightness:{}\nhdrLighting:{}\nhdrKey:{}\nbatteryMode:{}\nshadowCache:{}\ngraphicsApi:{}\npickedShaderPack:{}\nbatchTranslucent:{}\nhdrSmoothGradients:{}\nmenuBackgroundCache:{}\npackWorkers:{}\n",
+            "preset:{}\nlodDistance:{}\nfarDetail:{}\ncaveCulling:{}\nentityCulling:{}\nparticleCulling:{}\nleafCulling:{}\nblockEntityCacheShulkerBoxes:{}\nblockEntityCacheSigns:{}\nblockEntityCacheDecoratedPots:{}\nblockEntityCacheBells:{}\nblockEntityCacheChests:{}\nblockEntityCacheBanners:{}\nblockEntityCacheCopperGolemStatues:{}\nchunkUpdates:{}\nuploadBudgetKiB:{}\ntextureBudgetMiB:{}\nsky:{}\nfog:{}\nweather:{}\nanimatedTextures:{}\nditherCutoutMips:{}\npresentMode:{}\nframePacing:{}\nworkers:{}\noverlay:{}\nresolutionScale:{}\ndynamicResolution:{}\ndynamicResolutionMin:{}\nfxaa:{}\ntaa:{}\nupscaling:{}\nscreenshotQuality:{}\nframeGeneration:{}\nhdr:{}\nhdrPaperWhite:{}\nhdrPeak:{}\nhdrBlackLevel:{}\nhdrUiBrightness:{}\nhdrLighting:{}\nhdrKey:{}\nbatteryMode:{}\nshadowCache:{}\ngraphicsApi:{}\npickedShaderPack:{}\nbatchTranslucent:{}\nhdrSmoothGradients:{}\nmenuBackgroundCache:{}\npackWorkers:{}\n",
             self.preset.name(),
             self.lod_distance,
             self.far_detail.name(),
@@ -962,6 +968,7 @@ impl Graphics {
             },
             self.resolution_scale,
             bool_text(self.dynamic_resolution),
+            self.dynamic_resolution_min,
             bool_text(self.fxaa),
             bool_text(self.taa),
             self.upscaling.name(),
@@ -1147,6 +1154,7 @@ mod tests {
             overlay: Overlay::Graph,
             resolution_scale: 75,
             dynamic_resolution: true,
+            dynamic_resolution_min: 45,
             fxaa: true,
             taa: true,
             upscaling: Upscaling::Balanced,

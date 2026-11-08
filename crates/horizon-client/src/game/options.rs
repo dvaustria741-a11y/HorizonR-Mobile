@@ -507,6 +507,10 @@ impl Game<'_> {
                 s.horizon.taa,
                 s.horizon.upscaling.ratio(),
             );
+            // The frame cap is the budget: a capped frame is not a slow one.
+            let target = s.horizon.battery_limit(s.max_fps as i32, true, true);
+            let floor = s.horizon.dynamic_resolution_min as f32 / s.horizon.resolution_scale.max(1) as f32;
+            r.set_dynamic_scale(s.horizon.dynamic_resolution, target as f32, floor);
             r.set_frame_generation(
                 s.horizon.frame_generation != horizon_client::graphics::FrameGeneration::Off,
             );
