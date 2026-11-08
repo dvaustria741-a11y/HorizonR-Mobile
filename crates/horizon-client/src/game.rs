@@ -16185,8 +16185,20 @@ impl Game<'_> {
                 .facts()
                 .get(self.world.block(block[0], block[1], block[2]))
                 .solid_render;
+        // The pause menu over a paused world replays the background the renderer kept
+        // (`Frame::bg_cache`): then this frame builds none of the world, as starling's
+        // `skip_world_for_blur`. Only while paused: the inventory leaves the world running.
+        let bg_cache = self.background_cache_key();
+        let world_cached = self.pause
+            && !self.shows_panorama()
+            && bg_cache.is_some_and(|key| {
+                self.renderer
+                    .as_ref()
+                    .is_some_and(|r| r.can_replay_background_now(key))
+            });
         // The cave culling search runs on its worker while the frame is prepared.
         if cave_culling
+            && !world_cached
             && self.title.is_none()
             && let Some(renderer) = self.renderer.as_mut()
         {
@@ -16303,6 +16315,7 @@ impl Game<'_> {
         // does not open menus for spectators, so those never show it. An open
         // screen does not hide it: vanilla checks the HUD and the game mode, not the screen.
         let adventure = self.mode == horizon_client::command::args::GameMode::Adventure;
+        let touch_target_visible = touch_target_visible && !world_cached;
         let outline =
             if touch_target_visible && !self.ui.hide_gui && (self.may_build() || adventure) {
                 self.pick()
@@ -16361,6 +16374,8 @@ impl Game<'_> {
                 Vec::new()
             };
         let title = self.shows_panorama();
+        // No world for this frame: the title's, or the replayed background's.
+        let skip_world = title || world_cached;
         let (yaw, pitch) = if title {
             // PanoramaRenderer: the title cube spins at 0.1 degrees per tick, pitched 10 degrees.
             (
@@ -16469,7 +16484,7 @@ impl Game<'_> {
         self.see_through_vertices.clear();
         self.glowing_vertices.get_mut().clear();
         self.shadow_only_vertices.get_mut().clear();
-        if !title {
+        if !skip_world {
             let (built, static_sections, visible_static_sections, static_stats) =
                 spans::time("entity_geometry", || {
                     self.entity_geometry(camera, alpha, fov_degrees, entities)
@@ -16485,7 +16500,7 @@ impl Game<'_> {
             // be drawn over the title (#8192). Its models stay stored.
             self.skin_frame.get_mut().clear_draws();
         }
-        let bolts = if title {
+        let bolts = if skip_world {
             Vec::new()
         } else {
             self.bolt_instances(camera)
@@ -16493,13 +16508,13 @@ impl Game<'_> {
         let mut additive = Vec::new();
         // The dragon is drawn in every dimension, as any entity: a dragon
         // summoned outside the End (the server's AddEntity) is shown too.
-        if !title {
+        if !skip_world {
             let mut dragon = Vec::new();
             self.dragon_geometry(camera, alpha, &mut dragon, &mut additive);
             self.dragon_fireball_geometry(camera, alpha, &mut dragon);
             entities.extend(dragon);
         }
-        let (celestial, stars) = if title {
+        let (celestial, stars) = if skip_world {
             (Vec::new(), None)
         } else if self.dim == Dim::Overworld
             && self.potions.effects.get("darkness").is_none()
@@ -16512,19 +16527,19 @@ impl Game<'_> {
         } else {
             (Vec::new(), None)
         };
-        let (mut hand, hand_items) = if title || self.scoping() {
+        let (mut hand, hand_items) = if skip_world || self.scoping() {
             Default::default()
         } else {
             self.hand_geometry(camera_alpha)
         };
         // GameRenderer.render3dHud: the screen effects after the hand, in
         // its pass (the hand pass draws with `bob * view`).
-        if !title {
+        if !skip_world {
             let view = bob * horizon_client::camera::view_matrix(yaw, pitch);
             let aspect = size[0] as f32 / size[1].max(1) as f32;
             self.item_activation_geometry(camera_alpha as f32, view, aspect, &mut hand);
         }
-        let screen = if title {
+        let screen = if skip_world {
             Vec::new()
         } else {
             let scale = self
@@ -16534,20 +16549,20 @@ impl Game<'_> {
                 .unwrap_or(1.0) as f32;
             self.screen_quads(alpha as f32, size, scale)
         };
-        if !title {
+        if !skip_world {
             self.end_geometry(camera, &mut entities);
         }
         self.outline_fill(&outline, camera, &mut entities);
-        let weather = if !title && self.can_have_weather() && self.settings.horizon.weather {
+        let weather = if !skip_world && self.can_have_weather() && self.settings.horizon.weather {
             horizon_client::spans::time("weather", || self.weather_geometry(camera, alpha))
         } else {
             Vec::new()
         };
-        let border = (!title)
+        let border = (!skip_world)
             .then(|| self.border_draw(camera.to_array(), alpha as f32))
             .flatten();
         let see_through = std::mem::take(&mut self.see_through_vertices);
-        if title {
+        if skip_world {
             self.dynamic_lights.clear();
         } else {
             self.gather_dynamic_lights(camera, alpha);
@@ -16566,7 +16581,6 @@ impl Game<'_> {
         let glowing = std::mem::take(self.glowing_vertices.get_mut());
         let shadow_only = std::mem::take(self.shadow_only_vertices.get_mut());
         let skin = std::mem::take(self.skin_frame.get_mut());
-        let bg_cache = self.background_cache_key();
         let frame = Frame {
             weather: &weather,
             weather_time: horizon_client::weather::Time::new(self.world.game_time, alpha as f32),

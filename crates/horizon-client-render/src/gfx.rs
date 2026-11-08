@@ -7516,13 +7516,9 @@ impl Renderer {
                 })
         });
         if frame.bg_cache.is_some() {
-            let surface_matches = surface_frame
-                .as_ref()
-                .is_some_and(|f| f.texture == target_texture);
             let replays = checks.is_none()
                 && fg_frames.is_none()
-                && !reconfigure
-                && surface_matches
+                && surface_frame.is_some()
                 && self.background_replays(frame, size);
             self.note_bg_cache(
                 frame,
@@ -7531,21 +7527,17 @@ impl Renderer {
                 [
                     ("screenshot checks", checks.is_some()),
                     ("frame generation frames", fg_frames.is_some()),
-                    ("surface reconfigure", reconfigure),
-                    ("scaled presentation", scaled_presentation),
-                    ("target is not the swapchain texture", !surface_matches),
+                    ("no swapchain frame", surface_frame.is_none()),
                 ],
+                scaled_presentation,
             );
         }
         // A screen over a world that cannot change (`Frame::bg_cache`): the world was drawn
-        // and kept by an earlier frame, so this one draws that image and the screen.
+        // and kept by an earlier frame, so this one draws that image and the screen. The
+        // game draws no world for such a frame when `can_replay_background` says it replays.
         if checks.is_none()
             && fg_frames.is_none()
-            && !reconfigure
             && self.background_replays(frame, size)
-            && surface_frame
-                .as_ref()
-                .is_some_and(|f| f.texture == target_texture)
             && let Some(surface_frame) = surface_frame
         {
             return self.replay_background(
@@ -7556,6 +7548,7 @@ impl Renderer {
                 surface_frame,
                 has_section_copies,
                 started,
+                reconfigure,
             );
         }
         // Horizon's own passes are timed like a shader pack's, from the frame's first pass.
@@ -11422,7 +11415,8 @@ impl Renderer {
         frame: &Frame,
         size: [u32; 2],
         replayed: bool,
-        outer: [(&'static str, bool); 5],
+        outer: [(&'static str, bool); 3],
+        scaled_presentation: bool,
     ) {
         use std::sync::Mutex;
         static STATE: Mutex<Option<(Instant, u32, u32)>> = Mutex::new(None);
@@ -11446,9 +11440,6 @@ impl Renderer {
         if frame.title {
             blockers.push("title frame");
         }
-        if self.config.alpha_mode != wgpu::CompositeAlphaMode::Opaque {
-            blockers.push("surface alpha mode not Opaque");
-        }
         if !self.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
             blockers.push("surface has no COPY_SRC (nothing is kept)");
         }
@@ -11470,12 +11461,13 @@ impl Renderer {
             blockers.push("cache miss (not stored yet, key or size changed)");
         }
         log::info!(
-            "menu background cache: {} replayed, {} full frames in {} ms; blocked by [{}]; alpha {:?}, {}x{}, frame_gen {}",
+            "menu background cache: {} replayed, {} full frames in {} ms; blocked by [{}]; alpha {:?}, scaled presentation {}, {}x{}, frame_gen {}",
             replays,
             fulls,
             since.elapsed().as_millis(),
             blockers.join(", "),
             self.config.alpha_mode,
+            on_off(scaled_presentation),
             size[0],
             size[1],
             on_off(self.frame_gen.on),
@@ -11484,23 +11476,31 @@ impl Renderer {
     }
     /// Whether this frame can draw the kept menu background instead of the world: the key
     /// and size match, and the frame is the plain swapchain's (no HDR, no screenshot, no
-    /// first-frame bookkeeping).
+    /// first-frame bookkeeping). The replay finishes like a full frame (scaled presentation,
+    /// non-opaque surface), so those do not stop it.
     fn background_replays(&self, frame: &Frame, size: [u32; 2]) -> bool {
-        #[cfg(target_os = "android")]
-        let opaque = self.config.alpha_mode == wgpu::CompositeAlphaMode::Opaque;
-        #[cfg(not(target_os = "android"))]
-        let opaque = true;
         !frame.title
-            && opaque
+            && frame
+                .bg_cache
+                .is_some_and(|key| self.can_replay_background(key, size))
+    }
+    /// What `background_replays` asks of the renderer, for the game to ask first: when it
+    /// holds, a frame with this key draws the kept image, so the game need not build the
+    /// world for it.
+    pub fn can_replay_background(&self, key: u64, size: [u32; 2]) -> bool {
+        self.config.usage.contains(wgpu::TextureUsages::COPY_SRC)
             && self.hdr.is_none()
             && self.hdr_marker.is_none()
             && self.screenshot.is_none()
             && self.first_frame == FirstFrame::Drawn
-            && frame.bg_cache.is_some_and(|key| {
-                self.menu_blur
-                    .as_ref()
-                    .is_some_and(|blur| blur.cache_hit(key, size))
-            })
+            && self
+                .menu_blur
+                .as_ref()
+                .is_some_and(|blur| blur.cache_hit(key, size))
+    }
+    /// `can_replay_background` at the window's size.
+    pub fn can_replay_background_now(&self, key: u64) -> bool {
+        self.can_replay_background(key, [self.config.width, self.config.height])
     }
     /// The frame of `background_replays`: the kept background, then the screen over it.
     /// Uploads, patches and section copies go out as in a full frame.
@@ -11514,6 +11514,7 @@ impl Renderer {
         surface_frame: wgpu::SurfaceTexture,
         has_section_copies: bool,
         started: Instant,
+        reconfigure: bool,
     ) -> Result<bool> {
         self.hud.prepare(
             &self.device,
@@ -11543,11 +11544,33 @@ impl Renderer {
             self.section_copy_bytes = 0;
             self.section_uploads.finish(&encoder);
         }
+        // The frame's last steps, as a full frame ends: a 16-bit frame onto the swapchain,
+        // the scaled frame onto the real surface, a non-opaque surface sanitized.
+        self.readback
+            .present(&self.device, &mut encoder, &surface_frame.texture);
+        #[cfg(target_os = "android")]
+        if let Some(scale) = &self.frame_scale {
+            scale.present(&mut encoder, &surface_frame.texture);
+        }
+        #[cfg(target_os = "android")]
+        if self.config.alpha_mode != wgpu::CompositeAlphaMode::Opaque {
+            let format = self.surface_config().format.remove_srgb_suffix();
+            let output = self
+                .opaque_output
+                .get_or_insert_with(|| opaque_output::OpaqueOutput::new(&self.device, format));
+            if output.format != format {
+                *output = opaque_output::OpaqueOutput::new(&self.device, format);
+            }
+            output.present(&mut encoder, &surface_frame.texture);
+        }
         self.queue.submit([encoder.finish()]);
         if self.config.present_mode == wgpu::PresentMode::Fifo {
             self.window.pre_present_notify();
         }
         self.queue.present(surface_frame);
+        if reconfigure {
+            self.configure_surface();
+        }
         self.last_wait += self.queue.take_waited();
         self.last_encode = started.elapsed().saturating_sub(self.last_wait);
         Ok(true)
