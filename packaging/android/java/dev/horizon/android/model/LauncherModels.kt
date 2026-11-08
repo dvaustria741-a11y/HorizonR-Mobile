@@ -189,8 +189,8 @@ enum class AccountType(val badge: String) {
  * - OpenGl -> "open-gl"
  */
 enum class HorizonRendererMode(val serdeKey: String, val label: String) {
-    VULKAN_COMPAT("vulkan-compatibility", "Vulkan Compatibility (Default)"),
-    VULKAN("vulkan", "Vulkan (High Performance)"),
+    VULKAN_COMPAT("vulkan-compatibility", "Vulkan Compatibility"),
+    VULKAN("vulkan", "Vulkan (High Performance, Default)"),
     OPENGL("open-gl", "OpenGL ES (Fallback)")
 }
 
@@ -459,7 +459,7 @@ val DEFAULT_GEMINI_MODELS = listOf(
 
 data class HorizonConfigState(
     val profile: Int = 0,
-    val renderer: HorizonRendererMode = HorizonRendererMode.VULKAN_COMPAT,
+    val renderer: HorizonRendererMode = HorizonRendererMode.VULKAN,
     val renderScalePercent: Int = 75,
     val orientation: HorizonOrientation = HorizonOrientation.LANDSCAPE,
     val screenAspect: HorizonScreenAspect = HorizonScreenAspect.NATIVE,

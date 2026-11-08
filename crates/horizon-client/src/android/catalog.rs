@@ -18,9 +18,9 @@ pub const MICROSOFT_CLIENT_ID: &str = "00000000441cc96b";
 #[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RendererMode {
+    #[default]
     Vulkan,
     OpenGl,
-    #[default]
     VulkanCompatibility,
 }
 impl RendererMode {

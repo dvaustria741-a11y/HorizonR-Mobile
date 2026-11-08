@@ -1591,10 +1591,10 @@ object HorizonNativeBridge {
         if (file.exists()) {
             try {
                 val obj = JSONObject(file.readText())
-                val rawRenderer = obj.optString("renderer", HorizonRendererMode.VULKAN_COMPAT.serdeKey)
+                val rawRenderer = obj.optString("renderer", HorizonRendererMode.VULKAN.serdeKey)
                 val normalizedRenderer = if (rawRenderer == "opengl") "open-gl" else rawRenderer
                 val renderer = HorizonRendererMode.entries.firstOrNull { it.serdeKey == normalizedRenderer }
-                    ?: HorizonRendererMode.VULKAN_COMPAT
+                    ?: HorizonRendererMode.VULKAN
                 val orientKey = obj.optString("orientation", HorizonOrientation.LANDSCAPE.serdeKey)
                 val orientation = HorizonOrientation.entries.firstOrNull { it.serdeKey == orientKey }
                     ?: HorizonOrientation.LANDSCAPE
