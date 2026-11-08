@@ -48,7 +48,7 @@
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
 
         <activity
-            android:name="dev.horizon.android.ui.ZalithMainActivity"
+            android:name="dev.horizon.android.ui.HorizonLauncherActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation|uiMode|density"
             android:exported="true"
             android:launchMode="singleTask"

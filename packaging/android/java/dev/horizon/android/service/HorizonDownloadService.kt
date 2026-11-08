@@ -12,7 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import dev.horizon.android.bridge.HorizonNativeBridge
-import dev.horizon.android.ui.ZalithMainActivity
+import dev.horizon.android.ui.HorizonLauncherActivity
 
 /**
  * Foreground Service for continuous background downloading of Minecraft 26.3 assets
@@ -201,7 +201,7 @@ class HorizonDownloadService : Service() {
         indeterminate: Boolean,
         ongoing: Boolean
     ): Notification {
-        val openIntent = Intent(this, ZalithMainActivity::class.java).apply {
+        val openIntent = Intent(this, HorizonLauncherActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val piFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

@@ -25,7 +25,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 
-import dev.horizon.android.ui.ZalithMainActivity;
+import dev.horizon.android.ui.HorizonLauncherActivity;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -48,7 +48,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * NativeActivity for the Vasysik/horizon-android + horizon-rust/horizon 26.3 engine.
  * Includes:
- * - Guaranteed single-shot launch & clean return to ZalithMainActivity on game exit.
+ * - Guaranteed single-shot launch & clean return to HorizonLauncherActivity on game exit.
  * - Full-Screen Separate-Window Dialog Splash Overlay (`HorizonSplashOverlayView`) so Android's
  *   SurfaceFlinger renders the splash screen ON TOP of `NativeActivity`'s `takeSurface()` window
  *   all the way until the Minecraft 26.3 Main Menu is rendered (zero black screen gap!).
@@ -77,7 +77,7 @@ public final class HorizonActivity extends NativeActivity {
         File exitFlag = new File(homeDir, "zalith-game-exited.flag");
 
         if (savedInstanceState != null || exitFlag.exists() || !tokenFile.exists()) {
-            Log.i(TAG, "No active launch token (or exit flag present) — returning to ZalithMainActivity.");
+            Log.i(TAG, "No active launch token (or exit flag present) — returning to HorizonLauncherActivity.");
             exitFlag.delete();
             tokenFile.delete();
             returnToLauncherAndFinish();
@@ -94,7 +94,7 @@ public final class HorizonActivity extends NativeActivity {
 
         appendCrossProcessLog(homeDir, "[GameProcess] Starting HorizonActivity (:game process) for Minecraft 26.3.");
         ensureEngineDataExtracted();
-        applyZalithLaunchEnvironment(getIntent());
+        applyLauncherLaunchEnvironment(getIntent());
         startLogMirror();
         applyRequestedOrientationFromIntent(getIntent());
         enableImmersiveFullscreen();
@@ -497,7 +497,7 @@ public final class HorizonActivity extends NativeActivity {
         watchdogRunning = false;
         dismissSplashDialogSafely();
         try {
-            Intent backIntent = new Intent(this, ZalithMainActivity.class);
+            Intent backIntent = new Intent(this, HorizonLauncherActivity.class);
             backIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             startActivity(backIntent);
         } catch (Exception ignored) {
@@ -637,7 +637,7 @@ public final class HorizonActivity extends NativeActivity {
         }
     }
 
-    private void applyZalithLaunchEnvironment(Intent intent) {
+    private void applyLauncherLaunchEnvironment(Intent intent) {
         try {
             File homeDir = getFilesDir();
             if (homeDir != null) {

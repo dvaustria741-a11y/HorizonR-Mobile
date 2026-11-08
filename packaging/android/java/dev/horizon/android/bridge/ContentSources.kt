@@ -23,7 +23,7 @@ import java.util.zip.ZipOutputStream
 class ContentSourceException(message: String) : IOException(message)
 
 /**
- * Resource pack and shader pack browsing for Modrinth and CurseForge, following the same API usage as ZalithLauncher 2:
+ * Resource pack and shader pack browsing for Modrinth and CurseForge, following the same API usage as the upstream launcher:
  * Modrinth `/search` with `project_type:resourcepack` facets and `/project/{id}/version`, CurseForge
  * `/mods/search` with `classId=12` (texture packs) and `/mods/{id}/files`, picking the primary file per version,
  * and falling back to the forgecdn edge URL when CurseForge returns a null `downloadUrl`.
