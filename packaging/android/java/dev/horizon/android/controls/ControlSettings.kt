@@ -13,6 +13,10 @@ class ControlSettings(context: Context) {
         ControlPaths.init(context)
     }
 
+    /** Draw the touch layout over the game and feed it to the engine. Off keeps the engine's own touch controls. */
+    var overlayEnabled: Boolean
+        get() = prefs.getBoolean("overlay_enabled", false)
+        set(v) = prefs.edit().putBoolean("overlay_enabled", v).apply()
     var layout: String
         get() = prefs.getString("layout", DefaultLayout.ID) ?: DefaultLayout.ID
         set(v) = prefs.edit().putString("layout", v).apply()

@@ -80,6 +80,19 @@ object Keycodes {
         rows.forEach { (code, name) -> named[name]?.let { put(code, it) } }
     }
 
+    private val reverse: Map<Int, String> by lazy { named.entries.associate { it.value to it.key } }
+
+    /** The engine's name for an Android key code (`key.keyboard.left.shift`), or null when it has none. */
+    fun engineName(code: Int): String? {
+        val glfw = reverse[code]?.lowercase() ?: return null
+        val tail = when {
+            glfw.startsWith("kp_") -> "keypad." + glfw.removePrefix("kp_").replace('_', '.')
+            glfw.endsWith("_super") -> glfw.removeSuffix("_super") + ".win"
+            else -> glfw.replace('_', '.')
+        }
+        return "key.keyboard.$tail"
+    }
+
     fun fromGlfwName(name: String): Int? = named[name.removePrefix("GLFW_KEY_")]
 
     fun fromEvdev(code: Int): Int? = evdev[code]

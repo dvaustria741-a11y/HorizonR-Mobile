@@ -57,6 +57,8 @@ mod allays;
 mod android_bundled;
 #[cfg(target_os = "android")]
 mod android_input;
+#[cfg(target_os = "android")]
+mod touch_overlay;
 mod armor_stands;
 mod atlas_slots;
 mod attachment_sync;
@@ -19821,6 +19823,8 @@ impl Game<'_> {
         }
         horizon_client::spans::time("server_packs", || self.tick_server_packs());
         horizon_client::spans::time("control", || self.poll_control(event_loop));
+        #[cfg(target_os = "android")]
+        self.poll_touch_overlay(event_loop);
         if self.pending_save.is_some() {
             return;
         }

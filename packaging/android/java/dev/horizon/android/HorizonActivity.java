@@ -59,6 +59,7 @@ public final class HorizonActivity extends NativeActivity {
     private volatile boolean watchdogRunning = true;
     private Dialog splashDialog;
     private HorizonSplashOverlayView splashOverlayView;
+    private dev.horizon.android.controls.ControlsOverlay controlsOverlay;
 
     static {
         try {
@@ -112,6 +113,7 @@ public final class HorizonActivity extends NativeActivity {
 
             splashOverlayView = new HorizonSplashOverlayView(this, homeDir, () -> {
                 dismissSplashDialogSafely();
+                showControlsOverlay();
             });
             splashOverlayView.setStartTimeMs(getIntent().getLongExtra("HORIZON_SPLASH_START_MS", 0L));
             splashDialog.setContentView(
@@ -155,6 +157,25 @@ public final class HorizonActivity extends NativeActivity {
             splashDialog.show();
         } catch (Exception e) {
             Log.w(TAG, "Could not show splash dialog: " + e.getMessage());
+        }
+    }
+
+    /** The launcher's touch layout over the game, when the player turned it on in Settings. */
+    private void showControlsOverlay() {
+        try {
+            if (controlsOverlay == null) {
+                controlsOverlay = new dev.horizon.android.controls.ControlsOverlay(this);
+            }
+            controlsOverlay.show();
+        } catch (Throwable t) {
+            Log.e(TAG, "Touch overlay unavailable: " + t.getMessage());
+        }
+    }
+
+    private void hideControlsOverlay() {
+        try {
+            if (controlsOverlay != null) controlsOverlay.hide();
+        } catch (Throwable ignored) {
         }
     }
 
@@ -526,6 +547,7 @@ public final class HorizonActivity extends NativeActivity {
         logMirrorRunning = false;
         mirrorLogsOnce();
         watchdogRunning = false;
+        hideControlsOverlay();
         dismissSplashDialogSafely();
         super.onDestroy();
     }

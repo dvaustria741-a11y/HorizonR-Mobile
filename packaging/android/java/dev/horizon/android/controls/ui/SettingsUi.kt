@@ -67,6 +67,9 @@ fun LayoutSettings(settings: ControlSettings, onEdit: (() -> Unit)?, onChange: (
     }
     ControlsCard {
         CardTitle(stringResource(R.string.controls_layout))
+        var overlay by remember { mutableStateOf(settings.overlayEnabled) }
+        SettingSwitch(stringResource(R.string.controls_overlay), overlay) { overlay = it; settings.overlayEnabled = it }
+        Hint(stringResource(R.string.controls_overlay_hint))
         entries.forEach { e ->
             Row(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { choose(e.id) },
