@@ -298,10 +298,16 @@ impl Game<'_> {
         let size = self.window.as_ref().unwrap().inner_size();
         let b = HudBatch::new([size.width, size.height]);
         let p = [t.location.x as f32 / b.scale, t.location.y as f32 / b.scale];
-        if let Some(action) = self
-            .pad
-            .touch_ui
-            .action(b.width, b.height, p, self.pad_in_menu())
+        // The utility buttons only exist while they are drawn (touch input or the keypad); under the
+        // Zalith overlay's Keyboard & Mouse mode their LMB/RMB/Back/Mouse zones must not catch taps.
+        let utility_visible = crate::touch_visible() || self.settings.keypad.enabled;
+        if let Some(action) = utility_visible
+            .then(|| {
+                self.pad
+                    .touch_ui
+                    .action(b.width, b.height, p, self.pad_in_menu())
+            })
+            .flatten()
         {
             if t.phase == TouchPhase::Started {
                 self.pad.touch.clear();
