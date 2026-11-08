@@ -1010,12 +1010,17 @@ impl ChunkWork {
 type BiomeCache = Mutex<HashMap<(i32, i32), Arc<BiomeChunk<BiomeId>>>>;
 
 fn state(registry: &BlockRegistry, raw: &Value) -> Result<BlockStateId, GeneratorError> {
+    // A name, or an object with `Name` and `Properties` (1.21.11's keys) or `id` and `properties` (26.3's).
     let name = raw
         .get("Name")
+        .or_else(|| raw.get("id"))
         .and_then(Value::as_str)
         .or_else(|| raw.as_str())
         .ok_or_else(|| resource("block state"))?;
-    let properties = raw.get("Properties").and_then(Value::as_object);
+    let properties = raw
+        .get("Properties")
+        .or_else(|| raw.get("properties"))
+        .and_then(Value::as_object);
     match properties {
         Some(properties) if !properties.is_empty() => {
             let descriptor = crate::chunk::BlockState {

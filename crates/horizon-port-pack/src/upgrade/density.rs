@@ -195,6 +195,33 @@ impl<'a> Context<'a> {
             "shift_a" | "shift_b" | "shift" => {
                 json!({"type": format!("minecraft:{t}"), "noise": noise_holder(&arg("argument"), report)})
             }
+            // 1.21.11's sampler is `r * |noise(x / r, y / r, z / r)|` with `r` from the mapper's table by the
+            // interval the input falls in; 26.3 writes the same as `abs(interval_select(...))` of scaled noises.
+            "weird_scaled_sampler" => {
+                let (thresholds, rarities): (&[f64], &[f64]) = match o
+                    .get("rarity_value_mapper")
+                    .and_then(Value::as_str)
+                {
+                    Some("type_1") => (&[-0.5, 0.0, 0.5], &[0.75, 1.0, 1.5, 2.0]),
+                    Some("type_2") => (&[-0.75, -0.5, 0.5, 0.75], &[0.5, 0.75, 1.0, 2.0, 3.0]),
+                    _ => {
+                        report.lossy("density: weird_scaled_sampler with an unknown rarity mapper");
+                        return v.clone();
+                    }
+                };
+                let input = self.density(&arg("input"), report);
+                let noise = noise_holder(&arg("noise"), report);
+                let functions: Vec<Value> = rarities
+                    .iter()
+                    .map(|&r| {
+                        json!({"type": "minecraft:mul", "right": r,
+                            "left": {"type": "minecraft:noise", "noise": noise,
+                                "xz_scale": 1.0 / r, "y_scale": 1.0 / r}})
+                    })
+                    .collect();
+                json!({"type": "minecraft:abs", "input": {"type": "minecraft:interval_select",
+                    "input": input, "thresholds": thresholds, "functions": functions}})
+            }
             "end_islands" => json!({"type": "minecraft:end_outer_islands"}),
             "constant" => arg("argument"),
             "clamp" | "range_choice" | "find_top_surface" | "interval_select" => {

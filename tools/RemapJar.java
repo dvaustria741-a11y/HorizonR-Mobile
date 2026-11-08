@@ -74,7 +74,9 @@ public class RemapJar {
                 continue;
             }
             Matcher fm = field.matcher(l);
-            if (fm.matches()) fields.computeIfAbsent(owner, k -> new HashMap<>()).put(fm.group(3), fm.group(2));
+            // Keyed by name and type: a class and its supertypes can hold same-named obfuscated fields of other types.
+            if (fm.matches()) fields.computeIfAbsent(owner, k -> new HashMap<>())
+                    .put(fm.group(3) + ":" + obfDesc(javaTypeToDesc(fm.group(1))), fm.group(2));
         }
         // hierarchy from the jar
         Map<String,byte[]> entries = new LinkedHashMap<>();
@@ -95,7 +97,7 @@ public class RemapJar {
                 return r != null ? r : name;
             }
             @Override public String mapFieldName(String owner, String name, String desc) {
-                String r = findField(owner, name, new HashSet<>());
+                String r = findField(owner, name + ":" + desc, new HashSet<>());
                 return r != null ? r : name;
             }
         };

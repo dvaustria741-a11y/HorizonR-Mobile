@@ -404,6 +404,26 @@ mod tests {
     }
 
     #[test]
+    fn weird_scaled_sampler_becomes_an_interval_select_of_scaled_noises() {
+        let old = json!({"type": "minecraft:weird_scaled_sampler", "rarity_value_mapper": "type_1",
+            "noise": "minecraft:spaghetti_3d_1",
+            "input": {"type": "minecraft:noise", "noise": "minecraft:spaghetti_3d_rarity", "xz_scale": 2.0, "y_scale": 1.0}});
+        let (new, report) = up("data/x/worldgen/density_function/s.json", old);
+        let scaled = |r: f64| {
+            json!({"type": "minecraft:mul", "right": r,
+            "left": {"type": "minecraft:noise", "noise": "minecraft:spaghetti_3d_1", "xz_scale": 1.0 / r, "y_scale": 1.0 / r}})
+        };
+        assert_eq!(
+            new,
+            json!({"type": "minecraft:abs", "input": {"type": "minecraft:interval_select",
+                "input": {"type": "minecraft:noise", "noise": "minecraft:spaghetti_3d_rarity", "xz_scale": 2.0, "y_scale": 1.0},
+                "thresholds": [-0.5, 0.0, 0.5],
+                "functions": [scaled(0.75), scaled(1.0), scaled(1.5), scaled(2.0)]}})
+        );
+        assert!(report.lossy.is_empty());
+    }
+
+    #[test]
     fn density_arguments_and_removed_types() {
         let (v, _) = up(
             "data/x/worldgen/density_function/f.json",

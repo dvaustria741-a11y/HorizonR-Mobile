@@ -101,7 +101,14 @@ tags 204/2/68). Differences between the versions that the loader found on the wa
 - **Material conditions and block-state providers** are inline in 1.21.11 (no `conditions` or `state_providers`
   bundle): the loader takes an empty `conditions` bundle.
 
-Loading is not generating: nothing yet compares a generated 1.21.11 chunk with the real game's.
+- **weird_scaled_sampler.** 1.21.11 has this density type (`r * |noise(x/r, y/r, z/r)|`, `r` from a two-table mapper);
+  26.3 writes it as `abs(interval_select(...))` of scaled noises. The upgrader now converts it (checked against the
+  real bytecode and 26.3's own `entrances` and `spaghetti_2d` data).
+- **Block-state keys in worldgen settings:** the generator's state reader accepts `Name`/`Properties` and `id`/`properties`.
+
+Loading is not generating. `horizon-world/tests/terrain_1_21_11.rs` compares the engine's generated Overworld heights with
+the real game's (`Vanilla1_21_11HeightOracle`, vanilla `getBaseHeight`): it gets as far as decoding the density functions
+and had not yet produced a comparison when this was written.
 
 ## Still blocked
 
