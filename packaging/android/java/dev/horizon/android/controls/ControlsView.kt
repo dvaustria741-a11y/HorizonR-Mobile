@@ -913,6 +913,10 @@ class ControlsView(
             stroke.color = alpha(st.stroke, opacity)
             stroke.strokeWidth = st.strokeDp * density
             canvas.drawRoundRect(r, rad, rad, stroke)
+        } else if (Color.alpha(st.fill) * opacity < 110f) {
+            stroke.color = Color.argb(130, 255, 255, 255)
+            stroke.strokeWidth = density
+            canvas.drawRoundRect(r, rad, rad, stroke)
         }
         if (b.text.isEmpty()) return
         text.color = alpha(if (active) st.textPressed else st.text, opacity)
