@@ -30,6 +30,8 @@ EXPORTERS = {
     "VanillaBlockBehaviourExporter": ("block-behaviours.json", []),
     "VanillaStructureBlockExporter": ("structure-blocks.json", []),
     "Vanilla1_21_11MotionTagsExporter": ("motion-tags.json", []),
+    "VanillaCreativeTabsExporter": ("creative-tabs.json", []),
+    "VanillaCommandSuggestionsExporter": ("command-suggestions.tsv", []),
 }
 ASM = [f"--add-exports=java.base/jdk.internal.org.objectweb.asm{s}=ALL-UNNAMED" for s in ("", ".commons")]
 

@@ -82,10 +82,25 @@ version 4671, `Name`/`Properties`), `BlockState::{to_nbt_as, from_nbt_as}`, `Blo
 as itself (a 1.21.11 section is an error to the 26.3 reader and the other way round) and `new`, `to_nbt` and `from_nbt`
 stay 26.3's. Tested (`chunk_format_1_21_11.rs`): keys written and read per format, data-version gate, editing a 1.21.11
 chunk, and all 29,671 real 1.21.11 states through a Classic section round trip. Not done: block entities, entities and
-other NBT that embed block states, and nothing yet selects `V1_21_11` for a save: singleplayer stays unavailable. Left: `ParityData` (registry layering and data-component initializers
-changed) blocks the creative-tabs and command-suggestion exporters; the oracles (`VanillaSimpleBlockOracle`,
-`VanillaCommandParseOracle`, `VanillaBlockLandingOracle`, `VanillaPlacementOracle`, ...) have 60-odd API-difference
-errors; the client exporters, the tag bundle and the collision cache are not yet produced.
+other NBT that embed block states, and nothing yet selects `V1_21_11` for a save: singleplayer stays unavailable. Exporters added since: `ParityData` has a 1.21.11 overlay (layers STATIC/WORLDGEN/DIMENSIONS/RELOADABLE, synchronous
+registry loader, no component initializers), so `VanillaCreativeTabsExporter` (overlay: `ItemStack.getTags`) and
+`VanillaCommandSuggestionsExporter` run on the remapped jar and are registered in `tools/export_1_21_11.py`: 14 creative
+tabs with 3,914 item entries (`creative-tabs.json`) and 122 command suggestions (`command-suggestions.tsv`). They ran;
+nothing compares them with the game's own client or with what the engine reads, and the engine's loaders for them
+(`horizon-client`) were not built here (ALSA).
+
+**Oracles: 182 of 316 `Vanilla*Oracle` classes do not compile against 1.21.11** (one javac pass over all of them with the
+overlay, 1,415 errors; the other 134 compile, none was run). Sorted by the errors' symbols (`oracle_buckets` kind, from
+that pass; not committed):
+
+- 67 use APIs 1.21.11 does not have at all (the new renderer, `Hud`/`GuiGraphicsExtractor`, the density-function
+  compiler and `DensitySampler`, `world.clock`, `ItemStackTemplate`, sprite/cuboid model packages). They test 26.x-only
+  code, so there is nothing to port: they have no 1.21.11 counterpart.
+- 72 fail with 1 to 3 errors. The commonest cause is the `ServerLevel`/`LocalPlayer`/`ServerChunkCache`/`ServerPlayer`
+  constructors the oracles subclass with 26.3's signatures (about 80 errors over 27+ oracles), then `bindComponents`,
+  `BlockState.FULL_CODEC`, `EntityTypes` (renamed `EntityType` fields), `Registries.BLOCK_TRANSFORMER` and `Feature.DIRECT_CODEC`
+  (26.3-only). Each is a per-oracle edit; none is done.
+- 43 fail with more (for example `VanillaChunkGenerationOracle` 33, `VanillaCommandExecOracle` 22, `VanillaDataFixOracle` 21).
 
 ## The generator loads 1.21.11's data
 
