@@ -43,16 +43,17 @@ impl AtomicF32 {
 /// The overlay view's size in pixels, as it last reported it (`nativeSetScale`).
 static VIEW_W: AtomicF32 = AtomicF32::new();
 static VIEW_H: AtomicF32 = AtomicF32::new();
-/// The game surface's size and GUI scale, published by the game thread every frame.
+/// The game surface's size, and the GUI's scale and size in GUI pixels (what the HUD is laid out
+/// in), published by the game thread every frame.
 static SURFACE_W: AtomicF32 = AtomicF32::new();
 static SURFACE_H: AtomicF32 = AtomicF32::new();
-static GUI_SCALE: AtomicF32 = AtomicF32::new();
+static HUD_SCALE: AtomicF32 = AtomicF32::new();
+static HUD_W: AtomicF32 = AtomicF32::new();
+static HUD_H: AtomicF32 = AtomicF32::new();
 /// The mouse is grabbed for play (the overlay then sends look motion, not a cursor).
 static CAPTURED: AtomicBool = AtomicBool::new(false);
-/// The overlay is showing (`nativeSetActive`), and whether the game has switched to mouse and
-/// keyboard input for it yet: once per showing, so a pad picked up later still takes over.
+/// The overlay is showing (`nativeSetActive`).
 static ACTIVE: AtomicBool = AtomicBool::new(false);
-static ACTIVE_APPLIED: AtomicBool = AtomicBool::new(false);
 
 fn push(input: Input) {
     let mut queue = QUEUE.lock().unwrap_or_else(|e| e.into_inner());
@@ -101,20 +102,21 @@ fn surface_point(x: f32, y: f32) -> (f64, f64) {
     (f64::from(x / vw * sw), f64::from(y / vh * sh))
 }
 
-/// The hotbar slot (0..9) under a point of the overlay view, or -1: vanilla's 182x22 bar centred
-/// at the bottom of the screen, drawn at the GUI scale.
+/// The hotbar slot (0..9) under a point of the overlay view, or -1. The bar is laid out as
+/// `hud_layout::hotbar_with_attack_side` draws it: 182x22 GUI pixels, centred on the integer half
+/// of the GUI width and sitting on the bottom of the GUI height (both rounded up from the surface).
 fn hotbar_slot(x: f32, y: f32) -> i32 {
-    let gui = GUI_SCALE.get();
-    let (sw, sh) = (SURFACE_W.get(), SURFACE_H.get());
-    if gui <= 0.0 || sw <= 0.0 || sh <= 0.0 {
+    let gui = HUD_SCALE.get();
+    let (gw, gh) = (HUD_W.get() as i32, HUD_H.get() as i32);
+    if gui <= 0.0 || gw <= 0 || gh <= 0 {
         return -1;
     }
     let (px, py) = surface_point(x, y);
-    let (px, py) = (px as f32, py as f32);
-    if py < sh - 22.0 * gui || py > sh {
+    let (gx, gy) = (px as f32 / gui, py as f32 / gui);
+    if gy < (gh - 22) as f32 || gy > gh as f32 {
         return -1;
     }
-    let along = (px - (sw / 2.0 - 91.0 * gui)) / gui;
+    let along = gx - (gw / 2 - 91) as f32;
     if !(1.0..181.0).contains(&along) {
         return -1;
     }
@@ -217,19 +219,24 @@ impl Game<'_> {
             let size = [renderer.config.width, renderer.config.height];
             SURFACE_W.set(size[0] as f32);
             SURFACE_H.set(size[1] as f32);
-            GUI_SCALE.set(horizon_client::hud::HudBatch::new(size).scale as f32);
+            let hud = horizon_client::hud::HudBatch::new(size);
+            HUD_SCALE.set(hud.scale);
+            HUD_W.set(hud.width);
+            HUD_H.set(hud.height);
         }
         CAPTURED.store(
             self.captured && self.screen == Screen::Playing,
             Ordering::Relaxed,
         );
-        // The overlay replaces the game's own touch HUD. Only an automatic input mode follows
-        // along: a mode the player fixed in Settings is theirs.
-        let active = ACTIVE.load(Ordering::Relaxed);
-        if active != ACTIVE_APPLIED.swap(active, Ordering::Relaxed) && active {
-            horizon_client::android_runtime::note_input(
-                horizon_client::android_gamepad::InputMode::KeyboardMouse,
-            );
+        // The overlay is mouse and keyboard input: while it shows, the input device is Keyboard &
+        // mouse whatever mode was saved or picked in-game (configure_input restarts the active mode
+        // too, note_input keeps it there once the mode is already Keyboard & mouse).
+        if ACTIVE.load(Ordering::Relaxed) {
+            use horizon_client::android_gamepad::InputMode;
+            if horizon_client::android_runtime::input_mode() != InputMode::KeyboardMouse {
+                horizon_client::android_runtime::configure_input(InputMode::KeyboardMouse);
+            }
+            horizon_client::android_runtime::note_input(InputMode::KeyboardMouse);
         }
         let queued = drain();
         if queued.is_empty() {

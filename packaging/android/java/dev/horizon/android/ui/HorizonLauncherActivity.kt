@@ -99,6 +99,7 @@ import dev.horizon.android.model.*
 import dev.horizon.android.ui.theme.HorizonLauncherTheme
 import dev.horizon.android.controls.ControlEditorActivity
 import dev.horizon.android.controls.ControlSettings
+import dev.horizon.android.controls.ui.ControlsCardStyle
 import dev.horizon.android.controls.ui.ControlsSettings as TouchControlsSettings
 import dev.horizon.android.controls.ui.ControlsTheme
 import dev.horizon.android.controls.ui.LayoutSettings as TouchLayoutSettings
@@ -8277,11 +8278,20 @@ private fun CleanSettingsViewport(
 
                     SettingsSubCategory.CONTROLS -> {
                         val touchControls = remember { ControlSettings(context) }
-                        var zalithController by remember { mutableStateOf(touchControls.overlayEnabled) }
+                        var overlayOn by remember { mutableStateOf(touchControls.overlayEnabled) }
+                        // Zalith Controller is on only while the overlay is on AND the saved input host is
+                        // Keyboard & Mouse; if the two ever disagree (another tab, an old config), the overlay yields.
+                        val zalithController = overlayOn && config.inputHost == HorizonInputHost.KEYBOARD_MOUSE
+                        LaunchedEffect(Unit) {
+                            if (overlayOn && config.inputHost != HorizonInputHost.KEYBOARD_MOUSE) {
+                                touchControls.overlayEnabled = false
+                                overlayOn = false
+                            }
+                        }
                         // null stands for Zalith Controller: the editable touch layouts drawn over the game.
                         LauncherSettingDropdownCard(
                             title = "Input Mode (v0.7.5)",
-                            description = "Select primary input host (Auto follows active touch, mouse, or controller input). Zalith Controller draws the editable touch layouts below over the game",
+                            description = "Select primary input host (Auto follows active touch, mouse, or controller input). Zalith Controller uses Keyboard & Mouse and draws the editable touch layouts over the game",
                             selectedItem = if (zalithController) null else config.inputHost,
                             options = listOf(
                                 HorizonInputHost.AUTO,
@@ -8292,20 +8302,31 @@ private fun CleanSettingsViewport(
                             ),
                             itemLabel = { it?.label ?: "Zalith Controller (editable touch layouts)" },
                             onSelect = { choice ->
-                                zalithController = choice == null
-                                touchControls.overlayEnabled = choice == null
-                                onConfigChange(config.copy(inputHost = choice ?: HorizonInputHost.AUTO))
+                                val zalith = choice == null
+                                touchControls.overlayEnabled = zalith
+                                overlayOn = zalith
+                                onConfigChange(config.copy(inputHost = choice ?: HorizonInputHost.KEYBOARD_MOUSE))
                             }
                         )
 
-                        ControlsTheme {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TouchLayoutSettings(
-                                    settings = touchControls,
-                                    onEdit = { context.startActivity(Intent(context, ControlEditorActivity::class.java)) },
-                                    onChange = {}
+                        if (zalithController) {
+                            ControlsTheme(
+                                ControlsCardStyle(
+                                    card = CardSlateBg,
+                                    accent = SkyBlueAccent,
+                                    onAccent = SkyBlueDarkText,
+                                    muted = MutedSubtitleText,
+                                    track = Color(0xFF33424B)
                                 )
-                                TouchControlsSettings(settings = touchControls, onChange = {})
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    TouchLayoutSettings(
+                                        settings = touchControls,
+                                        onEdit = { context.startActivity(Intent(context, ControlEditorActivity::class.java)) },
+                                        onChange = {}
+                                    )
+                                    TouchControlsSettings(settings = touchControls, onChange = {})
+                                }
                             }
                         }
 
@@ -8373,13 +8394,18 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.GAMEPAD -> {
+                        val touchControls = remember { ControlSettings(context) }
                         LauncherSettingDropdownCard(
                             title = "Controller & Gamepad Routing (v0.7.5)",
                             description = "Configure USB & Bluetooth gamepad input host (Xbox, DualSense, Switch Pro)",
                             selectedItem = config.inputHost,
                             options = listOf(HorizonInputHost.AUTO, HorizonInputHost.CONTROLLER, HorizonInputHost.KEYBOARD_MOUSE, HorizonInputHost.TOUCH),
                             itemLabel = { it.label },
-                            onSelect = { onConfigChange(config.copy(inputHost = it)) }
+                            onSelect = {
+                                // Any mode picked here replaces Zalith Controller.
+                                touchControls.overlayEnabled = false
+                                onConfigChange(config.copy(inputHost = it))
+                            }
                         )
 
                         LauncherSettingDropdownCard(
