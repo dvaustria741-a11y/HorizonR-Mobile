@@ -20,7 +20,17 @@ enum Input {
     Wheel(f32),
     Cursor(f32, f32),
     Button(i32, bool),
+    /// A finger the overlay did not use for a button or stick, handed to the engine as a native touch.
+    /// `phase`: 0 started, 1 moved, 2 ended, anything else cancelled.
+    Touch {
+        pointer: u64,
+        phase: i32,
+        x: f32,
+        y: f32,
+    },
 }
+
+const TOUCH_MOVED: i32 = 1;
 
 /// More than a few frames of unread pointer motion is stale; presses and releases are never dropped.
 const QUEUE_LIMIT: usize = 256;
@@ -72,11 +82,35 @@ fn push(input: Input) {
             *y = *ny;
             return;
         }
+        (
+            Some(Input::Touch {
+                pointer,
+                phase: TOUCH_MOVED,
+                x,
+                y,
+            }),
+            Input::Touch {
+                pointer: next,
+                phase: TOUCH_MOVED,
+                x: nx,
+                y: ny,
+            },
+        ) if pointer == next => {
+            *x = *nx;
+            *y = *ny;
+            return;
+        }
         _ => {}
     }
     let motion = matches!(
         input,
-        Input::Look(..) | Input::Wheel(_) | Input::Cursor(..)
+        Input::Look(..)
+            | Input::Wheel(_)
+            | Input::Cursor(..)
+            | Input::Touch {
+                phase: TOUCH_MOVED,
+                ..
+            }
     );
     if motion && queue.len() >= QUEUE_LIMIT {
         return;
@@ -171,6 +205,25 @@ pub extern "system" fn Java_dev_horizon_android_controls_HorizonBridge_nativeBut
     down: jboolean,
 ) {
     push(Input::Button(button, down != 0));
+}
+
+/// A touch the overlay did not claim (menus without the virtual mouse): the engine handles it as
+/// it would a touch on its own window, so menu taps, drags and sliders keep working beneath the buttons.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_horizon_android_controls_HorizonBridge_nativeTouch(
+    _env: JNIEnv,
+    _class: JClass,
+    pointer: jint,
+    phase: jint,
+    x: jfloat,
+    y: jfloat,
+) {
+    push(Input::Touch {
+        pointer: u64::from(pointer.max(0) as u32),
+        phase,
+        x,
+        y,
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -283,6 +336,33 @@ impl Game<'_> {
                             device_id: DeviceId::dummy(),
                             position: winit::dpi::PhysicalPosition::new(x, y),
                         },
+                        input_trace::InputOrigin::User,
+                    );
+                }
+                Input::Touch {
+                    pointer,
+                    phase,
+                    x,
+                    y,
+                } => {
+                    use winit::event::TouchPhase;
+                    let (x, y) = surface_point(x, y);
+                    let phase = match phase {
+                        0 => TouchPhase::Started,
+                        TOUCH_MOVED => TouchPhase::Moved,
+                        2 => TouchPhase::Ended,
+                        _ => TouchPhase::Cancelled,
+                    };
+                    self.handle_window_event(
+                        events,
+                        id,
+                        WindowEvent::Touch(winit::event::Touch {
+                            device_id: DeviceId::dummy(),
+                            phase,
+                            location: winit::dpi::PhysicalPosition::new(x, y),
+                            force: None,
+                            id: pointer,
+                        }),
                         input_trace::InputOrigin::User,
                     );
                 }

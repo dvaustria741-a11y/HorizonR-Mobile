@@ -145,6 +145,9 @@ class ControlsView(
         }
         class Drag(val target: Selection, val offX: Float, val offY: Float) : Role()
         data object Ignore : Role()
+
+        /** A finger over empty space in a menu without the virtual mouse: the engine handles it as a touch. */
+        class Forward(var lastX: Float, var lastY: Float) : Role()
     }
 
     private val roles = HashMap<Int, Role>()
@@ -249,10 +252,11 @@ class ControlsView(
     }
 
     fun releaseAll() {
-        roles.values.forEach { role ->
+        roles.forEach { (pointer, role) ->
             when (role) {
                 is Role.Look -> role.longPress?.let(uiHandler::removeCallbacks)
                 is Role.Mouse -> role.longPress?.let(uiHandler::removeCallbacks)
+                is Role.Forward -> HorizonBridge.touch(pointer, TOUCH_CANCEL, role.lastX, role.lastY)
                 else -> {}
             }
         }
@@ -572,8 +576,10 @@ class ControlsView(
             return true
         }
         if (!virtualMouse) {
-            if (roles.isEmpty()) return false
-            roles[id] = Role.Ignore
+            // The window stays touchable so the buttons above work in menus too; everything else goes to
+            // the engine, which handles menu taps, drags and sliders itself.
+            roles[id] = Role.Forward(x, y)
+            HorizonBridge.touch(id, TOUCH_DOWN, x, y)
             return true
         }
         val first = roles.values.firstOrNull { it is Role.Mouse } as Role.Mouse?
@@ -692,6 +698,11 @@ class ControlsView(
                 }
             }
             is Role.Stick -> stickMove(role.index, x, y)
+            is Role.Forward -> {
+                role.lastX = x
+                role.lastY = y
+                HorizonBridge.touch(id, TOUCH_MOVE, x, y)
+            }
             is Role.Look -> {
                 val dx = x - role.lastX
                 val dy = y - role.lastY
@@ -762,6 +773,7 @@ class ControlsView(
             }
             is Role.Btn -> releaseButton(role.index, !cancel)
             is Role.Stick -> stickUp(role.index)
+            is Role.Forward -> HorizonBridge.touch(id, if (cancel) TOUCH_CANCEL else TOUCH_UP, role.lastX, role.lastY)
             is Role.Look -> {
                 role.longPress?.let(uiHandler::removeCallbacks)
                 if (role.mining) holdMouse(0, false)

@@ -28,15 +28,15 @@ import dev.horizon.android.controls.ui.OverlayMenu
  *
  * The game is a NativeActivity: it owns its window's input queue, so a view added to that window
  * never sees a touch. The overlay therefore lives in a window of its own (as the splash does) and
- * talks to the engine through [HorizonBridge]. In menus without a virtual mouse the window lets
- * touches through, so the engine's own touch handling still works there.
+ * talks to the engine through [HorizonBridge]. The window is always touchable, so the buttons work in
+ * menus too; in menus without a virtual mouse, touches that miss every button are handed to the
+ * engine as native touches ([ControlsView]), so its own touch handling still works there.
  */
 class ControlsOverlay(private val activity: Activity) : ControlsHost {
     private val settings = ControlSettings(activity)
     private val handler = Handler(Looper.getMainLooper())
     private var dialog: Dialog? = null
     private var view: ControlsView? = null
-    private var passThrough = false
     private var frame: FrameLayout? = null
     private var composeView: ComposeView? = null
     private var owner: OverlayOwner? = null
@@ -45,9 +45,7 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
     private val sync = object : Runnable {
         override fun run() {
             val v = view ?: return
-            val captured = HorizonBridge.isCaptured()
-            v.setCaptured(captured)
-            setPassThrough(!captured && !v.virtualMouse && ui == OverlayUi.NONE)
+            v.setCaptured(HorizonBridge.isCaptured())
             handler.postDelayed(this, 100)
         }
     }
@@ -126,7 +124,6 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
         runCatching { dialog?.dismiss() }
         view = null
         dialog = null
-        passThrough = false
     }
 
     /** Compose is built the first time the ☰ menu opens, so a game that never opens it pays nothing. */
@@ -185,14 +182,6 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
 
     override fun openMenu() {
         handler.post { if (ui == OverlayUi.NONE) switchUi(OverlayUi.MENU) }
-    }
-
-    private fun setPassThrough(on: Boolean) {
-        if (on == passThrough) return
-        passThrough = on
-        val win = dialog?.window ?: return
-        if (on) win.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
-        else win.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
     }
 
     override fun sendKey(code: Int, down: Boolean) {
