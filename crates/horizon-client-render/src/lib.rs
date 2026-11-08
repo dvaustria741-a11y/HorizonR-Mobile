@@ -47,6 +47,7 @@ pub mod environment;
 pub mod extras;
 pub(crate) mod extras_ui;
 pub mod fast_hash;
+pub mod file_lock;
 pub mod fluid_render;
 pub mod fog;
 pub mod font;

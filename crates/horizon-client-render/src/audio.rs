@@ -286,9 +286,6 @@ pub struct CapturedSound {
     pub except_entity: Option<u32>,
 }
 
-#[cfg(feature = "audio")]
-type DeviceProbe = (Option<String>, Option<String>, Vec<String>);
-
 pub struct Audio {
     _stream: Option<Stream>,
     device_name: String,
@@ -327,7 +324,7 @@ pub struct Audio {
     /// The other half of `lastSeenDevices`: every output device last seen.
     #[cfg(feature = "audio")]
     devices_seen: Vec<String>,
-    /// Wall-clock time of the last device query; the launcher ticks per frame.
+    /// Ticks since the output devices were last looked at (`DeviceTracker.tick`).
     #[cfg(feature = "audio")]
     device_ticks: u32,
     /// The look at the output devices running on its own thread, until a tick
@@ -1134,6 +1131,17 @@ impl Audio {
         };
         let mut engine = SoundEngine::new(registry);
         engine.loaded = live;
+        #[cfg(feature = "audio")]
+        let cards = if live { card_fingerprint() } else { None };
+        // Where the cards gate the list (Linux, macOS), it starts empty: opening the
+        // output does not need it, and listing it probes every device; the first
+        // change fills it. Elsewhere it starts with every device listed, as before.
+        #[cfg(feature = "audio")]
+        let devices = if live && cards.is_none() {
+            output_devices()
+        } else {
+            Vec::new()
+        };
         Self {
             _stream: stream,
             device_name: target_device.to_owned(),
@@ -1161,11 +1169,11 @@ impl Audio {
             preview: Default::default(),
             muffle: None,
             #[cfg(feature = "audio")]
-            default_seen: None,
+            default_seen: if live { default_output_name() } else { None },
             #[cfg(feature = "audio")]
-            cards_seen: None,
+            cards_seen: cards,
             #[cfg(feature = "audio")]
-            devices_seen: Vec::new(),
+            devices_seen: devices,
             #[cfg(feature = "audio")]
             device_ticks: 0,
             #[cfg(feature = "audio")]
@@ -1351,35 +1359,6 @@ impl Audio {
         }
         self.engine.listening = self.record_heard;
     }
-    /// Start one device query without ever making the audio/render thread wait
-    /// for CPAL or the operating system. At most one query is alive per `Audio`.
-    #[cfg(feature = "audio")]
-    fn start_device_probe(&self) -> Option<std::sync::mpsc::Receiver<DeviceProbe>> {
-        let previous_default = self.default_seen.clone();
-        let previous_cards = self.cards_seen.clone();
-        let previous_devices = self.devices_seen.clone();
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-        match std::thread::Builder::new()
-            .name("Audio device probe".into())
-            .spawn(move || {
-                let default = default_output_name();
-                let cards = card_fingerprint();
-                let devices = if default == previous_default
-                    && !cards_changed(previous_cards.as_deref(), cards.as_deref())
-                {
-                    previous_devices
-                } else {
-                    output_devices()
-                };
-                let _ = sender.send((default, cards, devices));
-            }) {
-            Ok(_) => Some(receiver),
-            Err(error) => {
-                log::warn!("Horizon: could not start the audio device probe: {error}");
-                None
-            }
-        }
-    }
     /// `SoundEngine.shouldChangeDevice`: the open device was lost, the system
     /// default changed (with no device chosen in the options), or the chosen
     /// device came back; the output is then opened again. The devices are looked
@@ -1460,36 +1439,11 @@ impl Audio {
             if changed {
                 log::info!("Horizon: system default audio device has changed");
             }
+            return changed;
         }
-        let mut changed = false;
-        if let Some((default, cards, devices)) = found {
-            self.cards_seen = cards;
-            if default != self.default_seen || devices != self.devices_seen {
-                // Only a change in the device lists is looked at, as in vanilla: a
-                // preferred device that is listed but cannot open is not retried.
-                self.default_seen = default.clone();
-                let wanted = self.device_name.clone();
-                let available = devices.contains(&wanted);
-                self.devices_seen = devices;
-                if wanted.is_empty() {
-                    changed = default.as_deref().is_some_and(|d| d != current);
-                    if changed {
-                        log::info!("Horizon: system default audio device has changed");
-                    }
-                } else {
-                    changed = current != wanted && available;
-                    if changed {
-                        log::info!("Horizon: preferred audio device has become available");
-                    }
-                }
-            }
-        }
-        if self._stream.is_some()
-            && self.device_probe.is_none()
-            && self.device_probe_started.elapsed() >= std::time::Duration::from_secs(1)
-        {
-            self.device_probe_started = std::time::Instant::now();
-            self.device_probe = self.start_device_probe();
+        let changed = current != wanted && available;
+        if changed {
+            log::info!("Horizon: preferred audio device has become available");
         }
         changed
     }

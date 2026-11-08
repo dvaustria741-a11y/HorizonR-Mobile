@@ -371,6 +371,8 @@ impl Settings {
             .parent()
             .map(|dir| crate::mod_list::ModList::load(&crate::logging::shared_dir(dir)))
             .unwrap_or_default();
+        let keypad = crate::keypad::Settings::load(&path.with_file_name("horizon-keypad.json"));
+        let touch = crate::touch::Settings::load_from(&path.with_file_name("horizon-touch.json"));
         let mut settings = match fs::read(path) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes);
@@ -668,6 +670,7 @@ impl Settings {
         let mut file = self.to_file();
         file.set_text(key, value)?;
         let mut next = Self {
+            keypad: self.keypad.clone(),
             horizon: self.horizon.clone(),
             #[cfg(target_os = "android")]
             touch: self.touch.clone(),
@@ -693,6 +696,9 @@ impl Settings {
         if let Some(dir) = path.parent() {
             self.horizon.save(dir);
             self.controller.save(dir);
+            let _ = self.keypad.save(&dir.join("horizon-keypad.json"));
+            #[cfg(target_os = "android")]
+            let _ = self.touch.save_to(&dir.join("horizon-touch.json"));
             let mut extras = self.extras.clone();
             extras.emote_key = self.keys.get("key.emote").to_owned();
             extras.save(dir);

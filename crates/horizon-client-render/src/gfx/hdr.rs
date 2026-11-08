@@ -893,13 +893,6 @@ impl Hdr {
             color_attachments: &attachments,
             ..Default::default()
         });
-        #[cfg(target_os = "android")]
-        if presentation {
-            let [x, y, w, h] =
-                winit::platform::android::native_content_rect([target.width(), target.height()]);
-            pass.set_viewport(x as f32, y as f32, w as f32, h as f32, 0.0, 1.0);
-            pass.set_scissor_rect(x, y, w, h);
-        }
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, group, &[]);
         pass.draw(0..3, 0..1);

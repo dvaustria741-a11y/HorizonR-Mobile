@@ -116,6 +116,8 @@ pub enum H {
     HdrLighting,
     BatteryMode,
     ShadowCache,
+    MenuBackgroundCache,
+    PackWorkers,
     /// Opens the shader pack list (`options_ui::Page::ShaderPacks`).
     ShaderPacks,
     GraphicsApi,
