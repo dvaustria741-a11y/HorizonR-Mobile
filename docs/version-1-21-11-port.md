@@ -102,6 +102,8 @@ that pass; not committed):
   (26.3-only). Each is a per-oracle edit; none is done.
 - 43 fail with more (for example `VanillaChunkGenerationOracle` 33, `VanillaCommandExecOracle` 22, `VanillaDataFixOracle` 21).
 
+The client exporters, the tag bundle and the collision cache are not yet produced.
+
 ## The generator loads 1.21.11's data
 
 `tools/assemble_worldgen_1_21_11.py` assembles the directory `GeneratorData::load` reads from the datagen output, the
@@ -150,7 +152,22 @@ oracle's is not, so carving is the likely cause; that has not been checked (one 
   (Mojang's `libraries.minecraft.net` files, which the sandbox does not have), so the later stages never ran for 1.21.11:
   the remap of the client jar (`tools/RemapJar.java`) is not part of the preparer, the exporters still compile against an
   unobfuscated jar with `--release 25` and no `java-1.21.11` overlay, the pack formats and the asset index are 26.3's.
-  The `client.txt` supplied for this work is not Mojang's published file (its sha1 differs from the version JSON's, it is
-  270 bytes longer and its header is an MIT-licence text, not Mojang's), so the repository lock correctly refuses it;
-  the exporters ran on it, since only the mapping lines matter to them.
-- Gameplay logic differences 1.21.11 -> 26.3 (mobs, items, trades, loot) are unmeasured without decompiled sources.
+  The first `client.txt` supplied for this work was not Mojang's published file (its sha1 differs from the version JSON's, it is
+  270 bytes longer and its header is an MIT-licence text, not Mojang's), so the repository lock correctly refuses it.
+  The file supplied afterwards (`client__1_.txt`) matches the pin (sha1 031a68be...): `tools/export_1_21_11.py` on it
+  gives byte-identical `facts.json` and `motion-tags.json`, so the earlier exports stand.
+- Gameplay logic differences 1.21.11 -> 26.3 (mobs, items, trades, loot): partly measured, see below.
+
+## Gameplay differences: what is measured
+
+Decompiled: Vineflower 1.12.0 (the lock's pin) on the remapped jar's `world/entity`, `world/item`, `world/inventory` and
+`world/level/storage/loot` packages: 1,856 classes into 1,196 source files, no failure markers. A decompile of the whole
+jar was started first and died without output, so only these packages exist. Not read yet: no behaviour was compared
+with 26.3's code, which is not available here.
+
+Loot tables, 1.21.11 against 26.3 (`tools/loot_diff_1_21_11.py`, 26.3 from misode/mcmeta): 134 entity and gameplay tables
+in both versions; one entity table is new in 26.3 (`sulfur_cube`). After mapping 26.3's restructured JSON onto 1.21.11's
+shape, 104 of 134 are equal and 30 differ (26 entities, 4 gameplay). For the four gameplay ones (fishing, fishing junk,
+fishing treasure, piglin bartering) the item names and weights are equal, so what differs is conditions or
+representation. The 26 entity tables were not read one by one. This is the data only: mob AI, damage, item use and trade
+logic are code and are unmeasured.
