@@ -31,7 +31,7 @@ const TERRAIN_ATTRIBUTES: [wgpu::VertexAttribute; 5] =
     wgpu::vertex_attr_array![0=>Float32x3,1=>Uint16x2,2=>Uint16,4=>Uint8x2,3=>Unorm8x4];
 
 mod terrain_source;
-use terrain_source::terrain_shader;
+use terrain_source::terrain_shader_for;
 
 /// entity.wgsl after the OverlayTexture constants it reads.
 fn entity_shader() -> String {
@@ -74,76 +74,6 @@ pub use entity_batch::{
 };
 pub use pack_post::{PackPost, Refused};
 pub use view::{View, ViewSet};
-
-/// The GPU state `PackPost::new` reads, cloned out of the renderer so a worker thread can create
-/// a shader pack's pipelines (seconds on a phone) while the game keeps drawing.
-pub struct ShaderPackBuildContext {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    adapter: wgpu::Adapter,
-    frame_format: wgpu::TextureFormat,
-    atlas: Option<(wgpu::TextureView, [u32; 2])>,
-    sprite_rects: Vec<u32>,
-    material_maps: Option<[wgpu::TextureView; 2]>,
-    lightmap: wgpu::TextureView,
-    gui_size: [u32; 2],
-    flat_layout: Option<wgpu::BindGroupLayout>,
-    pack_terrain_flat: bool,
-    celestial: Option<wgpu::TextureView>,
-    clouds: wgpu::BindGroupLayout,
-}
-
-impl ShaderPackBuildContext {
-    /// Builds the pipelines of `post`: what `Renderer::set_shader_pack` did inline.
-    pub fn build(
-        self,
-        post: horizon_shaders::Post,
-        block_ids: &[i32],
-    ) -> std::result::Result<pack_post::PackPost, pack_post::Refused> {
-        let instance = wgpu::vertex_attr_array![5=>Float32x4];
-        let vertex = wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<TerrainVertex>() as u64,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &TERRAIN_ATTRIBUTES,
-        };
-        let instances = wgpu::VertexBufferLayout {
-            array_stride: 16,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &instance,
-        };
-        let buffers = [Some(vertex), Some(instances)];
-        let flat = self.pack_terrain_flat;
-        let world = pack_post::World {
-            atlas: self.atlas.clone(),
-            sprite_rects: &self.sprite_rects,
-            material_maps: self.material_maps.clone(),
-            lightmap: self.lightmap.clone(),
-            gui_size: self.gui_size,
-            terrain: self.atlas.as_ref().map(|_| pack_post::Geometry {
-                buffers: if flat { &buffers[..1] } else { &buffers },
-                table: self.flat_layout.as_ref().filter(|_| flat),
-                depth_write: true,
-                atlas: None,
-                material_maps: true,
-                ids: None,
-                cull: true,
-            }),
-            block_ids,
-            celestial: self.celestial.clone(),
-            clouds: Some(&self.clouds),
-            weather: true,
-            hand: true,
-        };
-        pack_post::PackPost::new(
-            &self.device,
-            &self.queue,
-            &self.adapter,
-            post,
-            self.frame_format,
-            world,
-        )
-    }
-}
 
 /// Window.getAppropriateLineWidth, in framebuffer pixels.
 pub fn outline_width(width: u32) -> f32 {
@@ -3044,7 +2974,9 @@ impl Renderer {
         let gpu_timer = timing::GpuTimer::new(&device, &queue);
         let shader = kept.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Horizon terrain"),
-            source: wgpu::ShaderSource::Wgsl(terrain_shader().into()),
+            source: wgpu::ShaderSource::Wgsl(terrain_shader_for(
+                adapter.get_info().backend == wgpu::Backend::Gl,
+            )),
         });
         let entry = |binding, visibility, ty| wgpu::BindGroupLayoutEntry {
             binding,
@@ -3237,7 +3169,9 @@ impl Renderer {
                 hud_coverage::pipeline(
                     &device,
                     &desc,
-                    wgpu::ShaderSource::Wgsl(terrain_shader().into()),
+                    wgpu::ShaderSource::Wgsl(terrain_shader_for(
+                        adapter.get_info().backend == wgpu::Backend::Gl,
+                    )),
                 )
                 .expect("the debug crosshair's coverage")
             } else {

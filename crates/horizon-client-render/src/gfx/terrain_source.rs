@@ -1,12 +1,14 @@
 //! Legacy GLES lowering. Vulkan retains the original WGSL byte for byte.
 use std::borrow::Cow;
 
-pub(super) fn terrain_shader(gl: bool) -> Cow<'static, str> {
-    let source = include_str!("../terrain.wgsl");
+/// The terrain shader as the GPU's API takes it: Vulkan keeps upstream's `terrain_shader` byte
+/// for byte, GLES gets the lowering below.
+pub(super) fn terrain_shader_for(gl: bool) -> Cow<'static, str> {
+    let source = super::terrain_shader();
     if gl {
-        Cow::Owned(gles_source(source))
+        Cow::Owned(gles_source(&source))
     } else {
-        Cow::Borrowed(source)
+        Cow::Owned(source)
     }
 }
 
@@ -90,10 +92,9 @@ mod tests {
 
     #[test]
     fn vulkan_source_is_unchanged_and_gles_validates_every_entrypoint() {
-        assert!(matches!(terrain_shader(false), Cow::Borrowed(_)));
-        assert_eq!(terrain_shader(false), include_str!("../terrain.wgsl"));
-        let source = terrain_shader(true);
-        let original = include_str!("../terrain.wgsl").replace("\r\n", "\n");
+        assert_eq!(terrain_shader_for(false), super::super::terrain_shader());
+        let source = terrain_shader_for(true);
+        let original = super::super::terrain_shader().replace("\r\n", "\n");
         assert_eq!(
             &source[source.find("struct SkyOut {").unwrap()..],
             &original[original.find("struct SkyOut {").unwrap()..],
@@ -136,7 +137,7 @@ mod tests {
 
     #[test]
     fn windows_line_endings_produce_the_same_gles_shader() {
-        let source = include_str!("../terrain.wgsl").replace("\r\n", "\n");
+        let source = super::super::terrain_shader().replace("\r\n", "\n");
         assert_eq!(
             gles_source(&source),
             gles_source(&source.replace('\n', "\r\n"))
