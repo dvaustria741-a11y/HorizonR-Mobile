@@ -13,9 +13,11 @@ class ControlSettings(context: Context) {
     init {
         ControlPaths.init(context)
         // Before the Zalith layout existed the active layout was saved as Horizon's own, and a saved
-        // value beats the new default. Switch to Zalith (default) once; saved layouts stay in Load.
-        if (prefs.getInt("layout_rev", 0) < 1) {
-            prefs.edit().putString("layout", ControlLayouts.ZALITH_ID).putInt("layout_rev", 1).apply()
+        // value beats the new default. Switch to Zalith (default) once per revision; saved layouts stay in Load.
+        // Rev 2: Zalith (default) is now ZalithLauncher's own default.json, so installs still on Horizon's
+        // joystick layout (or a copy saved from it) move to it too.
+        if (prefs.getInt("layout_rev", 0) < 2) {
+            prefs.edit().putString("layout", ControlLayouts.ZALITH_ID).putInt("layout_rev", 2).apply()
         }
     }
 
@@ -136,7 +138,15 @@ object ControlLayouts {
             id.startsWith("file:") -> File(dir, id.removePrefix("file:")).let { ControlLayout.parse(it.readText(), it.nameWithoutExtension) }
             else -> null
         }
-    }.onFailure { android.util.Log.e("ControlLayouts", "Could not load layout $id: ${it.message}", it) }
+    }.onFailure {
+        android.util.Log.e("ControlLayouts", "Could not load layout $id: ${it.message}", it)
+        // Never swap in Horizon's joystick layout silently: say which layout failed and why.
+        runCatching {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                android.widget.Toast.makeText(context.applicationContext, "Could not load layout $id: ${it.message}", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
         .getOrNull() ?: DefaultLayout.create(defaultName)
 
     fun import(context: Context, uri: Uri): Entry {
