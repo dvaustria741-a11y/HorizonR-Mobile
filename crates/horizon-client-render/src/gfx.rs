@@ -7515,6 +7515,28 @@ impl Renderer {
                     label: Some("Horizon frame"),
                 })
         });
+        if frame.bg_cache.is_some() {
+            let surface_matches = surface_frame
+                .as_ref()
+                .is_some_and(|f| f.texture == target_texture);
+            let replays = checks.is_none()
+                && fg_frames.is_none()
+                && !reconfigure
+                && surface_matches
+                && self.background_replays(frame, size);
+            self.note_bg_cache(
+                frame,
+                size,
+                replays,
+                [
+                    ("screenshot checks", checks.is_some()),
+                    ("frame generation frames", fg_frames.is_some()),
+                    ("surface reconfigure", reconfigure),
+                    ("scaled presentation", scaled_presentation),
+                    ("target is not the swapchain texture", !surface_matches),
+                ],
+            );
+        }
         // A screen over a world that cannot change (`Frame::bg_cache`): the world was drawn
         // and kept by an earlier frame, so this one draws that image and the screen.
         if checks.is_none()
@@ -11391,6 +11413,74 @@ impl Renderer {
         if let Some(blur) = &mut self.menu_blur {
             blur.invalidate_cache();
         }
+    }
+    /// Diagnostics for `Frame::bg_cache` (INFO, at most once a second, only while the game
+    /// names a key): how many frames replayed the kept background and how many drew the
+    /// world, and what stopped the replay. Changes no behaviour.
+    fn note_bg_cache(
+        &self,
+        frame: &Frame,
+        size: [u32; 2],
+        replayed: bool,
+        outer: [(&'static str, bool); 5],
+    ) {
+        use std::sync::Mutex;
+        static STATE: Mutex<Option<(Instant, u32, u32)>> = Mutex::new(None);
+        let Ok(mut state) = STATE.lock() else {
+            return;
+        };
+        let (since, replays, fulls) = state.get_or_insert_with(|| (Instant::now(), 0, 0));
+        if replayed {
+            *replays += 1;
+        } else {
+            *fulls += 1;
+        }
+        if since.elapsed() < std::time::Duration::from_secs(1) {
+            return;
+        }
+        let mut blockers: Vec<&str> = outer
+            .iter()
+            .filter(|(_, on)| *on)
+            .map(|(name, _)| *name)
+            .collect();
+        if frame.title {
+            blockers.push("title frame");
+        }
+        if self.config.alpha_mode != wgpu::CompositeAlphaMode::Opaque {
+            blockers.push("surface alpha mode not Opaque");
+        }
+        if !self.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
+            blockers.push("surface has no COPY_SRC (nothing is kept)");
+        }
+        if self.hdr.is_some() || self.hdr_marker.is_some() {
+            blockers.push("HDR");
+        }
+        if self.screenshot.is_some() {
+            blockers.push("screenshot pending");
+        }
+        if self.first_frame != FirstFrame::Drawn {
+            blockers.push("first frame bookkeeping");
+        }
+        let hit = frame.bg_cache.is_some_and(|key| {
+            self.menu_blur
+                .as_ref()
+                .is_some_and(|blur| blur.cache_hit(key, size))
+        });
+        if !hit {
+            blockers.push("cache miss (not stored yet, key or size changed)");
+        }
+        log::info!(
+            "menu background cache: {} replayed, {} full frames in {} ms; blocked by [{}]; alpha {:?}, {}x{}, frame_gen {}",
+            replays,
+            fulls,
+            since.elapsed().as_millis(),
+            blockers.join(", "),
+            self.config.alpha_mode,
+            size[0],
+            size[1],
+            on_off(self.frame_gen.on),
+        );
+        *state = Some((Instant::now(), 0, 0));
     }
     /// Whether this frame can draw the kept menu background instead of the world: the key
     /// and size match, and the frame is the plain swapchain's (no HDR, no screenshot, no
