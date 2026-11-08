@@ -48,6 +48,10 @@ impl CarvingBlocks {
             .collect();
         Ok(Self { flags })
     }
+    /// Whether carvers leave `state` alone (the table's `uncarvable` set).
+    pub fn is_uncarvable(&self, state: BlockStateId) -> bool {
+        self.flags(state).is_ok_and(|f| f & 1 != 0)
+    }
     fn flags(&self, state: BlockStateId) -> Result<u8, TerrainError> {
         self.flags
             .get(state.0 as usize)

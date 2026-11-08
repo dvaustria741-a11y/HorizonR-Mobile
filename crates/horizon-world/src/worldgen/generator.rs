@@ -186,6 +186,10 @@ pub struct GeneratorData {
     temperatures: Vec<BiomeTemperatureSettings>,
     biome_carvers: Vec<Vec<Arc<WorldCarver>>>,
     carving_blocks: CarvingBlocks,
+    /// Carving tables of dimensions whose carvers replace other blocks than the default table's, by
+    /// noise settings id (`horizon:uncarvable/<path>` block tags: 1.21.11 gives each carver its own
+    /// `replaceable` list). Settings without one use `carving_blocks`.
+    carving_by_settings: BTreeMap<String, CarvingBlocks>,
     pub(super) block_tags: BTreeMap<String, Vec<String>>,
     /// `block_tags` bound to block states, once for the feature bindings of
     /// decoration, structures and live features (`feature_block_bindings`).
@@ -344,6 +348,11 @@ fn joined<T>(thread: std::thread::JoinHandle<T>) -> T {
         .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
 }
 impl GeneratorData {
+    /// The carving table of the noise settings `key`, else the default `minecraft:uncarvable` one.
+    pub fn carving_for(&self, key: Option<&str>) -> &CarvingBlocks {
+        key.and_then(|k| self.carving_by_settings.get(k))
+            .unwrap_or(&self.carving_blocks)
+    }
     /// Load a worldgen bundle directory. Required files are JSON objects mapping
     /// resource identifiers to the resource's JSON text: `noises`, `densities`,
     /// `rules` (material rules), `conditions` (material conditions), `settings`
@@ -513,6 +522,15 @@ impl GeneratorData {
                 .collect(),
         )
         .map_err(|e| resource(format!("carving blocks: {e}")))?;
+        let mut carving_by_settings = BTreeMap::new();
+        for (tag, values) in &block_tags {
+            let Some(path) = tag.strip_prefix("horizon:uncarvable/") else {
+                continue;
+            };
+            let table = CarvingBlocks::from_registry(registry, &values.iter().cloned().collect())
+                .map_err(|e| resource(format!("carving blocks {tag}: {e}")))?;
+            carving_by_settings.insert(format!("minecraft:{path}"), table);
+        }
         let feature_resources = match (
             read_optional_bundle(dir, ov, "features")?,
             read_optional_bundle(dir, ov, "placed_features")?,
@@ -566,6 +584,7 @@ impl GeneratorData {
             temperatures,
             biome_carvers,
             carving_blocks,
+            carving_by_settings,
             block_tags,
             biome_tags,
             feature_resources,
@@ -925,6 +944,8 @@ struct Pipeline<R: RandomSource> {
     biome_cache: BiomeCache,
     biome_work: ChunkWork,
     carver_cache: Mutex<HashMap<(i32, i32), BiomeId>>,
+    /// The noise settings id naming this dimension's carving table (`GeneratorData::carving_for`).
+    carving_key: Option<String>,
     pub(super) decoration: Option<Arc<super::generator_decoration::Decoration>>,
     pub(super) structures: Option<super::generator_structures::StructureState>,
     /// Definitions for explicit placement when automatic structure starts are off.
@@ -1238,6 +1259,7 @@ where
             debug_density,
             spawn_position: std::sync::OnceLock::new(),
             flat: None,
+            carving_key: generator["settings"].as_str().map(str::to_owned),
         };
         pipeline.decoration = pipeline
             .data
@@ -1772,7 +1794,7 @@ where
                     density_context: context,
                 },
                 aquifer.as_mut(),
-                &data.carving_blocks,
+                data.carving_for(self.carving_key.as_deref()),
                 |[x, y, z]| blender.carving_filter(x, y, z).unwrap_or(true),
             )
             .map_err(stage("carvers"))?;

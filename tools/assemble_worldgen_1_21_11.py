@@ -76,9 +76,10 @@ def main():
         write("block_tags.json", tags)
         counts["motion tags"] = {k: len(v) for k, v in exported.items()}
     # 26.3 has one `uncarvable` tag (bedrock); 1.21.11 gives each carver a `replaceable` list, and the upgrade drops
-    # it. The Overworld's carvers all use `overworld_carver_replaceables`, so its `uncarvable` is every other block.
-    # Nether and End carving need a table of their own per dimension, which the generator does not have yet:
-    # this directory is right for the Overworld only.
+    # it. The Overworld's carvers all use `overworld_carver_replaceables`, so `minecraft:uncarvable` (the generator's
+    # default table) is every other block. The Nether's `nether_cave` uses `nether_carver_replaceables`: its table
+    # is the block tag `horizon:uncarvable/nether`, which the generator picks for noise settings `minecraft:nether`
+    # (`horizon:uncarvable/<path>` names the settings `minecraft:<path>`). The End has no carvers.
     def expand(tag, seen=()):
         f = datagen / "data/minecraft/tags/block" / f"{tag}.json"
         names = set()
@@ -89,10 +90,12 @@ def main():
 
     tags = json.loads((out / "block_tags.json").read_text(encoding="utf-8"))
     all_blocks = set(json.loads((datagen / "reports/blocks.json").read_text(encoding="utf-8")))
-    uncarvable = sorted(all_blocks - expand("overworld_carver_replaceables"))
-    tags["minecraft:uncarvable"] = json.dumps({"values": uncarvable}, separators=(",", ":"))
+    for tag, replaceable in (("minecraft:uncarvable", "overworld_carver_replaceables"),
+                             ("horizon:uncarvable/nether", "nether_carver_replaceables")):
+        uncarvable = sorted(all_blocks - expand(replaceable))
+        tags[tag] = json.dumps({"values": uncarvable}, separators=(",", ":"))
+        counts[f"uncarvable ({tag})"] = len(uncarvable)
     write("block_tags.json", tags)
-    counts["uncarvable (Overworld only)"] = len(uncarvable)
     # [is_air, has_fluid] per registry state, from the registry facts export.
     facts = json.loads((exports / "facts.json").read_text(encoding="utf-8"))
     write("block_flags.json", [[row[1], row[2]] for row in facts["states"]])

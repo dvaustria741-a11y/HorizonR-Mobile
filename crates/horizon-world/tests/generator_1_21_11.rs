@@ -23,3 +23,48 @@ fn what_the_generator_makes_of_the_1_21_11_directory() {
         Err(e) => println!("GeneratorData::load: {e}"),
     }
 }
+
+/// 1.21.11 gives each carver its own replaceable blocks: the Overworld's carvers cannot cut netherrack, the
+/// Nether's `nether_cave` can (and still cannot cut bedrock). The generator picks the table by noise settings.
+#[test]
+fn carving_tables_differ_per_dimension_in_the_1_21_11_data() {
+    let (Some(dir), Some(reports)) = (
+        std::env::var_os("HORIZON_1_21_11_WORLDGEN"),
+        std::env::var_os("HORIZON_1_21_11_REPORTS"),
+    ) else {
+        return;
+    };
+    let blocks = fs::File::open(Path::new(&reports).join("blocks.json")).unwrap();
+    let (registry, _) = BlockRegistry::from_blocks_report(blocks).unwrap();
+    let registry: &'static BlockRegistry = Box::leak(Box::new(registry));
+    let data = GeneratorData::load(Path::new(&dir), registry).unwrap();
+    let state = |name: &str| registry.default_state(name).unwrap();
+    let overworld = data.carving_for(Some("minecraft:overworld"));
+    let nether = data.carving_for(Some("minecraft:nether"));
+    for (name, in_overworld, in_nether) in [
+        ("minecraft:stone", false, false),
+        ("minecraft:netherrack", true, false),
+        ("minecraft:soul_sand", true, false),
+        ("minecraft:crimson_nylium", true, false),
+        ("minecraft:dirt", false, false),
+        ("minecraft:bedrock", true, true),
+        ("minecraft:diamond_block", true, true),
+    ] {
+        assert_eq!(
+            overworld.is_uncarvable(state(name)),
+            in_overworld,
+            "overworld {name}"
+        );
+        assert_eq!(
+            nether.is_uncarvable(state(name)),
+            in_nether,
+            "nether {name}"
+        );
+    }
+    // Settings without a table of their own use the default one.
+    let end = data.carving_for(Some("minecraft:end"));
+    assert_eq!(
+        end.is_uncarvable(state("minecraft:netherrack")),
+        overworld.is_uncarvable(state("minecraft:netherrack"))
+    );
+}

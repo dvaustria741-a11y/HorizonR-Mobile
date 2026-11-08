@@ -96,8 +96,12 @@ tags 204/2/68). Differences between the versions that the loader found on the wa
   blocks that 1.21.11 counts as blocking motion and 26.3 does not: a real behaviour change, not an export error.
   `resin_brick_wall` has 2 of 324 states that differ and cannot be one tag entry.
 - **Carvers.** 26.3 has one `uncarvable` tag (bedrock); 1.21.11 gives each carver a `replaceable` block list (the
-  upgrade drops it). The assembler derives the Overworld's table (1,114 blocks); Nether and End carving need a
-  table per dimension, and `GeneratorData` has one table, so they are wrong until it is split. Open.
+  upgrade drops it). The assembler writes `minecraft:uncarvable` for the Overworld (1,114 blocks, from
+  `overworld_carver_replaceables`) and `horizon:uncarvable/nether` (1,141 blocks, from `nether_carver_replaceables`).
+  `GeneratorData` keeps a table per noise settings id: a `horizon:uncarvable/<path>` block tag is the table of
+  settings `minecraft:<path>`, and settings without one use `minecraft:uncarvable`, so 26.3's data (one tag) loads and
+  generates as before. The End has no carvers. Checked by `generator_1_21_11.rs` (netherrack, soul sand, nylium carvable
+  only in the Nether; bedrock in neither); not checked against the game's carved blocks, only against the tag data.
 - **Material conditions and block-state providers** are inline in 1.21.11 (no `conditions` or `state_providers`
   bundle): the loader takes an empty `conditions` bundle.
 
@@ -106,9 +110,11 @@ tags 204/2/68). Differences between the versions that the loader found on the wa
   real bytecode and 26.3's own `entrances` and `spaghetti_2d` data).
 - **Block-state keys in worldgen settings:** the generator's state reader accepts `Name`/`Properties` and `id`/`properties`.
 
-Loading is not generating. `horizon-world/tests/terrain_1_21_11.rs` compares the engine's generated Overworld heights with
-the real game's (`Vanilla1_21_11HeightOracle`, vanilla `getBaseHeight`): it gets as far as decoding the density functions
-and had not yet produced a comparison when this was written.
+Loading is not generating. `horizon-world/tests/terrain_1_21_11.rs` compares the engine's generated Overworld heights
+with the real game's (`Vanilla1_21_11HeightOracle`, vanilla `getBaseHeight` for WORLD_SURFACE_WG). Seed 12345, a 64x64 grid
+(every 8 blocks, x and z from -256 to 256): **4207 of 4225 columns (99.6%) match**. The 18 that differ are all lower in the
+engine, by 1 to 8 blocks (-8: 2, -6: 3, -4: 1, -3: 4, -2: 2, -1: 6). The engine's height is read after carving and the
+oracle's is not, so carving is the likely cause; that has not been checked (one seed, one area, Overworld only).
 
 ## Still blocked
 
