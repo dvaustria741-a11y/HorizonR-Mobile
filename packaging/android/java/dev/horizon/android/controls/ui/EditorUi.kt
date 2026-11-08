@@ -592,13 +592,13 @@ private fun ZPill(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.ZSection(title: String) {
+private fun ZSection(title: String) {
     Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
     Box(Modifier.fillMaxWidth().height(1.dp).background(ZLine))
 }
 
 @Composable
-private fun ColumnScope.ZButton(text: String, onClick: () -> Unit) {
+private fun ZButton(text: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier.padding(top = 8.dp).fillMaxWidth().height(52.dp).clip(RoundedCornerShape(10.dp)).background(ZItem).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -606,12 +606,12 @@ private fun ColumnScope.ZButton(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.ZLabel(text: String) {
+private fun ZLabel(text: String) {
     Text(text, color = ZMuted, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp))
 }
 
 @Composable
-private fun ColumnScope.ZField(key: String, initial: String, numeric: Boolean, onValue: (String) -> Unit) {
+private fun ZField(key: String, initial: String, numeric: Boolean, onValue: (String) -> Unit) {
     ZFieldBox(key, initial, numeric, onValue)
 }
 
@@ -649,7 +649,7 @@ private fun ZSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.ZSwitchRow(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
+private fun ZSwitchRow(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text(label, color = Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
         ZSwitch(value, onChange)
@@ -657,7 +657,7 @@ private fun ColumnScope.ZSwitchRow(label: String, value: Boolean, onChange: (Boo
 }
 
 @Composable
-private fun ColumnScope.ZChevron(label: String, onClick: () -> Unit) {
+private fun ZChevron(label: String, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp)) {
         Text(label, color = ZMuted, fontSize = 17.sp, modifier = Modifier.weight(1f))
         Text("›", color = Color.White, fontSize = 24.sp)
@@ -670,7 +670,7 @@ private fun zSliderColors() = SliderDefaults.colors(
 )
 
 @Composable
-private fun ColumnScope.ZSeek(label: String, value: Int, onDone: (Int) -> Unit) {
+private fun ZSeek(label: String, value: Int, onDone: (Int) -> Unit) {
     var current by remember(value) { mutableFloatStateOf(value.toFloat()) }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
         Text(label, color = ZMuted, fontSize = 17.sp, modifier = Modifier.weight(1f))
@@ -684,7 +684,7 @@ private fun ColumnScope.ZSeek(label: String, value: Int, onDone: (Int) -> Unit) 
 }
 
 @Composable
-private fun ColumnScope.ZCheck(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
+private fun ZCheck(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onChange(!value) }) {
         Checkbox(
             checked = value, onCheckedChange = onChange,
@@ -695,7 +695,7 @@ private fun ColumnScope.ZCheck(label: String, value: Boolean, onChange: (Boolean
 }
 
 @Composable
-private fun ColumnScope.ZPlain(text: String, onClick: () -> Unit) {
+private fun ZPlain(text: String, onClick: () -> Unit) {
     Text(
         text, color = Color.White, fontSize = 17.sp,
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 13.dp)
