@@ -40,6 +40,8 @@ data class Style(
     val radiusDp: Float,
     val textSp: Float,
     val radiusInPx: Boolean = false,
+    /** Whole-button opacity (Zalith's "Button Opacity"), multiplied into every colour when drawing. */
+    val opacity: Float = 1f,
 )
 
 data class ControlButton(
@@ -462,7 +464,7 @@ private object PojarushFormat {
     private fun style(s: Style?): JSONObject? = s?.let {
         JSONObject().put("fill", it.fill).put("fillPressed", it.fillPressed).put("text", it.text).put("textPressed", it.textPressed)
             .put("stroke", it.stroke).put("strokeDp", it.strokeDp.toDouble()).put("radiusDp", it.radiusDp.toDouble())
-            .put("textSp", it.textSp.toDouble()).put("radiusInPx", it.radiusInPx)
+            .put("textSp", it.textSp.toDouble()).put("radiusInPx", it.radiusInPx).put("opacity", it.opacity.toDouble())
     }
 
     private fun style(o: JSONObject?): Style? = o?.let {
@@ -470,6 +472,7 @@ private object PojarushFormat {
             it.optInt("fill"), it.optInt("fillPressed"), it.optInt("text", Color.WHITE), it.optInt("textPressed", Color.WHITE),
             it.optInt("stroke"), it.optDouble("strokeDp", 1.0).toFloat(), it.optDouble("radiusDp", 10.0).toFloat(),
             it.optDouble("textSp", 15.0).toFloat(), it.optBoolean("radiusInPx", false),
+            it.optDouble("opacity", 1.0).toFloat().coerceIn(0f, 1f),
         )
     }
 

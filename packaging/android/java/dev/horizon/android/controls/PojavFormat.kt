@@ -137,19 +137,20 @@ internal object PojavFormat {
 
     private fun style(c: JSONObject, screen: Screen, wDp: Float = 50f, hDp: Float = 50f): Style {
         val opacity = c.optDouble("opacity", 1.0).toFloat().coerceIn(0f, 1f)
-        fun scaled(color: Int) = Color.argb((Color.alpha(color) * opacity).toInt().coerceIn(0, 255), Color.red(color), Color.green(color), Color.blue(color))
         val bg = c.optInt("bgColor", 0x4D000000)
         val stroke = c.optInt("strokeColor", -1)
-        val radius = c.optDouble("cornerRadius", 0.0).toFloat() / 100f * minOf(wDp, hDp) / 2f
+        val half = minOf(wDp, hDp) / 2f
         return Style(
-            fill = scaled(bg),
-            fillPressed = scaled(Color.argb(maxOf(Color.alpha(bg), 150), 190, 190, 195)),
-            text = scaled(Color.WHITE),
-            textPressed = scaled(Color.WHITE),
-            stroke = scaled(stroke),
-            strokeDp = c.optDouble("strokeWidth", 0.0).toFloat(),
-            radiusDp = radius,
+            fill = bg,
+            fillPressed = Color.argb(maxOf(Color.alpha(bg), 150), 190, 190, 195),
+            text = Color.WHITE,
+            textPressed = Color.WHITE,
+            stroke = stroke,
+            // Zalith stores both as a percentage of half the shorter side.
+            strokeDp = c.optDouble("strokeWidth", 0.0).toFloat() / 100f * half,
+            radiusDp = c.optDouble("cornerRadius", 0.0).toFloat() / 100f * half,
             textSp = 14f,
+            opacity = opacity,
         )
     }
 

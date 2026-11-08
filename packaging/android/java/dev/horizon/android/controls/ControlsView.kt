@@ -195,6 +195,18 @@ class ControlsView(
         invalidate()
     }
 
+    /** The style a button is drawn with, so the editor starts from what is on screen. */
+    fun effectiveStyle(b: ControlButton): Style = b.style ?: defaultStyle
+
+    fun effectiveStyle(s: ControlStick): Style = s.style ?: defaultStyle
+
+    /** Where the selected button or stick is on screen, in this view's pixels. */
+    fun selectionRect(): RectF? = when (val s = selection) {
+        is Selection.Button -> buttonRects.getOrNull(s.index)?.let { RectF(it) }
+        is Selection.Stick -> stickCenters.getOrNull(s.index)?.let { RectF(it[0] - it[2], it[1] - it[2], it[0] + it[2], it[1] + it[2]) }
+        null -> null
+    }
+
     fun select(next: Selection?) {
         selection = next
         onSelectionChanged?.invoke(next)
@@ -587,7 +599,12 @@ class ControlsView(
     private var guideY: Float? = null
 
     private fun snap(target: Selection, left: Float, top: Float, w: Float, h: Float): Pair<Float, Float> {
-        val threshold = 10f * density
+        if (!settings.snapEnabled) {
+            guideX = null
+            guideY = null
+            return left to top
+        }
+        val threshold = settings.snapDp * density
         val xs = mutableListOf(0f, width.toFloat())
         val ys = mutableListOf(0f, height.toFloat())
         layout.buttons.indices.forEach { i ->
@@ -841,19 +858,20 @@ class ControlsView(
             val st = s.style ?: defaultStyle
             val c = stickCenters[i]
             val active = stickHeld[i].isNotEmpty() || stickLocked[i]
-            fill.color = alpha(if (stickArmed[i] || stickLocked[i]) st.fillPressed else st.fill, opacity)
+            val so = opacity * st.opacity
+            fill.color = alpha(if (stickArmed[i] || stickLocked[i]) st.fillPressed else st.fill, so)
             canvas.drawCircle(c[0], c[1], c[2], fill)
-            stroke.color = alpha(st.stroke, opacity)
+            stroke.color = alpha(st.stroke, so)
             stroke.strokeWidth = (st.strokeDp * density).coerceAtLeast(1f)
             canvas.drawCircle(c[0], c[1], c[2], stroke)
-            fill.color = alpha(if (active) st.fillPressed else st.stroke, opacity)
+            fill.color = alpha(if (active) st.fillPressed else st.stroke, so)
             canvas.drawCircle(c[0] + stickKnob[i][0], c[1] + stickKnob[i][1], c[2] * 0.38f, fill)
             if (stickSneak[i]) {
-                stroke.color = alpha(Color.YELLOW, opacity)
+                stroke.color = alpha(Color.YELLOW, so)
                 canvas.drawCircle(c[0], c[1], c[2] * 0.5f, stroke)
             }
             if (editMode && selection == Selection.Stick(i)) {
-                stroke.color = Color.YELLOW
+                stroke.color = SELECTION
                 stroke.strokeWidth = 2.5f * density
                 canvas.drawCircle(c[0], c[1], c[2] + 3f * density, stroke)
             }
@@ -862,7 +880,7 @@ class ControlsView(
             if (!shown(b.layer, b.visibility)) return@forEachIndexed
             drawButton(canvas, b, buttonRects[i], pressed[i] > 0 || toggled[i], opacity)
             if (editMode && selection == Selection.Button(i)) {
-                stroke.color = Color.YELLOW
+                stroke.color = SELECTION
                 stroke.strokeWidth = 2.5f * density
                 val r = buttonRects[i]
                 canvas.drawRect(r.left - 3f * density, r.top - 3f * density, r.right + 3f * density, r.bottom + 3f * density, stroke)
@@ -884,8 +902,9 @@ class ControlsView(
         if (!editMode && !captured && virtualMouse) drawCursor(canvas)
     }
 
-    private fun drawButton(canvas: Canvas, b: ControlButton, r: RectF, active: Boolean, opacity: Float) {
+    private fun drawButton(canvas: Canvas, b: ControlButton, r: RectF, active: Boolean, baseOpacity: Float) {
         val st = b.style ?: defaultStyle
+        val opacity = baseOpacity * st.opacity
         val radius = if (st.radiusInPx) st.radiusDp else st.radiusDp * density
         val rad = min(radius, min(r.width(), r.height()) / 2f)
         fill.color = alpha(if (active) st.fillPressed else st.fill, opacity)
@@ -953,3 +972,6 @@ class ControlsView(
         canvas.drawPath(cursorPath, stroke)
     }
 }
+
+/** Outline of the selected button in the editor (the Zalith editor's teal). */
+private val SELECTION = 0xFF80CBC4.toInt()

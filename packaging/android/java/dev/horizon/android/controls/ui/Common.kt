@@ -35,19 +35,21 @@ import java.util.Locale
 
 val Slate = Color(0xFF394952)
 
+// The overlay menu and layout editor use ZalithLauncher's dark grey and teal. The launcher's own
+// setting cards pass their palette in through ControlsCardStyle, so they are not affected.
 val ControlsColors = darkColorScheme(
-    primary = Color(0xFF8BE0FF),
-    onPrimary = Color(0xFF0E2430),
-    primaryContainer = Slate,
-    onPrimaryContainer = Color(0xFFE3F4FB),
-    secondary = Color(0xFFFFC857),
-    secondaryContainer = Color(0xFF2A3136),
-    onSecondaryContainer = Color(0xFFE3F4FB),
-    background = Color(0xFF14181B),
-    surface = Color(0xFF22282C),
-    surfaceVariant = Color(0xFF2A3136),
-    onSurface = Color(0xFFE6EAEC),
-    onSurfaceVariant = Color(0xFF9EA8B0),
+    primary = Color(0xFF80CBC4),
+    onPrimary = Color(0xFF000000),
+    primaryContainer = Color(0xFF2A2A2A),
+    onPrimaryContainer = Color(0xFFE6E6E6),
+    secondary = Color(0xFF80CBC4),
+    secondaryContainer = Color(0xFF2A2A2A),
+    onSecondaryContainer = Color(0xFFE6E6E6),
+    background = Color(0xFF121212),
+    surface = Color(0xFF1C1C1C),
+    surfaceVariant = Color(0xFF2A2A2A),
+    onSurface = Color(0xFFFFFFFF),
+    onSurfaceVariant = Color(0xFFB4B4B4),
     error = Color(0xFFFF8A80),
 )
 
@@ -57,7 +59,7 @@ data class ControlsCardStyle(
     val accent: Color,
     val onAccent: Color,
     val muted: Color,
-    val track: Color = Color(0xFF33424B),
+    val track: Color = Color(0xFF555555),
 )
 
 private val DefaultCardStyle = ControlsCardStyle(

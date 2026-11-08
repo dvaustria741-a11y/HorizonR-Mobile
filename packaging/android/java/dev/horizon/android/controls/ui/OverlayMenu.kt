@@ -67,7 +67,7 @@ fun OverlayMenu(
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
                 .width(300.dp)
-                .background(Color(0xF0181B1E))
+                .background(Color(0xF21C1C1C))
                 .clickable(interactionSource = panel, indication = null) {}
                 .padding(12.dp)
                 .verticalScroll(rememberScrollState()),

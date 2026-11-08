@@ -21,6 +21,13 @@ class ControlSettings(context: Context) {
     var layout: String
         get() = prefs.getString("layout", ControlLayouts.ZALITH_ID) ?: ControlLayouts.ZALITH_ID
         set(v) = prefs.edit().putString("layout", v).apply()
+    /** Editor: snap dragged buttons to the others' edges. */
+    var snapEnabled: Boolean
+        get() = prefs.getBoolean("snap_enabled", true)
+        set(v) = prefs.edit().putBoolean("snap_enabled", v).apply()
+    var snapDp: Float
+        get() = prefs.getFloat("snap_dp", 8f)
+        set(v) = prefs.edit().putFloat("snap_dp", v).apply()
     var opacity: Float
         get() = prefs.getFloat("opacity", 0.70f)
         set(v) = prefs.edit().putFloat("opacity", v).apply()
