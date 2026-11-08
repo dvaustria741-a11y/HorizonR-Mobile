@@ -82,4 +82,12 @@
     <string name="vis_always">Always</string>
     <string name="vis_game">In game</string>
     <string name="vis_menu">In menus</string>
+    <string name="controls_zalith_name">Zalith (default)</string>
+    <string name="menu_title">Controller</string>
+    <string name="menu_close">Close menu</string>
+    <string name="menu_pause">Pause menu</string>
+    <string name="menu_edit">Edit controller</string>
+    <string name="menu_layouts">Layouts</string>
+    <string name="menu_quick">Quick settings</string>
+    <string name="menu_back">← Back</string>
 </resources>

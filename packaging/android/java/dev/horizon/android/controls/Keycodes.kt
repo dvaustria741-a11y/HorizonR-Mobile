@@ -93,6 +93,31 @@ object Keycodes {
         return "key.keyboard.$tail"
     }
 
+    private val glfwCodes: Map<Int, String> by lazy {
+        buildMap {
+            for (c in 'A'..'Z') put(c.code, c.toString())
+            for (d in 0..9) {
+                put(48 + d, d.toString())
+                put(320 + d, "KP_$d")
+            }
+            for (f in 1..12) put(289 + f, "F$f")
+            put(32, "SPACE"); put(39, "APOSTROPHE"); put(44, "COMMA"); put(45, "MINUS"); put(46, "PERIOD")
+            put(47, "SLASH"); put(59, "SEMICOLON"); put(61, "EQUAL"); put(91, "LEFT_BRACKET"); put(92, "BACKSLASH")
+            put(93, "RIGHT_BRACKET"); put(96, "GRAVE_ACCENT")
+            put(256, "ESCAPE"); put(257, "ENTER"); put(258, "TAB"); put(259, "BACKSPACE"); put(260, "INSERT")
+            put(261, "DELETE"); put(262, "RIGHT"); put(263, "LEFT"); put(264, "DOWN"); put(265, "UP")
+            put(266, "PAGE_UP"); put(267, "PAGE_DOWN"); put(268, "HOME"); put(269, "END")
+            put(280, "CAPS_LOCK"); put(281, "SCROLL_LOCK"); put(282, "NUM_LOCK"); put(283, "PRINT_SCREEN"); put(284, "PAUSE")
+            put(330, "KP_DECIMAL"); put(331, "KP_DIVIDE"); put(332, "KP_MULTIPLY"); put(333, "KP_SUBTRACT")
+            put(334, "KP_ADD"); put(335, "KP_ENTER"); put(336, "KP_EQUAL")
+            put(340, "LEFT_SHIFT"); put(341, "LEFT_CONTROL"); put(342, "LEFT_ALT"); put(343, "LEFT_SUPER")
+            put(344, "RIGHT_SHIFT"); put(345, "RIGHT_CONTROL"); put(346, "RIGHT_ALT"); put(347, "RIGHT_SUPER"); put(348, "MENU")
+        }
+    }
+
+    /** The Android key code for a GLFW key code (as Pojav / Zalith control maps store them), or null. */
+    fun fromGlfwCode(code: Int): Int? = glfwCodes[code]?.let { named[it] }
+
     fun fromGlfwName(name: String): Int? = named[name.removePrefix("GLFW_KEY_")]
 
     fun fromEvdev(code: Int): Int? = evdev[code]

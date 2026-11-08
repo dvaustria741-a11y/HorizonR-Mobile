@@ -98,6 +98,7 @@ data class ControlLayout(
             val json = JSONObject(text)
             return when {
                 json.has("pojarush") -> PojarushFormat.parse(json, fallbackName)
+                json.has("mControlDataList") -> PojavFormat.parse(json, fallbackName)
                 json.has("editorVersion") -> Zalith.parse(json, fallbackName)
                 json.has("viewGroups") -> FoldCraft.parse(json, fallbackName)
                 else -> throw IllegalArgumentException("Unknown control layout format")

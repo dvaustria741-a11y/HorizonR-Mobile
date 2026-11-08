@@ -13,7 +13,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.widget.FrameLayout
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
 import dev.horizon.android.R
+import dev.horizon.android.controls.ui.ControlEditor
+import dev.horizon.android.controls.ui.ControlsTheme
+import dev.horizon.android.controls.ui.OverlayMenu
 
 /**
  * The launcher's touch layout, drawn over the game.
@@ -29,13 +37,17 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
     private var dialog: Dialog? = null
     private var view: ControlsView? = null
     private var passThrough = false
+    private var frame: FrameLayout? = null
+    private var composeView: ComposeView? = null
+    private var owner: OverlayOwner? = null
+    private var ui by mutableStateOf(OverlayUi.NONE)
 
     private val sync = object : Runnable {
         override fun run() {
             val v = view ?: return
             val captured = HorizonBridge.isCaptured()
             v.setCaptured(captured)
-            setPassThrough(!captured && !v.virtualMouse)
+            setPassThrough(!captured && !v.virtualMouse && ui == OverlayUi.NONE)
             handler.postDelayed(this, 100)
         }
     }
@@ -57,10 +69,13 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
             val d = Dialog(activity, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen)
             d.requestWindowFeature(Window.FEATURE_NO_TITLE)
             d.setCancelable(false)
+            val host = FrameLayout(activity)
+            host.addView(controls, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             d.setContentView(
-                controls,
+                host,
                 ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
             )
+            frame = host
             d.window?.let { win ->
                 win.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
                 win.setFormat(PixelFormat.TRANSLUCENT)
@@ -100,12 +115,76 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
 
     fun hide() {
         handler.removeCallbacks(sync)
+        runCatching { composeView?.disposeComposition() }
+        runCatching { owner?.destroy() }
+        composeView = null
+        owner = null
+        frame = null
+        ui = OverlayUi.NONE
         HorizonBridge.setActive(false)
         runCatching { view?.releaseAll() }
         runCatching { dialog?.dismiss() }
         view = null
         dialog = null
         passThrough = false
+    }
+
+    /** Compose is built the first time the ☰ menu opens, so a game that never opens it pays nothing. */
+    private fun ensureCompose() {
+        if (composeView != null) return
+        val host = frame ?: return
+        val win = dialog?.window ?: return
+        val o = OverlayOwner()
+        ComposeHostOwners.install(win.decorView, o, o, o)
+        val cv = ComposeView(activity)
+        cv.visibility = View.GONE
+        cv.setContent {
+            val current = ui
+            ControlsTheme {
+                when (current) {
+                    OverlayUi.MENU -> OverlayMenu(
+                        settings = settings,
+                        onClose = { setUi(OverlayUi.NONE) },
+                        onPause = {
+                            setUi(OverlayUi.NONE)
+                            toggleMenu()
+                        },
+                        onEdit = { setUi(OverlayUi.EDIT) },
+                        onLayout = { reloadLayout() },
+                        onSettingsChanged = { view?.reloadSettings() },
+                    )
+                    OverlayUi.EDIT -> view?.let { ControlEditor(it, settings) { setUi(OverlayUi.NONE) } }
+                    OverlayUi.NONE -> {}
+                }
+            }
+        }
+        host.addView(cv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        owner = o
+        composeView = cv
+    }
+
+    private fun reloadLayout() {
+        view?.setLayout(ControlLayouts.load(activity, settings.layout, activity.getString(R.string.controls_default_name)))
+    }
+
+    private fun setUi(next: OverlayUi) {
+        val v = view ?: return
+        if (next != OverlayUi.NONE) ensureCompose()
+        val was = ui
+        ui = next
+        composeView?.visibility = if (next == OverlayUi.NONE) View.GONE else View.VISIBLE
+        v.setEditMode(next == OverlayUi.EDIT)
+        // The editor has text fields, so its window takes focus; otherwise keys stay with the game.
+        dialog?.window?.let { win ->
+            if (next == OverlayUi.EDIT) win.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            else win.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        }
+        if (was == OverlayUi.EDIT && next != OverlayUi.EDIT) reloadLayout()
+        v.reloadSettings()
+    }
+
+    override fun openMenu() {
+        handler.post { if (ui == OverlayUi.NONE) setUi(OverlayUi.MENU) }
     }
 
     private fun setPassThrough(on: Boolean) {

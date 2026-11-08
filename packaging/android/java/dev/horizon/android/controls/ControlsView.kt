@@ -39,6 +39,9 @@ interface ControlsHost {
     fun sendKey(code: Int, down: Boolean)
     fun toggleKeyboard()
     fun toggleMenu()
+
+    /** The ☰ handle was tapped: the overlay opens its menu; other hosts keep the old pause-menu behavior. */
+    fun openMenu() = toggleMenu()
     fun sendText(text: String)
 }
 
@@ -505,7 +508,7 @@ class ControlsView(
     }
 
     private fun pointerDown(id: Int, x: Float, y: Float, time: Long): Boolean {
-        if (showHandle && menuRect.contains(x, y)) {
+        if (showHandle && !editMode && menuRect.contains(x, y)) {
             roles[id] = Role.Handle(x, y, x - menuRect.left, y - menuRect.top)
             return true
         }
@@ -732,7 +735,7 @@ class ControlsView(
                     settings.menuX = if (w > 0f) (menuRect.left / w).coerceIn(0f, 1f) else 0.5f
                     settings.menuY = if (h > 0f) (menuRect.top / h).coerceIn(0f, 1f) else 0f
                 } else if (!cancel) {
-                    host.toggleMenu()
+                    host.openMenu()
                 }
             }
             is Role.Drag -> {
@@ -871,7 +874,7 @@ class ControlsView(
             guideX?.let { canvas.drawLine(it, 0f, it, height.toFloat(), stroke) }
             guideY?.let { canvas.drawLine(0f, it, width.toFloat(), it, stroke) }
         }
-        if (showHandle) {
+        if (showHandle && !editMode) {
             fill.color = alpha(Color.argb(170, 24, 24, 28), opacity.coerceAtLeast(0.50f))
             canvas.drawRoundRect(menuRect, 8f * density, 8f * density, fill)
             text.color = Color.WHITE

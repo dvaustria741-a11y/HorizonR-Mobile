@@ -3,6 +3,7 @@ package dev.horizon.android.controls
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
+import dev.horizon.android.R
 import dev.horizon.android.bridge.HorizonNativeBridge
 import java.io.File
 
@@ -18,7 +19,7 @@ class ControlSettings(context: Context) {
         get() = prefs.getBoolean("overlay_enabled", false)
         set(v) = prefs.edit().putBoolean("overlay_enabled", v).apply()
     var layout: String
-        get() = prefs.getString("layout", DefaultLayout.ID) ?: DefaultLayout.ID
+        get() = prefs.getString("layout", ControlLayouts.ZALITH_ID) ?: ControlLayouts.ZALITH_ID
         set(v) = prefs.edit().putString("layout", v).apply()
     var opacity: Float
         get() = prefs.getFloat("opacity", 0.70f)
@@ -96,10 +97,14 @@ class ControlSettings(context: Context) {
 object ControlLayouts {
     data class Entry(val id: String, val name: String, val removable: Boolean)
 
+    /** ZalithLauncher's own default control map (assets/controls/zalith_default.json). */
+    const val ZALITH_ID = "asset:zalith_default.json"
+
     val dir: File get() = File(ControlPaths.root, "controls")
 
     fun list(context: Context, defaultName: String): List<Entry> {
         val builtIn = listOf(
+            Entry(ZALITH_ID, context.getString(R.string.controls_zalith_name), false),
             Entry(DefaultLayout.ID, defaultName, false),
         )
         val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".json", true) }.orEmpty()
@@ -114,7 +119,7 @@ object ControlLayouts {
     fun load(context: Context, id: String, defaultName: String): ControlLayout = runCatching {
         when {
             id.startsWith("asset:") -> context.assets.open("controls/${id.removePrefix("asset:")}").bufferedReader().use {
-                ControlLayout.parse(it.readText(), id.removePrefix("asset:"))
+                ControlLayout.parse(it.readText(), if (id == ZALITH_ID) context.getString(R.string.controls_zalith_name) else id.removePrefix("asset:"))
             }
             id.startsWith("file:") -> File(dir, id.removePrefix("file:")).let { ControlLayout.parse(it.readText(), it.nameWithoutExtension) }
             else -> null

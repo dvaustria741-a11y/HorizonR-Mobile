@@ -135,7 +135,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                 .align(Alignment.TopCenter)
                 .padding(top = 6.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xDD1E1129))
+                .background(Color(0xE6181B1E))
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -171,7 +171,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                     .width(300.dp)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xEE1E1129))
+                    .background(Color(0xF0181B1E))
                     .padding(10.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
