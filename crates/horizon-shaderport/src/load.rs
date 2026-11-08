@@ -63,6 +63,7 @@ pub(crate) fn inputs() -> GameInputs {
         hand: Some(terrain.clone()),
         lines: Some(terrain),
         terrain_geometry: None,
+        terrain_parts: None,
         entity_geometry: None,
     }
 }
