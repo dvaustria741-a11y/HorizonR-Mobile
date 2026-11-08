@@ -12,6 +12,11 @@ class ControlSettings(context: Context) {
 
     init {
         ControlPaths.init(context)
+        // Before the Zalith layout existed the active layout was saved as Horizon's own, and a saved
+        // value beats the new default. Switch to Zalith (default) once; saved layouts stay in Load.
+        if (prefs.getInt("layout_rev", 0) < 1) {
+            prefs.edit().putString("layout", ControlLayouts.ZALITH_ID).putInt("layout_rev", 1).apply()
+        }
     }
 
     /** Draw the touch layout over the game and feed it to the engine. Off keeps the engine's own touch controls. */
@@ -131,7 +136,8 @@ object ControlLayouts {
             id.startsWith("file:") -> File(dir, id.removePrefix("file:")).let { ControlLayout.parse(it.readText(), it.nameWithoutExtension) }
             else -> null
         }
-    }.getOrNull() ?: DefaultLayout.create(defaultName)
+    }.onFailure { android.util.Log.e("ControlLayouts", "Could not load layout $id: ${it.message}", it) }
+        .getOrNull() ?: DefaultLayout.create(defaultName)
 
     fun import(context: Context, uri: Uri): Entry {
         val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
