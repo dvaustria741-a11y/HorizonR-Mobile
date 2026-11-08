@@ -7,7 +7,8 @@ use horizon_client::{
     chunk::Chunk,
     entity_nbt,
     mobs::Who,
-    save::{ChunkExtras, random_uuid, text, uuid_text},
+    random_source,
+    save::{ChunkExtras, random_uuid, text, uuid_from_text, uuid_text},
     scoreboard::Scoreboard,
 };
 use horizon_core::{
@@ -52,6 +53,15 @@ pub struct EntityMemory {
     /// Only filled while a mod is loaded.
     pub(super) live: Vec<(u32, String, bool)>,
 }
+impl EntityMemory {
+    /// The UUID entity `id` was loaded or saved with: what a save writes for a
+    /// field naming that entity (`entity_nbt::mob_to_nbt`'s `uuid_of`). `None`
+    /// for one that has none yet, so no reference is written rather than a
+    /// made-up UUID nothing would answer for.
+    pub(super) fn uuid_of(&self, id: u32) -> Option<[i32; 4]> {
+        self.uuids.get(&id).copied()
+    }
+}
 
 /// The key that marks a compound queued with the chunk loads as a fresh add
 /// (`PersistentEntitySectionManager.addNewEntity`: `/summon`, a portal
@@ -71,13 +81,6 @@ pub(super) fn mark_fresh(tag: &mut Tag) {
 /// `teleportSameDimension`, which moves the entity without removing it), so
 /// it doesn't join the level again. Taken off like [`FRESH_ADD`].
 const SAME_LEVEL_MOVE: &str = "horizon:same_level_move";
-
-/// Queue `tag` with the chunk loads as an entity moving within its level.
-pub(super) fn mark_moved(tag: &mut Tag) {
-    if let Tag::Compound(c) = tag {
-        c.insert(SAME_LEVEL_MOVE.into(), Tag::Byte(1));
-    }
-}
 
 /// Whether `tag` was queued as a move within its level; the mark comes off.
 fn take_moved(tag: &mut Tag) -> bool {
@@ -183,6 +186,93 @@ impl Game<'_> {
             .world
             .block_entities
             .chunk_attachments(chunk.x, chunk.z);
+        // ComparatorBlockEntity.saveAdditional: the output belongs to the
+        // circuit, not the inventory map. Overlay only that field on the raw
+        // compound so components and other saved data survive.
+        for (p, output) in &self.block_ticks.comparator_outputs {
+            if (p.x >> 4, p.z >> 4) != (chunk.x, chunk.z)
+                || self
+                    .res
+                    .facts()
+                    .get(chunk.block(p.x & 15, p.y, p.z & 15))
+                    .name
+                    .as_ref()
+                    != "minecraft:comparator"
+            {
+                continue;
+            }
+            let at = [p.x, p.y, p.z];
+            let index = extras
+                .block_entities
+                .iter()
+                .position(|t| block_entity_pos(t) == at);
+            let tag = match index {
+                Some(i) => &mut extras.block_entities[i],
+                None => {
+                    extras.block_entities.push(Tag::compound([
+                        ("id", Tag::String("minecraft:comparator".into())),
+                        ("x", Tag::Int(p.x)),
+                        ("y", Tag::Int(p.y)),
+                        ("z", Tag::Int(p.z)),
+                    ]));
+                    extras.block_entities.last_mut().unwrap()
+                }
+            };
+            if text(tag.get("id")).as_deref() != Some("minecraft:comparator") {
+                *tag = Tag::compound([
+                    ("id", Tag::String("minecraft:comparator".into())),
+                    ("x", Tag::Int(p.x)),
+                    ("y", Tag::Int(p.y)),
+                    ("z", Tag::Int(p.z)),
+                ]);
+            }
+            if let Tag::Compound(c) = tag {
+                c.insert("OutputSignal".into(), Tag::Int(*output));
+            }
+        }
+        // HopperBlockEntity.saveAdditional: its inventory is modelled, but its
+        // transfer phase lives in Game. The snapshot's source overlay preserves
+        // the remaining NBT without changing the live source compound.
+        for (p, state) in &self.hoppers {
+            if (p.0 >> 4, p.2 >> 4) != (chunk.x, chunk.z)
+                || self
+                    .res
+                    .facts()
+                    .get(chunk.block(p.0 & 15, p.1, p.2 & 15))
+                    .name
+                    .as_ref()
+                    != "minecraft:hopper"
+            {
+                continue;
+            }
+            let index = extras.block_entity_sources.iter().position(|(q, _)| q == p);
+            let tag = match index {
+                Some(i) => &mut extras.block_entity_sources[i].1,
+                None => {
+                    extras.block_entity_sources.push((
+                        *p,
+                        Tag::compound([
+                            ("id", Tag::String("minecraft:hopper".into())),
+                            ("x", Tag::Int(p.0)),
+                            ("y", Tag::Int(p.1)),
+                            ("z", Tag::Int(p.2)),
+                        ]),
+                    ));
+                    &mut extras.block_entity_sources.last_mut().unwrap().1
+                }
+            };
+            if text(tag.get("id")).as_deref() != Some("minecraft:hopper") {
+                *tag = Tag::compound([
+                    ("id", Tag::String("minecraft:hopper".into())),
+                    ("x", Tag::Int(p.0)),
+                    ("y", Tag::Int(p.1)),
+                    ("z", Tag::Int(p.2)),
+                ]);
+            }
+            if let Tag::Compound(c) = tag {
+                c.insert("TransferCooldown".into(), Tag::Int(state.cooldown));
+            }
+        }
         // A chunk the scheduler hasn't registered yet (one loaded and
         // unloaded again before the next tick) still holds its saved ticks:
         // `register_chunk_ticks` empties that list once it takes them.
@@ -230,6 +320,30 @@ impl Game<'_> {
     pub(super) fn register_chunk_ticks(&mut self, key: (i32, i32)) {
         let pos = ChunkPos::new(key.0, key.1);
         let saved = self.world.chunks.get(&key).and_then(|c| c.saved.clone());
+        // Load before the first block-entity tick, including while ticks are
+        // frozen. The scheduler's maps are authoritative from this point on.
+        if let Some(saved) = saved.as_deref() {
+            for tag in &saved.block_entities {
+                let p = block_entity_pos(tag);
+                if text(tag.get("id")).as_deref() == Some("minecraft:comparator")
+                    && self.data_block_name(p) == "minecraft:comparator"
+                    && let Some(tag) = horizon_client::block_entity_nbt::canonical(tag)
+                    && let Some(Tag::Int(output)) = tag.get("OutputSignal")
+                {
+                    self.block_ticks
+                        .comparator_outputs
+                        .insert(BlockPos::new(p[0], p[1], p[2]), *output);
+                }
+            }
+            for (p, tag) in &saved.block_entity_sources {
+                if text(tag.get("id")).as_deref() == Some("minecraft:hopper")
+                    && self.data_block_name([p.0, p.1, p.2]) == "minecraft:hopper"
+                {
+                    self.hoppers
+                        .insert(*p, super::machines::HopperState::load(tag));
+                }
+            }
+        }
         // ChunkAccess.inhabitedTime as saved.
         if let Some(Tag::Long(t)) = saved
             .as_deref()
@@ -371,6 +485,7 @@ impl Game<'_> {
                         | "minecraft:small_fireball"
                         | "minecraft:wind_charge"
                         | "minecraft:breeze_wind_charge"
+                        | "minecraft:wither_skull"
                         | "minecraft:snowball"
                         | "minecraft:egg"
                         | "minecraft:ender_pearl"
@@ -454,9 +569,14 @@ impl Game<'_> {
     /// A saved dropped item.
     pub(super) fn load_item(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
         self.next_entity += 1;
-        let bob = self.world.random.next_float() * std::f32::consts::PI * 2.0;
+        // `ItemEntity(EntityType, Level)` before the load: the item's own random
+        // makes its UUID (kept unless the tag has one) and bobOffs, not the level's.
+        // Its yaw, the next draw, is always replaced by the saved rotation.
+        let mut own = random_source::entity();
+        let fresh = horizon_client::save::insecure_uuid(&mut own);
+        let bob = own.next_float() * std::f32::consts::PI * 2.0;
         if let Some(e) = entity_nbt::item_entity_from_nbt(&tag, self.next_entity, bob) {
-            self.remember(e.id, uuid, tag);
+            self.remember(e.id, Some(uuid.unwrap_or(fresh)), tag);
             self.dropped.push(e);
         }
     }
@@ -505,7 +625,8 @@ impl Game<'_> {
 
     /// A saved llama spit or shulker bullet.
     pub(super) fn load_spit_or_bullet(&mut self, tag: Tag, player_uuid: Option<[i32; 4]>) {
-        if let Some(mut p) = entity_nbt::spit_or_bullet_from_nbt(&tag, player_uuid) {
+        let target = self.bullet_target(&tag);
+        if let Some(mut p) = entity_nbt::spit_or_bullet_from_nbt(&tag, player_uuid, target) {
             self.claim_owner(&mut p);
             self.next_entity += 1;
             p.id = self.next_entity;
@@ -513,6 +634,14 @@ impl Game<'_> {
             self.add_projectile(p);
             self.remember_last_projectile_tags(&tag);
         }
+    }
+    /// `ShulkerBullet.readAdditionalSaveData`'s `Target`, resolved over the UUID
+    /// bridge: the `Who` of the loaded player or mob that UUID names, or `None`
+    /// for one that is not here. Vanilla keeps the UUID and re-resolves it every
+    /// tick; a `Who` can only name an entity in the level, so a target that is
+    /// away leaves the bullet with none and it falls (`ShulkerBullet.tick`).
+    fn bullet_target(&self, tag: &Tag) -> Option<Who> {
+        self.who_by_uuid(entity_nbt::bullet_target(tag)?)
     }
     /// A saved fireball or wind charge.
     pub(super) fn load_fireball(
@@ -556,7 +685,8 @@ impl Game<'_> {
     pub(super) fn load_falling(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
         if let Some((state, position, velocity, age, fall_distance)) =
             entity_nbt::falling_block_from_nbt(&tag)
-            && let Some(state) = self.state_from_nbt(&state)
+            && let Some(state) =
+                entity_nbt::falling_state_from_nbt(self.pack.assets.registry, &state)
         {
             let (no_gravity, drop_item) = entity_nbt::falling_block_flags(&tag);
             self.next_entity += 1;
@@ -622,8 +752,7 @@ impl Game<'_> {
         }
     }
 
-    /// A saved primed TNT.
-    // PrimedTnt.readAdditionalSaveData: its fuse (80 when absent) and motion.
+    /// `PrimedTnt.readAdditionalSaveData`: its numeric short fuse (80 when absent) and motion.
     // Its Passengers ride it (EntityType.loadEntityRecursive forces them on).
     pub(super) fn load_tnt(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
         let mut tag = tag;
@@ -631,10 +760,13 @@ impl Game<'_> {
         if let Some(position) = entity_nbt::position(&tag) {
             self.next_entity += 1;
             let id = self.next_entity;
-            let fuse = match tag.get("fuse") {
-                Some(Tag::Short(f)) => i32::from(*f),
-                _ => 80,
-            };
+            // getShortOr uses NumericTag.shortValue: floor floating values
+            // to int before short narrowing; integer tags narrow directly.
+            let fuse = i32::from(match tag.get("fuse") {
+                Some(Tag::Float(v)) => f32::from_bits(*v).floor() as i32 as i16,
+                Some(Tag::Double(v)) => f64::from_bits(*v).floor() as i32 as i16,
+                other => horizon_client::save::number(other).unwrap_or(80) as i16,
+            });
             self.tnts.push(super::tnt::PrimedTnt {
                 rotation: [0.0, 0.0],
                 join: Default::default(),
@@ -645,6 +777,9 @@ impl Game<'_> {
                 velocity: entity_nbt::motion(&tag),
                 fuse,
                 on_ground: matches!(tag.get("OnGround"), Some(Tag::Byte(1))),
+                fall_distance: horizon_client::save::float(tag.get("fall_distance")).unwrap_or(0.0),
+                stuck: Vec3::ZERO,
+                in_water: false,
                 owner: None,
                 guest: None,
                 // PrimedTnt.readAdditionalSaveData: 4 by default,
@@ -672,6 +807,7 @@ impl Game<'_> {
             let (wood, chest) = super::boats::any_boat_wood(k).unwrap_or(("oak", false));
             let mut b = super::boats::Boat::new(id, std::sync::Arc::from(wood), position, yaw);
             b.no_gravity = entity_nbt::flag(&tag, "NoGravity");
+            b.fire_ticks = super::boats::saved_fire(&tag);
             b.pitch = entity_nbt::rotation(&tag)[1];
             if chest {
                 b = b.with_chest();
@@ -720,7 +856,9 @@ impl Game<'_> {
 
     /// The saved ender dragon.
     pub(super) fn load_dragon(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
-        let seed = self.world.random.next_long();
+        // The loaded dragon's own random (`Entity.random`): loading draws
+        // nothing from the level's.
+        let seed = random_source::unique_seed();
         if self.dragon.is_none()
             && let Some(mut d) = super::dragon::Dragon::from_nbt(&tag, seed)
         {
@@ -736,8 +874,9 @@ impl Game<'_> {
 
     /// A saved end crystal.
     pub(super) fn load_crystal(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
-        let time = self.world.random.next_int_bound(100_000).unwrap_or(0);
-        if let Some(mut c) = super::dragon::Crystal::from_nbt(&tag, time) {
+        let drawn = self.world.random.next_int_bound(100_000).unwrap_or(0);
+        if let Some(mut c) = super::dragon::Crystal::from_nbt(&tag, drawn) {
+            c.time = super::dragon::Crystal::start_time(c.position, drawn, self.clock.still());
             // EndCrystal's constructor takes an id from the
             // entity counter.
             self.next_entity += 1;
@@ -787,6 +926,23 @@ impl Game<'_> {
             self.persist.unknown.entry(key).or_default().push(tag);
         }
     }
+    /// `Entity.load`: adopt the bounded TAG_LIST_CODEC input as a set.
+    /// Keep that adopted Mob state in the retained compound for commands and saves.
+    pub(in crate::game) fn normalize_loaded_mob_tags(tag: &mut Tag) {
+        let Tag::Compound(raw) = tag else {
+            return;
+        };
+        let Some(Tag::List(mut tags)) = raw.remove(&"Tags".into()) else {
+            return;
+        };
+        tags.retain(|tag| matches!(tag, Tag::String(_)));
+        tags.truncate(1024);
+        let mut seen = HashSet::new();
+        tags.retain(|tag| seen.insert(tag.clone()));
+        if !tags.is_empty() {
+            raw.insert("Tags".into(), Tag::List(tags));
+        }
+    }
     /// A saved mob and, under `Passengers`, the mobs riding it.
     pub(super) fn load_mob(&mut self, tag: Tag, mount: Option<u32>) -> Option<u32> {
         let uuid = entity_nbt::uuid(&tag);
@@ -797,6 +953,7 @@ impl Game<'_> {
         // Structure mobs that generation left to finish: saves from before
         // they were finalized at placement, or a placement that could not.
         let mut tag = tag;
+        Self::normalize_loaded_mob_tags(&mut tag);
         let mut finalize = false;
         if let Tag::Compound(c) = &mut tag {
             finalize = c.remove(&"horizon:finalize".into()).is_some();
@@ -855,7 +1012,7 @@ impl Game<'_> {
             if let Some(r) = self.load_mob(rider, Some(id))
                 && let Some(v) = self.mobs.iter_mut().find(|m| m.id == id)
             {
-                v.extra.rider = Some(r);
+                v.extra.rider.get_or_insert(r);
             }
         }
         Some(id)
@@ -883,19 +1040,47 @@ impl Game<'_> {
         }
         riders
     }
-    /// The mobs riding entity `id` under `tag`'s `Passengers`, after the
-    /// passengers it kept from loading.
+    /// `Entity.shouldBeSaved`: the mobs riding entity `id` under `tag`'s
+    /// `Passengers`, after the passengers it kept from loading. Discarded
+    /// passengers cannot save even before their list entry is swept.
     pub(super) fn put_mob_passengers(&mut self, tag: &mut Tag, id: u32) {
-        let riders: Vec<usize> = (0..self.mobs.len())
-            .filter(|&j| self.mobs[j].extra.mount == Some(id) && self.mobs[j].alive())
+        let mut riders: Vec<usize> = (0..self.mobs.len())
+            .filter(|&j| {
+                self.mobs[j].extra.mount == Some(id)
+                    && self.mobs[j].alive()
+                    && !self.mobs[j].removed
+            })
             .collect();
+        if let Some(driver) = self
+            .mobs
+            .iter()
+            .find(|m| m.id == id)
+            .and_then(|m| m.extra.rider)
+            && let Some(pos) = riders.iter().position(|&j| self.mobs[j].id == driver)
+            && pos != 0
+        {
+            let d = riders.remove(pos);
+            riders.insert(0, d);
+        }
         let riders: Vec<Tag> = riders.into_iter().map(|j| self.mob_tree_nbt(j)).collect();
         add_passengers(tag, riders);
     }
     /// An entity of a type Horizon does not simulate, kept as its compound.
     fn load_other(&mut self, mut tag: Tag, kind: &str) -> Option<u32> {
         strip_finalize(&mut tag);
-        let position = entity_nbt::position(&tag)?;
+        let mut position = entity_nbt::position(&tag)?;
+        let item_transformation = if kind == "minecraft:item_display" {
+            super::native_entities::ItemDisplayTransformation::from_tag(tag.get("transformation"))
+        } else {
+            None
+        };
+        let knot_check = (kind == "minecraft:leash_knot").then_some(0);
+        if knot_check.is_some() {
+            // BlockAttachedEntity.setPos -> LeashFenceKnotEntity.recalculateBoundingBox.
+            let block = BlockPos::containing(position);
+            position =
+                horizon_client::mobs::leash::knot_state([block.x, block.y, block.z]).position;
+        }
         let rotation = match tag.get("Rotation") {
             Some(Tag::List(l)) => {
                 let f = |i: usize| match l.get(i) {
@@ -916,6 +1101,8 @@ impl Game<'_> {
             position,
             yaw: rotation[0],
             pitch: rotation[1],
+            item_transformation,
+            knot_check,
         });
         Some(id)
     }
@@ -946,6 +1133,25 @@ impl Game<'_> {
                 ]),
             );
             c.insert("UUID".into(), Tag::IntArray(uuid.to_vec()));
+            if let Some(transformation) = o.item_transformation {
+                c.insert("transformation".into(), transformation.to_tag());
+            }
+            if matches!(o.kind.as_str(), "minecraft:interaction" | "interaction") {
+                // Interaction.addAdditionalSaveData always writes these settings.
+                c.entry("width".into())
+                    .or_insert(Tag::Float(1.0_f32.to_bits()));
+                c.entry("height".into())
+                    .or_insert(Tag::Float(1.0_f32.to_bits()));
+                c.entry("response".into()).or_insert(Tag::Byte(0));
+            }
+        }
+        // Marker and LeashFenceKnotEntity still use Entity.saveWithoutId's
+        // common fields when their additional-save methods write nothing.
+        if matches!(
+            o.kind.as_str(),
+            "minecraft:marker" | "marker" | "minecraft:leash_knot"
+        ) {
+            entity_nbt::fill_common_defaults(&mut tag);
         }
         tag
     }
@@ -979,15 +1185,7 @@ impl Game<'_> {
         if self.boats.iter().any(|b| b.id == root) {
             let uuid = self.uuid_for(root);
             let b = self.boats.iter().find(|b| b.id == root)?;
-            let mut tag = entity_nbt::boat_to_nbt(
-                &b.entity_type(),
-                b.position,
-                b.velocity,
-                [b.yaw, b.pitch],
-                uuid,
-                self.persist.raw.get(&root),
-                b.chest.then_some(&b.items[..]),
-            );
+            let mut tag = b.to_nbt(uuid, self.persist.raw.get(&root));
             self.put_mob_passengers(&mut tag, root);
             return Some(tag);
         }
@@ -1118,19 +1316,50 @@ impl Game<'_> {
     pub(super) fn mob_tree_nbt(&mut self, i: usize) -> Tag {
         let id = self.mobs[i].id;
         let uuid = self.uuid_for(id);
+        // A warden's anger names each suspect by UUID. A mob that has never been
+        // loaded or saved has no UUID yet, so give it one, or the save would
+        // drop the anger at it (`who_uuid` writes nothing for a mob the map does
+        // not know).
+        let suspects: Vec<u32> = self.mobs[i]
+            .extra
+            .warden
+            .as_ref()
+            .map(|st| {
+                st.anger
+                    .suspects()
+                    .iter()
+                    .filter_map(|who| match who {
+                        Who::Mob(id) => Some(*id),
+                        Who::Player => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for suspect in suspects {
+            self.uuid_for(suspect);
+        }
         // `NeutralMob.addPersistentAngerSaveData`: the anger ends at an
         // absolute game time, so it goes on while the chunk is unloaded, and
         // the target is the entity the mob is angry at.
         let anger = self.mobs[i].extra.anger;
-        self.mobs[i].extra.anger_end = if anger > 0 {
-            self.world.game_time + i64::from(anger)
-        } else {
-            -1
-        };
+        // A loaded NoAI Enderman owns an absolute NeutralMob timestamp;
+        // its skipped AI does not decrement the derived gameplay counter.
+        if !(self.mobs[i].species() == horizon_client::mobs::Species::Enderman
+            && self.mobs[i].no_ai)
+        {
+            self.mobs[i].extra.anger_end = if anger > 0 {
+                self.world.game_time + i64::from(anger)
+            } else {
+                -1
+            };
+        }
         self.mobs[i].extra.angry_at = if anger > 0 {
-            // A wolf keeps its anger's target itself, also once the target
-            // is gone (`tame::update_persistent_anger`).
-            if self.mobs[i].species() == horizon_client::mobs::Species::Wolf {
+            // A wolf and an iron golem keep their anger's target themselves,
+            // also once the target is gone (`tame::update_persistent_anger`).
+            if matches!(
+                self.mobs[i].species(),
+                horizon_client::mobs::Species::Wolf | horizon_client::mobs::Species::IronGolem
+            ) {
                 self.mobs[i].extra.angry_at
             } else {
                 self.mobs[i].ai.target
@@ -1138,11 +1367,20 @@ impl Game<'_> {
         } else {
             None
         };
+        // A mob gets its UUID when it is first saved (`uuid_for`): the anger
+        // target still in the world gets it now, so `uuid_of` can name it.
+        if let Some(horizon_client::mobs::Who::Mob(target)) = self.mobs[i].extra.angry_at
+            && target != 0
+            && self.mobs.iter().any(|m| m.id == target)
+        {
+            self.uuid_for(target);
+        }
         let mut tag = entity_nbt::mob_to_nbt(
             &self.mobs[i],
             uuid,
             self.persist.raw.get(&id),
             Some(self.pack.assets.registry),
+            |other| self.persist.uuid_of(other),
         );
         if horizon_client::mobs::camel::is_camel(self.mobs[i].species())
             && let Tag::Compound(c) = &mut tag
@@ -1235,6 +1473,19 @@ impl Game<'_> {
             self.persist.raw.insert(id, Tag::Compound(map));
         }
     }
+    /// `Entity.isSilent`: mobs model it directly; other entities retain it
+    /// in their saved fields, including command changes to `Silent`.
+    pub(super) fn entity_silent(&self, id: u32) -> bool {
+        self.mobs.iter().find(|m| m.id == id).map_or_else(
+            || {
+                self.persist
+                    .raw
+                    .get(&id)
+                    .is_some_and(|tag| horizon_client::entity_nbt::flag(tag, "Silent"))
+            },
+            |m| m.silent,
+        )
+    }
     /// The `Tags` of the projectile `add_projectile` just pushed.
     fn remember_last_projectile_tags(&mut self, tag: &Tag) {
         if let Some(id) = self.creatures.projectiles.last().map(|p| p.id) {
@@ -1264,13 +1515,24 @@ impl Game<'_> {
             join_saved_team(&mut self.score.board, &name, tag);
         }
     }
+    /// The entity a UUID read back from a save names, while it is in the level:
+    /// the player, or a mob loaded or saved with that UUID. `None` for nothing
+    /// loaded (an entity that is not here, or one `Who` cannot carry) - never
+    /// some other entity as a stand-in.
+    pub(super) fn who_by_uuid(&self, uuid: [i32; 4]) -> Option<Who> {
+        let player = if self.player.is_some() {
+            self.level.player_uuid
+        } else {
+            None
+        };
+        entity_nbt::who_by_uuid(&self.persist.uuids, &self.mobs, player, uuid)
+    }
     /// The mob that was loaded or saved with a UUID.
     pub(super) fn mob_by_uuid(&self, uuid: [i32; 4]) -> Option<u32> {
-        self.persist
-            .uuids
-            .iter()
-            .find(|(id, u)| **u == uuid && self.mobs.iter().any(|m| m.id == **id))
-            .map(|(id, _)| *id)
+        match self.who_by_uuid(uuid) {
+            Some(Who::Mob(id)) => Some(id),
+            _ => None,
+        }
     }
     /// A mob's UUID, made up for new ones.
     pub(super) fn mob_uuid(&mut self, id: u32) -> [i32; 4] {
@@ -1392,6 +1654,23 @@ impl Game<'_> {
                     .push(self.fangs_to_nbt(f, uuid));
             }
         }
+        // `AreaEffectCloud.addAdditionalSaveData`: a lingering potion's cloud is
+        // an entity of its chunk. A dragon's own breath carries no potion and
+        // is not written.
+        for c in &self.breath_clouds {
+            let at = Vec3::new(c.at[0], c.at[1], c.at[2]);
+            if c.potion.is_none() || !keys.contains(&chunk_of(at)) {
+                continue;
+            }
+            let uuid = self
+                .persist
+                .uuids
+                .get(&c.id)
+                .copied()
+                .unwrap_or_else(random_uuid);
+            let tag = super::potions::potion_cloud_to_nbt(c, uuid, self.persist.raw.get(&c.id));
+            out.entry(chunk_of(at)).or_default().push(tag);
+        }
         for o in &self.others {
             if keys.contains(&chunk_of(o.position)) {
                 let uuid = self
@@ -1490,6 +1769,15 @@ impl Game<'_> {
                 }
                 keep
             });
+            // The potion clouds written above leave with their chunk; a
+            // dragon's breath (no potion) was not written and stays.
+            self.breath_clouds.retain(|c| {
+                let keep = c.potion.is_none() || !gone(Vec3::new(c.at[0], c.at[1], c.at[2]));
+                if !keep {
+                    removed.push(c.id);
+                }
+                keep
+            });
             // Riders leave with their root vehicle, a boat's with the boat.
             let leaving: HashSet<u32> = (0..self.mobs.len())
                 .filter(|&i| {
@@ -1552,13 +1840,56 @@ impl Game<'_> {
             self.save.save_entities_later(chunks)
         }
     }
-    pub(super) fn prune_entity_memory(&mut self) {
+    /// The ids of every entity in the level now.
+    fn live_entity_ids(&self) -> HashSet<u32> {
         use super::entity::{Entity as _, entity_lists_of, for_each_entity};
-        // Forget entities that no longer exist.
         let mut alive: HashSet<u32> = self.entity_ids_off_walk().collect();
         for_each_entity!(entity_lists_of!(self), entity => {
             alive.insert(entity.id());
         });
+        alive
+    }
+    /// `ServerLevel.EntityCallbacks.onDestroyed` → `Scoreboard.entityRemoved`
+    /// for every kind of entity: a mob's body once it is removed, an item
+    /// picked up or killed, an expired cloud, a discarded projectile leaves
+    /// the board and its team. Unloaded and
+    /// travelling entities leave `persist.uuids` first (`forget_entity`,
+    /// `detach_entity`), so they keep their scores, as vanilla's do. Once a
+    /// tick, so a command in the same tick still sees them; nothing to do
+    /// while no entity holds a score or a team.
+    pub(super) fn score_destroyed_entities(&mut self) {
+        let board = &self.score.board;
+        let held: HashSet<[i32; 4]> = board
+            .scores
+            .keys()
+            .map(String::as_str)
+            .chain(board.team_members())
+            .filter(|holder| holder.len() == 36)
+            .filter_map(uuid_from_text)
+            .collect();
+        if held.is_empty() {
+            return;
+        }
+        let candidates: Vec<(u32, [i32; 4])> = self
+            .persist
+            .uuids
+            .iter()
+            .filter(|(_, uuid)| held.contains(*uuid))
+            .map(|(&id, &uuid)| (id, uuid))
+            .collect();
+        if candidates.is_empty() {
+            return;
+        }
+        let alive = self.live_entity_ids();
+        for (id, uuid) in candidates {
+            if !alive.contains(&id) {
+                self.score.board.entity_removed(&uuid_text(uuid));
+            }
+        }
+    }
+    pub(super) fn prune_entity_memory(&mut self) {
+        // Forget entities that no longer exist.
+        let alive = self.live_entity_ids();
         for (id, uuid) in &self.persist.uuids {
             if !alive.contains(id) {
                 self.entity_attachments.remove(uuid);
@@ -1633,8 +1964,12 @@ impl Game<'_> {
         keys.contains(&chunk_of(at)).then(|| {
             let id = self.dropped[i].id;
             let uuid = self.uuid_for(id);
-            let tag =
-                entity_nbt::item_entity_to_nbt(&self.dropped[i], uuid, self.persist.raw.get(&id));
+            let tag = entity_nbt::item_entity_to_nbt_with_items(
+                &self.dropped[i],
+                uuid,
+                self.persist.raw.get(&id),
+                self.items(),
+            );
             (chunk_of(at), tag)
         })
     }
@@ -1663,6 +1998,15 @@ impl Game<'_> {
         if !keys.contains(&chunk_of(p.position)) || !entity_nbt::saved_with_chunk(p) {
             return None;
         }
+        // `ShulkerBullet`'s target, over the UUID bridge: a mob the level has
+        // no UUID for writes no `Target` rather than a made-up one.
+        let target = match &p.kind {
+            horizon_client::projectiles::ProjectileKind::ShulkerBullet {
+                target: Some(who),
+                ..
+            } => self.save_who_uuid(*who),
+            _ => None,
+        };
         let owner = p.owner_uuid;
         let raw = anon_raw(&self.persist, p.kind.id(), p.position);
         let uuid = saved_uuid(&self.persist, p.id);
@@ -1674,7 +2018,7 @@ impl Game<'_> {
         let tag = entity_nbt::arrow_to_nbt(p, uuid, owner, in_block, raw.as_ref())
             .or_else(|| entity_nbt::fireball_to_nbt(p, uuid, owner, raw.as_ref()))
             .or_else(|| entity_nbt::throwable_to_nbt(p, uuid, owner, raw.as_ref()))
-            .or_else(|| entity_nbt::spit_or_bullet_to_nbt(p, uuid, owner, raw.as_ref()))?;
+            .or_else(|| entity_nbt::spit_or_bullet_to_nbt(p, uuid, owner, target, raw.as_ref()))?;
         // HasBeenShot is modeled for these projectiles. The generic raw
         // overlay also serves entity types whose shot flag is still opaque.
         let shot = tag.get("HasBeenShot").cloned();
@@ -1683,6 +2027,13 @@ impl Game<'_> {
             map.insert("HasBeenShot".into(), shot);
         }
         Some((chunk_of(p.position), tag))
+    }
+    /// The UUID a save writes for a reference to `who`, as `mob_to_nbt`'s
+    /// `angry_at` does: the bridge's `who_uuid` over `EntityMemory::uuid_of`,
+    /// which answers the UUID the entity was loaded or saved with. A mob the
+    /// level has none for writes nothing.
+    pub(in crate::game) fn save_who_uuid(&self, who: Who) -> Option<[i32; 4]> {
+        entity_nbt::who_uuid(who, &mut |id| self.persist.uuid_of(id))
     }
     pub(super) fn save_falling(
         &mut self,
@@ -1745,23 +2096,9 @@ impl Game<'_> {
         i: usize,
         keys: &HashSet<ChunkKey>,
     ) -> Option<(ChunkKey, Tag)> {
-        let (id, at) = (self.tnts[i].id, self.tnts[i].position);
-        keys.contains(&chunk_of(at)).then(|| {
-            let uuid = self.uuid_for(id);
-            let t = &self.tnts[i];
-            let tag = entity_nbt::tnt_to_nbt(
-                t.position,
-                t.velocity,
-                t.on_ground,
-                t.fuse,
-                t.power,
-                t.block_state_nbt(self.pack.assets.registry),
-                t.rotation,
-                uuid,
-                self.persist.raw.get(&id),
-            );
-            (chunk_of(at), tag)
-        })
+        let at = self.tnts[i].position;
+        keys.contains(&chunk_of(at))
+            .then(|| (chunk_of(at), self.tnt_nbt(i)))
     }
     pub(super) fn save_boat(
         &mut self,
@@ -1774,15 +2111,7 @@ impl Game<'_> {
             return None;
         }
         let uuid = self.saved_uuid_or_random(id);
-        let mut tag = entity_nbt::boat_to_nbt(
-            &b.entity_type(),
-            b.position,
-            b.velocity,
-            [b.yaw, b.pitch],
-            uuid,
-            self.persist.raw.get(&id),
-            b.chest.then_some(&b.items[..]),
-        );
+        let mut tag = b.to_nbt(uuid, self.persist.raw.get(&id));
         self.put_mob_passengers(&mut tag, id);
         // AbstractBoat.addAdditionalSaveData: the lead's holder.
         self.write_boat_leash(&mut tag, i);
@@ -1822,6 +2151,15 @@ impl Game<'_> {
             .get(&id)
             .copied()
             .unwrap_or_else(random_uuid)
+    }
+}
+
+/// The mob layer's [`horizon_client::mobs::WhoLookup`]: a warden's anger keeps
+/// the suspects that left by UUID, and resolves the ones that are back through
+/// the same map a save writes them from (`mob_to_nbt`'s `uuid_of`).
+impl horizon_client::mobs::WhoLookup for Game<'_> {
+    fn who_by_uuid(&self, uuid: [i32; 4]) -> Option<Who> {
+        Game::who_by_uuid(self, uuid)
     }
 }
 
@@ -1937,6 +2275,271 @@ fn join_saved_team(board: &mut Scoreboard, name: &str, tag: &Tag) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn comparator_and_hopper_live_state_survives_chunk_reload() {
+        use super::super::{Audio, Options, Progress, Settings, load_resources};
+        use horizon_client::{containers::BlockEntity, items::ItemStack, save};
+        fn cooldown(game: &Game<'_>) -> i32 {
+            match game
+                .block_entity_nbt([3, 64, 3])
+                .unwrap()
+                .get("TransferCooldown")
+            {
+                Some(Tag::Int(value)) => *value,
+                _ => -1,
+            }
+        }
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!("no menu handoff"),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.headless = true;
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        let comparator = BlockPos::new(1, 64, 1);
+        let hopper = (3, 64, 3);
+        let barrel = (3, 63, 3);
+        let mut chunk = Chunk::empty(0, 0);
+        for (p, name) in [
+            ((1, 64, 1), "minecraft:comparator"),
+            (hopper, "minecraft:hopper"),
+            (barrel, "minecraft:barrel"),
+            ((1, 64, 0), "minecraft:redstone_block"),
+            ((1, 63, 1), "minecraft:stone"),
+        ] {
+            chunk.set(
+                p.0,
+                p.1,
+                p.2,
+                game.pack.assets.registry.default_state(name).unwrap().0,
+            );
+        }
+        let raw = |id: &str, p: (i32, i32, i32), key: &str, value: i32| {
+            Tag::compound([
+                ("id", Tag::String(id.into())),
+                ("x", Tag::Int(p.0)),
+                ("y", Tag::Int(p.1)),
+                ("z", Tag::Int(p.2)),
+                (key, Tag::Int(value)),
+                (
+                    "components",
+                    Tag::compound([(
+                        "minecraft:custom_data",
+                        Tag::compound([("mark", Tag::String("preserved".into()))]),
+                    )]),
+                ),
+            ])
+        };
+        let mut extras = ChunkExtras::default();
+        extras
+            .block_entities
+            .push(raw("minecraft:comparator", (1, 64, 1), "OutputSignal", 3));
+        extras.block_entity_sources.push((
+            hopper,
+            raw("minecraft:hopper", hopper, "TransferCooldown", 22),
+        ));
+        chunk.saved = Some(Arc::new(extras));
+        game.world.chunks.insert((0, 0), Arc::new(chunk));
+        game.world.block_entities.insert(
+            hopper,
+            BlockEntity::Chest(vec![Some(ItemStack::new("minecraft:stone", 64)); 5]),
+        );
+        game.world
+            .block_entities
+            .insert(barrel, BlockEntity::Chest(vec![None; 27]));
+        let mut trace = Vec::new();
+        for (index, value) in [
+            None,
+            Some(Tag::Byte(-1)),
+            Some(Tag::Short(23)),
+            Some(Tag::Int(i32::MIN)),
+            Some(Tag::Long(4_294_967_297)),
+            Some(Tag::Float((-1.5f32).to_bits())),
+            Some(Tag::Double(15.75f64.to_bits())),
+            Some(Tag::String("wrong".into())),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut extra = ChunkExtras::default();
+            let mut c = raw("minecraft:comparator", (1, 64, 1), "OutputSignal", 0);
+            let mut h = raw("minecraft:hopper", hopper, "TransferCooldown", -1);
+            for (tag, field) in [(&mut c, "OutputSignal"), (&mut h, "TransferCooldown")] {
+                if let Tag::Compound(map) = tag {
+                    match &value {
+                        Some(v) => {
+                            map.insert(field.into(), v.clone());
+                        }
+                        None => {
+                            map.remove(&field.into());
+                        }
+                    }
+                }
+            }
+            extra.block_entities.push(c);
+            extra.block_entity_sources.push((hopper, h));
+            let old = Arc::make_mut(game.world.chunks.get_mut(&(0, 0)).unwrap())
+                .saved
+                .replace(Arc::new(extra));
+            game.register_chunk_ticks((0, 0));
+            trace.push(format!(
+                "integer {index} {} {}",
+                game.block_ticks
+                    .comparator_outputs
+                    .get(&comparator)
+                    .copied()
+                    .unwrap_or(0),
+                cooldown(&game)
+            ));
+            Arc::make_mut(game.world.chunks.get_mut(&(0, 0)).unwrap()).saved = old;
+        }
+        game.sync_tick_chunks();
+        assert_eq!(
+            game.block_ticks
+                .comparator_outputs
+                .get(&comparator)
+                .copied()
+                .unwrap_or(0),
+            3,
+            "restored comparator output"
+        );
+        assert_eq!(cooldown(&game), 22);
+        // A real circuit update and transfer change both values since load.
+        game.with_level(|b, level, ticks| b.scheduled_block_tick(level, ticks, comparator));
+        assert_eq!(game.block_ticks.comparator_outputs[&comparator], 15);
+        game.build_registries();
+        game.set_allow_commands(true);
+        assert!(game.run_command_quietly("data merge block 3 64 3 {TransferCooldown:0}"));
+        for _ in 0..5 {
+            game.world.game_time += 1;
+            game.tick_hopper(hopper);
+        }
+        assert_eq!(cooldown(&game), 4);
+        game.world
+            .block_entities
+            .insert(barrel, BlockEntity::Chest(vec![None; 27]));
+        let batch = game.with_entities(game.world.chunks.values());
+        let encoded = save::encode(&batch[0], game.pack.assets.registry, world_biomes!(game));
+        // Streaming removes the resident chunk before preparing its save.
+        let resident = game.world.chunks.remove(&(0, 0)).unwrap();
+        let unloaded = game.with_entities([&resident]);
+        assert_eq!(
+            save::encode(&unloaded[0], game.pack.assets.registry, world_biomes!(game)).tag,
+            encoded.tag
+        );
+        game.world.chunks.insert((0, 0), resident);
+        let Some(Tag::List(tags)) = encoded.tag.get("block_entities") else {
+            panic!("missing entities")
+        };
+        for (id, key, expected) in [
+            ("minecraft:comparator", "OutputSignal", 15),
+            ("minecraft:hopper", "TransferCooldown", 4),
+        ] {
+            let tag = tags
+                .iter()
+                .find(|t| text(t.get("id")).as_deref() == Some(id))
+                .unwrap();
+            assert_eq!(tag.get(key), Some(&Tag::Int(expected)), "{id} live save");
+            assert_eq!(
+                text(
+                    tag.get("components")
+                        .unwrap()
+                        .get("minecraft:custom_data")
+                        .unwrap()
+                        .get("mark")
+                )
+                .as_deref(),
+                Some("preserved")
+            );
+        }
+        // Snapshotting must not rewrite either the source chunk or its raw NBT.
+        assert_eq!(
+            game.world.chunks[&(0, 0)]
+                .saved
+                .as_ref()
+                .unwrap()
+                .block_entity_sources[0]
+                .1
+                .get("TransferCooldown"),
+            Some(&Tag::Int(22))
+        );
+        let restored =
+            save::decode(&encoded, game.pack.assets.registry, world_biomes!(game)).unwrap();
+        game.world.block_entities.clear();
+        for (p, entity) in &restored.block_entities {
+            game.world.block_entities.insert(*p, entity.clone());
+        }
+        game.world.chunks.insert((0, 0), Arc::new(restored));
+        game.hoppers.clear();
+        game.block_ticks = horizon_world::level::Ticks::new(0);
+        game.tick_chunks.clear();
+        // Frozen: data must already show the saved values before any tick.
+        assert_eq!(
+            game.block_entity_nbt([1, 64, 1])
+                .unwrap()
+                .get("OutputSignal"),
+            Some(&Tag::Int(15))
+        );
+        assert_eq!(
+            game.block_entity_nbt([3, 64, 3])
+                .unwrap()
+                .get("TransferCooldown"),
+            Some(&Tag::Int(4))
+        );
+        game.sync_tick_chunks();
+        println!("persistence state 15 {} 0", cooldown(&game));
+        trace.push("state 15 4 0".to_owned());
+        for tick in 1..=6 {
+            game.world.game_time += 1;
+            game.tick_hopper(hopper);
+            let BlockEntity::Chest(items) = game.world.block_entities.get(&barrel).unwrap() else {
+                panic!("barrel")
+            };
+            let count: u32 = items.iter().flatten().map(|s| s.count).sum();
+            assert_eq!(count, u32::from(tick >= 4), "transfer tick {tick}");
+            let line = format!("tick {tick} {} {count}", cooldown(&game));
+            println!("persistence {line}");
+            trace.push(line);
+        }
+        if let Some(path) = std::env::var_os("HORIZON_PERSISTENCE_ORACLE") {
+            assert_eq!(
+                trace.join("\n"),
+                std::fs::read_to_string(path).unwrap().trim()
+            );
+        }
+        game.world.chunks.clear();
+        game.sync_tick_chunks();
+        assert!(!game.hoppers.contains_key(&hopper));
+        assert!(
+            !game
+                .block_ticks
+                .comparator_outputs
+                .contains_key(&comparator)
+        );
+    }
 
     const MOUNT: [i32; 4] = [1, 2, 3, 4];
 
@@ -2172,6 +2775,74 @@ mod tests {
         }
     }
 
+    /// A lingering potion's cloud is an entity of its chunk: unloading the chunk writes it and
+    /// takes it out of the level, so loading the chunk again gives back one cloud, not two.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_lingering_cloud_leaves_with_its_chunk() {
+        use super::super::{Audio, Game, Options, Progress, Settings, load_resources};
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!("no menu handoff"),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        let cloud = Tag::compound([
+            ("id", Tag::String("minecraft:area_effect_cloud".into())),
+            (
+                "Pos",
+                Tag::List(vec![
+                    Tag::Double(4.5f64.to_bits()),
+                    Tag::Double(64.0f64.to_bits()),
+                    Tag::Double(4.5f64.to_bits()),
+                ]),
+            ),
+            ("UUID", Tag::IntArray(vec![5, 6, 7, 8])),
+            ("Duration", Tag::Int(600)),
+            (
+                "potion_contents",
+                Tag::compound([("potion", Tag::String("minecraft:poison".into()))]),
+            ),
+        ]);
+        let clouds = |game: &Game| {
+            game.breath_clouds
+                .iter()
+                .filter(|c| c.potion.is_some())
+                .count()
+        };
+        game.world.loaded_entities.push(((0, 0), vec![cloud]));
+        game.spawn_loaded_entities();
+        assert_eq!(clouds(&game), 1, "the cloud loads");
+        let unloaded = game.entity_chunks(&HashSet::from([(0, 0)]), true);
+        let written: Vec<Tag> = unloaded.into_iter().flat_map(|(_, tags)| tags).collect();
+        assert_eq!(written.len(), 1, "the unload writes the cloud");
+        assert_eq!(clouds(&game), 0, "and takes it out of the level");
+        game.world.loaded_entities.push(((0, 0), written));
+        game.spawn_loaded_entities();
+        assert_eq!(clouds(&game), 1, "loading the chunk again gives one cloud");
+    }
+
     #[test]
     fn a_lone_rider_saves_the_horse() {
         let horse = 7;
@@ -2233,5 +2904,1666 @@ mod tests {
         assert!(take_fresh(&mut fresh));
         assert!(!take_fresh(&mut fresh));
         assert_eq!(fresh, Tag::Compound(Default::default()));
+    }
+
+    /// `NeutralMob.addPersistentAngerSaveData` names the mob the anger is at,
+    /// also one never saved yet (a mob gets its UUID when it is first saved).
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn anger_at_a_mob_not_saved_yet_names_it() {
+        use crate::game::{Audio, Options, Progress, Settings, load_resources};
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        let types = game.res.mob_types();
+        let golem = horizon_client::mobs::Mob::new(
+            1,
+            types.get("minecraft:iron_golem").unwrap().clone(),
+            Vec3::ZERO,
+            0.0,
+        );
+        let zombie = horizon_client::mobs::Mob::new(
+            2,
+            types.get("minecraft:zombie").unwrap().clone(),
+            Vec3::new(3.0, 0.0, 0.0),
+            0.0,
+        );
+        game.mobs.push(golem);
+        game.mobs.push(zombie);
+        game.mobs[0].extra.anger = 400;
+        game.mobs[0].extra.angry_at = Some(horizon_client::mobs::Who::Mob(2));
+        assert_eq!(game.persist.uuid_of(2), None);
+        let tag = game.mob_tree_nbt(0);
+        let Some(Tag::IntArray(named)) = tag.get("angry_at") else {
+            panic!("no angry_at in {tag:?}");
+        };
+        assert_eq!(
+            Some(named.as_slice()),
+            game.persist.uuid_of(2).as_ref().map(|u| &u[..])
+        );
+    }
+}
+#[cfg(test)]
+mod interaction_saved_defaults_tests {
+    use super::*;
+    use crate::game::{Audio, Options, Progress, Settings, commands::Target, load_resources};
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn registered_interactions_save_default_and_loaded_settings() {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.game_dir = Some(std::env::current_dir().unwrap().join("game"));
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+        let mut chunk = Chunk::empty(0, 0);
+        let stone = game
+            .pack
+            .assets
+            .registry
+            .default_state("minecraft:stone")
+            .unwrap();
+        for x in 0..16 {
+            for z in 0..16 {
+                chunk.set(x, 199, z, stone.0);
+            }
+        }
+        game.world.chunks.insert((0, 0), Arc::new(chunk));
+        game.block_ticks
+            .add_empty_chunk(ChunkPos::new(0, 0))
+            .unwrap();
+        assert!(game.run_command("forceload add 0 0"));
+        let time = game.world.game_time;
+        assert!(game.run_command("summon marker 10.5 200 7.5 {UUID:[I;109,0,0,4],data:{audit:7}}"));
+        assert!(game.run_command("summon pig 10.5 200 8.5 {UUID:[I;109,0,0,5],NoAI:1b,NoGravity:1b,PersistenceRequired:1b,Health:10f}"));
+        let marker_id = game
+            .others
+            .iter()
+            .find(|o| game.persist.uuids.get(&o.id) == Some(&[109, 0, 0, 4]))
+            .unwrap()
+            .id;
+        let marker_before = game.entity_nbt(Target::Other(marker_id)).unwrap();
+        let mut ids = Vec::new();
+        for (n, fields) in [
+            (1, ""),
+            (2, ",width:1f,height:1f,response:0b"),
+            (
+                3,
+                ",width:2.5f,height:3.5f,response:1b,attack:{player:[I;109,1,0,91],timestamp:17L},interaction:{player:[I;109,1,0,92],timestamp:23L}",
+            ),
+        ] {
+            assert!(game.run_command(&format!("summon interaction {} 200 4.5 {{UUID:[I;109,0,0,{n}],Rotation:[15f,-30f],CustomName:\"audit\",Tags:[\"audit\"]{fields}}}", 1.5+3.0*f64::from(n-1))));
+            let o = game
+                .others
+                .iter()
+                .find(|o| game.persist.uuids.get(&o.id) == Some(&[109, 0, 0, n]))
+                .unwrap();
+            assert_eq!(o.kind, "minecraft:interaction");
+            ids.push(o.id);
+        }
+        assert_eq!(
+            game.entity_nbt(Target::Other(marker_id)).unwrap(),
+            marker_before
+        );
+        for key in ["width", "height", "response"] {
+            assert!(marker_before.get(key).is_none());
+        }
+        let pig_id = game
+            .mobs
+            .iter()
+            .find(|m| game.persist.uuids.get(&m.id) == Some(&[109, 0, 0, 5]))
+            .unwrap()
+            .id;
+        let pig = game.entity_nbt(Target::Mob(pig_id)).unwrap();
+        assert_eq!(pig.get("NoAI"), Some(&Tag::Byte(1)));
+        assert_eq!(pig.get("PersistenceRequired"), Some(&Tag::Byte(1)));
+        let saved: Vec<_> = game
+            .entity_chunks(&[(0, 0)].into(), false)
+            .into_iter()
+            .flat_map(|(_, tags)| tags)
+            .collect();
+        for (index, id) in ids.iter().enumerate() {
+            let uuid = [109, 0, 0, index as i32 + 1];
+            let command_tag = game.entity_nbt(Target::Other(*id)).unwrap();
+            let chunk_tag = saved
+                .iter()
+                .find(|tag| entity_nbt::uuid(tag) == Some(uuid))
+                .unwrap();
+            for tag in [&command_tag, chunk_tag] {
+                assert_eq!(tag.get("UUID"), Some(&Tag::IntArray(uuid.to_vec())));
+                assert_eq!(tag.get("CustomName"), Some(&Tag::String("audit".into())));
+                assert_eq!(
+                    tag.get("Tags"),
+                    Some(&Tag::List(vec![Tag::String("audit".into())]))
+                );
+                assert_eq!(
+                    tag.get("width"),
+                    Some(&Tag::Float(
+                        (if index == 2 { 2.5f32 } else { 1.0f32 }).to_bits()
+                    )),
+                    "width case {index}"
+                );
+                assert_eq!(
+                    tag.get("height"),
+                    Some(&Tag::Float(
+                        (if index == 2 { 3.5f32 } else { 1.0f32 }).to_bits()
+                    ))
+                );
+                assert_eq!(tag.get("response"), Some(&Tag::Byte(i8::from(index == 2))));
+                if index == 2 {
+                    for (key, n, time) in [("attack", 91, 17), ("interaction", 92, 23)] {
+                        let record = tag.get(key).unwrap();
+                        assert_eq!(
+                            record.get("player"),
+                            Some(&Tag::IntArray(vec![109, 1, 0, n]))
+                        );
+                        assert_eq!(record.get("timestamp"), Some(&Tag::Long(time)));
+                    }
+                } else {
+                    assert!(tag.get("attack").is_none() && tag.get("interaction").is_none());
+                }
+            }
+        }
+        // The actual registered identity/position still supplies a fresh save without raw input.
+        game.persist.raw.remove(&ids[0]);
+        let fresh = game.entity_nbt(Target::Other(ids[0])).unwrap();
+        assert_eq!(fresh.get("UUID"), Some(&Tag::IntArray(vec![109, 0, 0, 1])));
+        assert_eq!(fresh.get("width"), Some(&Tag::Float(1.0f32.to_bits())));
+        assert_eq!(fresh.get("height"), Some(&Tag::Float(1.0f32.to_bits())));
+        assert_eq!(fresh.get("response"), Some(&Tag::Byte(0)));
+        assert_eq!(game.world.game_time, time);
+    }
+}
+
+#[cfg(test)]
+mod loaded_tag_tests {
+    use super::*;
+    use crate::game::{Audio, Options, Progress, Settings, commands::Target, load_resources};
+    use horizon_client::mobs::Species;
+
+    fn check(
+        game: &mut Game<'_>,
+        target: Target,
+        expected: &[String],
+        phase: &str,
+        failures: &mut Vec<String>,
+    ) {
+        let live = game.tags_of(target);
+        if live.len() != expected.len() || expected.iter().any(|t| !live.contains(t)) {
+            failures.push(format!(
+                "{phase}: live count {} expected {}",
+                live.len(),
+                expected.len()
+            ));
+        }
+        let saved = game.entity_nbt(target).expect("actual entity save view");
+        assert_eq!(saved.get("Health"), Some(&Tag::Float(10.0_f32.to_bits())));
+        assert_eq!(saved.get("NoAI"), Some(&Tag::Byte(1)));
+        assert_eq!(saved.get("NoGravity"), Some(&Tag::Byte(1)));
+        assert_eq!(saved.get("PortalCooldown"), Some(&Tag::Int(17)));
+        let valid = match saved.get("Tags") {
+            None => expected.is_empty(),
+            Some(Tag::List(tags)) => {
+                !expected.is_empty()
+                    && tags.len() == expected.len()
+                    && tags.iter().all(|t| matches!(t, Tag::String(_)))
+                    && expected
+                        .iter()
+                        .all(|s| tags.contains(&Tag::String(s.as_str().into())))
+            }
+            _ => false,
+        };
+        if !valid {
+            failures.push(format!(
+                "{phase}: saved Tags count/type/membership mismatch"
+            ));
+        }
+    }
+
+    fn action(game: &mut Game<'_>, command: &str, expected: bool, failures: &mut Vec<String>) {
+        if game.run_command(command) != expected {
+            failures.push(format!("command result: {command}"));
+        }
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and scratch homes/cwd"]
+    fn loaded_pig_tags_cap_before_dedup_and_live_rewrites_adopt_the_set() {
+        let root = std::path::PathBuf::from(
+            std::env::var_os("HORIZON_TEST_RESOURCES").expect("prepared resources required"),
+        );
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.block_ticks
+            .add_empty_chunk(ChunkPos::new(0, 0))
+            .unwrap();
+        assert!(game.run_command("forceload add 0 0"));
+        assert!(game.run_command("fill 0 199 0 15 199 15 stone"));
+        assert_eq!(
+            game.world.block(4, 199, 4),
+            game.pack
+                .assets
+                .registry
+                .default_state("minecraft:stone")
+                .unwrap()
+        );
+        let start = game.world.game_time;
+        let unique: Vec<String> = (0..1025).map(|i| format!("h252_{i:04}")).collect();
+        let mut duplicates = vec!["h252_repeat".to_string(); 1024];
+        duplicates.push("h252_late".into());
+        let small = vec![
+            "h252_beta".to_string(),
+            "h252_alpha".into(),
+            "h252_beta".into(),
+        ];
+        let encode = |tags: &[String]| {
+            format!(
+                "[{}]",
+                tags.iter()
+                    .map(|s| format!("\"{s}\""))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+        let mut failures = Vec::new();
+        for (index, (input, expected)) in [
+            (Some(encode(&unique)), unique[..1024].to_vec()),
+            (Some(encode(&duplicates)), vec!["h252_repeat".to_string()]),
+            (
+                Some(encode(&small)),
+                vec!["h252_alpha".to_string(), "h252_beta".into()],
+            ),
+            (Some("\"h252_scalar\"".into()), vec![]),
+            (None, vec![]),
+            (Some("[]".into()), vec![]),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let n = index + 1;
+            let uuid = format!("000000fc-0000-0000-0000-{n:012x}");
+            let x = 4.5 + index as f64 * 2.0;
+            let tags = input.map_or_else(String::new, |s| format!(",Tags:{s}"));
+            assert!(game.run_command(&format!(
+                "summon pig {x} 200 4.5 {{UUID:[I;252,0,0,{n}],Health:10f,NoAI:1b,NoGravity:1b,Motion:[0d,0d,0d],PortalCooldown:17{tags}}}"
+            )));
+            let target = game.target_with_uuid([252, 0, 0, n as i32]).unwrap();
+            let Target::Mob(id) = target else {
+                panic!("actual pig target");
+            };
+            let mob = game.mobs.iter().find(|m| m.id == id).unwrap();
+            assert_eq!(mob.species(), Species::Pig);
+            assert_eq!(mob.position, Vec3::new(x, 200.0, 4.5));
+            assert_eq!(mob.health, 10.0);
+            assert!(mob.no_ai && mob.no_gravity);
+            assert_eq!(game.uuid_for(id), [252, 0, 0, n as i32]);
+            check(
+                &mut game,
+                target,
+                &expected,
+                &format!("load {index}"),
+                &mut failures,
+            );
+            if index == 0 {
+                action(
+                    &mut game,
+                    &format!("tag {uuid} add h252_extra"),
+                    false,
+                    &mut failures,
+                );
+                action(
+                    &mut game,
+                    &format!("tag {uuid} remove h252_0000"),
+                    true,
+                    &mut failures,
+                );
+                action(
+                    &mut game,
+                    &format!("tag {uuid} add h252_extra"),
+                    true,
+                    &mut failures,
+                );
+                let mut after = unique[1..1024].to_vec();
+                after.push("h252_extra".into());
+                check(&mut game, target, &after, "full remove/add", &mut failures);
+            } else if index == 1 {
+                action(
+                    &mut game,
+                    &format!("tag {uuid} add h252_added"),
+                    true,
+                    &mut failures,
+                );
+                let after = vec!["h252_repeat".to_string(), "h252_added".into()];
+                check(
+                    &mut game,
+                    target,
+                    &after,
+                    "duplicate load then add",
+                    &mut failures,
+                );
+                action(
+                    &mut game,
+                    &format!("tag {uuid} remove h252_added"),
+                    true,
+                    &mut failures,
+                );
+                check(
+                    &mut game,
+                    target,
+                    &expected,
+                    "remove added tag",
+                    &mut failures,
+                );
+            } else if index == 2 {
+                action(
+                    &mut game,
+                    &format!("tag {uuid} add h252_alpha"),
+                    false,
+                    &mut failures,
+                );
+                assert!(game.run_command(&format!(
+                    "data modify entity {uuid} Tags set value {}",
+                    encode(&duplicates)
+                )));
+                check(
+                    &mut game,
+                    target,
+                    &["h252_repeat".into()],
+                    "live rewrite",
+                    &mut failures,
+                );
+            }
+            assert_eq!(
+                game.mobs.iter().find(|m| m.id == id).unwrap().position,
+                Vec3::new(x, 200.0, 4.5)
+            );
+            assert_eq!(game.uuid_for(id), [252, 0, 0, n as i32]);
+            assert_eq!(game.world.game_time, start);
+        }
+        assert!(
+            failures.is_empty(),
+            "actual load/getter/save/mutation failures: {failures:#?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod item_display_saved_transform_tests {
+    use super::*;
+    use crate::game::{Audio, Options, Progress, Settings, commands::Target, load_resources};
+    use horizon_client::{chunk::Chunk, motion::PlayerMotion};
+    use horizon_core::{geometry::Vec3, position::ChunkPos, random::LegacyRandom};
+    fn with_game(test: impl FnOnce(&mut Game<'_>)) {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.game_dir = Some(
+            std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap())
+                .join(format!("h132-{:?}", std::thread::current().id())),
+        );
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.block_ticks
+            .add_empty_chunk(ChunkPos::new(0, 0))
+            .unwrap();
+        assert!(game.run_command("difficulty normal"));
+        assert!(game.run_command("forceload add 0 0"));
+        for (x, z) in [(0, 1), (1, 0), (1, 1)] {
+            game.world
+                .chunks
+                .insert((x, z), Arc::new(Chunk::empty(x, z)));
+            game.block_ticks
+                .add_empty_chunk(ChunkPos::new(x, z))
+                .unwrap();
+        }
+        game.player = Some(PlayerMotion::new(game.motion, Vec3::new(2.5, 200.0, 2.5)).unwrap());
+        game.creative = true;
+        assert!(game.run_command("fill 0 199 0 31 199 31 stone"));
+        assert!(
+            game.run_command("summon pig 13.5 200 2.5 {UUID:[I;132,0,0,99],NoAI:1b,NoGravity:1b}")
+        );
+        game.world.random = LegacyRandom::new(132);
+        test(&mut game);
+    }
+    const IDENTITY: &str = "{translation:[0f,0f,0f],left_rotation:[0f,0f,0f,1f],scale:[1f,1f,1f],right_rotation:[0f,0f,0f,1f]}";
+    const CHANGED: &str = "{translation:[1.25f,-2.5f,3f],left_rotation:[0f,1f,0f,0f],scale:[2f,3f,4f],right_rotation:[0f,0f,0f,1f]}";
+    fn expected(translation: [f32; 3], left: [f32; 4], scale: [f32; 3]) -> Tag {
+        let floats = |v: &[f32]| Tag::List(v.iter().map(|x| Tag::Float(x.to_bits())).collect());
+        Tag::Compound(
+            [
+                ("translation".into(), floats(&translation)),
+                ("left_rotation".into(), floats(&left)),
+                ("scale".into(), floats(&scale)),
+                ("right_rotation".into(), floats(&[0.0, 0.0, 0.0, 1.0])),
+            ]
+            .into_iter()
+            .collect(),
+        )
+    }
+    fn summon(game: &mut Game<'_>, n: i32, transform: Option<&str>) -> u32 {
+        let suffix = transform
+            .map(|t| format!(",transformation:{t}"))
+            .unwrap_or_default();
+        assert!(game.run_command(&format!("summon item_display 6.5 200 6.5 {{UUID:[I;132,0,0,{n}],Rotation:[12.5f,-20f],NoGravity:1b,CustomName:\"display\",Tags:[\"h132\"],item:{{id:\"minecraft:diamond\",count:2,components:{{\"minecraft:custom_data\":{{h132:7}}}}}}{suffix}}}")));
+        let o = game
+            .others
+            .iter()
+            .find(|o| game.persist.uuid_of(o.id) == Some([132, 0, 0, n]))
+            .unwrap();
+        assert_eq!(o.kind, "minecraft:item_display");
+        assert_eq!(o.position, Vec3::new(6.5, 200.0, 6.5));
+        assert_eq!([o.yaw, o.pitch], [12.5, -20.0]);
+        let id = o.id;
+        let saved = game.entity_nbt(Target::Other(id)).unwrap();
+        let stack = horizon_client::save::item_from_nbt(saved.get("item").unwrap()).unwrap();
+        assert_eq!(&*stack.item, "minecraft:diamond");
+        assert_eq!(stack.count, 2);
+        assert_eq!(
+            saved
+                .get("item")
+                .unwrap()
+                .get("components")
+                .unwrap()
+                .get("minecraft:custom_data")
+                .unwrap()
+                .get("h132"),
+            Some(&Tag::Int(7))
+        );
+        id
+    }
+    #[test]
+    #[ignore = "prepared resources; actual item-display registered load and no-raw save"]
+    fn omitted_item_display_transformation_is_saved_as_typed_identity() {
+        with_game(|game| {
+            let clock = game.world.game_time;
+            let id = summon(game, 1, None);
+            let identity = expected([0.0; 3], [0.0, 0.0, 0.0, 1.0], [1.0; 3]);
+            let tag = game.entity_nbt(Target::Other(id)).unwrap();
+            assert_eq!(tag.get("transformation"), Some(&identity));
+            let raw = game.persist.raw.remove(&id).unwrap();
+            let fresh = game.entity_nbt(Target::Other(id)).unwrap();
+            assert_eq!(fresh.get("transformation"), Some(&identity));
+            assert_eq!(fresh.get("UUID"), tag.get("UUID"));
+            assert_eq!(fresh.get("Pos"), tag.get("Pos"));
+            for key in [
+                "interpolation_duration",
+                "teleport_duration",
+                "start_interpolation",
+            ] {
+                assert!(fresh.get(key).is_none());
+            }
+            game.persist.raw.insert(id, raw);
+            assert_eq!(game.world.game_time, clock);
+        });
+    }
+    #[test]
+    #[ignore = "prepared resources; actual explicit load must survive removal of raw source"]
+    fn admitted_compound_item_transforms_are_actual_saved_state() {
+        with_game(|game| {
+            let clock = game.world.game_time;
+            for (n, text, want) in [
+                (
+                    2,
+                    CHANGED,
+                    expected([1.25, -2.5, 3.0], [0.0, 1.0, 0.0, 0.0], [2.0, 3.0, 4.0]),
+                ),
+                (
+                    3,
+                    IDENTITY,
+                    expected([0.0; 3], [0.0, 0.0, 0.0, 1.0], [1.0; 3]),
+                ),
+            ] {
+                let id = summon(game, n, Some(text));
+                let before = game.entity_nbt(Target::Other(id)).unwrap();
+                assert_eq!(before.get("transformation"), Some(&want));
+                let raw = game.persist.raw.remove(&id).unwrap();
+                let fresh = game.entity_nbt(Target::Other(id)).unwrap();
+                assert_eq!(
+                    fresh.get("transformation"),
+                    Some(&want),
+                    "real loaded state survives without raw"
+                );
+                game.persist.raw.insert(id, raw);
+            }
+            assert_eq!(game.world.game_time, clock);
+        });
+    }
+    #[test]
+    #[ignore = "prepared resources; actual native setter, stale raw and no-raw writer"]
+    fn existing_native_item_display_setter_carries_only_transform_state() {
+        use crate::game::native_entities::NativeDisplay;
+        with_game(|game| {
+            // Same actual server-context setup as existing native machine/contact fixtures.
+            game.options.dedicated = Some(Vec::new());
+            let id = summon(game, 4, None);
+            let uuid = game.persist.uuid_of(id);
+            let clock = game.world.game_time;
+            let update = NativeDisplay {
+                translation: [9.0, 8.0, 7.0],
+                scale: [2.0; 3],
+                interpolation: 13,
+                teleport: 5,
+                ..NativeDisplay::default()
+            };
+            assert!(game.native_set_display("minecraft:overworld", id, &update));
+            let raw = game.persist.raw.get_mut(&id).unwrap();
+            assert_eq!(raw.get("interpolation_duration"), Some(&Tag::Int(13)));
+            assert_eq!(raw.get("teleport_duration"), Some(&Tag::Int(5)));
+            assert_eq!(raw.get("start_interpolation"), Some(&Tag::Int(0)));
+            let Tag::Compound(c) = raw else {
+                panic!("compound")
+            };
+            c.insert(
+                "transformation".into(),
+                expected([0.0; 3], [0.0, 0.0, 0.0, 1.0], [1.0; 3]),
+            );
+            let want = expected([9.0, 8.0, 7.0], [0.0, 0.0, 0.0, 1.0], [2.0; 3]);
+            assert_eq!(
+                game.entity_nbt(Target::Other(id))
+                    .unwrap()
+                    .get("transformation"),
+                Some(&want)
+            );
+            let raw = game.persist.raw.remove(&id).unwrap();
+            let fresh = game.entity_nbt(Target::Other(id)).unwrap();
+            assert_eq!(fresh.get("transformation"), Some(&want));
+            for key in [
+                "interpolation_duration",
+                "teleport_duration",
+                "start_interpolation",
+            ] {
+                assert!(fresh.get(key).is_none());
+            }
+            game.persist.raw.insert(id, raw);
+            let invalid = NativeDisplay {
+                left_rotation: [0.0; 4],
+                ..update
+            };
+            let before = game.persist.raw.get(&id).unwrap().clone();
+            assert!(!game.native_set_display("minecraft:overworld", id, &invalid));
+            assert_eq!(game.persist.raw.get(&id), Some(&before));
+            assert_eq!(
+                game.entity_nbt(Target::Other(id))
+                    .unwrap()
+                    .get("transformation"),
+                Some(&want)
+            );
+            assert_eq!(game.persist.uuid_of(id), uuid);
+            assert_eq!(game.world.game_time, clock);
+        });
+    }
+    #[test]
+    #[ignore = "prepared resources; preservation controls, not Java matrix/invalid admission"]
+    fn unprojected_forms_and_non_item_classes_keep_their_existing_saved_route() {
+        with_game(|game| {
+            for (n, form) in [
+                (5, "[1f,0f,0f,0f,0f,1f,0f,0f,0f,0f,1f,0f,0f,0f,0f,1f]"),
+                (6, "{}"),
+                (7, "\"invalid\""),
+            ] {
+                assert!(game.run_command(&format!("summon item_display 6.5 200 6.5 {{UUID:[I;132,0,0,{n}],transformation:{form},item:{{id:\"minecraft:diamond\",count:1}}}}")));
+                let id = game
+                    .others
+                    .iter()
+                    .find(|o| game.persist.uuid_of(o.id) == Some([132, 0, 0, n]))
+                    .unwrap()
+                    .id;
+                let before = game
+                    .persist
+                    .raw
+                    .get(&id)
+                    .unwrap()
+                    .get("transformation")
+                    .unwrap()
+                    .clone();
+                assert_eq!(
+                    game.entity_nbt(Target::Other(id))
+                        .unwrap()
+                        .get("transformation"),
+                    Some(&before)
+                );
+                let raw = game.persist.raw.remove(&id).unwrap();
+                assert!(
+                    game.entity_nbt(Target::Other(id))
+                        .unwrap()
+                        .get("transformation")
+                        .is_none()
+                );
+                game.persist.raw.insert(id, raw);
+            }
+            for (n, kind, extra) in [
+                (8, "marker", ",data:{audit:7}"),
+                (9, "leash_knot", ""),
+                (10, "text_display", ",text:\"control\""),
+            ] {
+                assert!(game.run_command(&format!(
+                    "summon {kind} 10.5 200 10.5 {{UUID:[I;132,0,0,{n}]{extra}}}"
+                )));
+                let id = game
+                    .others
+                    .iter()
+                    .find(|o| game.persist.uuid_of(o.id) == Some([132, 0, 0, n]))
+                    .unwrap()
+                    .id;
+                assert!(
+                    game.entity_nbt(Target::Other(id))
+                        .unwrap()
+                        .get("transformation")
+                        .is_none()
+                );
+            }
+            assert_eq!(
+                game.mobs
+                    .iter()
+                    .find(|m| game.persist.uuid_of(m.id) == Some([132, 0, 0, 99]))
+                    .unwrap()
+                    .health,
+                10.0
+            );
+        });
+    }
+}
+
+#[cfg(test)]
+mod h262_enderman_absolute_anger_tests {
+    use super::*;
+    use crate::game::{Audio, Options, Progress, Settings, load_resources};
+    use horizon_client::{chunk::Chunk, motion::PlayerMotion};
+    use horizon_core::{geometry::Vec3, position::ChunkPos, random::LegacyRandom};
+    fn with_game(test: impl FnOnce(&mut Game<'_>)) {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.game_dir = Some(
+            std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap())
+                .join(format!("h262-{:?}", std::thread::current().id())),
+        );
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.block_ticks
+            .add_empty_chunk(ChunkPos::new(0, 0))
+            .unwrap();
+        assert!(game.run_command("difficulty normal"));
+        assert!(game.run_command("forceload add 0 0"));
+        for (x, z) in [(0, 1), (1, 0), (1, 1)] {
+            game.world
+                .chunks
+                .insert((x, z), Arc::new(Chunk::empty(x, z)));
+            game.block_ticks
+                .add_empty_chunk(ChunkPos::new(x, z))
+                .unwrap();
+        }
+        game.player = Some(PlayerMotion::new(game.motion, Vec3::new(2.5, 200.0, 2.5)).unwrap());
+        game.creative = true;
+        assert!(game.run_command("fill 0 199 0 31 199 31 stone"));
+        assert!(
+            game.run_command("summon pig 13.5 200 2.5 {UUID:[I;262,0,0,99],NoAI:1b,NoGravity:1b}")
+        );
+        game.world.random = LegacyRandom::new(262);
+        test(&mut game);
+    }
+    fn load(game: &mut Game<'_>, n: i32, end: Option<i64>) -> (u32, usize) {
+        let suffix = end
+            .map(|v| format!(",anger_end_time:{v}L"))
+            .unwrap_or_default();
+        let cmd = format!(
+            "summon enderman 6.5 200 4.5 {{UUID:[I;262,1,0,{n}],Health:40f,NoAI:1b,NoGravity:1b,Motion:[0d,0d,0d],Tags:[h262],CustomName:\"end\"{suffix}}}"
+        );
+        assert!(game.run_command(&cmd));
+        let id = game
+            .persist
+            .uuids
+            .iter()
+            .find_map(|(id, u)| (*u == [262, 1, 0, n]).then_some(*id))
+            .unwrap();
+        let i = game.mobs.iter().position(|m| m.id == id).unwrap();
+        assert_eq!(
+            game.mobs[i].species(),
+            horizon_client::mobs::Species::Enderman
+        );
+        assert!(game.mobs[i].no_ai);
+        assert_eq!(game.mobs[i].health, 40.0);
+        assert_eq!(game.mobs[i].position, Vec3::new(6.5, 200.0, 4.5));
+        assert_eq!(game.mobs[i].extra.anger_end, end.unwrap_or(-1));
+        (id, i)
+    }
+    fn check(
+        game: &mut Game<'_>,
+        i: usize,
+        expected: i64,
+        label: &str,
+        failures: &mut Vec<String>,
+    ) {
+        let saved = game.mob_tree_nbt(i);
+        if saved.get("anger_end_time") != Some(&Tag::Long(expected)) {
+            failures.push(format!(
+                "{label}: expected {expected}L, actual {:?}",
+                saved.get("anger_end_time")
+            ));
+        }
+        assert_eq!(
+            saved.get("UUID"),
+            Some(&Tag::IntArray(
+                game.persist.uuids[&game.mobs[i].id].to_vec()
+            ))
+        );
+        // Tags follow the existing raw-field policy; a deliberately no-raw
+        // subject has no synthetic source of Tags. Preserve them when present.
+        if let Some(tags) = game
+            .persist
+            .raw
+            .get(&game.mobs[i].id)
+            .and_then(|raw| raw.get("Tags"))
+        {
+            assert_eq!(saved.get("Tags"), Some(tags));
+        }
+        assert!(saved.get("CustomName").is_some());
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn h262_loaded_noai_enderman_actual_ticks_and_model_projection() {
+        with_game(|game| {
+            game.world.game_time = 100;
+            assert!(game.run_command("gamerule spawn_mobs false"));
+            let (id, i) = load(game, 1, Some(999999));
+            let age = game.mobs[i].age;
+            let mut failures = Vec::new();
+            for tick in 0..=2 {
+                if tick > 0 {
+                    game.world.game_time += 1;
+                    game.update_chunk_tickets();
+                    assert!(game.entity_ticking_area()(6, 4));
+                    game.tick_creature_entities().unwrap();
+                }
+                assert_eq!(game.mobs[i].id, id);
+                assert_eq!(game.mobs[i].age, age + tick);
+                assert_eq!(game.world.game_time, 100 + i64::from(tick));
+                assert_eq!(game.mobs[i].position, Vec3::new(6.5, 200.0, 4.5));
+                assert_eq!(game.mobs[i].velocity, Vec3::ZERO);
+                check(game, i, 999999, "loaded/ticked", &mut failures);
+                check(game, i, 999999, "repeated", &mut failures);
+            }
+            game.persist.raw.remove(&id);
+            game.mobs[i].extra.anger_end = 777777;
+            check(game, i, 777777, "no raw/model mutation", &mut failures);
+            game.persist.raw.insert(
+                id,
+                Tag::compound([
+                    ("anger_end_time", Tag::Long(123)),
+                    ("retained", Tag::Int(17)),
+                ]),
+            );
+            game.mobs[i].extra.anger_end = 888888;
+            check(
+                game,
+                i,
+                888888,
+                "contradictory raw/model mutation",
+                &mut failures,
+            );
+            assert_eq!(game.mob_tree_nbt(i).get("retained"), Some(&Tag::Int(17)));
+            assert!(failures.is_empty(), "{failures:#?}");
+        });
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn h262_noai_enderman_absent_zero_past_and_future_are_actual_longs() {
+        with_game(|game| {
+            game.world.game_time = 100;
+            let mut failures = Vec::new();
+            for (n, end) in [None, Some(0), Some(-5), Some(1), Some(999999)]
+                .into_iter()
+                .enumerate()
+            {
+                let (_, i) = load(game, n as i32 + 2, end);
+                check(
+                    game,
+                    i,
+                    end.unwrap_or(-1),
+                    "typed loaded boundary",
+                    &mut failures,
+                );
+            }
+            assert!(failures.is_empty(), "{failures:#?}");
+        });
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn h262_live_enderman_write_uses_actual_decoded_timestamp() {
+        with_game(|game| {
+            game.world.game_time = 100;
+            let (id, i) = load(game, 9, Some(999999));
+            let age = game.mobs[i].age;
+            assert!(game.run_command("data modify entity 00000106-0000-0001-0000-000000000009 anger_end_time set value 777777L"));
+            assert_eq!(
+                game.mobs[i].extra.anger_end, 777777,
+                "actual adoption, before saved read"
+            );
+            assert_eq!(game.mobs[i].id, id);
+            assert_eq!(game.mobs[i].age, age);
+            assert_eq!(game.world.game_time, 100);
+            assert!(game.mobs[i].ai.target.is_none());
+            let mut failures = Vec::new();
+            check(game, i, 777777, "live write", &mut failures);
+            assert!(failures.is_empty(), "{failures:#?}");
+        });
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn h262_existing_ai_and_other_neutral_counter_projection_is_unchanged() {
+        with_game(|game| {
+            game.world.game_time = 100;
+            let (_, i) = load(game, 20, Some(999999));
+            game.mobs[i].no_ai = false;
+            game.mobs[i].extra.anger = 50;
+            assert_eq!(
+                game.mob_tree_nbt(i).get("anger_end_time"),
+                Some(&Tag::Long(150))
+            );
+            assert!(
+                game.run_command(
+                    "summon wolf 8.5 200 4.5 {UUID:[I;262,1,0,21],NoAI:1b,NoGravity:1b}"
+                )
+            );
+            let i = game
+                .mobs
+                .iter()
+                .position(|m| m.species() == horizon_client::mobs::Species::Wolf)
+                .unwrap();
+            game.mobs[i].extra.anger = 50;
+            assert_eq!(
+                game.mob_tree_nbt(i).get("anger_end_time"),
+                Some(&Tag::Long(150))
+            );
+            game.world.game_time += 1;
+            assert_eq!(
+                game.mob_tree_nbt(i).get("anger_end_time"),
+                Some(&Tag::Long(151))
+            );
+        });
+    }
+}
+
+#[cfg(test)]
+mod sulfur_body_attribute_tests {
+    use super::*;
+    use crate::game::{Audio, Options, Progress, Settings, load_resources};
+    use horizon_client::motion::PlayerMotion;
+
+    fn with_game(test: impl FnOnce(&mut Game<'_>)) {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.game_dir = Some(
+            std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap())
+                .join(format!("h192-{:?}", std::thread::current().id())),
+        );
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.block_ticks
+            .add_empty_chunk(ChunkPos::new(0, 0))
+            .unwrap();
+        assert!(game.run_command("forceload add 0 0"));
+        assert!(game.run_command("difficulty normal"));
+        assert!(game.run_command("scoreboard objectives add h192 dummy"));
+        game.player = Some(PlayerMotion::new(game.motion, Vec3::new(2.5, 200.0, 2.5)).unwrap());
+        game.creative = true;
+        test(&mut game);
+    }
+    /// `/attribute <cube> <attribute> get 1000`, read back through a score.
+    fn read(game: &mut Game<'_>, n: i32, attribute: &str) -> i32 {
+        let sel = format!("@e[type=minecraft:sulfur_cube,nbt={{UUID:[I;192,0,0,{n}]}},limit=1]");
+        assert!(game.run_command(&format!(
+            "execute store result score #v h192 run attribute {sel} minecraft:{attribute} get 1000"
+        )));
+        (-3000..=3000)
+            .find(|v| game.run_command_quietly(&format!("execute if score #v h192 matches {v}")))
+            .unwrap_or(i32::MIN)
+    }
+
+    /// Expected values from the official 26.3 server: a sulfur cube reads its
+    /// defaults until a tick adopts its body (collectEquipmentChanges); then the
+    /// body's archetype modifiers count (oak planks: bouncy).
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and a scratch HORIZON_HOME"]
+    fn a_sulfur_cube_reads_its_body_archetype_modifiers_after_a_tick() {
+        with_game(|game| {
+            for (n, body) in [
+                (1, ",equipment:{body:{id:\"minecraft:oak_planks\"}}"),
+                (2, ""),
+            ] {
+                assert!(game.run_command(&format!(
+                    "summon minecraft:sulfur_cube {}.5 200 4.5 {{UUID:[I;192,0,0,{n}],NoAI:1b,NoGravity:1b,Silent:1b,PersistenceRequired:1b,Size:1{body}}}",
+                    3 * n
+                )));
+            }
+            let attrs = [
+                "knockback_resistance",
+                "explosion_knockback_resistance",
+                "bounciness",
+                "friction_modifier",
+                "air_drag_modifier",
+            ];
+            let defaults = [0, 0, 0, 1000, 1000];
+            let mut failures = Vec::new();
+            for (n, label) in [(1, "body"), (2, "none")] {
+                for (a, d) in attrs.iter().zip(defaults) {
+                    let got = read(game, n, a);
+                    if got != d {
+                        failures.push(format!("{label} {a} before a tick: {got}, expected {d}"));
+                    }
+                }
+            }
+            game.tick_world(true).unwrap();
+            game.tick_world(true).unwrap();
+            // Bouncy: -2, -2 clamped to 0, +0.9, x0.3, x0.01.
+            let bouncy = [-2000, 0, 899, 300, 9];
+            for (n, label, want) in [(1, "body", bouncy), (2, "none", defaults)] {
+                for (a, d) in attrs.iter().zip(want) {
+                    let got = read(game, n, a);
+                    if got != d {
+                        failures.push(format!("{label} {a} after two ticks: {got}, expected {d}"));
+                    }
+                }
+            }
+            assert!(failures.is_empty(), "sulfur body attributes: {failures:#?}");
+        });
+    }
+
+    /// Added before production (routing compatibility): a cube with no body
+    /// keeps the existing effect of a command-set knockback base and permanent
+    /// modifier on the cached resistance its physics reads
+    /// (Mob::knockback_resistance falls back to attrs.knockback_resistance).
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and a scratch HORIZON_HOME"]
+    fn a_bodiless_cube_keeps_its_command_knockback_resistance_effect() {
+        with_game(|game| {
+            assert!(game.run_command(
+                "summon minecraft:sulfur_cube 4.5 200 8.5 {UUID:[I;192,0,0,9],NoAI:1b,NoGravity:1b,Silent:1b,PersistenceRequired:1b,Size:1}"
+            ));
+            let sel = "@e[type=minecraft:sulfur_cube,nbt={UUID:[I;192,0,0,9]},limit=1]";
+            let cached = |game: &Game<'_>| {
+                let m = game
+                    .mobs
+                    .iter()
+                    .find(|m| game.persist.uuid_of(m.id) == Some([192, 0, 0, 9]))
+                    .unwrap();
+                (m.attrs.knockback_resistance, m.knockback_resistance())
+            };
+            let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
+            let mut failures = Vec::new();
+            for (command, want) in [
+                (
+                    format!("attribute {sel} minecraft:knockback_resistance base set 0.5"),
+                    0.5,
+                ),
+                (
+                    format!(
+                        "attribute {sel} minecraft:knockback_resistance modifier add h192:extra 0.25 add_value"
+                    ),
+                    0.75,
+                ),
+                (
+                    format!(
+                        "attribute {sel} minecraft:knockback_resistance modifier remove h192:extra"
+                    ),
+                    0.5,
+                ),
+            ] {
+                assert!(game.run_command(&command), "{command}");
+                let (c, e) = cached(game);
+                if !close(c, want) || !close(e, want) {
+                    failures.push(format!(
+                        "{command}: cached {c}, effective {e}, expected {want}"
+                    ));
+                }
+                if read(game, 9, "knockback_resistance") != (want * 1000.0) as i32 {
+                    failures.push(format!(
+                        "{command}: /attribute get {}",
+                        read(game, 9, "knockback_resistance")
+                    ));
+                }
+            }
+            game.tick_world(true).unwrap();
+            let (c, _) = cached(game);
+            if !close(c, 0.5) {
+                failures.push(format!("after a tick: cached {c}"));
+            }
+            assert!(
+                failures.is_empty(),
+                "bodiless cube knockback: {failures:#?}"
+            );
+        });
+    }
+    /// Added control (H192 routing mirror): base reset and modifier add/remove
+    /// on a bodiless and a bodied cube reach the cached resistance, which never
+    /// takes the body archetype's transient modifiers (bouncy: -2).
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and a scratch HORIZON_HOME"]
+    fn command_knockback_changes_reach_the_cache_without_archetype_values() {
+        with_game(|game| {
+            for (n, body) in [
+                (10, ""),
+                (11, ",equipment:{body:{id:\"minecraft:oak_planks\"}}"),
+            ] {
+                assert!(game.run_command(&format!(
+                    "summon minecraft:sulfur_cube {}.5 200 8.5 {{UUID:[I;192,0,0,{n}],NoAI:1b,NoGravity:1b,Silent:1b,PersistenceRequired:1b,Size:1{body}}}",
+                    n - 8
+                )));
+            }
+            game.tick_world(true).unwrap();
+            let cached = |game: &Game<'_>, n: i32| {
+                game.mobs
+                    .iter()
+                    .find(|m| game.persist.uuid_of(m.id) == Some([192, 0, 0, n]))
+                    .unwrap()
+                    .attrs
+                    .knockback_resistance
+            };
+            let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
+            let mut failures = Vec::new();
+            // (command, cached, /attribute get for the bodied cube)
+            for (command, want, bodied) in [
+                ("base set 0.5", 0.5, -1500),
+                ("modifier add h192:extra 0.25 add_value", 0.75, -1250),
+                ("modifier remove h192:extra", 0.5, -1500),
+                ("base reset", 0.0, -2000),
+                ("modifier add h192:extra 0.25 add_value", 0.25, -1750),
+                ("modifier remove h192:extra", 0.0, -2000),
+            ] {
+                for n in [10, 11] {
+                    let sel = format!(
+                        "@e[type=minecraft:sulfur_cube,nbt={{UUID:[I;192,0,0,{n}]}},limit=1]"
+                    );
+                    let full = format!("attribute {sel} minecraft:knockback_resistance {command}");
+                    assert!(game.run_command(&full), "{full}");
+                    let c = cached(game, n);
+                    if !close(c, want) {
+                        failures.push(format!("{n} {command}: cached {c}, expected {want}"));
+                    }
+                }
+                let got = read(game, 10, "knockback_resistance");
+                if got != (want * 1000.0) as i32 {
+                    failures.push(format!("10 {command}: /attribute get {got}"));
+                }
+                let got = read(game, 11, "knockback_resistance");
+                if got != bodied {
+                    failures.push(format!(
+                        "11 {command}: /attribute get {got}, expected {bodied}"
+                    ));
+                }
+            }
+            assert!(failures.is_empty(), "knockback mirror: {failures:#?}");
+        });
+    }
+}
+
+#[cfg(test)]
+mod summoned_knot_tests {
+    use super::*;
+    use crate::game::{Audio, Options, Progress, Settings, commands::Target, load_resources};
+    use horizon_client::{chunk::Chunk, motion::PlayerMotion};
+    use horizon_core::{geometry::Vec3, position::ChunkPos, random::LegacyRandom};
+    fn with_game(test: impl FnOnce(&mut Game<'_>)) {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.game_dir = Some(
+            std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap())
+                .join(format!("h129-{:?}", std::thread::current().id())),
+        );
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.block_ticks
+            .add_empty_chunk(ChunkPos::new(0, 0))
+            .unwrap();
+        assert!(game.run_command("difficulty normal"));
+        assert!(game.run_command("forceload add 0 0"));
+        for (x, z) in [(0, 1), (1, 0), (1, 1)] {
+            game.world
+                .chunks
+                .insert((x, z), Arc::new(Chunk::empty(x, z)));
+            game.block_ticks
+                .add_empty_chunk(ChunkPos::new(x, z))
+                .unwrap();
+        }
+        game.player = Some(PlayerMotion::new(game.motion, Vec3::new(2.5, 200.0, 2.5)).unwrap());
+        game.creative = true;
+        assert!(game.run_command("fill 0 199 0 31 199 31 stone"));
+        assert!(
+            game.run_command("summon pig 13.5 200 2.5 {UUID:[I;129,0,0,99],NoAI:1b,NoGravity:1b}")
+        );
+        game.world.random = LegacyRandom::new(129);
+        test(&mut game);
+    }
+    fn knot_id(game: &Game<'_>, n: i32) -> u32 {
+        game.others
+            .iter()
+            .find(|o| game.persist.uuid_of(o.id) == Some([129, 0, 0, n]))
+            .unwrap()
+            .id
+    }
+    fn summon_knots(game: &mut Game<'_>) -> [u32; 3] {
+        for x in [6, 14] {
+            assert!(game.run_command(&format!("setblock {x} 200 6 oak_fence strict")));
+        }
+        for (n, x) in [(1, 6), (2, 10), (3, 14)] {
+            assert!(game.run_command(&format!("summon leash_knot {x}.2 200.8 6.9 {{UUID:[I;129,0,0,{n}],CustomName:\"knot\",Tags:[\"h129\"]}}")));
+        }
+        [1, 2, 3].map(|n| knot_id(game, n))
+    }
+    #[test]
+    #[ignore = "prepared resources; registered explicit knot load and real saved projection"]
+    fn summoned_knots_adopt_normalized_position_and_save_common_defaults() {
+        with_game(|game| {
+            let clock = game.world.game_time;
+            let ids = summon_knots(game);
+            for (i, id) in ids.into_iter().enumerate() {
+                let o = game.others.iter().find(|o| o.id == id).unwrap();
+                assert_eq!(o.kind, "minecraft:leash_knot");
+                assert_eq!(game.persist.uuid_of(id), Some([129, 0, 0, i as i32 + 1]));
+                let expected = Vec3::new(6.5 + 4.0 * i as f64, 200.375, 6.5);
+                assert_eq!(
+                    o.position, expected,
+                    "actual loaded model, not a getter-only answer"
+                );
+                let tag = game.entity_nbt(Target::Other(id)).unwrap();
+                assert_eq!(
+                    tag.get("Pos"),
+                    Some(&Tag::List(
+                        expected
+                            .components()
+                            .map(|v| Tag::Double(v.to_bits()))
+                            .to_vec()
+                    ))
+                );
+                for (key, value) in [
+                    ("Air", Tag::Short(300)),
+                    ("Invulnerable", Tag::Byte(0)),
+                    ("OnGround", Tag::Byte(0)),
+                    ("PortalCooldown", Tag::Int(0)),
+                    ("fall_distance", Tag::Double(0.0f64.to_bits())),
+                ] {
+                    assert_eq!(tag.get(key), Some(&value), "{key}");
+                }
+                assert_eq!(
+                    tag.get("Tags"),
+                    Some(&Tag::List(vec![Tag::String("h129".into())]))
+                );
+                // The same real model, with no raw source, must still save defaults.
+                let raw = game.persist.raw.remove(&id).unwrap();
+                let fresh = game.entity_nbt(Target::Other(id)).unwrap();
+                assert_eq!(fresh.get("Air"), Some(&Tag::Short(300)));
+                assert_eq!(fresh.get("Pos"), tag.get("Pos"));
+                game.persist.raw.insert(id, raw);
+            }
+            assert_eq!(game.world.game_time, clock);
+        });
+    }
+    #[test]
+    #[ignore = "prepared resources; actual Game world ticks and support removal"]
+    fn summoned_knots_check_actual_fence_support_on_tick_101() {
+        with_game(|game| {
+            let clock = game.world.game_time;
+            let ids = summon_knots(game);
+            assert!(
+                game.run_command(
+                    "summon marker 8.2 200.8 10.9 {UUID:[I;129,0,0,4],data:{audit:7}}"
+                )
+            );
+            let marker = game
+                .others
+                .iter()
+                .find(|o| o.kind == "minecraft:marker")
+                .unwrap()
+                .id;
+            let marker_before = game.entity_nbt(Target::Other(marker)).unwrap();
+            for tick in 1..=101 {
+                game.tick().unwrap();
+                assert_eq!(game.world.game_time, clock + tick);
+                if tick == 1 {
+                    assert!(game.run_command("setblock 14 200 6 air strict"));
+                }
+                if tick <= 100 {
+                    assert!(
+                        ids.iter().all(|id| game.others.iter().any(|o| o.id == *id)),
+                        "alive through tick{tick}"
+                    );
+                }
+            }
+            assert!(
+                game.others.iter().any(|o| o.id == ids[0]),
+                "actual fence survives"
+            );
+            assert!(
+                !game.others.iter().any(|o| o.id == ids[1]),
+                "unsupported actual entity gone at101"
+            );
+            assert!(
+                !game.others.iter().any(|o| o.id == ids[2]),
+                "removed support actual entity gone at101"
+            );
+            assert_eq!(
+                game.entity_nbt(Target::Other(marker)).unwrap(),
+                marker_before
+            );
+            assert_eq!(
+                game.mobs
+                    .iter()
+                    .find(|m| game.persist.uuid_of(m.id) == Some([129, 0, 0, 99]))
+                    .unwrap()
+                    .health,
+                10.0
+            );
+            assert!(game.entity_nbt(Target::Other(ids[1])).is_none());
+            assert!(game.run_command("kill @e[type=leash_knot]"));
+            assert!(!game.others.iter().any(|o| o.kind == "minecraft:leash_knot"));
+        });
+    }
+    #[test]
+    #[ignore = "prepared resources; negative fractional registered position"]
+    fn negative_fractional_knot_position_uses_floor_before_centering() {
+        with_game(|game| {
+            game.world
+                .chunks
+                .insert((-1, -1), Arc::new(Chunk::empty(-1, -1)));
+            game.block_ticks
+                .add_empty_chunk(ChunkPos::new(-1, -1))
+                .unwrap();
+            assert!(game.run_command("setblock -2 199 -3 stone strict"));
+            assert!(game.run_command("setblock -2 200 -3 oak_fence strict"));
+            assert!(game.run_command("summon leash_knot -1.2 200.8 -2.1 {UUID:[I;129,0,0,5]}"));
+            let id = knot_id(game, 5);
+            assert_eq!(
+                game.others.iter().find(|o| o.id == id).unwrap().position,
+                Vec3::new(-1.5, 200.375, -2.5)
+            );
+        });
+    }
+    #[test]
+    #[ignore = "prepared resources; paused and actual ticket-excluded ticks"]
+    fn explicit_knot_check_counts_only_running_entity_ticking_turns() {
+        with_game(|game| {
+            let ids = summon_knots(game);
+            let clock = game.world.game_time;
+            for _ in 0..100 {
+                game.tick().unwrap();
+            }
+            assert!(ids.iter().all(|id| game.others.iter().any(|o| o.id == *id)));
+            assert!(game.run_command("tick freeze"));
+            for _ in 0..3 {
+                game.tick().unwrap();
+            }
+            assert_eq!(game.world.game_time, clock + 100);
+            assert!(ids.iter().all(|id| game.others.iter().any(|o| o.id == *id)));
+            assert!(game.run_command("gamerule spectators_generate_chunks false"));
+            assert!(game.run_command("gamemode spectator @s"));
+            assert!(game.run_command("forceload remove all"));
+            assert!(game.run_command("tick unfreeze"));
+            for _ in 0..3 {
+                game.tick().unwrap();
+                assert!(!game.entity_ticking_area()(10, 6));
+            }
+            assert_eq!(game.world.game_time, clock + 103);
+            assert!(ids.iter().all(|id| game.others.iter().any(|o| o.id == *id)));
+            assert!(game.run_command("gamemode creative @s"));
+            assert!(game.run_command("forceload add 0 0"));
+            game.tick().unwrap();
+            assert!(game.entity_ticking_area()(10, 6));
+            assert!(game.others.iter().any(|o| o.id == ids[0]));
+            assert!(
+                !game.others.iter().any(|o| o.id == ids[1]),
+                "101 eligible ticks, not elapsed world time"
+            );
+        });
+    }
+    #[test]
+    #[ignore = "prepared resources; existing natural lead/knot adapter control"]
+    fn explicit_knot_removal_preserves_a_real_lead_created_knot() {
+        with_game(|game| {
+            use horizon_client::mobs::leash::Holder;
+            assert!(game.run_command("tp @s 12.5 200 2.5"));
+            assert!(game.run_command("item replace entity @s weapon.mainhand with lead"));
+            assert!(game.run_command("setblock 14 200 2 oak_fence strict"));
+            let pig = game
+                .mobs
+                .iter()
+                .position(|m| game.persist.uuid_of(m.id) == Some([129, 0, 0, 99]))
+                .unwrap();
+            assert!(game.interact_leash(pig, "minecraft:lead"));
+            assert!(game.use_knot([14, 200, 2], false));
+            assert_eq!(game.mobs[pig].extra.leash, Some(Holder::Knot([14, 200, 2])));
+            game.lan_assign_ids();
+            let natural = game.knot_ids[&[14, 200, 2]];
+            let ids = summon_knots(game);
+            for _ in 0..101 {
+                game.tick().unwrap();
+            }
+            game.lan_assign_ids();
+            assert_eq!(game.knot_ids[&[14, 200, 2]], natural);
+            let pig = game
+                .mobs
+                .iter()
+                .find(|m| game.persist.uuid_of(m.id) == Some([129, 0, 0, 99]))
+                .unwrap();
+            assert_eq!(pig.extra.leash, Some(Holder::Knot([14, 200, 2])));
+            assert!(!game.others.iter().any(|o| o.id == ids[1]));
+        });
+    }
+}
+
+#[cfg(test)]
+mod camel_pose_saved_tests {
+    use super::*;
+    use crate::game::{Audio, Options, Progress, Settings, load_resources};
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and scratch homes/cwd"]
+    fn loaded_camel_pose_timestamps_survive_actual_save_and_tick() {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.game_dir = Some(std::env::current_dir().unwrap().join("game"));
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+        let mut chunk = Chunk::empty(0, 0);
+        let stone = game
+            .pack
+            .assets
+            .registry
+            .default_state("minecraft:stone")
+            .unwrap();
+        for x in 0..16 {
+            for z in 0..16 {
+                chunk.set(x, 199, z, stone.0);
+            }
+        }
+        game.world.chunks.insert((0, 0), Arc::new(chunk));
+        game.block_ticks
+            .add_empty_chunk(ChunkPos::new(0, 0))
+            .unwrap();
+        assert!(game.run_command("forceload add 0 0"));
+        assert!(game.run_command("tick freeze"));
+        let initial = game.world.game_time;
+        assert!(game.run_command("tick step 128"));
+        for _ in 0..128 {
+            game.tick_server(false).unwrap();
+        }
+        let now = game.world.game_time;
+        assert_eq!(now, initial + 128);
+        let cases = [
+            None,
+            Some(0),
+            Some(now - 24),
+            Some(-(now - 24)),
+            Some(now + 20),
+        ];
+        let mut actors = Vec::new();
+        for (n, value) in cases.into_iter().enumerate() {
+            let number = n as i32 + 1;
+            let field = value
+                .map(|value| format!(",LastPoseTick:{value}L"))
+                .unwrap_or_default();
+            assert!(game.run_command(&format!("summon camel {} 200 4.5 {{UUID:[I;94,0,0,{number}],NoAI:1b,NoGravity:1b,PersistenceRequired:1b,Health:32f,Temper:17,Tags:[\"h094\"]{field}}}", 2.5 + n as f64 * 2.5)));
+            let mob = game
+                .mobs
+                .iter()
+                .find(|m| game.persist.uuids.get(&m.id) == Some(&[94, 0, 0, number]))
+                .unwrap();
+            // Prove the real decoder adopted the value before reading saved NBT.
+            assert_eq!(mob.extra.pose_change_tick, value.unwrap_or(0));
+            actors.push((mob.id, value.unwrap_or(0)));
+        }
+        for elapsed in 0..=1 {
+            assert_eq!(game.world.game_time, now + elapsed);
+            for &(id, value) in &actors {
+                let index = game.mobs.iter().position(|m| m.id == id).unwrap();
+                let mob = &game.mobs[index];
+                assert!(mob.no_ai && mob.alive());
+                assert_eq!(mob.age, elapsed as u32, "actual entity tick admission");
+                assert_eq!(mob.health, 32.0);
+                assert_eq!(horizon_client::mobs::camel::sitting(mob), value < 0);
+                assert_eq!(
+                    horizon_client::mobs::camel::refuse_to_move(mob),
+                    value < 0 || value == now - 24 || value == now + 20
+                );
+                let saved = game.mob_tree_nbt(index);
+                assert_eq!(
+                    saved.get("LastPoseTick"),
+                    Some(&Tag::Long(value)),
+                    "loaded timestamp {value} at delta {elapsed}"
+                );
+                assert_eq!(
+                    saved.get("Tags"),
+                    Some(&Tag::List(vec![Tag::String("h094".into())]))
+                );
+                // The authoritative Game save must also work without source NBT.
+                let raw = game.persist.raw.remove(&id);
+                assert_eq!(
+                    game.mob_tree_nbt(index).get("LastPoseTick"),
+                    Some(&Tag::Long(value))
+                );
+                if let Some(raw) = raw {
+                    game.persist.raw.insert(id, raw);
+                }
+            }
+            if elapsed == 0 {
+                assert!(game.run_command("tick step 1"));
+                game.tick_server(false).unwrap();
+            }
+        }
     }
 }

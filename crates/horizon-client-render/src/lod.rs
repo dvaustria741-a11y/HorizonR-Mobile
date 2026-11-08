@@ -9,6 +9,7 @@ use crate::{
 };
 pub mod cache;
 mod mesh;
+pub mod packed;
 use horizon_world::registry::BlockStateId;
 use std::{
     collections::VecDeque,
@@ -559,7 +560,8 @@ pub(crate) fn state_kinds(facts: &BlockFacts) -> Vec<u8> {
 }
 /// Blocks that fill their cell but neither draw solid nor collide as a full
 /// block: far terrain draws them as blocks, or patches of powder snow leave
-/// holes in mountains (and paths and fields dips).
+/// holes in mountains (and paths and fields dips). Slabs use the same
+/// full-cell approximation as stairs, so distant slab builds remain visible.
 fn nearly_full(name: &str) -> bool {
     matches!(
         name,
@@ -568,6 +570,7 @@ fn nearly_full(name: &str) -> bool {
             | "minecraft:farmland"
             | "minecraft:honey_block"
     ) || name.ends_with("_stairs")
+        || name.ends_with("_slab")
         || name.contains("fence")
         || name.contains("_wall")
         || name.contains("bars")
@@ -1414,7 +1417,13 @@ impl Lod {
                                     &edges,
                                     &input.finer,
                                 );
+                                // Sorts the quads by facing side, and clears
+                                // the compact layout: a far tile has no tints
+                                // for `mesher::packed`, so its own records
+                                // (`lod::packed`) are laid out here, from the
+                                // quads in the order the sort left them.
                                 mesh.sort_solid();
+                                crate::lod::packed::lay_out(&mut mesh);
                                 let [ox, _, oz] = job.key.origin();
                                 let size = job.key.size();
                                 mesh.keep = keep_finer
@@ -3977,6 +3986,73 @@ mod tests {
     }
     #[test]
     #[ignore = "requires prepared models/textures in HORIZON_TEST_RESOURCES"]
+    fn slab_materials_survive_chunk_summaries_and_draw_far_faces() -> crate::Result<()> {
+        use crate::{assets::Assets, biome::Biomes, light::LightTables, mesher::MeshTables};
+        let root = std::path::PathBuf::from(
+            std::env::var_os("HORIZON_TEST_RESOURCES").expect("HORIZON_TEST_RESOURCES"),
+        );
+        let assets = Arc::new(Assets::load(&root)?);
+        let render = Arc::new(assets.reload(&root)?);
+        let facts = BlockFacts::load(&root, assets.registry)?;
+        let context = WorkerContext {
+            light: Arc::new(LightTables::load(&root, assets.registry, &facts)?),
+            tables: Arc::new(MeshTables::new(
+                &assets,
+                &render,
+                &facts,
+                crate::models::load_visibility(&root, assets.registry)?,
+            )?),
+            assets: assets.clone(),
+            render,
+            biomes: Arc::new(Biomes::load(&root)?),
+        };
+        let kinds = state_kinds(&facts);
+        let mut chunk = Chunk::empty(0, 0);
+        let mut mesher = mesh::Mesher::default();
+        let mut materials = FxHashSet::default();
+        // Real top, bottom, double and waterlogged states: a waterlogged slab
+        // must keep its material rather than become a column of plain water.
+        for (i, f) in facts.states.iter().enumerate() {
+            if !f.name.ends_with("_slab") {
+                continue;
+            }
+            materials.insert(f.name.as_ref());
+            let state = BlockStateId(i as u32);
+            chunk.set(3, 90, 3, state.0);
+            let columns = summarize(&chunk, &kinds);
+            let column = &columns[3 * 16 + 3];
+            assert_eq!(column.spans.len(), 1, "{} state {i}", f.name);
+            assert_eq!(column.spans[0].state, state, "{} state {i}", f.name);
+            assert_eq!((column.spans[0].min, column.spans[0].max), (90, 91));
+            assert_eq!(Column::reduced(&columns, 0, 0, 4).spans, column.spans);
+            let mesh = mesher.mesh(
+                TileKey {
+                    x: 0,
+                    z: 0,
+                    level: 0,
+                },
+                &columns.iter().collect::<Vec<_>>(),
+                &FxHashSet::default(),
+                None,
+                &context,
+                &std::array::from_fn(|_| Vec::new()),
+                &[],
+            );
+            // Like stairs, far slabs use the existing full-cell approximation.
+            assert_eq!(mesh.solid.len(), 6 * 4, "{} state {i}", f.name);
+            assert!(mesh.translucent.is_empty(), "{} state {i}", f.name);
+        }
+        for name in [
+            "minecraft:smooth_stone_slab",
+            "minecraft:oak_slab",
+            "minecraft:cut_copper_slab",
+        ] {
+            assert!(materials.contains(name), "missing fixture {name}");
+        }
+        Ok(())
+    }
+    #[test]
+    #[ignore = "requires prepared models/textures in HORIZON_TEST_RESOURCES"]
     fn real_mesh_clips_near_chunks_and_preserves_water_and_edited_surfaces() -> crate::Result<()> {
         use crate::{
             assets::Assets, biome::Biomes, light::LightTables, mesher::MeshTables,
@@ -4025,9 +4101,12 @@ mod tests {
         );
         // A chunk covers only one quarter of this parent's 32² cell. Both
         // opaque terrain and water must leave precisely that 16² footprint.
+        // Only active tiles enter the mesher snapshot, even when samples are ready.
+        lod.active.insert(key);
         lod.covered.insert((-1, -2));
         lod.covered_bounds = Some([-16, -32, 0, -16]);
         let mesh = lod.mesh(key);
+        lod.active.remove(&key);
         let top_area = |vertices: &[TerrainVertex], y: f32| {
             vertices
                 .as_chunks::<4>()
@@ -4213,14 +4292,19 @@ mod tests {
             &lod.reduced[&(-1, -1)].columns,
             &lod.saved[&(-1, -1)]
         ));
-        assert!(
+        let reduced_spans = |lod: &Lod| {
             lod.snapshot()
                 .visited_source(-16, -16, 2)
                 .unwrap()
                 .get()
                 .spans
-                .is_empty()
-        );
+                .iter()
+                .map(|span| (span.min, span.max, span.state))
+                .collect::<Vec<_>>()
+        };
+        // Reduction keeps a block held by any column of the footprint, so
+        // this single-column build survives the cached two-block reduction.
+        assert_eq!(reduced_spans(&lod), vec![(120, 121, stone)]);
         let old = lod.saved[&(-1, -1)].clone();
         lod.observe(Arc::new(chunk.clone()), &facts);
         receive_observed(&mut lod);
@@ -4233,30 +4317,43 @@ mod tests {
             &lod.reduced[&(-1, -1)].columns,
             &lod.saved[&(-1, -1)]
         ));
+        assert_eq!(
+            reduced_spans(&lod),
+            vec![(120, 121, stone), (130, 131, stone)]
+        );
         // A seed reduction arriving after the edit cannot restore old data.
         lod.finish_detail((-1, -1), ReducedColumns::new(old));
         assert_eq!(lod.ready[&fine][0].surface.unwrap().height, 131);
+        assert_eq!(
+            reduced_spans(&lod),
+            vec![(120, 121, stone), (130, 131, stone)]
+        );
 
         // Exercise the actual worker/update seam: a parent stays displayed
-        // until all four child meshes can replace it in the same update.
+        // until all four child meshes have arrived, possibly over several updates.
         let camera = [-256.0, 100.0, -256.0];
         lod.area = Some(([-16, -16], 2, 64, 0, false, None));
         lod.plan.roots = vec![key];
         lod.plan.nodes.insert(key);
         // As a replan does (`update` only selects after a change).
         lod.reselect = true;
-        let await_meshes = |lod: &mut Lod| {
+        let await_meshes = |lod: &mut Lod, count: usize| {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut uploaded = Vec::new();
             loop {
-                let meshes = lod.update(camera, 2, 64, None, None);
-                if !meshes.is_empty() {
-                    return meshes;
+                uploaded.extend(lod.update(camera, 2, 64, None, None));
+                if uploaded.len() >= count {
+                    return uploaded;
                 }
+                assert!(
+                    lod.removed().is_empty(),
+                    "retired before replacement meshes"
+                );
                 assert!(std::time::Instant::now() < deadline, "mesh worker stalled");
                 std::thread::sleep(std::time::Duration::from_millis(1));
             }
         };
-        let uploaded = await_meshes(&mut lod);
+        let uploaded = await_meshes(&mut lod, 1);
         assert_eq!(uploaded.len(), 1);
         assert_eq!(uploaded[0].0, key);
         assert!(lod.active.contains(&key));
@@ -4266,13 +4363,7 @@ mod tests {
             lod.ready.insert(child, lod.ready[&key].clone());
         }
         lod.reselect = true;
-        assert!(lod.update(camera, 2, 64, None, None).is_empty());
-        assert!(
-            lod.active.contains(&key),
-            "parent retired before child meshes"
-        );
-        assert!(lod.removed().is_empty());
-        let uploaded = await_meshes(&mut lod);
+        let uploaded = await_meshes(&mut lod, 4);
         assert_eq!(uploaded.len(), 4);
         assert!(
             key.children()
@@ -4376,6 +4467,7 @@ mod tests {
                 .insert(parent, Arc::new(vec![Column::default(); 256]));
         }
         lod.active = [near, far].into_iter().collect();
+        lod.wanted_stale = true;
         lod.shared.jobs.lock().unwrap().clear();
         lod.sample_jobs = SAMPLE_JOBS;
         lod.pending = (0..SAMPLE_JOBS - 1)
@@ -4401,6 +4493,7 @@ mod tests {
         lod.plan.split.clear();
         lod.detail_masks.clear();
         lod.covered = [(0, 0)].into_iter().collect();
+        lod.full = lod.covered.clone();
         lod.detail_request_pending = false;
         lod.detail_request_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
         lod.request_detail([0, 0]);

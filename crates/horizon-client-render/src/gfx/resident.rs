@@ -124,6 +124,10 @@ impl<T> Resident<T> {
     pub fn get_mut(&mut self, slot: u32) -> &mut T {
         &mut self.items[slot as usize].1
     }
+    /// Padded mesh bounds of the section in `slot`, relative to its origin.
+    pub fn bounds(&self, slot: u32) -> Option<[Vec3; 2]> {
+        self.bounds[slot as usize]
+    }
     /// Sections from now on count from `min_y` (a level of another column).
     pub fn set_min_y(&mut self, min_y: i32) {
         self.min_y = min_y;
@@ -475,7 +479,8 @@ impl<T> Resident<T> {
                     }
                     let oy = f64::from(self.min_y + y * 16) - camera.y;
                     let min = Vec3::new(min_x, oy as f32, min_z);
-                    let (bmin, bmax) = section_box(min, self.bounds[slot as usize]);
+                    let bounds = self.bounds[slot as usize].filter(|_| frustum.tight());
+                    let (bmin, bmax) = section_box(min, bounds);
                     if !frustum.intersects(bmin, bmax) {
                         continue;
                     }

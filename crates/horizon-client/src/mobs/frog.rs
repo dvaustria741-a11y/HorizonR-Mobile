@@ -115,7 +115,9 @@ pub fn register(m: &mut Mob) {
     };
     let g = &mut m.ai.goals;
     g.add(0, Float);
-    g.add(1, Panic::new(1.25));
+    // `FrogAi.initCoreActivity`: `AnimalPanic(2.0)` — the panic speed
+    // multiplier is 2.0, not the 1.25 its temptation uses.
+    g.add(1, Panic::new(2.0));
     // `FrogAi.initIdleActivity`: `AnimalMakeLove` first, then `FollowTemptation(1.25)`.
     g.add(2, Breed::new(1.0));
     g.add(3, Unless(is_pregnant, Tempt::new(1.25, food, false)));
@@ -161,6 +163,18 @@ pub fn tick(m: &mut Mob) {
     let age = m.age as f32;
     let still = m.fluids.in_water && m.limb_speed <= 1.0e-5;
     m.anim.states[SWIM_IDLE].animate_when(still, age);
+}
+/// `Frog.travelInWater`: `moveRelative(getSpeed(), input)`, the move, then
+/// the motion scaled by 0.9. `getSpeed` is the speed the move control stored.
+/// Out of water the usual travel runs.
+pub fn travel(m: &mut Mob, w: &MobWorld, input: Vec3, events: &mut Vec<MobEvent>) -> bool {
+    if !m.fluids.in_water {
+        return false;
+    }
+    m.move_relative(m.ai.speed, input);
+    m.do_move(w, events);
+    m.velocity = m.velocity.scale(0.9);
+    true
 }
 
 /// `Frog.canEat`: a slime or magma cube of size 1.
@@ -825,7 +839,7 @@ fn candidates([x, y, z]: [i32; 3], width: i32, height: i32) -> Vec<Candidate> {
 /// first arc that reaches the target clear of blocks. `Collections.shuffle`
 /// without a random draws from an unseeded one, not the mob's or the level's.
 fn optimal_jump_vector(m: &Mob, w: &MobWorld, target: Vec3) -> Option<Vec3> {
-    let mut random = crate::sound_engine::SoundEngine::unseeded();
+    let mut random = crate::random_source::create();
     let mut angles = ALLOWED_ANGLES;
     for i in (2..=angles.len()).rev() {
         let j = random.next_int_bound(i as i32).unwrap_or(0) as usize;
@@ -980,6 +994,40 @@ mod tests {
         Mob::new(1, kind, Vec3::new(0.5, 0.0, 0.5), 0.0)
     }
 
+    /// `Frog.travelInWater`: the move uses `getSpeed` (the speed the move
+    /// control stored, here 0.25, not the movement attribute 1.0 and not the
+    /// turtle's 0.1), then the whole motion is scaled by 0.9. Out of water
+    /// this path does not run.
+    #[test]
+    fn water_travel_uses_get_speed_and_scales_by_nine_tenths() {
+        let ran = crate::mobs::world::with_test_world(&[], |w, _| {
+            let mut m = frog();
+            m.attrs.speed = 1.0;
+            m.ai.speed = 0.25;
+            m.yaw = 0.0;
+            m.velocity = Vec3::new(1.0, -0.5, 0.125);
+            let kept = m.velocity;
+            assert!(!travel(
+                &mut m,
+                w,
+                Vec3::new(0.0, 0.0, 1.0),
+                &mut Vec::new()
+            ));
+            assert_eq!(m.velocity, kept);
+
+            m.fluids.in_water = true;
+            m.position = Vec3::new(0.5, 80.0, 0.5);
+            m.travel(w, Vec3::new(0.0, 0.0, 1.0), &mut Vec::new());
+            // (1, -0.5, 0.125) + (0, 0, getSpeed 0.25) = (1, -0.5, 0.375),
+            // then * 0.9 = (0.9, -0.45, 0.3375).
+            assert!((m.velocity.x - 0.9).abs() < 1.0e-9, "{}", m.velocity.x);
+            assert!((m.velocity.y - -0.45).abs() < 1.0e-9, "{}", m.velocity.y);
+            assert!((m.velocity.z - 0.3375).abs() < 1.0e-9, "{}", m.velocity.z);
+        });
+        // Without a test world the closure does not run; there is nothing else to check.
+        let _ = ran;
+    }
+
     /// `Frog.updateWalkAnimation`: target `min(distance * 25, 1)`, 0 while
     /// the jump animation is started, eased by 0.4 (`WalkAnimationState.update`).
     #[test]
@@ -1093,5 +1141,60 @@ mod tests {
         set_jump_cooldown(&mut m, None);
         assert_eq!(jump_cooldown(&m), None);
         assert!(!m.extra.memories.iter().any(|x| x.0 == LONG_JUMP_COOLDOWN));
+    }
+
+    /// `FrogAi.initCoreActivity`: `AnimalPanic(2.0)`. A hurt frog starts the
+    /// panic goal with vanilla's 2.0 speed multiplier, which `PathNavigation`
+    /// stores for `SmoothSwimmingMoveControl` (`speedModifier * movement
+    /// speed`, so 0.2 on land and 0.04 in water). The brain's temptation and
+    /// long jump run at 1.25 and 1.0; 1.25 here would make a fleeing frog 60%
+    /// slower than vanilla's.
+    #[test]
+    fn a_hurt_frog_panics_at_vanillas_two_times_speed() {
+        let ran = crate::mobs::world::with_built_test_world(
+            &[],
+            |world, registry| {
+                for x in -2..=1 {
+                    for z in -2..=1 {
+                        world.chunks.insert(
+                            (x, z),
+                            std::sync::Arc::new(crate::chunk::Chunk::empty(x, z)),
+                        );
+                    }
+                }
+                let stone = registry.default_state("minecraft:stone").unwrap();
+                for x in -8..=8 {
+                    for z in -8..=8 {
+                        world.set(x, 63, z, stone).unwrap();
+                    }
+                }
+            },
+            |w, types| {
+                let kind = std::sync::Arc::new(types.types["minecraft:frog"].clone());
+                let mut m = Mob::new(1, kind, Vec3::new(0.5, 64.0, 0.5), 0.0);
+                register(&mut m);
+                m.on_ground = true;
+                // An environmental hit inside the 40 tick panic window
+                // (`DamageTypeTags.PANIC_CAUSES`).
+                m.last_damage = Some((
+                    super::super::Damage::of(super::super::DamageKind::Freeze),
+                    i64::from(m.age),
+                ));
+                let mut events = Vec::new();
+                let mut lr = LegacyRandom::new(0);
+                let mut cx = Cx {
+                    w,
+                    lr: &mut lr,
+                    events: &mut events,
+                };
+                let mut goals = std::mem::take(&mut m.ai.goals);
+                goals.tick(&mut m, &mut cx);
+                assert!(goals.is_running("Panic"), "the hurt frog should flee");
+                m.ai.goals = goals;
+                assert!(m.ai.panicking);
+                assert_eq!(m.ai.nav.speed_modifier, 2.0);
+            },
+        );
+        let _ = ran;
     }
 }

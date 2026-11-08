@@ -191,6 +191,12 @@ impl Levels {
         self.get(x, z)
             .is_none_or(|(l, s)| l <= ENTITY_TICKING && s <= ENTITY_TICKING)
     }
+    /// `DistanceManager.inEntityTickingRange` alone: the simulation level,
+    /// whatever the chunk's own status. `ChunkMap.tick` sends an entity's
+    /// changes there only (or when it changed section or needs sync).
+    pub fn in_entity_ticking_range(&self, x: i32, z: i32) -> bool {
+        self.get(x, z).is_none_or(|(_, s)| s <= ENTITY_TICKING)
+    }
     /// `inBlockTickingRange` in a block-ticking chunk: where scheduled ticks,
     /// block events and block entities run.
     pub fn block_ticking(&self, x: i32, z: i32) -> bool {
@@ -243,6 +249,23 @@ pub struct ChunkTickets {
 impl ChunkTickets {
     /// `None`: tick everywhere.
     pub fn update(&mut self, mut sources: Option<Sources>) {
+        // The game submits a fresh `Sources` value every tick even when no
+        // player or ticket moved.  The normalized vectors are already held
+        // in `self.sources`; when the caller preserves their order, avoid
+        // sorting/deduplicating them and rebuilding the portal list just to
+        // discover that the levels are unchanged.  If a caller supplies the
+        // same set in another order, the existing normalization path below
+        // remains authoritative.
+        if let (Some(next), Some(old)) = (&sources, &self.sources)
+            && next.view_distance == old.view_distance
+            && next.simulation_distance == old.simulation_distance
+            && next.players == old.players
+            && next.forced == old.forced
+            && next.dragon == old.dragon
+            && self.portal_matches(old)
+        {
+            return;
+        }
         if let Some(s) = sources.as_mut() {
             s.players.sort_unstable();
             s.players.dedup();
@@ -263,6 +286,14 @@ impl ChunkTickets {
             None => Levels(None, None),
         };
         self.sources = sources;
+    }
+
+    fn portal_matches(&self, sources: &Sources) -> bool {
+        self.portal.len() == sources.portal.len()
+            && sources
+                .portal
+                .iter()
+                .all(|chunk| self.portal.iter().any(|(current, _)| current == chunk))
     }
     pub fn levels(&self) -> Levels {
         self.levels.clone()
@@ -497,6 +528,8 @@ mod tests {
         assert!(l.block_ticking(5, 5) && !l.block_ticking(6, 0));
         assert!(l.loaded_entity_ticking(4, 0));
         assert!(!l.loaded_entity_ticking(5, 0));
+        // ChunkMap.tick's sendChanges reads the simulation level alone.
+        assert!(l.in_entity_ticking_range(10, 0) && !l.in_entity_ticking_range(11, 0));
     }
 
     #[test]

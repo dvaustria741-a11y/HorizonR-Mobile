@@ -12,13 +12,14 @@ use horizon_client::{
     mobs::{Mob, Species, sulfur_cube},
     particles::{ParticleOptions, ParticleType},
     projectiles::{Projectile, ProjectileKind},
+    random_source,
 };
 // Its old home, for mixin code that names it here.
 pub(super) use horizon_client::mod_api::NativeDispensed;
 use horizon_core::{
     geometry::{Aabb, Direction, Vec3},
     position::BlockPos,
-    random::{LegacyRandom, RandomSource},
+    random::RandomSource,
 };
 use horizon_world::{
     fluid::FluidKind,
@@ -132,36 +133,6 @@ enum Target {
     Player,
     Mob(usize),
     Stand(usize),
-}
-
-/// `RandomSource.create()`: the unseeded random an entity owns
-/// (`RandomSupport.generateUniqueSeed`). Draws of an entity's own random never
-/// touch the level's stream.
-pub(super) fn entity_random() -> LegacyRandom {
-    use std::sync::atomic::{AtomicI64, Ordering};
-    static UNIQUIFIER: AtomicI64 = AtomicI64::new(8_682_522_807_148_012);
-    const STEP: i64 = 1_181_783_497_276_652_981;
-    // seedUniquifier.updateAndGet(s -> s * STEP)
-    let mut current = UNIQUIFIER.load(Ordering::Relaxed);
-    let seed = loop {
-        let next = current.wrapping_mul(STEP);
-        match UNIQUIFIER.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed)
-        {
-            Ok(_) => break next,
-            Err(actual) => current = actual,
-        }
-    };
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos() as i64);
-    LegacyRandom::new(seed ^ nanos)
-}
-/// `new ItemEntity(level, x, y, z, stack)`'s motion, from the item's own random.
-pub(super) fn new_item_motion() -> [f64; 3] {
-    let mut r = entity_random();
-    let x = r.next_double() * 0.2 - 0.1;
-    let z = r.next_double() * 0.2 - 0.1;
-    [x, 0.2, z]
 }
 
 /// `EquipmentSlot`.
@@ -509,7 +480,6 @@ impl Game<'_> {
     /// return this remainder in its answer with `CLICK`; the caller plays the
     /// answer's event and smoke once. A client, another dimension or an unloaded
     /// chunk keeps the input stack unchanged. API 67.
-    #[allow(dead_code)]
     pub(super) fn native_dispense_default(
         &mut self,
         dimension: &str,
@@ -767,10 +737,16 @@ impl Game<'_> {
         }
         out
     }
-    /// `EntityType.getYOffset(level, pos, false, box)`: the entity box set on
+    /// `EntityType.getYOffset(level, pos, false, box)`: [`Self::drop_offset_from`] without
+    /// `movedUp`.
+    pub(super) fn drop_offset(&self, width: f64, height: f64, p: Pos) -> f64 {
+        self.drop_offset_from(width, height, p, false)
+    }
+    /// `EntityType.getYOffset(level, pos, movedUp, box)`: the entity box set on
     /// top of the block (`setPos(x + 0.5, y + 1, z + 0.5)`) falls one block
-    /// against the collision shapes overlapping that block alone.
-    fn drop_offset(&self, width: f64, height: f64, p: Pos) -> f64 {
+    /// against the collision shapes overlapping that block, or, `moved_up`, two
+    /// blocks against those of the block and the one under it.
+    pub(super) fn drop_offset_from(&self, width: f64, height: f64, p: Pos, moved_up: bool) -> f64 {
         use horizon_world::{
             block_collision_scan::BlockCollisionScan, collision_context::CollisionContext,
         };
@@ -782,7 +758,11 @@ impl Game<'_> {
             Vec3::new(x + h, y + height, z + h),
         );
         let cell = Aabb::new(
-            Vec3::new(f64::from(p.0), f64::from(p.1), f64::from(p.2)),
+            Vec3::new(
+                f64::from(p.0),
+                f64::from(p.1) - if moved_up { 1.0 } else { 0.0 },
+                f64::from(p.2),
+            ),
             Vec3::new(
                 f64::from(p.0) + 1.0,
                 f64::from(p.1) + 1.0,
@@ -794,7 +774,7 @@ impl Game<'_> {
             binding: self.collision,
             subject: None,
         };
-        let mut amount = -1.0;
+        let mut amount = if moved_up { -2.0 } else { -1.0 };
         // Level.getCollisions(null, aabb): CollisionContext.empty().
         if let Ok(scan) = BlockCollisionScan::new(
             &mut scene,
@@ -818,6 +798,23 @@ impl Game<'_> {
         } else {
             format!("minecraft:{kind}")
         };
+        // Ender Dragons are simulated separately from `Mob` and therefore do
+        // not have a mob-type registry entry for the generic dispenser path.
+        if name == "minecraft:ender_dragon" {
+            // `EntityType.getYOffset` uses the created entity's full 16 by 8
+            // bounding box when the dispenser asks to move it down.
+            let y_off = if try_move_down {
+                self.drop_offset(16.0, 8.0, p)
+            } else {
+                0.0
+            };
+            let at = [
+                f64::from(p.0) + 0.5,
+                f64::from(p.1) + y_off,
+                f64::from(p.2) + 0.5,
+            ];
+            return self.spawn_dragon_spawned(at);
+        }
         let t = self.res.mob_types().get(&name)?.clone();
         let y_off = if try_move_down {
             self.drop_offset(t.width, t.height, p)
@@ -956,6 +953,9 @@ impl Game<'_> {
     }
     /// After `EntityType.spawn` / `MobBucketItem.spawn`: `mob.playAmbientSound()`.
     fn mob_ambient(&mut self, id: u32) -> Result<()> {
+        if self.dragon_spawn_ambient(id) {
+            return Ok(());
+        }
         let Some(i) = self.mobs.iter().position(|m| m.id == id) else {
             return Ok(());
         };
@@ -1074,7 +1074,7 @@ impl Game<'_> {
             ..stack.clone()
         };
         // Projectile.shoot spreads the shot with the projectile's own random.
-        let mut own = entity_random();
+        let mut own = random_source::entity();
         match item.as_str() {
             "minecraft:experience_bottle"
             | "minecraft:splash_potion"
@@ -1300,7 +1300,7 @@ impl Game<'_> {
         if emptied.is_none() {
             return Ok((self.dispense_default(pos, facing, stack), CLICK));
         }
-        if self.dim == super::Dim::Nether
+        if self.dimension_type().water_evaporates
             && matches!(
                 content,
                 BucketContent::Fluid(FluidKind::Water) | BucketContent::MobWater
@@ -1644,9 +1644,12 @@ impl Game<'_> {
         };
         let target = (placed.x, placed.y, placed.z);
         let state = self.apply_item_block_state([target.0, target.1, target.2], state, &stack)?;
-        let name = self.res.facts().get(state).name.clone();
-        if let Some(entity) = self.new_block_entity(&name) {
+        if !self.world.block_entities.stateful_entity(state.0)
+            && let Some(entity) = self.new_block_entity_for_state(state)
+        {
             self.world.block_entities.insert(target, entity);
+        }
+        if self.world.block_entities.get(&target).is_some() {
             self.apply_placed_item([target.0, target.1, target.2], &stack, false);
         }
         self.process_level_events()?;
@@ -1811,9 +1814,7 @@ impl Game<'_> {
         y_offset: f64,
         stack: ItemStack,
     ) -> [f64; 3] {
-        let v = new_item_motion();
-        self.spawn_item(stack, [at.x, at.y + y_offset, at.z], v, 10);
-        v
+        self.spawn_item_own(stack, [at.x, at.y + y_offset, at.z], 10)
     }
     /// `Mob.convertTo(type, ConversionParams.single(this, false, false))`: a
     /// new mob of `kind` in the same place (no spawn finalization, so no
