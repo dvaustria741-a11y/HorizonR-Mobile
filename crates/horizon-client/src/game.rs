@@ -249,6 +249,10 @@ mod mob_looting;
 mod mob_sounds;
 mod mod_api_host;
 mod mod_browser;
+mod mod_input;
+#[cfg(feature = "mods")]
+mod mod_panel;
+mod mod_render;
 mod mods;
 mod mount_menu;
 mod mounts;
