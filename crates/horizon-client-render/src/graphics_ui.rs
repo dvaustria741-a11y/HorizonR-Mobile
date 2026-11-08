@@ -980,6 +980,10 @@ impl H {
             }
             H::BatteryMode => labelled("Battery Mode", on_off(g.battery)),
             H::ShadowCache => labelled("Shadow Cache", on_off(g.shadow_cache)),
+            H::MenuBackgroundCache => {
+                labelled("Menu Background Cache", on_off(g.menu_background_cache))
+            }
+            H::PackWorkers => labelled("Pack Worker Threads", on_off(g.pack_workers)),
             // A press across the row, as Calibrate...: the list it opens shows the pick.
             H::ShaderPacks => Text::literal(lang::get("Shader Packs...")),
             H::GraphicsApi => labelled("Graphics API", g.api.label()),

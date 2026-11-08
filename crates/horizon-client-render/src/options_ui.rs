@@ -1591,6 +1591,7 @@ enum Act {
     Key(&'static str),
     ResetKey(&'static str),
     ResetKeys,
+    KeyboardProfile,
     ToggleMod(usize),
     /// PvP & HUD's PvP preset (`pvp::apply_preset`).
     PvpPreset,
@@ -2469,6 +2470,9 @@ impl OptionsUi {
         if page == Page::Studio {
             self.studio.refresh();
         }
+        if page == Page::SplitProfiles {
+            self.split_profiles.reset();
+        }
     }
     /// The open page's screen on the settings shell. This, with `shell_mut`, is all a screen
     /// needs here: drawing, clicks, the wheel, a stick's scrolling, keys and typing all go
@@ -2600,6 +2604,10 @@ impl OptionsUi {
             _ => None,
         }
     }
+    /// The page's title.
+    fn page_title(page: Page, _s: &Settings) -> Text {
+        tr(Self::title(page))
+    }
     fn title(page: Page) -> &'static str {
         match page {
             Page::Main => "options.title",
@@ -2624,6 +2632,7 @@ impl OptionsUi {
             Page::Graphics | Page::GraphicsAdvanced | Page::GraphicsHdr | Page::HdrCalibration => {
                 "options.videoTitle"
             }
+            Page::Touch => "Touch Controls",
             Page::Controller | Page::PadBinds => "horizon.pages.controller",
             Page::Extras => "horizon.pages.extras",
             Page::Pvp => "horizon.pages.pvp",
@@ -3455,7 +3464,7 @@ impl OptionsUi {
                     w,
                     h: 9.0,
                     kind: WKind::Text {
-                        text: Self::page_title(page, s),
+                        text: tr(Self::title(page)),
                         color: u32::MAX,
                         centered: true,
                     },
@@ -3517,8 +3526,35 @@ impl OptionsUi {
                     list: false,
                     row: 0,
                 });
-                let mut mappings: Vec<(&str, &str)> =
-                    all_mappings().map(|(n, _, c)| (*n, *c)).collect();
+                let keypad = s.keypad.enabled;
+                if cfg!(target_os = "android") || keypad {
+                    top = 64.0;
+                    out.push(button(
+                        cx - 150.0,
+                        39.0,
+                        300.0,
+                        Text::literal(if keypad {
+                            "Input profile: D-pad / keypad"
+                        } else {
+                            "Input profile: Keyboard"
+                        }),
+                        Act::KeyboardProfile,
+                    ));
+                }
+                let label = |name: &str| {
+                    crate::keypad::ACTIONS
+                        .iter()
+                        .find(|a| a.0 == name)
+                        .map_or_else(|| lang::get(name), |a| a.1.to_owned())
+                };
+                let mut mappings: Vec<(&str, &str)> = if keypad {
+                    crate::keypad::ACTIONS
+                        .iter()
+                        .map(|a| (a.0, "movement"))
+                        .collect()
+                } else {
+                    all_mappings().map(|(n, _, c)| (*n, *c)).collect()
+                };
                 let query = self.settings_search.value.to_lowercase();
                 mappings.retain(|(name, _)| {
                     query.is_empty() || label(name).to_lowercase().contains(&query)
@@ -3635,7 +3671,14 @@ impl OptionsUi {
                     }
                     let reset_x = scrollbar_x - 50.0 - 10.0;
                     let change_x = reset_x - 5.0 - 75.0;
-                    let name_static = all_mappings().find(|m| m.0 == name).map_or("", |m| m.0);
+                    let name_static = if keypad {
+                        crate::keypad::ACTIONS
+                            .iter()
+                            .find(|a| a.0 == name)
+                            .map_or("", |a| a.0)
+                    } else {
+                        all_mappings().find(|m| m.0 == name).map_or("", |m| m.0)
+                    };
                     out.push(button(change_x, y, 75.0, message, Act::Key(name_static)));
                     if !conflicts.is_empty() {
                         out.push(Widget {
@@ -3777,7 +3820,7 @@ impl OptionsUi {
                     w,
                     h: 9.0,
                     kind: WKind::Text {
-                        text: tr(Self::title(page)),
+                        text: Self::page_title(page, s),
                         color: u32::MAX,
                         centered: true,
                     },
@@ -4046,6 +4089,11 @@ impl OptionsUi {
             self.studio.draw(batch, atlas, cursor, self.in_world);
             return;
         }
+        if self.page() == Page::SplitProfiles {
+            self.split_profiles
+                .draw(batch, atlas, cursor, self.in_world, self.pad_style);
+            return;
+        }
         if self.page() == Page::Packs {
             self.watch_data_packs(atlas, (w, h));
             ui::menu_background(batch, atlas, 0.0, 0.0, w, h, self.in_world);
@@ -4132,7 +4180,6 @@ impl OptionsUi {
                     });
                 }
                 WKind::Slider { label, value, opt } => {
-                    let label = fitted.as_ref().map_or(label, |f| &f.0);
                     let dragging = self.dragging == Some(*opt);
                     let shown = self.slider_shown(*opt, *value);
                     ui::slider_ext(

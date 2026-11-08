@@ -2752,6 +2752,8 @@ impl Renderer {
             translucent_batching,
             wide_frame,
             shader_pack,
+            linear_pack,
+            hdr_float,
         )
         .await
     }
@@ -2777,6 +2779,8 @@ impl Renderer {
         translucent_batching: bool,
         wide_frame: bool,
         shader_pack: bool,
+        linear_pack: bool,
+        hdr_float: bool,
     ) -> Result<Self> {
         #[cfg(target_os = "android")]
         let startup = (!offscreen && api != GraphicsApi::OpenGl)
@@ -12916,6 +12920,7 @@ impl Renderer {
         self.hud.draw_range(
             &mut encoder,
             &view_target,
+            None,
             &self.depth,
             frame.hud,
             size,
