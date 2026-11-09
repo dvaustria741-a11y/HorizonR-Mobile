@@ -2943,10 +2943,10 @@ impl Renderer {
             previous.map(Self::replacement_context),
             api,
             translucent_batching,
-            wide_frame,
             shader_pack,
-            linear_pack,
-            hdr_float,
+            settings,
+            request,
+            display,
         )
         .await
     }
@@ -2970,10 +2970,12 @@ impl Renderer {
         mut previous: Option<ReplacementContext>,
         api: GraphicsApi,
         translucent_batching: bool,
-        wide_frame: bool,
         shader_pack: bool,
-        linear_pack: bool,
-        hdr_float: bool,
+        // The settings and the pack's `request` pick the frame (`output::resolve_frame`),
+        // with what this window's display reported to the renderer before (`display`).
+        settings: &crate::graphics::Graphics,
+        request: output::FrameRequest,
+        display: output::DisplayReading,
     ) -> Result<Self> {
         #[cfg(target_os = "android")]
         let startup = (!offscreen && api != GraphicsApi::OpenGl)
@@ -5746,7 +5748,7 @@ impl Renderer {
             surface: None,
             config: self.config.clone(),
             present_modes: self.present_modes.clone(),
-            hdr_output: self.hdr_output,
+            hdr_output: self.output_caps.hdr,
             device_lost: self.device_lost.clone(),
             reuse: self.reuse.clone(),
         }
@@ -13012,7 +13014,7 @@ impl Renderer {
         // The background as it stands now (blurred, when the screen blurs): later frames
         // with the same key draw it instead of the world.
         if let Some(key) = bg_key {
-            let format = self.frame_format;
+            let format = self.output.frame.overlay_format;
             let device = &self.device;
             let software = is_software(self.info.device_type);
             self.menu_blur
@@ -13273,7 +13275,7 @@ impl Renderer {
             size,
         );
         let view_target = target_texture.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(self.frame_format),
+            format: Some(self.output.frame.format),
             ..Default::default()
         });
         if let Some(blur) = &self.menu_blur {

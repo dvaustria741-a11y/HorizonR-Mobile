@@ -129,8 +129,10 @@ impl Loading {
         let prepared = loaded.renderer_cpu.take();
         let api = rendering_api(&self.settings);
         let translucent_batching = self.settings.horizon.translucent_batching;
-        let wide_frame = self.settings.horizon.wide_frame();
         let shader_pack = shader_packs::picked_pack_shape(&self.settings);
+        let request = shader_pack.frame();
+        let settings = self.settings.horizon.clone();
+        let display = previous.display_reading();
         self.renderer_job = Some(
             std::thread::Builder::new()
                 .name("Renderer preparation".into())
@@ -155,10 +157,10 @@ impl Loading {
                         Some(context),
                         api,
                         translucent_batching,
-                        wide_frame,
                         shader_pack.draws_flat,
-                        shader_pack.linear,
-                        shader_pack.hdr_float,
+                        &settings,
+                        request,
+                        display,
                     ))
                     .map_err(|error| error.to_string());
                     log::info!(
