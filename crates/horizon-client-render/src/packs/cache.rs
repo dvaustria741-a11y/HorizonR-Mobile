@@ -325,7 +325,7 @@ pub(super) fn hold(out: &Path) -> io::Result<()> {
                 .create(true)
                 .truncate(false)
                 .open(use_path(out))?;
-            file.lock_shared()?;
+            crate::file_lock::shared(&file)?;
             held.push((out.into(), file));
             held.len() - 1
         }
@@ -384,7 +384,7 @@ fn remove_unused(out: &Path) -> io::Result<()> {
     let building = open(lock_path(out))?;
     let using = open(use_path(out))?;
     for lock in [&building, &using] {
-        match lock.try_lock() {
+        match crate::file_lock::try_exclusive(lock) {
             Ok(()) => {}
             Err(fs::TryLockError::WouldBlock) => return Ok(()),
             Err(fs::TryLockError::Error(e)) => return Err(e),
