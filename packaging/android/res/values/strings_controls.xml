@@ -127,4 +127,5 @@
     <string name="layouts_now_default">%1$s is now the default layout</string>
     <string name="layouts_select_default">Select Default Control Layout</string>
     <string name="layouts_save_exit">Save and Exit</string>
+    <string name="layouts_save">Save</string>
 </resources>

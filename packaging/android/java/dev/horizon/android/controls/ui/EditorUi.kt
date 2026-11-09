@@ -100,11 +100,13 @@ private enum class Mode { HOLD, TAP, TOGGLE }
 
 private fun isHoldable(a: Action) = a is Action.Key || a is Action.Mouse
 
+private enum class After { STAY, EXIT, SHARE }
+
 private sealed interface Dialog {
     data object Load : Dialog
     data object SelectDefault : Dialog
     data object ConfirmExit : Dialog
-    data object SaveExit : Dialog
+    data class SaveForm(val after: After) : Dialog
     data class Info(val info: ControlLayouts.Info) : Dialog
     data class Slot(val index: Int) : Dialog
     data class Pick(val background: Boolean) : Dialog
@@ -172,15 +174,6 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
         val s = l.sticks.getOrNull(index) ?: return
         controls.editLayout(l.copy(sticks = l.sticks.toMutableList().also { it[index] = change(s) }), Selection.Stick(index))
     }
-
-    fun save(): Boolean = runCatching {
-        val id = ControlLayouts.save(controls.layout, currentId, suffix)
-        settings.layout = id
-        currentId = id
-        dirty = false
-        val name = ControlLayouts.list(context, defaultName).firstOrNull { it.id == id }?.name ?: id
-        Toast.makeText(context, savedText.replace("%s", name), Toast.LENGTH_SHORT).show()
-    }.isSuccess
 
     fun addButton() {
         val (l, layer) = mainLayer(controls.layout)
@@ -372,9 +365,9 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                 ZButton("Add Joystick") { addJoystick(); menuOpen = false }
                 ZSection("Save")
                 ZButton("Load") { dialog = Dialog.Load }
-                ZButton("Save") { save() }
-                ZButton("Save and Exit") { dialog = Dialog.SaveExit }
-                ZButton("Save and Share") { if (save()) share() }
+                ZButton("Save") { dialog = Dialog.SaveForm(After.STAY) }
+                ZButton("Save and Exit") { dialog = Dialog.SaveForm(After.EXIT) }
+                ZButton("Save and Share") { dialog = Dialog.SaveForm(After.SHARE) }
                 ZSection("Control Layout")
                 Row(
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ZItem).padding(horizontal = 12.dp, vertical = 2.dp),
@@ -433,33 +426,37 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                 LayoutInfoBody(d.info)
                 ZButton(stringResource(R.string.layouts_close)) { dialog = null }
             }
-            Dialog.SaveExit -> ZDialog(stringResource(R.string.layouts_save_exit), { dialog = null }, width = 420.dp, maxHeight = 300.dp) {
+            is Dialog.SaveForm -> ZDialog(stringResource(R.string.layouts_save), { dialog = null }, width = 420.dp, maxHeight = 300.dp) {
                 val layout = controls.layout
-                val initialFile = if (currentId.startsWith("file:")) currentId.removePrefix("file:").removeSuffix(".json") else "${layout.name} $suffix"
+                val fromFile = currentId.startsWith("file:")
+                val initialFile = if (fromFile) currentId.removePrefix("file:").removeSuffix(".json") else "${layout.name} $suffix"
                 LayoutSaveForm(
                     initialFile = initialFile,
                     initial = ControlLayouts.Info(currentId, layout.name, initialFile, layout.author, layout.version, layout.description, true),
-                    layoutName = if (currentId.startsWith("file:")) layout.name else initialFile,
+                    layoutName = if (fromFile) layout.name else initialFile,
                     onCancel = { dialog = null },
                     onConfirm = { file, name, ver, author, desc ->
-                        val edited = layout.copy(name = name.ifBlank { file }, version = ver.trim(), author = author.trim(), description = desc.trim())
+                        val edited = layout.copy(name = name.trim().ifBlank { file.trim() }, version = ver.trim(), author = author.trim(), description = desc.trim())
                         val saved = runCatching { ControlLayouts.saveAs(edited, file, currentId) }.getOrNull()
+                        dialog = null
                         if (saved != null) {
                             settings.layout = saved
                             currentId = saved
+                            controls.editLayout(edited)
                             dirty = false
                             Toast.makeText(context, savedText.replace("%s", edited.name), Toast.LENGTH_SHORT).show()
-                            dialog = null
-                            onExit()
-                        } else {
-                            dialog = null
+                            when (d.after) {
+                                After.EXIT -> onExit()
+                                After.SHARE -> share()
+                                After.STAY -> menuOpen = false
+                            }
                         }
                     },
                 )
             }
             Dialog.ConfirmExit -> ZDialog("Exit without saving?", { dialog = null }) {
                 ZPlain("Exit Editor") { dialog = null; onExit() }
-                ZPlain("Save and Exit") { dialog = null; if (save()) onExit() }
+                ZPlain("Save and Exit") { dialog = Dialog.SaveForm(After.EXIT) }
                 ZPlain("Cancel") { dialog = null }
             }
             is Dialog.Slot -> {
