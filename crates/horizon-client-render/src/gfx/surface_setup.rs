@@ -33,6 +33,10 @@ pub(super) fn set_up_surface(
             size.height.clamp(1, max_side),
         )
         .ok_or("surface has no supported configuration")?;
+    #[cfg(target_os = "android")]
+    if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
+        config.alpha_mode = wgpu::CompositeAlphaMode::Opaque;
+    }
     config.format = surface_format(&caps.formats, config.format);
     config.view_formats = vec![config.format.remove_srgb_suffix()];
     // Screenshots copy the presented frame back from the swapchain, frame

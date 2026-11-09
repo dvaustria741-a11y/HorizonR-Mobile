@@ -318,7 +318,9 @@ impl Game<'_> {
                 }
             }
             let g = &self.settings.horizon;
-            let budgeted = g.chunk_updates > 0 || g.upload_budget_kib > 0;
+            let mobile_uploads =
+                cfg!(target_os = "android") && self.options.execution_role.is_client();
+            let budgeted = g.chunk_updates > 0 || g.upload_budget_kib > 0 || mobile_uploads;
             // The meshes, once copied, are freed by a worker (`Streaming::free`).
             if !budgeted && self.pending_uploads.is_empty() && uploads.len() <= AUTO_UPLOADS_AT_ONCE
             {
@@ -359,15 +361,14 @@ impl Game<'_> {
                     (k.0 - centre.0).pow(2) + (k.1 - cam_y).pow(2) + (k.2 - centre.1).pow(2)
                 };
                 pending.sort_unstable_by_key(|(k, _)| std::cmp::Reverse(far(k)));
-                let (limit, budget) = if budgeted {
-                    (
-                        g.chunk_updates as usize,
-                        u64::from(g.upload_budget_kib) * 1024,
-                    )
-                } else {
-                    (0, 0)
-                };
-                let (mut count, mut bytes) = (0, 0u64);
+                // Mobile (Android client): the same count/byte budgets, capped at
+                // 8 MiB a frame and a time slice that follows the last frame's wait.
+                let mut budget = horizon_client::gfx::upload_budget::UploadBudget::with_wait(
+                    g.chunk_updates as usize,
+                    u64::from(g.upload_budget_kib) * 1024,
+                    mobile_uploads,
+                    renderer.last_wait,
+                );
                 // Without the player's budgets, uploads stop once they took
                 // AUTO_UPLOAD_TIME of this frame (at least one goes): a burst of
                 // finished meshes spreads over frames, nearest first.
@@ -378,23 +379,22 @@ impl Game<'_> {
                     AUTO_UPLOAD_TIME
                 };
                 let started = Instant::now();
+                let mut uploaded = false;
                 while let Some((_, mesh)) = pending.last() {
-                    if auto && count > 0 && started.elapsed() >= auto_time {
+                    if auto && uploaded && started.elapsed() >= auto_time {
                         break;
                     }
                     let size = ((mesh.solid.len() + mesh.translucent.len())
                         * std::mem::size_of::<horizon_client::mesher::TerrainVertex>())
                         as u64;
-                    if (limit > 0 && count >= limit)
-                        || (budget > 0 && bytes > 0 && bytes + size > budget)
-                    {
+                    if !budget.allows(size, started.elapsed()) {
                         break;
                     }
                     let (key, mesh) = pending.pop().expect("checked above");
                     renderer.upload(key, &mesh);
+                    uploaded = true;
+                    budget.record(size);
                     spent.push((key, mesh));
-                    count += 1;
-                    bytes += size;
                 }
                 self.streaming.free(spent);
             }

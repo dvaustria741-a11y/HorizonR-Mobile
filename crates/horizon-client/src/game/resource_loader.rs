@@ -265,6 +265,47 @@ pub(super) fn run_loading(
     pack_error: Option<String>,
     started: Instant,
 ) -> Result<()> {
+    let mut app = loading_app(options, settings, vanilla_root, pack_error, started)?;
+    let result = new_event_loop()?.run_app(&mut app);
+    narrator::stop();
+    match &mut app {
+        // Ready: splitscreen around P1's game.
+        App::Ready(split) => leave_fullscreen_after(&result, &mut split.host.settings),
+        App::Loading(loading) => leave_fullscreen_after(&result, &mut loading.settings),
+    }
+    result?;
+    #[cfg(feature = "discord")]
+    horizon_client::discord_presence::stop();
+    match app {
+        App::Ready(mut split) => {
+            write_report(&split.host)?;
+            if let Some(e) = split.host.error.take() {
+                return Err(e);
+            }
+        }
+        App::Loading(loading) => {
+            if let Some(e) = loading.error {
+                return Err(e);
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn new_event_loop() -> std::result::Result<EventLoop<()>, winit::error::EventLoopError> {
+    #[cfg(target_os = "android")]
+    return crate::android_event_loop();
+    #[cfg(not(target_os = "android"))]
+    EventLoop::new()
+}
+
+pub(super) fn loading_app(
+    options: Options,
+    settings: Settings,
+    vanilla_root: PathBuf,
+    pack_error: Option<String>,
+    started: Instant,
+) -> Result<App> {
     let progress = Progress::new();
     let (receiver, loader) =
         startup_menu::spawn_loader(&options, &settings, &vanilla_root, started, &progress)?;
@@ -293,29 +334,5 @@ pub(super) fn run_loading(
         menu,
         error: None,
     };
-    let mut app = App::Loading(Box::new(loading));
-    let result = EventLoop::new()?.run_app(&mut app);
-    narrator::stop();
-    match &mut app {
-        // Ready: splitscreen around P1's game.
-        App::Ready(split) => leave_fullscreen_after(&result, &mut split.host.settings),
-        App::Loading(loading) => leave_fullscreen_after(&result, &mut loading.settings),
-    }
-    result?;
-    #[cfg(feature = "discord")]
-    horizon_client::discord_presence::stop();
-    match app {
-        App::Ready(mut split) => {
-            write_report(&split.host)?;
-            if let Some(e) = split.host.error.take() {
-                return Err(e);
-            }
-        }
-        App::Loading(loading) => {
-            if let Some(e) = loading.error {
-                return Err(e);
-            }
-        }
-    }
-    Ok(())
+    Ok(App::Loading(Box::new(loading)))
 }

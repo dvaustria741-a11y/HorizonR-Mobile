@@ -221,9 +221,9 @@ mod native_shadow;
 mod native_sky;
 mod occlusion;
 mod oit;
+mod oit_features;
 #[cfg(any(target_os = "android", test))]
 mod opaque_output;
-mod oit_features;
 pub(crate) mod output;
 mod pack_atlas;
 mod pack_center_depth;
@@ -2577,9 +2577,6 @@ async fn open_backend(
     let dxc = if dx12_compiler::wants_dxc(&adapter.get_info(), forced) {
         open_dxc(&adapter.get_info(), window, offscreen, open).await
     } else {
-        // Mobile drivers can spend hundreds of milliseconds reserving a new
-        // 128-256 MiB pool block. This changes allocation granularity, not
-        // resource limits, shader features, texture quality or geometry.
         None
     };
     let dxc_found = dxc.is_some();
@@ -2990,7 +2987,7 @@ impl Renderer {
             queue,
             device_lost,
             configured,
-        } = match previous.as_mut() {
+        } = match previous {
             // Reload resources on the same device; replacing live Vulkan
             // devices can invalidate the driver's swapchain state on the same
             // window.
@@ -3042,10 +3039,6 @@ impl Renderer {
                 &device_lost,
                 surface.get_capabilities(&adapter),
                 size,
-            #[cfg(target_os = "android")]
-            if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
-                config.alpha_mode = wgpu::CompositeAlphaMode::Opaque;
-            }
                 previous.map(|renderer| renderer.config.present_mode),
                 previous.is_none(),
             )?),
@@ -3057,7 +3050,6 @@ impl Renderer {
                 log::info!(
                     "Horizon renderer: HDR output {}",
                     hdr_output.map_or("not offered by this display", hdr::Output::name)
-                .as_ref()
                 );
             }
             (config, caps.present_modes, hdr_output)
@@ -3083,14 +3075,6 @@ impl Renderer {
             {
                 log::info!(
                     "Horizon renderer: HDR output {} offscreen (HORIZON_HDR_OUTPUT)",
-        } else if let Some(context) = &previous {
-            // Pipelines prepared in the worker must target the actual window
-            // format, not the generic offscreen format.
-            (
-                context.config.clone(),
-                context.present_modes.clone(),
-                context.hdr_output,
-            )
                     output.name()
                 );
             }
@@ -8742,24 +8726,10 @@ impl Renderer {
                         &self.device,
                         &image,
                         self.output.frame.format,
-                        self.screenshot.is_some() && !scaled_presentation,
+                        self.screenshot.is_some(),
                     )
                     .unwrap_or(image)
             }
-        };
-        #[cfg(target_os = "android")]
-        let target_texture = if self.hdr.is_none() && scaled_presentation {
-            self.frame_scale
-                .get_or_insert_with(|| {
-                    frame_scale::FrameScale::new(
-                        &self.device,
-                        self.config.format.remove_srgb_suffix(),
-                    )
-                })
-                .frame(&self.device, size)
-        } else {
-            self.frame_scale = None;
-            target_texture
         };
         // One command buffer for the frame, after the section copies staged
         // since the last one: Metal commits every command buffer wgpu-core

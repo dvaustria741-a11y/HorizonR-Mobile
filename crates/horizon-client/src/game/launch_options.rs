@@ -96,8 +96,18 @@ impl Options {
     /// The command line, then what it asks of the process: the game folder, the account.
     /// A bad command line is a [`launch_api::UsageError`] (exit code 2, no crash report).
     pub(super) fn read() -> Result<Option<Self>> {
-        let Some(mut o) = Self::parse(std::env::args().skip(1))
-            .map_err(|e| launch_api::UsageError(e.to_string()))?
+        #[cfg(not(target_os = "android"))]
+        {
+            Self::read_arguments(std::env::args().skip(1))
+        }
+        #[cfg(target_os = "android")]
+        {
+            Err("Android game startup requires explicit launch arguments".into())
+        }
+    }
+    pub(super) fn read_arguments(args: impl IntoIterator<Item = String>) -> Result<Option<Self>> {
+        let Some(mut o) =
+            Self::parse(args.into_iter()).map_err(|e| launch_api::UsageError(e.to_string()))?
         else {
             return Ok(None);
         };

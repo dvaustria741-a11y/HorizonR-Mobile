@@ -606,7 +606,7 @@ pub use native_world_read::NativeBlockReadError;
 use resource_load::{Progress, launch_world, load_resources, named_scope, synchronous_startup};
 use resource_loader::{
     EntityModels, GameCpuResources, Loaded, LoaderMsg, PendingWorldEntry, WorldRestLoader,
-    run_loading, write_report,
+    loading_app, new_event_loop, run_loading, write_report,
 };
 use std::{
     cell::RefCell,
@@ -6192,7 +6192,8 @@ impl Game<'_> {
             }
         }
         if self.remote.is_some() {
-            return self.tick_remote();
+            self.tick_remote()?;
+            return Ok(());
         }
         // Only a server ticks its own world from here: its players are guests, swapped in for
         // their turns (`as_guest`), and the window's player is a client of it.
@@ -6257,8 +6258,9 @@ impl Game<'_> {
         self.tick_totem();
         self.update_totem_ready();
         self.tick_command_extras();
+        self.tick_mods();
         self.native_tick();
-        self.tell_native_now();
+        self.tick_server_mods();
         self.tick_world(running)
     }
     /// What the tick runs after the local player's own update: effects, the
@@ -6298,7 +6300,6 @@ impl Game<'_> {
             // `EntityTickList.forEach`: what joined before the entity pass
             // (function summons, dropped or dispensed items) ticks in it;
             // what joins during it waits for the next tick
-        self.mod_block_event(target, state, true);
             // (`ensureActiveIsNotIterated`). Primed TNT and falling blocks
             // keep their own packet cutoff (`ordered.announced`, #10063).
             self.ticked_entities_through = self.next_entity;
@@ -14006,40 +14007,6 @@ pub fn run_with() -> Result<()> {
             log::warn!(
                 "Detected unexpected shutdown during last game startup: resetting fullscreen mode"
             );
-    let mut app = loading_app(options, settings, vanilla_root, pack_error, started)?;
-    let result = new_event_loop()?.run_app(&mut app);
-    narrator::stop();
-    match &mut app {
-        // Ready: splitscreen around P1's game.
-        App::Ready(split) => leave_fullscreen_after(&result, &mut split.host.settings),
-        App::Loading(loading) => leave_fullscreen_after(&result, &mut loading.settings),
-    }
-    result?;
-    #[cfg(feature = "discord")]
-    horizon_client::discord_presence::stop();
-    match app {
-        App::Ready(mut split) => {
-            write_report(&split.host)?;
-            if let Some(e) = split.host.error.take() {
-                return Err(e);
-            }
-        }
-        App::Loading(loading) => {
-            if let Some(e) = loading.error {
-                return Err(e);
-            }
-        }
-    }
-    Ok(())
-}
-
-fn loading_app(
-    options: Options,
-    settings: Settings,
-    vanilla_root: PathBuf,
-    pack_error: Option<String>,
-    started: Instant,
-) -> Result<App> {
         }
         early_settings.file.set(
             "startedCleanly",
@@ -14060,8 +14027,6 @@ fn loading_app(
             || options.world_frames.is_some();
         horizon_client::discord_presence::start(early_settings.extras.discord_presence, automated);
     }
-        renderer_job: None,
-        prepared_renderer: None,
     // Snapshots of derived tables live in the game folder, never beside the
     // shared resources.
     Behaviours::set_cache_dir(std::env::current_dir()?.join(".horizon-cache"));
@@ -14430,6 +14395,7 @@ mod player_save_projection_tests;
 
 #[cfg(test)]
 mod entity_die_tests;
+
 
 /// Leaves the game: the event loop ends on a desktop; on Android the launcher takes over again.
 pub(crate) fn exit_app(events: &dyn EventLoopCtl) {
