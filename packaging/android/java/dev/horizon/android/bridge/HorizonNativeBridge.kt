@@ -788,7 +788,7 @@ object HorizonNativeBridge {
     // CUSTOM SKIN ENGINE: PHOTO/PNG SKIN DETECTION, PRESETS, & IN-GAME SYNC
     // ========================================================================
 
-    fun loadOrGenerateAccountSkinBitmap(context: Context, account: ZalithAccount): Bitmap {
+    fun loadOrGenerateAccountSkinBitmap(context: Context, account: LauncherAccount): Bitmap {
         if (account.skinPath.isNotBlank()) {
             val file = File(account.skinPath)
             if (file.isFile && file.length() > 64L) {
@@ -1043,9 +1043,9 @@ object HorizonNativeBridge {
     fun applySavedCustomSkin(
         context: Context,
         item: SavedCustomSkinItem,
-        account: ZalithAccount,
+        account: LauncherAccount,
         config: HorizonConfigState
-    ): ZalithAccount {
+    ): LauncherAccount {
         val skinFile = File(item.filePath)
         if (skinFile.isFile) {
             syncActiveSkinToGameEngine(context, skinFile, item.slimModel, config.profile, config.enableSystemLog)
@@ -1100,7 +1100,7 @@ object HorizonNativeBridge {
     fun detectAndImportSkinFromUri(
         context: Context,
         uri: Uri,
-        account: ZalithAccount,
+        account: LauncherAccount,
         config: HorizonConfigState,
         customSkinName: String = ""
     ): SkinDetectionResult {
@@ -1384,9 +1384,9 @@ object HorizonNativeBridge {
     fun applyBuiltInPresetSkin(
         context: Context,
         preset: BuiltInSkinPreset,
-        account: ZalithAccount,
+        account: LauncherAccount,
         config: HorizonConfigState
-    ): ZalithAccount {
+    ): LauncherAccount {
         val home = ensureHomeDirectories(context)
         val skinsDir = File(home, "skins").apply { mkdirs() }
         val outFile = File(skinsDir, "skin_${account.id}_${preset.id}.png")
@@ -1501,19 +1501,19 @@ object HorizonNativeBridge {
     // PERSISTENT ACCOUNTS SYSTEM (WITH SKIN METADATA)
     // ========================================================================
 
-    fun loadSavedAccounts(context: Context): List<ZalithAccount> {
+    fun loadSavedAccounts(context: Context): List<LauncherAccount> {
         val home = ensureHomeDirectories(context)
         val file = File(home, "zalith-accounts.json")
         if (file.exists()) {
             try {
                 val arr = JSONArray(file.readText())
-                val list = mutableListOf<ZalithAccount>()
+                val list = mutableListOf<LauncherAccount>()
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
                     val typeName = obj.optString("accountType", AccountType.OFFLINE.name)
                     val type = runCatching { AccountType.valueOf(typeName) }.getOrDefault(AccountType.OFFLINE)
                     list.add(
-                        ZalithAccount(
+                        LauncherAccount(
                             id = obj.optString("id", UUID.randomUUID().toString()),
                             username = obj.optString("username", "Steve"),
                             uuid = obj.optString("uuid", UUID.randomUUID().toString()),
@@ -1536,7 +1536,7 @@ object HorizonNativeBridge {
             }
         }
         val defaultList = listOf(
-            ZalithAccount(
+            LauncherAccount(
                 id = "default_1",
                 username = "Steve",
                 uuid = "8667ba71-b85a-4004-af54-457a9734eed7",
@@ -1551,7 +1551,7 @@ object HorizonNativeBridge {
         return defaultList
     }
 
-    fun saveAccounts(context: Context, accounts: List<ZalithAccount>, config: HorizonConfigState) {
+    fun saveAccounts(context: Context, accounts: List<LauncherAccount>, config: HorizonConfigState) {
         val home = ensureHomeDirectories(context)
         val arr = JSONArray()
         accounts.forEach { acc ->
@@ -1591,10 +1591,10 @@ object HorizonNativeBridge {
         if (file.exists()) {
             try {
                 val obj = JSONObject(file.readText())
-                val rawRenderer = obj.optString("renderer", HorizonRendererMode.VULKAN_COMPAT.serdeKey)
+                val rawRenderer = obj.optString("renderer", HorizonRendererMode.VULKAN.serdeKey)
                 val normalizedRenderer = if (rawRenderer == "opengl") "open-gl" else rawRenderer
                 val renderer = HorizonRendererMode.entries.firstOrNull { it.serdeKey == normalizedRenderer }
-                    ?: HorizonRendererMode.VULKAN_COMPAT
+                    ?: HorizonRendererMode.VULKAN
                 val orientKey = obj.optString("orientation", HorizonOrientation.LANDSCAPE.serdeKey)
                 val orientation = HorizonOrientation.entries.firstOrNull { it.serdeKey == orientKey }
                     ?: HorizonOrientation.LANDSCAPE
@@ -1613,8 +1613,8 @@ object HorizonNativeBridge {
                 val shaderSrcKey = obj.optString("shader_source", HorizonContentOrigin.HORIZON.serdeKey)
                 val shaderSource = HorizonContentOrigin.entries.firstOrNull { it.serdeKey == shaderSrcKey }
                     ?: HorizonContentOrigin.HORIZON
-                val paletteName = obj.optString("themePalette", ZalithThemePalette.MATERIAL_YOU.name)
-                val palette = runCatching { ZalithThemePalette.valueOf(paletteName) }.getOrDefault(ZalithThemePalette.MATERIAL_YOU)
+                val paletteName = obj.optString("themePalette", LauncherThemePalette.MATERIAL_YOU.name)
+                val palette = runCatching { LauncherThemePalette.valueOf(paletteName) }.getOrDefault(LauncherThemePalette.MATERIAL_YOU)
 
                 state = HorizonConfigState(
                     profile = obj.optInt("profile", 0).coerceIn(0, 3),
@@ -1727,9 +1727,9 @@ object HorizonNativeBridge {
         return state
     }
 
-    fun saveConfig(context: Context, config: HorizonConfigState, activeAccount: ZalithAccount) {
+    fun saveConfig(context: Context, config: HorizonConfigState, activeAccount: LauncherAccount) {
         val home = ensureHomeDirectories(context)
-        val zalithObj = JSONObject().apply {
+        val launcherObj = JSONObject().apply {
             put("profile", config.profile)
             put("renderer", config.renderer.serdeKey)
             put("render_scale", config.renderScalePercent)
@@ -1785,7 +1785,7 @@ object HorizonNativeBridge {
         }
         synchronized(configIoLock) {
             runCatching {
-                File(home, "zalith-config.json").writeText(zalithObj.toString(2))
+                File(home, "zalith-config.json").writeText(launcherObj.toString(2))
                 syncNativeHorizonAccountAndCatalog(home, activeAccount, config)
             }.onFailure { e ->
                 Log.w(TAG, "saveConfig error: ${e.message}")
@@ -1795,7 +1795,7 @@ object HorizonNativeBridge {
 
     private fun syncNativeHorizonAccountAndCatalog(
         home: File,
-        activeAccount: ZalithAccount,
+        activeAccount: LauncherAccount,
         config: HorizonConfigState
     ) {
         val profileHome = getProfileHome(home, config.profile)
@@ -5913,7 +5913,7 @@ object HorizonNativeBridge {
     fun prepareNativeGameLaunch(
         context: Context,
         config: HorizonConfigState,
-        activeAccount: ZalithAccount
+        activeAccount: LauncherAccount
     ) {
         val home = ensureHomeDirectories(context)
         File(home, "zalith-game-exited.flag").delete()
@@ -6148,7 +6148,7 @@ object HorizonNativeBridge {
     fun startHorizonGameActivity(
         context: Context,
         config: HorizonConfigState,
-        activeAccount: ZalithAccount
+        activeAccount: LauncherAccount
     ) {
         val now = System.currentTimeMillis()
         val prev = lastGameLaunchTimestampMs.get()
@@ -6211,7 +6211,7 @@ object HorizonNativeBridge {
     fun launchNativeGame(
         context: Context,
         config: HorizonConfigState,
-        activeAccount: ZalithAccount
+        activeAccount: LauncherAccount
     ) {
         prepareNativeGameLaunch(context, config, activeAccount)
         startHorizonGameActivity(context, config, activeAccount)

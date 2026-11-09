@@ -77,3 +77,36 @@ Use rustc only for single small crates if at all.
 
 ## User preferences
 Zen writes casual Filipino-English. Wants commits pushed so GitHub Actions builds; do not babysit/poll the run.
+
+## Batch 16 (host + forced-Android-cfg checked only; not CI-compiled, not run on a device)
+- Android `graphics_api()` returns `Auto` outside OpenGL mode (Vulkan, then the GLES fallback), as starling 7fc390041.
+- Menu background cache: `Frame::bg_cache` (a key from `Game::background_cache_key`: pause menu of a paused
+  single-player world, and the inventory, 250 ms after opening; inventory re-keys every 500 ms). The first frame with a key
+  draws the world and keeps the result (blurred when the menu blurs) in `MenuBlur`'s cache; frames with the same key
+  and size run `Renderer::replay_background` (kept image + HUD from `blur_at` on). Dropped on key `None`, resize,
+  `install_built_shader_pack` (`Renderer::invalidate_menu_blur`, new). Skipped with HDR, a pending screenshot, scaled
+  presentation or a non-opaque Android surface. Frame generation is off while a key is set.
+- Frozen while cached: world animation behind the menu (water, clouds, shader-pack time effects), GPU/pass timing.
+
+## Batch 17 (host + forced-Android-cfg checked only; not CI-compiled, not run on a device)
+- 735b97488 built green on CI.
+- Pack pipelines skipped on a 4-bind-group device (Adreno 619 log, MakeUp-UltraFast: every program "Bind group layout count 6 exceeds device bind group limit 4"): `pack_post.rs` built its pipeline layouts as a fixed 6-slot array (table, draws, ids, buffers, indices) and wgpu counts the slice length, empty slots included. New `used_groups` drops the trailing `None`s in `build_pass` and `build_compute`, so programs that only use groups 0-3 fit. Groups 4 (buffers) and 5 (indices) are still bound only by passes that use them. Packs that really need SSBO buffers (group 4) or a geometry stage reading indices (group 5) still cannot build on a 4-group device: the shaders' `@group` numbers are fixed, so that needs renumbering, not done.
+- In-game diagnostics heartbeat: `Game` RedrawRequested calls `diagnostics::heartbeat` on Android (`in_world` while on the Playing screen, `in_game_menu` otherwise, with the GPU name). The heartbeat dedupes per phase for 5 s and skips if the diagnostic lock is busy.
+
+## Batch 18 (host + forced-Android-cfg checked only; not CI-compiled, not run on a device)
+- 34348f2d: INFO line `menu background cache: N replayed, M full frames ... blocked by [...]` (once a second while a key is set).
+- Pause menu follows starling 68a2c4d (`skip_world_for_blur`): when the game is paused (`self.pause`) and `Renderer::can_replay_background_now(key)` holds, `world_cached` skips the CPU world build (entities, bolts, dragon, celestial, hand, screen effects, end, weather, border, dynamic lights, outline, occlusion search). Shader pack inputs still run (they poll the pack workers). The inventory keeps the CPU build (its world runs) and only replays on the GPU side.
+- `replay_background` now ends like a full frame: `readback.present`, `frame_scale.present`, `opaque_output.present` and `configure_surface` on reconfigure, so scaled presentation and a non-opaque surface no longer block the replay (they did before: `surface_frame.texture == target_texture` and the Opaque check). The game and the renderer ask the same `can_replay_background`, so a frame with the world skipped always replays.
+
+## Batch 19 (host-checked only; platform.rs is Android-only code, not compiled on host; not CI-compiled, not run on a device)
+- New graphics settings (Performance > Culling group, saved as `menuBackgroundCache` and `packWorkers`, both default on): Menu Background Cache gates `Game::background_cache_key` (off: no key, so no replay and no CPU world skip); Pack Worker Threads gates the Android worker-thread pack load in `shader_pack_inputs` (off: the synchronous path non-Android uses).
+- Pack notes: `log_pack_notes` in shader_packs.rs logs a note at WARN only when it says a program was skipped or refused; routine notes (which pass draws what, uniforms left at defaults, shadow map line) go to INFO.
+- `KeptRef` in android/platform.rs wraps the thread-local vibrator GlobalRefs and attaches the thread before dropping them, which removes the jni "Dropping a GlobalRef in a detached thread" WARN.
+- Still WARN, a real skip: LIGHT-Shaders-1.9.0 `final` needs a vertex output at location 28, the device allows 27 (max_inter_stage_shader_variables). The device already asks for the adapter's limits, so the fix would be pruning unused varyings in the translator; not done.
+- Menu background cache now also covers the screens opened from the pause menu (Options, Advancements, Statistics, World Options, Friends, Social, Server Links, Debug Options): `Game::pause_screen_over_world`. They share one key (no screen discriminant), so moving between them over the paused world reuses the kept image; the CPU world skip applies to all of them while paused. Not verified on a device: whether each of those screens blurs the world the same way the pause menu does.
+
+## Batch 20 (host-checked; forced-Android-cfg check gives the same 44 known errors, none in the files touched; not CI-compiled, not run on a device)
+- `pack_post/unused_outputs.rs` (`fit`, called in `build_pass` before the shader modules are made): when a vertex stage writes a location at or above the device's `max_inter_stage_shader_variables` (LIGHT-Shaders-1.9.0 `final`: location 28, limit 27), it drops the vertex outputs the fragment stage never reads and renumbers the rest from 0 in both stages. A program within the limit, or one the fragment stage itself needs more than the limit for, is left untouched; so is an entry point that does not end in `return`s of the composed result struct. Unit tests (`unused_outputs_tests.rs`) passed in a scratch crate against `third_party/naga`; the `horizon-client-render` lib tests do not compile at this branch (`has_settings` missing in `options_ui.rs` and `pvp.rs` test fixtures), so they were not run in place.
+- GlobalRef detached-thread WARN, remaining sources: the "Android exit history" thread (exit_reports.rs), the "Content import" thread (documents.rs) and the "Screenshot gallery" thread (gallery.rs) now drop their GlobalRefs while attached. Android-only code: not type-checked here (the forced-cfg check stops at the 44 known name-resolution errors before it).
+- Dynamic Resolution moved from Quality > Image to Performance > Resolution (a setting may appear on one page only, `rows` test). New `Resolution` group key in en_us.json.
+- Worker Threads slider: its top is `max_workers()`, which on Android is at least 8 (`available_parallelism` reported 2 on the Redmi Note 11 Pro 5G, which has 8 cores). Other platforms keep the core count. The saved value was never capped by it (`workers` parses up to 64).

@@ -31,6 +31,11 @@ const BUFFERS: usize = horizon_shaders::BUFFERS;
 
 mod packed;
 
+mod unused_outputs;
+
+#[cfg(test)]
+mod unused_outputs_tests;
+
 #[cfg(test)]
 mod world_target_tests;
 
@@ -859,11 +864,30 @@ fn sampler(
     })
 }
 
+/// A pipeline layout counts its slice's length against the device's bind group limit, empty
+/// slots included. Programs that use only the low groups drop the unused tail, so a device
+/// with 4 groups (Adreno, Mali) still builds them; groups 4 and 5 are bound only by passes
+/// that use them.
+fn used_groups<'a, 'b>(
+    groups: &'b [Option<&'a wgpu::BindGroupLayout>],
+) -> &'b [Option<&'a wgpu::BindGroupLayout>] {
+    let used = groups
+        .iter()
+        .rposition(Option::is_some)
+        .map_or(0, |i| i + 1);
+    &groups[..used]
+}
+
 /// Runs `create` and returns its validation error, if any, or the backend's (a shader the
 /// driver's compiler refuses is an internal error). A panic while it runs is an error too:
 /// naga's backends turn a module they cannot write into a panic as the driver gets the pipeline
 /// (#3525), which a pack's program must not turn into a crash.
 fn checked<T>(device: &wgpu::Device, create: impl FnOnce() -> T) -> Result<T, String> {
+    if cfg!(target_os = "android") {
+        // Yield briefly between pipeline compilations: Mali's driver compiler holds one lock, and
+        // back-to-back builds on the loader thread would starve the render thread's submissions.
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
     let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let internal = device.push_error_scope(wgpu::ErrorFilter::Internal);
     let value = crate::crash::contain(create);
@@ -1640,14 +1664,14 @@ fn build_pass(
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(&p.name),
-            bind_group_layouts: &[
+            bind_group_layouts: used_groups(&[
                 Some(&layout),
                 geometry.and_then(|g| g.table),
                 draw.then_some(draws),
                 geometry.and_then(|g| g.ids),
                 (!interface.buffers.is_empty()).then_some(&pack.buffers.layout),
                 pack.indices.filter(|_| reads_indices),
-            ],
+            ]),
             ..Default::default()
         });
         let module = |mut m: naga::Module| {
@@ -1659,7 +1683,16 @@ fn build_pass(
         };
         let mut fragment = program.fragment;
         packed::quantise_outputs(&mut fragment, &packed_outputs);
-        let (vs, fs) = (module(program.vertex), module(fragment));
+        // A pack's vertex stage can write more varyings than the GPU allows, though the
+        // fragment stage reads only some: drop the rest and renumber (a program within the
+        // limit is left as it is).
+        let mut vertex = program.vertex;
+        unused_outputs::fit(
+            &mut vertex,
+            &mut fragment,
+            device.limits().max_inter_stage_shader_variables,
+        );
+        let (vs, fs) = (module(vertex), module(fragment));
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(&p.name),
             layout: Some(&pipeline_layout),
@@ -1823,13 +1856,13 @@ fn build_compute(
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(&name),
-            bind_group_layouts: &[
+            bind_group_layouts: used_groups(&[
                 Some(&layout),
                 None,
                 None,
                 None,
                 (!interface.buffers.is_empty()).then_some(&pack.buffers.layout),
-            ],
+            ]),
             ..Default::default()
         });
         let mut module = c.module;

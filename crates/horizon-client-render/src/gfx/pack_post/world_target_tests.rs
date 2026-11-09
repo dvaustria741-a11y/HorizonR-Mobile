@@ -371,6 +371,7 @@ fn frame(hud: &HudBatch) -> Frame<'_> {
         block_flicker: 0.0,
         boss_darken: 0.0,
         menu_blur: None,
+        bg_cache: None,
         chunk_fade: 0.0,
         post_effects: crate::post_chain::Request::none(),
     }

@@ -102,8 +102,9 @@ fn vs_box(@builtin(vertex_index) v: u32, @builtin(instance_index) t: u32) -> Box
 // The box is seen at this fragment: store the stamp, and give its phase 2
 // draws their instance.
 fn see(t: u32) {
-    if results[t] != params.stamp {
-        results[t] = params.stamp;
+    // `results` is an array of atomics, which WGSL only lets a shader touch through the atomic built-ins.
+    if atomicLoad(&results[t]) != params.stamp {
+        atomicStore(&results[t], params.stamp);
         let test = tests[t].data;
         for (var k = 0u; k < (test.z & 0xffffu); k++) {
             phase2[(test.y + k) * 5u + 1u] = 1u;

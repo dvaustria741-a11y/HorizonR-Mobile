@@ -2,7 +2,7 @@ name: Build HorizonZ Launcher APK
 
 on:
   push:
-    branches: [ "main", "master", "android", "native-mods-punchy", "upstream-shader-handler" ]
+    branches: [ "main", "master", "android", "native-mods-punchy", "upstream-shader-handler", "controls-overlay", "controls-overlay-fps" ]
     tags: [ "v*" ]
   pull_request:
     branches: [ "main", "master", "android" ]

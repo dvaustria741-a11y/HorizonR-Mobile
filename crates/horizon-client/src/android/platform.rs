@@ -5,12 +5,42 @@ use jni::{
     objects::{GlobalRef, JObject, JValue},
 };
 use std::cell::RefCell;
+
+/// A Java object kept in a thread-local. A plain `GlobalRef` that a thread's exit drops while the
+/// thread is detached makes the jni crate log a WARN; this attaches the thread first.
+struct KeptRef {
+    vm: JavaVM,
+    reference: std::mem::ManuallyDrop<GlobalRef>,
+}
+
+impl KeptRef {
+    fn new(env: &JNIEnv<'_>, object: &JObject<'_>) -> jni::errors::Result<Self> {
+        Ok(Self {
+            vm: env.get_java_vm()?,
+            reference: std::mem::ManuallyDrop::new(env.new_global_ref(object)?),
+        })
+    }
+
+    fn as_obj(&self) -> &JObject<'static> {
+        self.reference.as_obj()
+    }
+}
+
+impl Drop for KeptRef {
+    fn drop(&mut self) {
+        let guard = self.vm.attach_current_thread();
+        // SAFETY: dropped once, here, and never used afterwards.
+        unsafe { std::mem::ManuallyDrop::drop(&mut self.reference) };
+        drop(guard);
+    }
+}
+
 thread_local! {
     static EDIT: RefCell<Option<String>> = const { RefCell::new(None) };
     static MULTILINE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    static VIBRATOR: RefCell<Option<Option<GlobalRef>>> = const { RefCell::new(None) };
+    static VIBRATOR: RefCell<Option<Option<KeptRef>>> = const { RefCell::new(None) };
     static VIBRATING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    static PAD_VIBRATOR: RefCell<Option<GlobalRef>> = const { RefCell::new(None) };
+    static PAD_VIBRATOR: RefCell<Option<KeptRef>> = const { RefCell::new(None) };
     static PAD_HAPTIC_DEVICE: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
 }
 
@@ -44,7 +74,7 @@ fn with_vibrator(f: impl FnOnce(&mut JNIEnv<'_>, &JObject<'_>) -> jni::errors::R
                     let supported = !service.is_null()
                         && env.call_method(&service, "hasVibrator", "()Z", &[])?.z()?;
                     *cache = Some(if supported {
-                        Some(env.new_global_ref(service)?)
+                        Some(KeptRef::new(env, &service)?)
                     } else {
                         None
                     });
@@ -160,7 +190,7 @@ fn vibrate_gamepad(pulse: horizon_client::gamepad::Pulse, amplitude: i32) -> boo
                 )?.l()?;
                 env.call_method(&manager, "vibrate", "(Landroid/os/CombinedVibration;)V",
                     &[JValue::Object(&combined)])?;
-                let reference = env.new_global_ref(&manager)?;
+                let reference = KeptRef::new(env, &manager)?;
                 PAD_VIBRATOR.with(|v| *v.borrow_mut() = Some(reference));
                 return Ok(true);
             }
@@ -191,7 +221,7 @@ fn vibrate_gamepad(pulse: horizon_client::gamepad::Pulse, amplitude: i32) -> boo
             "(Landroid/os/VibrationEffect;)V",
             &[JValue::Object(&effect)],
         )?;
-        let reference = env.new_global_ref(&vibrator)?;
+        let reference = KeptRef::new(env, &vibrator)?;
         PAD_VIBRATOR.with(|v| *v.borrow_mut() = Some(reference));
         Ok(true)
     })

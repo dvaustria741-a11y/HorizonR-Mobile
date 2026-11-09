@@ -96,7 +96,13 @@ import dev.horizon.android.R
 import dev.horizon.android.HorizonActivity
 import dev.horizon.android.bridge.*
 import dev.horizon.android.model.*
-import dev.horizon.android.ui.theme.HorizonZalithTheme
+import dev.horizon.android.ui.theme.HorizonLauncherTheme
+import dev.horizon.android.controls.ControlEditorActivity
+import dev.horizon.android.controls.ControlSettings
+import dev.horizon.android.controls.ui.ControlsCardStyle
+import dev.horizon.android.controls.ui.ControlsSettings as TouchControlsSettings
+import dev.horizon.android.controls.ui.ControlsTheme
+import dev.horizon.android.controls.ui.LayoutSettings as TouchLayoutSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -159,7 +165,7 @@ private val MutedSubtitleText: Color get() = activeUiPalette.mutedSubtitleText
 private data class ShaderImportProgress(val percent: Int, val stage: String, val detail: String, val elapsedSec: Long)
 
 @Composable
-private fun SyncDynamicLauncherPalette(palette: ZalithThemePalette, useDynamicColor: Boolean) {
+private fun SyncDynamicLauncherPalette(palette: LauncherThemePalette, useDynamicColor: Boolean) {
     val scheme = MaterialTheme.colorScheme
     activeUiPalette = remember(palette, useDynamicColor, scheme.primary, scheme.background) {
         if (useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -176,7 +182,7 @@ private fun SyncDynamicLauncherPalette(palette: ZalithThemePalette, useDynamicCo
             )
         } else {
             when (palette) {
-                ZalithThemePalette.MATERIAL_YOU -> HorizonDynamicPalette(
+                LauncherThemePalette.MATERIAL_YOU -> HorizonDynamicPalette(
                     rootBg = Color(0xFF14181B),
                     cardSlateBg = Color(0xFF22282C),
                     cardRowBg = Color(0xFF2A3136),
@@ -187,7 +193,7 @@ private fun SyncDynamicLauncherPalette(palette: ZalithThemePalette, useDynamicCo
                     lavenderBadgeText = Color(0xFF231D38),
                     mutedSubtitleText = Color(0xFF9EA8B0)
                 )
-                ZalithThemePalette.EMBERMIRE -> HorizonDynamicPalette(
+                LauncherThemePalette.EMBERMIRE -> HorizonDynamicPalette(
                     rootBg = Color(0xFF161215),
                     cardSlateBg = Color(0xFF261E22),
                     cardRowBg = Color(0xFF32272C),
@@ -198,7 +204,7 @@ private fun SyncDynamicLauncherPalette(palette: ZalithThemePalette, useDynamicCo
                     lavenderBadgeText = Color(0xFF3E170B),
                     mutedSubtitleText = Color(0xFFB5A19B)
                 )
-                ZalithThemePalette.HORIZON_RUST -> HorizonDynamicPalette(
+                LauncherThemePalette.HORIZON_RUST -> HorizonDynamicPalette(
                     rootBg = Color(0xFF11151C),
                     cardSlateBg = Color(0xFF1B222C),
                     cardRowBg = Color(0xFF242D3A),
@@ -209,7 +215,7 @@ private fun SyncDynamicLauncherPalette(palette: ZalithThemePalette, useDynamicCo
                     lavenderBadgeText = Color(0xFF00251A),
                     mutedSubtitleText = Color(0xFF98A6B8)
                 )
-                ZalithThemePalette.AMOLED_EMERALD -> HorizonDynamicPalette(
+                LauncherThemePalette.AMOLED_EMERALD -> HorizonDynamicPalette(
                     rootBg = Color(0xFF070A08),
                     cardSlateBg = Color(0xFF121A15),
                     cardRowBg = Color(0xFF1A261E),
@@ -239,7 +245,7 @@ enum class AccountSubCategory(val label: String, val icon: ImageVector) {
     PROFILES("Accounts", Icons.Default.People)
 }
 
-class ZalithMainActivity : ComponentActivity() {
+class HorizonLauncherActivity : ComponentActivity() {
     companion object {
         @Volatile
         private var hasCheckedUpdateThisSession = false
@@ -264,7 +270,7 @@ class ZalithMainActivity : ComponentActivity() {
             val lifecycleOwner = LocalLifecycleOwner.current
             val scope = rememberCoroutineScope()
             var config by remember { mutableStateOf<HorizonConfigState>(HorizonNativeBridge.loadSavedConfig(context)) }
-            var accounts by remember { mutableStateOf<List<ZalithAccount>>(HorizonNativeBridge.loadSavedAccounts(context)) }
+            var accounts by remember { mutableStateOf<List<LauncherAccount>>(HorizonNativeBridge.loadSavedAccounts(context)) }
             val activeAccount = accounts.firstOrNull { it.isActive } ?: accounts.first()
 
             var isLauncherHibernated by remember { mutableStateOf(false) }
@@ -318,7 +324,7 @@ class ZalithMainActivity : ComponentActivity() {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            HorizonZalithTheme(
+            HorizonLauncherTheme(
                 palette = config.themePalette,
                 useDynamicColor = config.useDynamicColor
             ) {
@@ -340,7 +346,7 @@ class ZalithMainActivity : ComponentActivity() {
                         return@Surface
                     }
                     Box(modifier = Modifier.fillMaxSize()) {
-                        ZalithCleanLauncherScreen(
+                        CleanLauncherScreen(
                             config = config,
                             accounts = accounts,
                             activeAccount = activeAccount,
@@ -980,11 +986,11 @@ fun MinecraftSkin3DPreviewCanvas(
 }
 
 /**
- * Zalith-style Settings Dropdown Card (`429668.jpg` style):
+ * Launcher-style Settings Dropdown Card (`429668.jpg` style):
  * Full-width dark slate rounded card with Title, Description subtitle, `Selected: <value>`, and right dropdown arrow.
  */
 @Composable
-fun <T> ZalithSettingDropdownCard(
+fun <T> LauncherSettingDropdownCard(
     title: String,
     description: String,
     selectedItem: T,
@@ -1085,11 +1091,11 @@ fun <T> ZalithSettingDropdownCard(
 }
 
 /**
- * Zalith-style Slider Card (`429668.jpg` bottom card style):
+ * Launcher-style Slider Card (`429668.jpg` bottom card style):
  * Title + Subtitle + thick track slider on left + Sky-Blue `<  50%  >` stepper pill on right!
  */
 @Composable
-fun ZalithSettingSliderCard(
+fun LauncherSettingSliderCard(
     title: String,
     description: String,
     value: Int,
@@ -1181,7 +1187,7 @@ fun ZalithSettingSliderCard(
 }
 
 @Composable
-fun ZalithSettingToggleCard(
+fun LauncherSettingToggleCard(
     title: String,
     description: String,
     checked: Boolean,
@@ -1234,7 +1240,7 @@ fun ZalithSettingToggleCard(
  * Vertical Sub-Navigation Rail with Capsule Active Indicator (`429668.jpg` & `429665.jpg` left rail style).
  */
 @Composable
-fun <T> ZalithSubCategoryRail(
+fun <T> LauncherSubCategoryRail(
     items: List<T>,
     selectedItem: T,
     itemLabel: (T) -> String,
@@ -1415,18 +1421,18 @@ private fun InAppUpdateBannerCard(
 }
 
 @Composable
-fun ZalithCleanLauncherScreen(
+fun CleanLauncherScreen(
     config: HorizonConfigState,
-    accounts: List<ZalithAccount>,
-    activeAccount: ZalithAccount,
+    accounts: List<LauncherAccount>,
+    activeAccount: LauncherAccount,
     isHibernated: Boolean,
     onConfigChange: (HorizonConfigState) -> Unit,
-    onAccountsChange: (List<ZalithAccount>) -> Unit,
+    onAccountsChange: (List<LauncherAccount>) -> Unit,
     onCheckForUpdatesManual: () -> Unit = {},
     onEnterGameHibernation: () -> Unit
 ) {
     val context = LocalContext.current
-    var selectedTab by remember { mutableStateOf(ZalithNavTab.HOME) }
+    var selectedTab by remember { mutableStateOf(LauncherNavTab.HOME) }
     var storeInitialCategory by remember { mutableStateOf(StoreCategory.ALL) }
     var installStatus by remember { mutableStateOf<AssetInstallStatus>(HorizonNativeBridge.pollInstallProgress(context, config.enableSystemLog)) }
     var selectedGameVersion by remember { mutableStateOf(GameVersions.selected(context)) }
@@ -1473,7 +1479,7 @@ fun ZalithCleanLauncherScreen(
     }
 
     val triggerDownload = {
-        selectedTab = ZalithNavTab.VERSIONS
+        selectedTab = LauncherNavTab.VERSIONS
         val started = HorizonNativeBridge.startMinecraft26Download(context, config.enableSystemLog)
         if (!started && installStatus.ready) {
             onEnterGameHibernation()
@@ -1486,12 +1492,12 @@ fun ZalithCleanLauncherScreen(
         } else if (!installStatus.running) {
             onEnterGameHibernation()
         } else {
-            selectedTab = ZalithNavTab.VERSIONS
+            selectedTab = LauncherNavTab.VERSIONS
         }
     }
 
     // The launch dock (account + version + PLAY) floats at the bottom on Home and Game pages only.
-    val showLaunchDock = selectedTab == ZalithNavTab.HOME || selectedTab == ZalithNavTab.VERSIONS
+    val showLaunchDock = selectedTab == LauncherNavTab.HOME || selectedTab == LauncherNavTab.VERSIONS
 
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -1513,7 +1519,7 @@ fun ZalithCleanLauncherScreen(
                     installStatus = installStatus,
                     onSelectTab = { selectedTab = it },
                     onOpenDataFolder = { HorizonNativeBridge.openSystemFilesApp(context) },
-                    onOpenLogs = { selectedTab = ZalithNavTab.LOGS }
+                    onOpenLogs = { selectedTab = LauncherNavTab.LOGS }
                 )
 
                 Row(
@@ -1554,14 +1560,14 @@ fun ZalithCleanLauncherScreen(
                     ) { tab ->
                         Box(modifier = Modifier.fillMaxSize()) {
                             when (tab) {
-                                ZalithNavTab.HOME -> CleanHomeViewport(
+                                LauncherNavTab.HOME -> CleanHomeViewport(
                                     config = config,
                                     onConfigChange = onConfigChange,
                                     logEnabled = config.enableSystemLog,
                                     isHibernated = isHibernated
                                 )
 
-                                ZalithNavTab.VERSIONS -> CleanVersionsViewport(
+                                LauncherNavTab.VERSIONS -> CleanVersionsViewport(
                                     context = context,
                                     installStatus = installStatus,
                                     selectedVersion = selectedGameVersion,
@@ -1584,18 +1590,18 @@ fun ZalithCleanLauncherScreen(
                                     }
                                 )
 
-                                ZalithNavTab.STORE -> CleanStoreViewport(
+                                LauncherNavTab.STORE -> CleanStoreViewport(
                                     profileSlot = config.profile,
                                     logEnabled = config.enableSystemLog,
                                     initialCategory = storeInitialCategory
                                 )
 
-                                ZalithNavTab.FILES -> CleanFilesViewport(
+                                LauncherNavTab.FILES -> CleanFilesViewport(
                                     profileSlot = config.profile,
                                     logEnabled = config.enableSystemLog,
                                     onNavigateToStoreCategory = { targetCat ->
                                         storeInitialCategory = targetCat
-                                        selectedTab = ZalithNavTab.STORE
+                                        selectedTab = LauncherNavTab.STORE
                                     },
                                     onQuickPlayWorld = { worldName ->
                                         HorizonServerStore.pendingQuickPlayWorld = worldName
@@ -1603,7 +1609,7 @@ fun ZalithCleanLauncherScreen(
                                     }
                                 )
 
-                                ZalithNavTab.SERVERS -> CleanServersViewport(
+                                LauncherNavTab.SERVERS -> CleanServersViewport(
                                     profileSlot = config.profile,
                                     onQuickPlayServer = { address ->
                                         HorizonServerStore.pendingQuickPlayServer = address
@@ -1611,7 +1617,7 @@ fun ZalithCleanLauncherScreen(
                                     }
                                 )
 
-                                ZalithNavTab.ACCOUNTS -> CleanAccountsAndSkinsViewport(
+                                LauncherNavTab.ACCOUNTS -> CleanAccountsAndSkinsViewport(
                                     accounts = accounts,
                                     activeAccount = activeAccount,
                                     activeSkinBitmap = activeSkinBitmap,
@@ -1626,15 +1632,15 @@ fun ZalithCleanLauncherScreen(
                                     onAccountsChange = onAccountsChange
                                 )
 
-                                ZalithNavTab.LOGS -> CleanLogsViewport(
+                                LauncherNavTab.LOGS -> CleanLogsViewport(
                                     logEnabled = config.enableSystemLog
                                 )
 
-                                ZalithNavTab.SETTINGS -> CleanSettingsViewport(
+                                LauncherNavTab.SETTINGS -> CleanSettingsViewport(
                                     config = config,
                                     onConfigChange = onConfigChange,
                                     onCheckForUpdatesManual = onCheckForUpdatesManual,
-                                    onOpenLogs = { selectedTab = ZalithNavTab.LOGS }
+                                    onOpenLogs = { selectedTab = LauncherNavTab.LOGS }
                                 )
                             }
                         }
@@ -1652,7 +1658,7 @@ fun ZalithCleanLauncherScreen(
                         targetOffsetY = { it }
                     )
                 ) {
-                    ZalithLaunchDock(
+                    LauncherLaunchDock(
                         activeAccount = activeAccount,
                         activeSkinBitmap = activeSkinBitmap,
                         installStatus = installStatus,
@@ -1661,8 +1667,8 @@ fun ZalithCleanLauncherScreen(
                             GameVersions.select(context, id)
                             selectedGameVersion = GameVersions.byId(id)
                         },
-                        onOpenAccountScreen = { selectedTab = ZalithNavTab.ACCOUNTS },
-                        onOpenVersions = { selectedTab = ZalithNavTab.VERSIONS },
+                        onOpenAccountScreen = { selectedTab = LauncherNavTab.ACCOUNTS },
+                        onOpenVersions = { selectedTab = LauncherNavTab.VERSIONS },
                         onLaunchOrDownload = handleLaunchOrDownload
                     )
                 }
@@ -1681,7 +1687,7 @@ fun ZalithCleanLauncherScreen(
     }
 }
 
-private data class HorizonNavItem(val tab: ZalithNavTab, val icon: ImageVector, val label: String)
+private data class HorizonNavItem(val tab: LauncherNavTab, val icon: ImageVector, val label: String)
 
 /** Soft accent-tinted gradient outline shared by all the glass cards. */
 @Composable
@@ -1738,21 +1744,21 @@ private fun HorizonAuroraBackground() {
  */
 @Composable
 private fun HorizonTopNav(
-    selectedTab: ZalithNavTab,
+    selectedTab: LauncherNavTab,
     installStatus: AssetInstallStatus,
-    onSelectTab: (ZalithNavTab) -> Unit,
+    onSelectTab: (LauncherNavTab) -> Unit,
     onOpenDataFolder: () -> Unit,
     onOpenLogs: () -> Unit
 ) {
     val items = remember {
         listOf(
-            HorizonNavItem(ZalithNavTab.HOME, Icons.Default.Home, "Home"),
-            HorizonNavItem(ZalithNavTab.VERSIONS, Icons.Default.Download, "Game"),
-            HorizonNavItem(ZalithNavTab.STORE, Icons.Default.Storefront, "Store"),
-            HorizonNavItem(ZalithNavTab.FILES, Icons.Default.Extension, "Mods"),
-            HorizonNavItem(ZalithNavTab.SERVERS, Icons.Default.Dns, "Servers"),
-            HorizonNavItem(ZalithNavTab.ACCOUNTS, Icons.Default.Checkroom, "Skins"),
-            HorizonNavItem(ZalithNavTab.SETTINGS, Icons.Default.Settings, "Settings")
+            HorizonNavItem(LauncherNavTab.HOME, Icons.Default.Home, "Home"),
+            HorizonNavItem(LauncherNavTab.VERSIONS, Icons.Default.Download, "Game"),
+            HorizonNavItem(LauncherNavTab.STORE, Icons.Default.Storefront, "Store"),
+            HorizonNavItem(LauncherNavTab.FILES, Icons.Default.Extension, "Mods"),
+            HorizonNavItem(LauncherNavTab.SERVERS, Icons.Default.Dns, "Servers"),
+            HorizonNavItem(LauncherNavTab.ACCOUNTS, Icons.Default.Checkroom, "Skins"),
+            HorizonNavItem(LauncherNavTab.SETTINGS, Icons.Default.Settings, "Settings")
         )
     }
     val accent = SkyBlueAccent
@@ -1880,7 +1886,7 @@ private fun HorizonTopNav(
             }
             Surface(
                 shape = CircleShape,
-                color = if (selectedTab == ZalithNavTab.LOGS) SubRailCapsuleActive else CardSlateBg.copy(alpha = 0.82f),
+                color = if (selectedTab == LauncherNavTab.LOGS) SubRailCapsuleActive else CardSlateBg.copy(alpha = 0.82f),
                 border = horizonGlassBorder(),
                 modifier = Modifier
                     .size(34.dp)
@@ -2676,14 +2682,14 @@ private fun DashboardQuickIconPill(
 }
 
 /**
- * Full-Viewport Account Profile & Skin Studio (`ZalithNavTab.ACCOUNTS`):
+ * Full-Viewport Account Profile & Skin Studio (`LauncherNavTab.ACCOUNTS`):
  * - Clean, well-proportioned cards with zero vertical badge wrapping (`In-Game Ready` stays on 1 line!).
  * - Uses hoisted `onLaunchSkinPicker` so Google Photos selection always succeeds and updates immediately!
  */
 @Composable
 private fun CleanAccountsAndSkinsViewport(
-    accounts: List<ZalithAccount>,
-    activeAccount: ZalithAccount,
+    accounts: List<LauncherAccount>,
+    activeAccount: LauncherAccount,
     activeSkinBitmap: Bitmap,
     config: HorizonConfigState,
     detectionBanner: String?,
@@ -2693,7 +2699,7 @@ private fun CleanAccountsAndSkinsViewport(
     onLaunchSkinPicker: () -> Unit,
     onUpdateBanner: (String?) -> Unit,
     onSkinUpdated: () -> Unit,
-    onAccountsChange: (List<ZalithAccount>) -> Unit
+    onAccountsChange: (List<LauncherAccount>) -> Unit
 ) {
     val context = LocalContext.current
     var selectedSubTab by remember { mutableStateOf(AccountSubCategory.SKIN_STUDIO) }
@@ -2772,7 +2778,7 @@ private fun CleanAccountsAndSkinsViewport(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ZalithSubCategoryRail(
+        LauncherSubCategoryRail(
             items = AccountSubCategory.entries,
             selectedItem = selectedSubTab,
             itemLabel = { it.label },
@@ -3441,7 +3447,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         color = SkyBlueAccent,
                                         modifier = Modifier.animatedPressScale {
                                             if (newAccountName.isNotBlank()) {
-                                                val added = ZalithAccount(
+                                                val added = LauncherAccount(
                                                     id = UUID.randomUUID().toString(),
                                                     username = newAccountName.trim(),
                                                     uuid = UUID.randomUUID().toString(),
@@ -3951,7 +3957,7 @@ private fun CleanLogsViewport(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ZalithSubCategoryRail(
+        LauncherSubCategoryRail(
             items = LogCategoryFilter.entries,
             selectedItem = selectedCategory,
             itemLabel = { it.label },
@@ -5118,7 +5124,7 @@ private fun CleanStoreViewport(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // 1. Left Sub-Navigation Rail matching playhorizon.dev/mods (`All`, `Mods`, `Native Mods`, `Modpacks`, `Resource Packs`, `Shader Packs`)
-        ZalithSubCategoryRail(
+        LauncherSubCategoryRail(
             items = StoreCategory.entries,
             selectedItem = selectedCategory,
             itemLabel = { it.label },
@@ -6955,7 +6961,7 @@ private fun CleanFilesViewport(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Left Sub-Navigation Rail (`Mods`, `Saves`, `Resource Packs`, `Shader Packs`, `Screenshots`)
-        ZalithSubCategoryRail(
+        LauncherSubCategoryRail(
             items = categories,
             selectedItem = categories.first { it.first == currentFolder },
             itemLabel = { it.second },
@@ -7780,7 +7786,7 @@ private fun CleanSettingsViewport(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ZalithSubCategoryRail(
+        LauncherSubCategoryRail(
             items = SettingsSubCategory.entries,
             selectedItem = selectedSection,
             itemLabel = { it.label },
@@ -7809,7 +7815,7 @@ private fun CleanSettingsViewport(
             ) {
                 when (section) {
                     SettingsSubCategory.RENDERER -> {
-                        ZalithRamAllocationCard(
+                        LauncherRamAllocationCard(
                             context = context,
                             ramAllocationMb = config.ramAllocationMb,
                             onRamChange = { newRamMb ->
@@ -7817,7 +7823,7 @@ private fun CleanSettingsViewport(
                             }
                         )
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "Graphics API (Horizon Android 0.7.6)",
                             description = "Set the native Vulkan / OpenGL ES renderer used by Minecraft 26.3",
                             selectedItem = config.renderer,
@@ -7826,7 +7832,7 @@ private fun CleanSettingsViewport(
                             onSelect = { onConfigChange(config.copy(renderer = it)) }
                         )
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "Screen Presentation Aspect Ratio (v0.7.5)",
                             description = "Configure display fitting ratio for both logical rendering and touch input bounds",
                             selectedItem = config.screenAspect,
@@ -7835,7 +7841,7 @@ private fun CleanSettingsViewport(
                             onSelect = { onConfigChange(config.copy(screenAspect = it)) }
                         )
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "Orientation Rule",
                             description = "Choose how screen orientation is locked or sensor-rotated",
                             selectedItem = config.orientation,
@@ -7844,7 +7850,7 @@ private fun CleanSettingsViewport(
                             onSelect = { onConfigChange(config.copy(orientation = it)) }
                         )
 
-                        ZalithSettingSliderCard(
+                        LauncherSettingSliderCard(
                             title = "Resolution Scale",
                             description = "Lower values boost FPS on mobile GPUs; higher values sharpen 3D terrain & HUD",
                             value = config.renderScalePercent,
@@ -7854,7 +7860,7 @@ private fun CleanSettingsViewport(
                             onValueChange = { onConfigChange(config.copy(renderScalePercent = it)) }
                         )
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "Preferred Display Refresh Rate (Android 11+)",
                             description = "Request high-refresh display mode from SurfaceFlinger (display_hz in v0.7.5)",
                             selectedItem = config.displayRefreshHz,
@@ -7863,28 +7869,28 @@ private fun CleanSettingsViewport(
                             onSelect = { onConfigChange(config.copy(displayRefreshHz = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Avoid Camera Cutout / Notch (v0.7.5)",
                             description = "Inset viewport safely away from punch-hole cameras and display cutouts",
                             checked = config.screenAvoidCutout,
                             onCheckedChange = { onConfigChange(config.copy(screenAvoidCutout = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Immersive Fullscreen Navigation (v0.7.5)",
                             description = "Hide Android system status and navigation bars while playing",
                             checked = config.screenImmersive,
                             onCheckedChange = { onConfigChange(config.copy(screenImmersive = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "VSync (Vertical Synchronization)",
                             description = "Synchronize frame rate with display refresh rate in options.txt",
                             checked = config.mcVsync,
                             onCheckedChange = { onConfigChange(config.copy(mcVsync = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Android ADPF Performance Hints (v0.7.5)",
                             description = "Send Android Dynamic Performance Framework CPU/GPU thermal scheduling hints",
                             checked = config.performanceHintsAdpf,
@@ -7893,7 +7899,7 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.GAME -> {
-                        ZalithRamAllocationCard(
+                        LauncherRamAllocationCard(
                             context = context,
                             ramAllocationMb = config.ramAllocationMb,
                             onRamChange = { newRamMb ->
@@ -7901,7 +7907,7 @@ private fun CleanSettingsViewport(
                             }
                         )
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "Game Profile Slot",
                             description = "Select which isolated profile directory (saves, mods, options.txt) is active",
                             selectedItem = config.profile,
@@ -7910,7 +7916,7 @@ private fun CleanSettingsViewport(
                             onSelect = { onConfigChange(config.copy(profile = it)) }
                         )
 
-                        ZalithSettingSliderCard(
+                        LauncherSettingSliderCard(
                             title = "Render Distance",
                             description = "Number of visible world chunks rendered around the player (synced with options.txt)",
                             value = config.mcRenderDistance,
@@ -7920,7 +7926,7 @@ private fun CleanSettingsViewport(
                             onValueChange = { onConfigChange(config.copy(mcRenderDistance = it)) }
                         )
 
-                        ZalithSettingSliderCard(
+                        LauncherSettingSliderCard(
                             title = "Simulation Distance",
                             description = "Number of active entity and block-tick chunks around the player (synced with options.txt)",
                             value = config.mcSimulationDistance,
@@ -7930,7 +7936,7 @@ private fun CleanSettingsViewport(
                             onValueChange = { onConfigChange(config.copy(mcSimulationDistance = it)) }
                         )
 
-                        ZalithSettingSliderCard(
+                        LauncherSettingSliderCard(
                             title = "Max Framerate Limit",
                             description = "Maximum FPS cap inside Minecraft (260 = Unlimited, synced with options.txt)",
                             value = config.mcMaxFps,
@@ -7940,7 +7946,7 @@ private fun CleanSettingsViewport(
                             onValueChange = { onConfigChange(config.copy(mcMaxFps = it)) }
                         )
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "GUI Scale",
                             description = "In-game HUD and inventory interface scale factor (synced with options.txt)",
                             selectedItem = config.mcGuiScale,
@@ -7950,28 +7956,28 @@ private fun CleanSettingsViewport(
                         )
 
                         // Built-in Horizon 26.3 Client Extras (`horizon-extras.txt`)
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Fullbright Cave Lighting (Horizon Extra)",
                             description = "Display blocks and entities with a fully bright lightmap in dark caves (horizon-extras.txt)",
                             checked = config.extraFullbright,
                             onCheckedChange = { onConfigChange(config.copy(extraFullbright = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Dynamic Handheld Lights (Horizon Extra)",
                             description = "Held torches, lanterns, and glowing items illuminate nearby blocks in real time",
                             checked = config.extraDynamicLights,
                             onCheckedChange = { onConfigChange(config.copy(extraDynamicLights = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Auto-Reconnect on Server Drop (Horizon Extra)",
                             description = "Automatically retry server connection with 5s–60s backoff if disconnected",
                             checked = config.extraAutoReconnect,
                             onCheckedChange = { onConfigChange(config.copy(extraAutoReconnect = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Mouse Tweaks & Inventory Sort Button (Horizon Extra)",
                             description = "Enable fast slot dragging and one-click chest/inventory sorting in horizon-extras.txt",
                             checked = config.extraMouseTweaks,
@@ -8048,14 +8054,14 @@ private fun CleanSettingsViewport(
                             )
                         }
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Enable Minecraft In-Game AI Agent (Gemini AI Studio)",
                             description = "Enable the AI Agent inside Minecraft 26.3, connected to Google AI Studio (Gemini API) & the game control socket (horizon-control.json)",
                             checked = config.aiAgentEnabled,
                             onCheckedChange = { onConfigChange(config.copy(aiAgentEnabled = it)) }
                         )
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "AI Agent Engine Provider",
                             description = "Choose Google AI Studio integration (Gemini API with a local API key) or Local Socket only",
                             selectedItem = config.aiAgentProvider,
@@ -8205,7 +8211,7 @@ private fun CleanSettingsViewport(
                                 description = "Selected Google AI Studio model"
                             )
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = if (isRefreshingModels) "Google AI Studio Model (Loading model list...)" else "Choose Google AI Studio Model (${availableModels.size} Models Available)",
                             description = "${selectedModelObj.description} (${selectedModelObj.badge})",
                             selectedItem = selectedModelObj,
@@ -8246,14 +8252,14 @@ private fun CleanSettingsViewport(
                             }
                         }
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "In-Game Chat Assistant (@ai / !ai Trigger)",
                             description = "Allow typing @ai or !ai in Minecraft chat to ask questions or give commands directly to the Gemini AI Agent",
                             checked = config.aiAgentAutoAssistChat,
                             onCheckedChange = { onConfigChange(config.copy(aiAgentAutoAssistChat = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Autonomous Game Control Actions (Move, Look, Mine, Place, Craft)",
                             description = "Allow the Gemini AI Agent to control character actions via the local horizon-control.json protocol when asked",
                             checked = config.aiAgentAutonomousActions,
@@ -8292,37 +8298,81 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.CONTROLS -> {
-                        ZalithSettingDropdownCard(
+                        val touchControls = remember { ControlSettings(context) }
+                        var overlayOn by remember { mutableStateOf(touchControls.overlayEnabled) }
+                        // Zalith Controller is on only while the overlay is on AND the saved input host is
+                        // Keyboard & Mouse; if the two ever disagree (another tab, an old config), the overlay yields.
+                        val zalithController = overlayOn && config.inputHost == HorizonInputHost.KEYBOARD_MOUSE
+                        LaunchedEffect(Unit) {
+                            if (overlayOn && config.inputHost != HorizonInputHost.KEYBOARD_MOUSE) {
+                                touchControls.overlayEnabled = false
+                                overlayOn = false
+                            }
+                        }
+                        // null stands for Zalith Controller: the editable touch layouts drawn over the game.
+                        LauncherSettingDropdownCard(
                             title = "Input Mode (v0.7.5)",
-                            description = "Select primary input host (Auto follows active touch, mouse, or controller input)",
-                            selectedItem = config.inputHost,
-                            options = HorizonInputHost.entries,
-                            itemLabel = { it.label },
-                            onSelect = { onConfigChange(config.copy(inputHost = it)) }
+                            description = "Select primary input host (Auto follows active touch, mouse, or controller input). Zalith Controller uses Keyboard & Mouse and draws the editable touch layouts over the game",
+                            selectedItem = if (zalithController) null else config.inputHost,
+                            options = listOf(
+                                HorizonInputHost.AUTO,
+                                null,
+                                HorizonInputHost.TOUCH,
+                                HorizonInputHost.KEYBOARD_MOUSE,
+                                HorizonInputHost.CONTROLLER
+                            ),
+                            itemLabel = { it?.label ?: "Zalith Controller (editable touch layouts)" },
+                            onSelect = { choice ->
+                                val zalith = choice == null
+                                touchControls.overlayEnabled = zalith
+                                overlayOn = zalith
+                                onConfigChange(config.copy(inputHost = choice ?: HorizonInputHost.KEYBOARD_MOUSE))
+                            }
                         )
 
-                        ZalithSettingToggleCard(
+                        if (zalithController) {
+                            ControlsTheme(
+                                ControlsCardStyle(
+                                    card = CardSlateBg,
+                                    accent = SkyBlueAccent,
+                                    onAccent = SkyBlueDarkText,
+                                    muted = MutedSubtitleText,
+                                    track = Color(0xFF33424B)
+                                )
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    TouchLayoutSettings(
+                                        settings = touchControls,
+                                        onEdit = { context.startActivity(Intent(context, ControlEditorActivity::class.java)) },
+                                        onChange = {}
+                                    )
+                                    TouchControlsSettings(settings = touchControls, onChange = {})
+                                }
+                            }
+                        }
+
+                        LauncherSettingToggleCard(
                             title = "On-Screen Touch Keypad",
                             description = "Enable customizable virtual touch buttons inside Minecraft (horizon-keypad.json)",
                             checked = config.keypadControls,
                             onCheckedChange = { onConfigChange(config.copy(keypadControls = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Sprint Toggle / Tap-to-Sprint (v0.7.4+)",
                             description = "Use tap-to-toggle mode for the touch Sprint button instead of holding",
                             checked = config.sprintToggle,
                             onCheckedChange = { onConfigChange(config.copy(sprintToggle = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Inventory Touch Action Buttons (v0.7.4+)",
                             description = "Keep Attack (left-click), Interact (right-click), and Sneak (Shift) touch buttons visible inside inventories",
                             checked = config.inventoryTouchControls,
                             onCheckedChange = { onConfigChange(config.copy(inventoryTouchControls = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Gyroscope Camera Aiming (v0.7.4+)",
                             description = "Enable motion-sensor gyroscope camera aiming with adaptive axes",
                             checked = config.gyroAimingEnabled,
@@ -8330,7 +8380,7 @@ private fun CleanSettingsViewport(
                         )
 
                         if (config.gyroAimingEnabled) {
-                            ZalithSettingSliderCard(
+                            LauncherSettingSliderCard(
                                 title = "Gyroscope Aim Sensitivity",
                                 description = "Adjust motion sensor aiming speed multiplier",
                                 value = config.gyroSensitivityPercent,
@@ -8365,16 +8415,21 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.GAMEPAD -> {
-                        ZalithSettingDropdownCard(
+                        val touchControls = remember { ControlSettings(context) }
+                        LauncherSettingDropdownCard(
                             title = "Controller & Gamepad Routing (v0.7.5)",
                             description = "Configure USB & Bluetooth gamepad input host (Xbox, DualSense, Switch Pro)",
                             selectedItem = config.inputHost,
                             options = listOf(HorizonInputHost.AUTO, HorizonInputHost.CONTROLLER, HorizonInputHost.KEYBOARD_MOUSE, HorizonInputHost.TOUCH),
                             itemLabel = { it.label },
-                            onSelect = { onConfigChange(config.copy(inputHost = it)) }
+                            onSelect = {
+                                // Any mode picked here replaces Zalith Controller.
+                                touchControls.overlayEnabled = false
+                                onConfigChange(config.copy(inputHost = it))
+                            }
                         )
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "Controller Menu & Inventory Navigation (v0.7.5)",
                             description = "Choose Focus highlight (D-pad/Stick step) or Virtual Pointer cursor in menus (horizon-controller.txt)",
                             selectedItem = config.controllerNavMode,
@@ -8383,14 +8438,14 @@ private fun CleanSettingsViewport(
                             onSelect = { onConfigChange(config.copy(controllerNavMode = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Controller Vibration & Rumble (v0.7.4+)",
                             description = "Enable controller haptics and rumble feedback when supported by Android driver",
                             checked = config.controllerVibration,
                             onCheckedChange = { onConfigChange(config.copy(controllerVibration = it)) }
                         )
 
-                        ZalithSettingSliderCard(
+                        LauncherSettingSliderCard(
                             title = "Controller Look Sensitivity",
                             description = "Right-stick camera yaw/pitch rotation speed (synced with horizon-controller.txt)",
                             value = config.controllerSensitivityPercent,
@@ -8400,7 +8455,7 @@ private fun CleanSettingsViewport(
                             onValueChange = { onConfigChange(config.copy(controllerSensitivityPercent = it)) }
                         )
 
-                        ZalithSettingSliderCard(
+                        LauncherSettingSliderCard(
                             title = "Analog Stick Radial Deadzone",
                             description = "Prevent stick drift on left and right thumbsticks (synced with horizon-controller.txt)",
                             value = config.controllerDeadzonePercent,
@@ -8410,7 +8465,7 @@ private fun CleanSettingsViewport(
                             onValueChange = { onConfigChange(config.copy(controllerDeadzonePercent = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Audio Safe Mode",
                             description = "Disable OpenAL event callbacks if Bluetooth controllers or headsets cause audio stutter",
                             checked = config.disableAudioSafeMode,
@@ -8419,7 +8474,7 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.LAUNCHER -> {
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "Dashboard Background Mode (Wallpaper vs. Video Trailer)",
                             description = "Choose between static 16:9 HD Minecraft wallpapers or auto-playing official Minecraft YouTube Trailers (720p)",
                             selectedItem = config.backgroundMode,
@@ -8435,7 +8490,7 @@ private fun CleanSettingsViewport(
                             }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Auto-Play Minecraft YouTube 'Trailer' Video",
                             description = "Automatically play the latest official @Minecraft YouTube videos containing 'Trailer' on the dashboard and turn off static wallpaper while playing",
                             checked = config.useYoutubeTrailerWallpaper || config.backgroundMode == HorizonBackgroundMode.YOUTUBE_TRAILER,
@@ -8449,7 +8504,7 @@ private fun CleanSettingsViewport(
                             }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Silent / Mute Trailer Video Audio",
                             description = "Mute audio while playing the 720p Minecraft Trailer video on the dashboard (disable to hear full trailer audio)",
                             checked = config.muteTrailerVideo,
@@ -8520,39 +8575,39 @@ private fun CleanSettingsViewport(
                             }
                         }
 
-                        ZalithSettingDropdownCard(
+                        LauncherSettingDropdownCard(
                             title = "Theme Palette",
                             description = "Choose the color scheme used across HorizonR (applies immediately)",
                             selectedItem = config.themePalette,
-                            options = ZalithThemePalette.entries,
+                            options = LauncherThemePalette.entries,
                             itemLabel = { it.label },
                             onSelect = {
                                 onConfigChange(config.copy(themePalette = it, useDynamicColor = false))
                             }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Material You Dynamic Color (Android 12+)",
                             description = "Adapt launcher accent colors to your system wallpaper automatically",
                             checked = config.useDynamicColor,
                             onCheckedChange = { onConfigChange(config.copy(useDynamicColor = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "System & Game Runtime Logs",
                             description = "Record launcher, installer, and Minecraft runtime logs for troubleshooting",
                             checked = config.enableSystemLog,
                             onCheckedChange = { onConfigChange(config.copy(enableSystemLog = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Record Performance Telemetry",
                             description = "Write frame-time and GPU benchmark metrics to performance.json during gameplay",
                             checked = config.recordPerformance,
                             onCheckedChange = { onConfigChange(config.copy(recordPerformance = it)) }
                         )
 
-                        ZalithSettingToggleCard(
+                        LauncherSettingToggleCard(
                             title = "Detailed GPU Stage Profiling (p50/p95/p99)",
                             description = "Include rolling GPU preparation, upload, rendering, and post-processing timings",
                             checked = config.gpuStageProfiling,
@@ -8612,7 +8667,7 @@ private fun CleanSettingsViewport(
 }
 
 @Composable
-private fun ZalithRamAllocationCard(
+private fun LauncherRamAllocationCard(
     context: android.content.Context,
     ramAllocationMb: Int,
     onRamChange: (Int) -> Unit
@@ -8785,8 +8840,8 @@ private fun ZalithRamAllocationCard(
 }
 
 @Composable
-private fun ZalithLaunchDock(
-    activeAccount: ZalithAccount,
+private fun LauncherLaunchDock(
+    activeAccount: LauncherAccount,
     activeSkinBitmap: Bitmap,
     installStatus: AssetInstallStatus,
     selectedVersion: GameVersion,

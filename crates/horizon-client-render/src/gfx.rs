@@ -59,7 +59,78 @@ pub use entity_batch::{
     TEXT_POLYGON_OFFSET_OVERLAY, TRANSLUCENT_GLINT_ITEM_OVERLAY, TRANSLUCENT_ITEM_OVERLAY,
     TRANSLUCENT_PARTICLE_OVERLAY, WATER_MASK_OVERLAY, mark_oit,
 };
+pub use pack_post::{PackPost, Refused};
 pub use view::{View, ViewSet};
+
+/// The GPU state `PackPost::new` reads, cloned out of the renderer so a worker thread can create
+/// a shader pack's pipelines (seconds on a phone) while the game keeps drawing.
+pub struct ShaderPackBuildContext {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    adapter: wgpu::Adapter,
+    frame_format: wgpu::TextureFormat,
+    atlas: Option<(wgpu::TextureView, [u32; 2])>,
+    sprite_rects: Vec<u32>,
+    material_maps: Option<[wgpu::TextureView; 2]>,
+    lightmap: wgpu::TextureView,
+    gui_size: [u32; 2],
+    flat_layout: Option<wgpu::BindGroupLayout>,
+    pack_terrain_flat: bool,
+    celestial: Option<wgpu::TextureView>,
+    clouds: wgpu::BindGroupLayout,
+}
+
+impl ShaderPackBuildContext {
+    /// Builds the pipelines of `post`: what `Renderer::set_shader_pack` did inline.
+    pub fn build(
+        self,
+        post: horizon_shaders::Post,
+        block_ids: &[i32],
+    ) -> std::result::Result<pack_post::PackPost, pack_post::Refused> {
+        let instance = wgpu::vertex_attr_array![5=>Float32x4];
+        let vertex = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<TerrainVertex>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &TERRAIN_ATTRIBUTES,
+        };
+        let instances = wgpu::VertexBufferLayout {
+            array_stride: 16,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &instance,
+        };
+        let buffers = [Some(vertex), Some(instances)];
+        let flat = self.pack_terrain_flat;
+        let world = pack_post::World {
+            atlas: self.atlas.clone(),
+            sprite_rects: &self.sprite_rects,
+            material_maps: self.material_maps.clone(),
+            lightmap: self.lightmap.clone(),
+            gui_size: self.gui_size,
+            terrain: self.atlas.as_ref().map(|_| pack_post::Geometry {
+                buffers: if flat { &buffers[..1] } else { &buffers },
+                table: self.flat_layout.as_ref().filter(|_| flat),
+                depth_write: true,
+                atlas: None,
+                material_maps: true,
+                ids: None,
+                cull: true,
+            }),
+            block_ids,
+            celestial: self.celestial.clone(),
+            clouds: Some(&self.clouds),
+            weather: true,
+            hand: true,
+        };
+        pack_post::PackPost::new(
+            &self.device,
+            &self.queue,
+            &self.adapter,
+            post,
+            self.frame_format,
+            world,
+        )
+    }
+}
 
 /// Window.getAppropriateLineWidth, in framebuffer pixels.
 pub fn outline_width(width: u32) -> f32 {
@@ -996,6 +1067,12 @@ pub struct Frame<'a> {
     /// `Screen.extractBlurredBackground`: blur the frame by this radius
     /// (`menuBackgroundBlurriness`) before the screen is drawn over it.
     pub menu_blur: Option<f32>,
+    /// Names the screen's background (the world and HUD under it) while it cannot change.
+    /// The frame that first carries a key draws the world as usual and keeps the result
+    /// (blurred, when the screen blurs); frames with the same key at the same size draw the
+    /// kept image and only the screen over it. `None` draws the world every frame and
+    /// drops what was kept.
+    pub bg_cache: Option<u64>,
     /// `Options.chunkSectionFadeInTime`, in seconds: how long a section takes to fade in once
     /// uploaded (0 draws it whole at once).
     pub chunk_fade: f32,
@@ -6552,10 +6629,11 @@ impl Renderer {
     }
     /// Automatic render scale: while frames take longer than `target_fps`
     /// allows (the frame cap, at most 60), the world renders below the
-    /// Resolution Scale setting, down to 60% of it, and returns to it once
-    /// there is room.
-    pub fn set_dynamic_scale(&mut self, enabled: bool, target_fps: f32) {
-        if self.dyn_scale.configure(enabled, target_fps) {
+    /// Resolution Scale setting, down to `floor` of it (the Dynamic Resolution
+    /// slider), and returns to it once there is room.
+    pub fn set_dynamic_scale(&mut self, enabled: bool, target_fps: f32, floor: f32) {
+        let floor_changed = self.dyn_scale.set_floor(floor);
+        if self.dyn_scale.configure(enabled, target_fps) || floor_changed {
             self.world_post.scale = (self.scale_base * self.dyn_scale.factor()).clamp(0.25, 2.0);
         }
     }
@@ -6578,66 +6656,53 @@ impl Renderer {
             self.pack_atlas = None;
             self.pack_material_atlases = None;
         }
-        let instance = wgpu::vertex_attr_array![5=>Float32x4];
-        let vertex = wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<TerrainVertex>() as u64,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &TERRAIN_ATTRIBUTES,
-        };
-        let instances = wgpu::VertexBufferLayout {
-            array_stride: 16,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &instance,
-        };
-        let buffers = [Some(vertex), Some(instances)];
-        let flat = self.pack_terrain_flat;
-        let sprite_rects = self
-            .pack_atlas
-            .as_ref()
-            .map_or_else(Vec::new, |a| a.rects_table());
-        let post = pack.map(|post| {
-            let world = pack_post::World {
-                atlas: self.pack_atlas.as_ref().map(|a| (a.view.clone(), a.size())),
-                sprite_rects: &sprite_rects,
-                material_maps: self
-                    .pack_material_atlases
-                    .as_ref()
-                    .map(|a| [a[0].view.clone(), a[1].view.clone()]),
-                lightmap: self.lightmap_view.clone(),
-                gui_size: self
-                    .hud
-                    .atlas_texture
-                    .as_ref()
-                    .map_or([1, 1], |t| [t.width(), t.height()]),
-                terrain: self.pack_atlas.as_ref().map(|_| pack_post::Geometry {
-                    buffers: if flat { &buffers[..1] } else { &buffers },
-                    table: self.flat.as_ref().filter(|_| flat).map(|f| &f.draw_layout),
-                    depth_write: true,
-                    atlas: None,
-                    material_maps: true,
-                    ids: None,
-                    cull: true,
-                }),
-                block_ids,
-                celestial: self
-                    .hud
-                    .atlas_texture
-                    .as_ref()
-                    .map(|t| t.create_view(&Default::default())),
-                clouds: Some(&self.cloud_bindings),
-                weather: true,
-                hand: true,
-            };
-            pack_post::PackPost::new(
-                &self.device,
-                &self.queue,
-                &self.adapter,
-                post,
-                self.frame_format,
-                world,
-            )
-        });
-        let post = match post.transpose() {
+        let built = pack.map(|post| self.shader_pack_build_context().build(post, block_ids));
+        self.install_built_shader_pack(dimension, built.transpose())
+    }
+    /// A copy of the GPU state a pack's pipelines are built against (`ShaderPackBuildContext`).
+    pub fn shader_pack_build_context(&self) -> ShaderPackBuildContext {
+        ShaderPackBuildContext {
+            device: self.device.clone(),
+            queue: self.queue.clone(),
+            adapter: self.adapter.clone(),
+            frame_format: self.frame_format,
+            atlas: self.pack_atlas.as_ref().map(|a| (a.view.clone(), a.size())),
+            sprite_rects: self
+                .pack_atlas
+                .as_ref()
+                .map_or_else(Vec::new, |a| a.rects_table()),
+            material_maps: self
+                .pack_material_atlases
+                .as_ref()
+                .map(|a| [a[0].view.clone(), a[1].view.clone()]),
+            lightmap: self.lightmap_view.clone(),
+            gui_size: self
+                .hud
+                .atlas_texture
+                .as_ref()
+                .map_or([1, 1], |t| [t.width(), t.height()]),
+            flat_layout: self.flat.as_ref().map(|f| f.draw_layout.clone()),
+            pack_terrain_flat: self.pack_terrain_flat,
+            celestial: self
+                .hud
+                .atlas_texture
+                .as_ref()
+                .map(|t| t.create_view(&Default::default())),
+            clouds: self.cloud_bindings.clone(),
+        }
+    }
+    /// Runs a `PackPost` built with `shader_pack_build_context` (here or on a worker thread) from
+    /// now on, for the dimension `dimension`: what `set_shader_pack` does once it is built. Returns
+    /// the programs that run and the notes of loading them, or why the pack can't run: the
+    /// dimension then runs without a pack.
+    pub fn install_built_shader_pack(
+        &mut self,
+        dimension: i32,
+        built: std::result::Result<Option<pack_post::PackPost>, pack_post::Refused>,
+    ) -> std::result::Result<Option<(Vec<String>, Vec<String>)>, pack_post::Refused> {
+        // A kept menu background shows the world as the old pack drew it.
+        self.invalidate_menu_blur();
+        let post = match built {
             Ok(post) => post,
             Err(e) => {
                 self.pack_post = Some((dimension, None));
@@ -7325,6 +7390,7 @@ impl Renderer {
             && self.frame_format == self.config.format.remove_srgb_suffix()
             && !frame.title
             && frame.menu_blur.is_none()
+            && frame.bg_cache.is_none()
             && self.pack_post.as_ref().is_none_or(|p| p.1.is_none())
             && self.native.as_ref().is_none_or(|n| n.post.is_none())
             && (self.surface.is_none()
@@ -7450,6 +7516,42 @@ impl Renderer {
                     label: Some("Horizon frame"),
                 })
         });
+        if frame.bg_cache.is_some() {
+            let replays = checks.is_none()
+                && fg_frames.is_none()
+                && surface_frame.is_some()
+                && self.background_replays(frame, size);
+            self.note_bg_cache(
+                frame,
+                size,
+                replays,
+                [
+                    ("screenshot checks", checks.is_some()),
+                    ("frame generation frames", fg_frames.is_some()),
+                    ("no swapchain frame", surface_frame.is_none()),
+                ],
+                scaled_presentation,
+            );
+        }
+        // A screen over a world that cannot change (`Frame::bg_cache`): the world was drawn
+        // and kept by an earlier frame, so this one draws that image and the screen. The
+        // game draws no world for such a frame when `can_replay_background` says it replays.
+        if checks.is_none()
+            && fg_frames.is_none()
+            && self.background_replays(frame, size)
+            && let Some(surface_frame) = surface_frame
+        {
+            return self.replay_background(
+                frame,
+                size,
+                encoder,
+                &target_texture,
+                surface_frame,
+                has_section_copies,
+                started,
+                reconfigure,
+            );
+        }
         // Horizon's own passes are timed like a shader pack's, from the frame's first pass.
         if self.own_timing.is_some() != self.pass_timing {
             self.own_timing = self
@@ -11157,7 +11259,14 @@ impl Renderer {
         let menu_blur = frame
             .menu_blur
             .filter(|_| self.config.usage.contains(wgpu::TextureUsages::COPY_SRC));
-        let blur_at = menu_blur.map_or(0, |_| frame.hud.blur_at);
+        let bg_key = frame
+            .bg_cache
+            .filter(|_| self.config.usage.contains(wgpu::TextureUsages::COPY_SRC));
+        let blur_at = if menu_blur.is_some() || bg_key.is_some() {
+            frame.hud.blur_at
+        } else {
+            0
+        };
         self.hud.draw_range(
             encoder,
             view_target,
@@ -11185,6 +11294,24 @@ impl Renderer {
                 );
         } else if let Some(blur) = &mut self.menu_blur {
             blur.release();
+        }
+        // The background as it stands now (blurred, when the screen blurs): later frames
+        // with the same key draw it instead of the world.
+        if let Some(key) = bg_key {
+            let format = self.frame_format;
+            let device = &self.device;
+            let software = is_software(self.info.device_type);
+            self.menu_blur
+                .get_or_insert_with(|| crate::menu_blur::MenuBlur::new(device, format, software))
+                .store(
+                    &self.device,
+                    encoder,
+                    target_texture,
+                    [self.config.width, self.config.height],
+                    key,
+                );
+        } else if let Some(blur) = &mut self.menu_blur {
+            blur.invalidate_cache();
         }
         self.hud.draw_range(
             encoder,
@@ -11274,6 +11401,181 @@ pub(crate) fn copy_frame(
 impl Renderer {
     /// Take in the frame the submit thread submitted: start its readbacks and, offscreen,
     /// keep at most two frames ahead of the GPU, as a frame submitted in place does.
+    /// Drop the kept menu background (`Frame::bg_cache`): what it shows changed under it,
+    /// as when a shader pack is installed.
+    pub fn invalidate_menu_blur(&mut self) {
+        if let Some(blur) = &mut self.menu_blur {
+            blur.invalidate_cache();
+        }
+    }
+    /// Diagnostics for `Frame::bg_cache` (INFO, at most once a second, only while the game
+    /// names a key): how many frames replayed the kept background and how many drew the
+    /// world, and what stopped the replay. Changes no behaviour.
+    fn note_bg_cache(
+        &self,
+        frame: &Frame,
+        size: [u32; 2],
+        replayed: bool,
+        outer: [(&'static str, bool); 3],
+        scaled_presentation: bool,
+    ) {
+        use std::sync::Mutex;
+        static STATE: Mutex<Option<(Instant, u32, u32)>> = Mutex::new(None);
+        let Ok(mut state) = STATE.lock() else {
+            return;
+        };
+        let (since, replays, fulls) = state.get_or_insert_with(|| (Instant::now(), 0, 0));
+        if replayed {
+            *replays += 1;
+        } else {
+            *fulls += 1;
+        }
+        if since.elapsed() < std::time::Duration::from_secs(1) {
+            return;
+        }
+        let mut blockers: Vec<&str> = outer
+            .iter()
+            .filter(|(_, on)| *on)
+            .map(|(name, _)| *name)
+            .collect();
+        if frame.title {
+            blockers.push("title frame");
+        }
+        if !self.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
+            blockers.push("surface has no COPY_SRC (nothing is kept)");
+        }
+        if self.hdr.is_some() || self.hdr_marker.is_some() {
+            blockers.push("HDR");
+        }
+        if self.screenshot.is_some() {
+            blockers.push("screenshot pending");
+        }
+        if self.first_frame != FirstFrame::Drawn {
+            blockers.push("first frame bookkeeping");
+        }
+        let hit = frame.bg_cache.is_some_and(|key| {
+            self.menu_blur
+                .as_ref()
+                .is_some_and(|blur| blur.cache_hit(key, size))
+        });
+        if !hit {
+            blockers.push("cache miss (not stored yet, key or size changed)");
+        }
+        log::info!(
+            "menu background cache: {} replayed, {} full frames in {} ms; blocked by [{}]; alpha {:?}, scaled presentation {}, {}x{}, frame_gen {}",
+            replays,
+            fulls,
+            since.elapsed().as_millis(),
+            blockers.join(", "),
+            self.config.alpha_mode,
+            on_off(scaled_presentation),
+            size[0],
+            size[1],
+            on_off(self.frame_gen.on),
+        );
+        *state = Some((Instant::now(), 0, 0));
+    }
+    /// Whether this frame can draw the kept menu background instead of the world: the key
+    /// and size match, and the frame is the plain swapchain's (no HDR, no screenshot, no
+    /// first-frame bookkeeping). The replay finishes like a full frame (scaled presentation,
+    /// non-opaque surface), so those do not stop it.
+    fn background_replays(&self, frame: &Frame, size: [u32; 2]) -> bool {
+        !frame.title
+            && frame
+                .bg_cache
+                .is_some_and(|key| self.can_replay_background(key, size))
+    }
+    /// What `background_replays` asks of the renderer, for the game to ask first: when it
+    /// holds, a frame with this key draws the kept image, so the game need not build the
+    /// world for it.
+    pub fn can_replay_background(&self, key: u64, size: [u32; 2]) -> bool {
+        self.config.usage.contains(wgpu::TextureUsages::COPY_SRC)
+            && self.hdr.is_none()
+            && self.hdr_marker.is_none()
+            && self.screenshot.is_none()
+            && self.first_frame == FirstFrame::Drawn
+            && self
+                .menu_blur
+                .as_ref()
+                .is_some_and(|blur| blur.cache_hit(key, size))
+    }
+    /// `can_replay_background` at the window's size.
+    pub fn can_replay_background_now(&self, key: u64) -> bool {
+        self.can_replay_background(key, [self.config.width, self.config.height])
+    }
+    /// The frame of `background_replays`: the kept background, then the screen over it.
+    /// Uploads, patches and section copies go out as in a full frame.
+    #[allow(clippy::too_many_arguments)]
+    fn replay_background(
+        &mut self,
+        frame: &Frame,
+        size: [u32; 2],
+        mut encoder: wgpu::CommandEncoder,
+        target_texture: &wgpu::Texture,
+        surface_frame: wgpu::SurfaceTexture,
+        has_section_copies: bool,
+        started: Instant,
+        reconfigure: bool,
+    ) -> Result<bool> {
+        self.hud.prepare(
+            &self.device,
+            &mut self.uploads,
+            &mut encoder,
+            frame.hud,
+            size,
+        );
+        let view_target = target_texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(self.frame_format),
+            ..Default::default()
+        });
+        if let Some(blur) = &self.menu_blur {
+            blur.replay(&self.device, &self.queue, &mut encoder, &view_target);
+        }
+        self.hud.draw_range(
+            &mut encoder,
+            &view_target,
+            &self.depth,
+            frame.hud,
+            size,
+            frame.hud.blur_at..frame.hud.vertices.len() as u32,
+            None,
+        );
+        self.uploads.finish(&encoder);
+        if has_section_copies {
+            self.section_copy_bytes = 0;
+            self.section_uploads.finish(&encoder);
+        }
+        // The frame's last steps, as a full frame ends: a 16-bit frame onto the swapchain,
+        // the scaled frame onto the real surface, a non-opaque surface sanitized.
+        self.readback
+            .present(&self.device, &mut encoder, &surface_frame.texture);
+        #[cfg(target_os = "android")]
+        if let Some(scale) = &self.frame_scale {
+            scale.present(&mut encoder, &surface_frame.texture);
+        }
+        #[cfg(target_os = "android")]
+        if self.config.alpha_mode != wgpu::CompositeAlphaMode::Opaque {
+            let format = self.surface_config().format.remove_srgb_suffix();
+            let output = self
+                .opaque_output
+                .get_or_insert_with(|| opaque_output::OpaqueOutput::new(&self.device, format));
+            if output.format != format {
+                *output = opaque_output::OpaqueOutput::new(&self.device, format);
+            }
+            output.present(&mut encoder, &surface_frame.texture);
+        }
+        self.queue.submit([encoder.finish()]);
+        if self.config.present_mode == wgpu::PresentMode::Fifo {
+            self.window.pre_present_notify();
+        }
+        self.queue.present(surface_frame);
+        if reconfigure {
+            self.configure_surface();
+        }
+        self.last_wait += self.queue.take_waited();
+        self.last_encode = started.elapsed().saturating_sub(self.last_wait);
+        Ok(true)
+    }
     fn land_frame(&mut self) {
         let Some(offscreen) = self.deferred.take() else {
             return;

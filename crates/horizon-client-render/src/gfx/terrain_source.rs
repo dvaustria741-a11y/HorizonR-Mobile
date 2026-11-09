@@ -22,7 +22,10 @@ fn gles_source(source: &str) -> String {
     let rgss = source
         .find("fn sample_rgss(")
         .expect("terrain RGSS function");
-    let rgss_end = rgss + source[rgss..].find("\n}\n").expect("terrain RGSS end") + 3;
+    let grid = source
+        .find("fn rotated_grid(")
+        .expect("terrain rotated grid function");
+    let rgss_end = grid + source[grid..].find("\n}\n").expect("terrain RGSS end") + 3;
     let mut output = String::with_capacity(source.len());
     output.push_str(&source[..start]);
     output.push_str(include_str!("terrain_gles.wgsl.inc"));
@@ -49,9 +52,11 @@ fn gles_source(source: &str) -> String {
         ("layer", "codes.x"),
         ("emission", "codes.y"),
         ("fade", "codes.z"),
+        ("emissive_layer", "codes.w"),
         ("spherical", "distances.x"),
         ("cylindrical", "distances.y"),
         ("visibility", "distances.z"),
+        ("height", "distances.w"),
     ] {
         for variable in ["in", "out"] {
             body = body.replace(
@@ -67,10 +72,11 @@ fn gles_source(source: &str) -> String {
 const PACKED_INTERFACE: &str = "struct TerrainOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    @location(1) @interpolate(flat) codes: vec3<u32>,
+    @location(1) @interpolate(flat) codes: vec4<u32>,
     @location(2) color: vec4<f32>,
-    @location(3) distances: vec3<f32>,
+    @location(3) distances: vec4<f32>,
     @location(4) local: vec3<f32>,
+    @location(5) scene: vec2<f32>,
 }
 ";
 
@@ -98,9 +104,10 @@ mod tests {
         for index in 0..7 {
             assert!(source.contains(&format!("array_index == {index}u")));
         }
-        assert!(source.contains(
-            "let emissive = select(1.0, 0.7 * f32(4u - min(in.codes.y, 4u)) / 4.0, in.codes.y > 0u)"
-        ));
+        assert!(source.contains("if in.codes.w != 0xffffffffu"));
+        assert!(!source.contains("in.emissive_layer"));
+        assert_eq!(source.matches("fn sample_rgss(").count(), 1);
+        assert_eq!(source.matches("fn rotated_grid(").count(), 1);
         let module = naga::front::wgsl::parse_str(&source).unwrap();
         naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),
@@ -123,7 +130,7 @@ mod tests {
                 .iter()
                 .filter(|m| matches!(m.binding, Some(naga::Binding::Location { .. })))
                 .count(),
-            5
+            6
         );
     }
 

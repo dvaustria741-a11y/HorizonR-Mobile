@@ -12,9 +12,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import dev.horizon.android.model.ZalithThemePalette
+import dev.horizon.android.model.LauncherThemePalette
 
-val ZalithTypography = Typography(
+val LauncherTypography = Typography(
     headlineMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
@@ -42,8 +42,8 @@ val ZalithTypography = Typography(
 )
 
 @Composable
-fun HorizonZalithTheme(
-    palette: ZalithThemePalette = ZalithThemePalette.EMBERMIRE,
+fun HorizonLauncherTheme(
+    palette: LauncherThemePalette = LauncherThemePalette.EMBERMIRE,
     useDynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -75,7 +75,7 @@ fun HorizonZalithTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = ZalithTypography,
+        typography = LauncherTypography,
         content = content
     )
 }

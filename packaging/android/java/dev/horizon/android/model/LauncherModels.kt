@@ -1,6 +1,6 @@
 package dev.horizon.android.model
 
-enum class ZalithNavTab(val title: String) {
+enum class LauncherNavTab(val title: String) {
     HOME("Dashboard"),
     VERSIONS("Game & Assets"),
     STORE("Store"),
@@ -189,8 +189,8 @@ enum class AccountType(val badge: String) {
  * - OpenGl -> "open-gl"
  */
 enum class HorizonRendererMode(val serdeKey: String, val label: String) {
-    VULKAN_COMPAT("vulkan-compatibility", "Vulkan Compatibility (Default)"),
-    VULKAN("vulkan", "Vulkan (High Performance)"),
+    VULKAN_COMPAT("vulkan-compatibility", "Vulkan Compatibility"),
+    VULKAN("vulkan", "Vulkan (High Performance, Default)"),
     OPENGL("open-gl", "OpenGL ES (Fallback)")
 }
 
@@ -275,14 +275,14 @@ data class SavedCustomSkinItem(
     val addedAt: Long = System.currentTimeMillis()
 )
 
-enum class ZalithThemePalette(val label: String, val primaryHex: Long, val secondaryHex: Long, val surfaceHex: Long) {
+enum class LauncherThemePalette(val label: String, val primaryHex: Long, val secondaryHex: Long, val surfaceHex: Long) {
     MATERIAL_YOU("Material You (Dynamic)", 0xFF64B5F6, 0xFF81C784, 0xFF10131A),
     EMBERMIRE("Embermire Dark", 0xFFFF7043, 0xFFFFB74D, 0xFF12151E),
     HORIZON_RUST("Horizon Rust", 0xFFFF5722, 0xFF26A69A, 0xFF0E1218),
     AMOLED_EMERALD("Emerald AMOLED", 0xFF66BB6A, 0xFFA5D6A7, 0xFF090C10)
 }
 
-data class ZalithAccount(
+data class LauncherAccount(
     val id: String,
     val username: String,
     val uuid: String,
@@ -459,7 +459,7 @@ val DEFAULT_GEMINI_MODELS = listOf(
 
 data class HorizonConfigState(
     val profile: Int = 0,
-    val renderer: HorizonRendererMode = HorizonRendererMode.VULKAN_COMPAT,
+    val renderer: HorizonRendererMode = HorizonRendererMode.VULKAN,
     val renderScalePercent: Int = 75,
     val orientation: HorizonOrientation = HorizonOrientation.LANDSCAPE,
     val screenAspect: HorizonScreenAspect = HorizonScreenAspect.NATIVE,
@@ -495,7 +495,7 @@ data class HorizonConfigState(
     val mcFov: Int = 70,
     val mcVsync: Boolean = true,
     val mcFullscreen: Boolean = true,
-    val themePalette: ZalithThemePalette = ZalithThemePalette.MATERIAL_YOU,
+    val themePalette: LauncherThemePalette = LauncherThemePalette.MATERIAL_YOU,
     val useDynamicColor: Boolean = true,
     val enableSystemLog: Boolean = true,
     val disableAudioSafeMode: Boolean = false,

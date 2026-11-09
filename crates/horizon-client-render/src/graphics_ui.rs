@@ -104,6 +104,8 @@ pub enum H {
     HdrLighting,
     BatteryMode,
     ShadowCache,
+    MenuBackgroundCache,
+    PackWorkers,
     GraphicsApi,
     TranslucentBatching,
     HdrSmoothGradients,
@@ -319,11 +321,6 @@ pub fn rows() -> Vec<(Page, Vec<(&'static str, Vec<Setting>)>)> {
                             "World pixels per screen pixel. Below 100% is faster on the GPU.",
                         ),
                         h(
-                            H::DynamicResolution,
-                            High,
-                            "Lowers the resolution while frames run slow, then restores it.",
-                        ),
-                        h(
                             H::Antialiasing,
                             Medium,
                             "Smooths jagged edges. FXAA: softer. TAA: smoothest, moving things may trail.",
@@ -403,6 +400,16 @@ pub fn rows() -> Vec<(Page, Vec<(&'static str, Vec<Setting>)>)> {
                             Saves,
                             "Reuses the pack shadow map when sun, view and world match. Off by default.",
                         ),
+                        h(
+                            H::MenuBackgroundCache,
+                            Saves,
+                            "Keeps the world behind the pause menu instead of redrawing it. Off redraws it live.",
+                        ),
+                        h(
+                            H::PackWorkers,
+                            None,
+                            "Android: loads shader packs on worker threads. Off loads them in one step.",
+                        ),
                     ],
                 ),
                 (
@@ -451,6 +458,14 @@ pub fn rows() -> Vec<(Page, Vec<(&'static str, Vec<Setting>)>)> {
                         H::BatteryMode,
                         None,
                         "60 FPS cap (30 in menus or unfocused), half the workers: less power.",
+                    )],
+                ),
+                (
+                    "Resolution",
+                    vec![h(
+                        H::DynamicResolution,
+                        High,
+                        "Lowers the resolution while frames run slow, then restores it.",
                     )],
                 ),
             ],
@@ -713,6 +728,11 @@ impl H {
             }
             H::Workers => Some(g.workers as f32 / max_workers() as f32),
             H::ResolutionScale => Some((g.resolution_scale as f32 - 50.0) / 150.0),
+            // Off, then 30..100 by 5.
+            H::DynamicResolution => Some(match g.dynamic_resolution {
+                false => 0.0,
+                true => ((g.dynamic_resolution_min as f32 - 30.0) / 5.0 + 1.0) / 15.0,
+            }),
             // Auto, then 10..480 by 10.
             H::HdrPaperWhite => Some(g.hdr_paper_white as f32 / 480.0),
             // Auto, then 200..2000 by 50.
@@ -731,6 +751,7 @@ impl H {
             H::UploadBudget => Some((UPLOAD_STEPS.len() - 1) as u32),
             H::Workers => Some(max_workers()),
             H::ResolutionScale => Some(30),
+            H::DynamicResolution => Some(15),
             H::HdrPaperWhite => Some(41),
             H::HdrPeak => Some(37),
             H::HdrBlackLevel => Some(100),
@@ -752,7 +773,10 @@ impl H {
                 "BlueMap Radius",
                 lang::tr("%s chunks", &[&g.blue_map.radius_chunks()]),
             ),
-            H::DynamicResolution => labelled("Dynamic Resolution", on_off(g.dynamic_resolution)),
+            H::DynamicResolution => match g.dynamic_resolution {
+                false => labelled("Dynamic Resolution", on_off(false)),
+                true => labelled_percent("Dynamic Resolution", g.dynamic_resolution_min),
+            },
             H::CaveCulling => labelled("Cave Culling", on_off(g.cave_culling)),
             H::EntityCulling => labelled("Entity Culling", g.entity_culling.label()),
             H::ParticleCulling => labelled("Particle Culling", g.particle_culling.label()),
@@ -842,6 +866,10 @@ impl H {
             }
             H::BatteryMode => labelled("Battery Mode", on_off(g.battery)),
             H::ShadowCache => labelled("Shadow Cache", on_off(g.shadow_cache)),
+            H::MenuBackgroundCache => {
+                labelled("Menu Background Cache", on_off(g.menu_background_cache))
+            }
+            H::PackWorkers => labelled("Pack Worker Threads", on_off(g.pack_workers)),
             H::GraphicsApi => labelled("Graphics API", g.api.label()),
             // These two are greyed out where the device can't (`Item::blocked`): Off, as
             // they are there, while the saved value waits for a device that can.
@@ -876,6 +904,13 @@ impl H {
             }
             H::Workers => g.workers = (v * max_workers() as f32).round() as u32,
             H::ResolutionScale => g.resolution_scale = (50.0 + (v * 30.0).round() * 5.0) as u32,
+            H::DynamicResolution => match (v * 15.0).round() as u32 {
+                0 => g.dynamic_resolution = false,
+                step => {
+                    g.dynamic_resolution = true;
+                    g.dynamic_resolution_min = 30 + (step - 1) * 5;
+                }
+            },
             H::HdrPaperWhite => g.hdr_paper_white = (v * 48.0).round() as u32 * 10,
             H::HdrPeak => {
                 g.hdr_peak = match (v * 37.0).round() as u32 {
@@ -965,6 +1000,8 @@ impl H {
             H::HdrLighting => g.hdr_lighting = !g.hdr_lighting,
             H::BatteryMode => g.battery = !g.battery,
             H::ShadowCache => g.shadow_cache = !g.shadow_cache,
+            H::MenuBackgroundCache => g.menu_background_cache = !g.menu_background_cache,
+            H::PackWorkers => g.pack_workers = !g.pack_workers,
             H::GraphicsApi => {
                 // Android selects the backend before creating the renderer in
                 // launcher Settings. Stale/programmatic menu actions must not
@@ -992,8 +1029,15 @@ impl H {
         }
     }
 }
+/// The Worker Threads slider's top. On Android `available_parallelism` can report far fewer
+/// cores than the phone has (2 on a Snapdragon 695 with 8), so the slider goes to 8 there.
 fn max_workers() -> u32 {
-    std::thread::available_parallelism().map_or(8, |n| n.get() as u32)
+    let cores = std::thread::available_parallelism().map_or(8, |n| n.get() as u32);
+    if cfg!(target_os = "android") {
+        cores.max(8)
+    } else {
+        cores
+    }
 }
 
 impl Item {
@@ -1058,7 +1102,6 @@ impl Item {
         let g = &s.horizon;
         Some(match self {
             Item::Horizon(H::BlueMapAutoDetect) => g.blue_map.auto_detect,
-            Item::Horizon(H::DynamicResolution) => g.dynamic_resolution,
             Item::Horizon(H::CaveCulling) => g.cave_culling,
             Item::Horizon(H::CacheShulkerBoxes) => g.cache_shulker_boxes,
             Item::Horizon(H::CacheSigns) => g.cache_signs,
@@ -1076,6 +1119,8 @@ impl Item {
             Item::Horizon(H::HdrLighting) => g.hdr_lighting,
             Item::Horizon(H::BatteryMode) => g.battery,
             Item::Horizon(H::ShadowCache) => g.shadow_cache,
+            Item::Horizon(H::MenuBackgroundCache) => g.menu_background_cache,
+            Item::Horizon(H::PackWorkers) => g.pack_workers,
             Item::Horizon(H::TranslucentBatching) => {
                 g.translucent_batching && crate::graphics::translucent_batching_offered()
             }
@@ -1146,6 +1191,8 @@ impl Item {
                     | H::FrameGeneration
                     | H::BatteryMode
                     | H::ShadowCache
+                    | H::MenuBackgroundCache
+                    | H::PackWorkers
                     | H::GraphicsApi
                     | H::TranslucentBatching
                     | H::HdrSmoothGradients
@@ -3325,6 +3372,7 @@ mod tests {
             H::UploadBudget,
             H::Workers,
             H::ResolutionScale,
+            H::DynamicResolution,
             H::HdrPaperWhite,
             H::HdrPeak,
             H::HdrBlackLevel,

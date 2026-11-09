@@ -186,6 +186,11 @@ pub extern "system" fn document_result(
                 let (input, name) = opened.map_err(|e| e.to_string())?;
                 stage(pending, input, name)
             })();
+            // `activity` is a GlobalRef: drop it while this thread is attached, or the jni crate
+            // logs a WARN about a detached thread.
+            let attached = vm.attach_current_thread();
+            drop(activity);
+            drop(attached);
             STATE.lock().unwrap_or_else(|e| e.into_inner()).working = false;
             if let Err(error) = result {
                 notice(format!("Import failed: {error}"), false);

@@ -42,6 +42,17 @@ pub struct MenuBlur {
     format: wgpu::TextureFormat,
     /// Blur at half size (`new`'s `software`).
     half: bool,
+    /// The background kept between frames (`store`, `replay`).
+    cache: Option<Cache>,
+}
+/// A menu's background (the world and HUD under the screen, blurred when the menu blurs)
+/// as the first frame of the menu drew it. While the world cannot change, later frames draw
+/// this instead of the world.
+struct Cache {
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    size: [u32; 2],
+    key: u64,
 }
 impl MenuBlur {
     /// `format` is the swapchain's; the blur works in its non-sRGB view. `software`:
@@ -142,7 +153,95 @@ impl MenuBlur {
             size: [0, 0],
             format,
             half: software,
+            cache: None,
         }
+    }
+    /// Whether the background kept is the one `key` names, at `size`.
+    pub fn cache_hit(&self, key: u64, size: [u32; 2]) -> bool {
+        self.cache
+            .as_ref()
+            .is_some_and(|c| c.key == key && c.size == size)
+    }
+    /// Forget the background and give its video memory back.
+    pub fn invalidate_cache(&mut self) {
+        self.cache = None;
+    }
+    /// Keep `frame` (the swapchain texture, drawn as far as the screen's background) as the
+    /// background `key` names.
+    pub fn store(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        frame: &wgpu::Texture,
+        size: [u32; 2],
+        key: u64,
+    ) {
+        if self.cache_hit(key, size) {
+            return;
+        }
+        let kept = match self.cache.take() {
+            Some(c) if c.size == size => Cache { key, ..c },
+            _ => {
+                let texture = device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("Menu background"),
+                    size: wgpu::Extent3d {
+                        width: size[0],
+                        height: size[1],
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: self.format,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                });
+                let view = texture.create_view(&Default::default());
+                Cache {
+                    texture,
+                    view,
+                    size,
+                    key,
+                }
+            }
+        };
+        encoder.copy_texture_to_texture(
+            frame.as_image_copy(),
+            kept.texture.as_image_copy(),
+            wgpu::Extent3d {
+                width: size[0],
+                height: size[1],
+                depth_or_array_layers: 1,
+            },
+        );
+        self.cache = Some(kept);
+    }
+    /// Draw the kept background into `target`: a pass that copies each pixel (radius 0
+    /// samples it alone).
+    pub fn replay(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+    ) {
+        let Some(cache) = &self.cache else {
+            return;
+        };
+        let data = Uniform {
+            size_dir: [cache.size[0] as f32, cache.size[1] as f32, 0.0, 0.0],
+            radius: [0.0; 4],
+        };
+        self.pass(
+            device,
+            queue,
+            encoder,
+            PASSES.len(),
+            data,
+            &cache.view,
+            target,
+            None,
+        );
     }
     /// The size the blur's rounds run at for a frame of `size`.
     fn work_size(&self, size: [u32; 2]) -> [u32; 2] {
