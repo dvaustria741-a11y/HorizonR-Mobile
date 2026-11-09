@@ -374,24 +374,24 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                 ZButton("Save and Share") { if (save()) share() }
                 ZSection("Control Layout")
                 Row(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ZItem).padding(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ZItem).padding(horizontal = 12.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Button Snapping", color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    Text("Button Snapping", color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
                     ZSwitch(snapOn) { snapOn = it; settings.snapEnabled = it }
                 }
-                Text("Button Snapping Distance", color = ZMuted, fontSize = 16.sp)
+                Text("Button Snapping Distance", color = ZMuted, fontSize = 13.sp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("-", color = ZMuted, fontSize = 22.sp, modifier = Modifier.clickable { snapDp = (snapDp - 1f).coerceAtLeast(1f); settings.snapDp = snapDp }.padding(6.dp))
+                    Text("-", color = ZMuted, fontSize = 18.sp, modifier = Modifier.clickable { snapDp = (snapDp - 1f).coerceAtLeast(1f); settings.snapDp = snapDp }.padding(6.dp))
                     Slider(
                         value = snapDp, onValueChange = { snapDp = it.roundToInt().toFloat() },
                         onValueChangeFinished = { settings.snapDp = snapDp },
                         valueRange = 1f..32f, modifier = Modifier.weight(1f), colors = zSliderColors()
                     )
-                    Text("+", color = ZMuted, fontSize = 22.sp, modifier = Modifier.clickable { snapDp = (snapDp + 1f).coerceAtMost(32f); settings.snapDp = snapDp }.padding(6.dp))
+                    Text("+", color = ZMuted, fontSize = 18.sp, modifier = Modifier.clickable { snapDp = (snapDp + 1f).coerceAtMost(32f); settings.snapDp = snapDp }.padding(6.dp))
                     Text(
-                        "${snapDp.roundToInt()} dp", color = Color.White, fontSize = 15.sp,
-                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(ZItem).padding(horizontal = 10.dp, vertical = 6.dp)
+                        "${snapDp.roundToInt()} dp", color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(ZItem).padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
                 ZButton("Select Default Control Layout") { dialog = Dialog.SelectDefault }
@@ -505,7 +505,7 @@ private fun Modifier.zPanel(onLeft: Boolean = false): Modifier {
     val dir = if (onLeft) -1f else 1f
     return this
         .fillMaxHeight()
-        .width(300.dp)
+        .width(270.dp)
         .graphicsLayer {
             translationX = dir * (1f - progress) * size.width * 0.5f
             alpha = progress
@@ -515,7 +515,7 @@ private fun Modifier.zPanel(onLeft: Boolean = false): Modifier {
         .border(1.dp, Brush.verticalGradient(listOf(HzCapsule, Color.Transparent)), shape)
         .pointerInput(Unit) { detectTapGestures { } }
         .verticalScroll(rememberScrollState())
-        .padding(16.dp)
+        .padding(14.dp)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -646,9 +646,9 @@ private fun ZSection(title: String) {
 @Composable
 private fun ZButton(text: String, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.padding(top = 8.dp).fillMaxWidth().height(50.dp).clip(RoundedCornerShape(16.dp)).background(ZItem).clickable(onClick = onClick),
+        modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(40.dp).clip(RoundedCornerShape(14.dp)).background(ZItem).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
-    ) { Text(text, color = Color.White, fontSize = 17.sp) }
+    ) { Text(text, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
 }
 
 @Composable
