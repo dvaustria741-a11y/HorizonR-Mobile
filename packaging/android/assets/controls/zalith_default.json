@@ -1,1 +1,919 @@
-{"mControlDataList":[{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.0 * ${screen_width} + (px(160.0) / 100 * ${preferred_scale}) - (px(80.0) / 100 * ${preferred_scale}) + (px(160.0) / 100 * ${preferred_scale}) - ${width}","dynamicY":"0.0 * ${screen_height} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(60.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - ${height} - ${margin}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[-1,0,0,0],"name":"Input","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"1.0 * ${screen_width} - (px(80.0) / 100 * ${preferred_scale}) + (px(80.0) / 100 * ${preferred_scale}) - (px(160.0) / 100 * ${preferred_scale})","dynamicY":"0.0 * ${screen_height} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - ${height} - ${margin}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[-2,0,0,0],"name":"GUI","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.91068375 * ${screen_width} - (px(80.0) / 100 * ${preferred_scale}) + (px(80.0) / 100 * ${preferred_scale}) - (px(160.0) / 100 * ${preferred_scale})","dynamicY":"0.63148147 * ${screen_height} - (px(53.333332) /100 * ${preferred_scale}) - (px(53.333332) /100 * ${preferred_scale}) - ${margin} + (px(53.333332) /100 * ${preferred_scale}) + ${margin}","height":53.333332,"isSwipeable":false,"isToggle":false,"keycodes":[-3,0,0,0],"name":"LMB","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.91068375 * ${screen_width} - ${width}","dynamicY":"0.63148147 * ${screen_height} - ${height}","height":53.333332,"isSwipeable":false,"isToggle":false,"keycodes":[-4,0,0,0],"name":"RMB","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"1.0 * ${screen_width} - ${width}","dynamicY":"0.0 * ${screen_height}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[-5,0,0,0],"name":"Mouse","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.0 * ${screen_width} + (px(160.0) / 100 * ${preferred_scale}) - ${width}","dynamicY":"0.0 * ${screen_height} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[292,0,0,0],"name":"F3","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.0 * ${screen_width} + (px(160.0) / 100 * ${preferred_scale}) - ${width}","dynamicY":"0.0 * ${screen_height} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(60.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - ${height} - ${margin}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[84,0,0,0],"name":"T","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.0 * ${screen_width} + (px(160.0) / 100 * ${preferred_scale}) - (px(80.0) / 100 * ${preferred_scale}) + (px(160.0) / 100 * ${preferred_scale}) + ${margin} - ${width} - ${margin}","dynamicY":"0.0 * ${screen_height} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(60.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - (px(60.0) /100 * ${preferred_scale}) - ${margin}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[294,0,0,0],"name":"F5","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.0 * ${screen_width}","dynamicY":"0.0 * ${screen_height} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(60.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - (px(30.0) /100 * ${preferred_scale}) - ${margin} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - ${height} - ${margin}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[258,0,0,0],"name":"TAB","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.0508547 * ${screen_width} + (px(100.0) / 100 * ${preferred_scale}) - ${width}","dynamicY":"0.87777776 * ${screen_height} - (px(50.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} + (px(50.0) /100 * ${preferred_scale}) + ${margin}","height":50.0,"isSwipeable":true,"isToggle":false,"keycodes":[87,0,0,0],"name":"▲","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":50.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.0508547 * ${screen_width} - (px(3.3333333) / 100 * ${preferred_scale}) - ${margin} + (px(3.3333333) / 100 * ${preferred_scale}) + ${margin} + (px(100.0) / 100 * ${preferred_scale}) - (px(50.0) / 100 * ${preferred_scale}) + (px(50.0) / 100 * ${preferred_scale}) + ${margin} - ${width} - ${margin}","dynamicY":"0.87777776 * ${screen_height} - (px(50.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} + (px(100.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) + (px(100.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) + (px(50.0) /100 * ${preferred_scale}) + ${margin} - ${height} - ${margin}","height":50.0,"isSwipeable":true,"isToggle":false,"keycodes":[83,0,0,0],"name":"▼","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":50.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.0508547 * ${screen_width} + (px(100.0) / 100 * ${preferred_scale}) - (px(50.0) / 100 * ${preferred_scale}) + (px(100.0) / 100 * ${preferred_scale}) - (px(50.0) / 100 * ${preferred_scale}) + (px(50.0) / 100 * ${preferred_scale}) + ${margin} - ${width} - ${margin}","dynamicY":"0.87777776 * ${screen_height} - (px(50.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} + (px(50.0) /100 * ${preferred_scale}) + ${margin} + (px(100.0) /100 * ${preferred_scale}) - ${height}","height":50.0,"isSwipeable":true,"isToggle":false,"keycodes":[68,0,0,0],"name":"▶","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":50.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.0508547 * ${screen_width} - (px(3.3333333) / 100 * ${preferred_scale}) - ${margin} + (px(3.3333333) / 100 * ${preferred_scale}) + ${margin} + (px(100.0) / 100 * ${preferred_scale}) - ${width}","dynamicY":"0.87777776 * ${screen_height} - (px(50.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} + (px(100.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale})","height":50.0,"isSwipeable":true,"isToggle":false,"keycodes":[0,0,0,0],"name":"","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":50.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.91068375 * ${screen_width} - (px(80.0) / 100 * ${preferred_scale}) + (px(80.0) / 100 * ${preferred_scale}) + ${margin} - ${width} - ${margin}","dynamicY":"0.63148147 * ${screen_height} - (px(53.333332) /100 * ${preferred_scale}) - (px(53.333332) /100 * ${preferred_scale}) - ${margin} + (px(53.333332) /100 * ${preferred_scale}) + ${margin} + (px(106.666664) /100 * ${preferred_scale}) - ${height}","height":53.333332,"isSwipeable":false,"isToggle":false,"keycodes":[32,0,0,0],"name":"■","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.0508547 * ${screen_width}","dynamicY":"0.87777776 * ${screen_height} - (px(50.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) - ${margin} - ${height} - ${margin}","height":50.0,"isSwipeable":true,"isToggle":false,"keycodes":[65,87,0,0],"name":"◤","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":50.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.0508547 * ${screen_width} + (px(100.0) / 100 * ${preferred_scale}) - (px(50.0) / 100 * ${preferred_scale}) + (px(100.0) / 100 * ${preferred_scale}) - ${width}","dynamicY":"0.87777776 * ${screen_height} - (px(50.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} + (px(50.0) /100 * ${preferred_scale}) + ${margin}","height":50.0,"isSwipeable":true,"isToggle":false,"keycodes":[87,68,0,0],"name":"◥","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":50.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.0508547 * ${screen_width} + (px(100.0) / 100 * ${preferred_scale}) - (px(50.0) / 100 * ${preferred_scale}) + (px(100.0) / 100 * ${preferred_scale}) - (px(50.0) / 100 * ${preferred_scale}) + (px(50.0) / 100 * ${preferred_scale}) + ${margin} - ${width} - ${margin}","dynamicY":"0.87777776 * ${screen_height} - (px(50.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} + (px(100.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) + (px(100.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) + (px(50.0) /100 * ${preferred_scale}) + ${margin} - ${height} - ${margin}","height":50.0,"isSwipeable":true,"isToggle":false,"keycodes":[68,83,0,0],"name":"◢","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":50.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.0508547 * ${screen_width} - (px(3.3333333) / 100 * ${preferred_scale}) - ${margin} + (px(3.3333333) / 100 * ${preferred_scale}) + ${margin} - (px(3.3333333) / 100 * ${preferred_scale}) - ${margin} + (px(3.3333333) / 100 * ${preferred_scale}) + ${margin}","dynamicY":"0.87777776 * ${screen_height} - (px(50.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} + (px(100.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) + (px(100.0) /100 * ${preferred_scale}) - ${height}","height":50.0,"isSwipeable":true,"isToggle":false,"keycodes":[83,65,0,0],"name":"◣","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":50.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.0 * ${screen_width}","dynamicY":"0.0 * ${screen_height} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - ${height} - ${margin}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[256,0,0,0],"name":"ESC","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.0508547 * ${screen_width} - (px(3.3333333) / 100 * ${preferred_scale}) - ${margin} + (px(3.3333333) / 100 * ${preferred_scale}) + ${margin}","dynamicY":"0.87777776 * ${screen_height} - (px(50.0) /100 * ${preferred_scale}) - (px(50.0) /100 * ${preferred_scale}) - ${margin} - (px(50.0) /100 * ${preferred_scale}) - ${margin} + (px(100.0) /100 * ${preferred_scale}) - ${height}","height":50.0,"isSwipeable":true,"isToggle":false,"keycodes":[65,0,0,0],"name":"◀","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":50.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.91068375 * ${screen_width} - (px(80.0) / 100 * ${preferred_scale}) + (px(80.0) / 100 * ${preferred_scale}) - (px(160.0) / 100 * ${preferred_scale}) - (px(80.0) / 100 * ${preferred_scale}) - ${margin} + (px(80.0) / 100 * ${preferred_scale}) + ${margin}","dynamicY":"0.63148147 * ${screen_height} - (px(53.333332) /100 * ${preferred_scale}) - (px(53.333332) /100 * ${preferred_scale}) - ${margin} + (px(53.333332) /100 * ${preferred_scale}) + ${margin} + (px(106.666664) /100 * ${preferred_scale}) - ${height}","height":53.333332,"isSwipeable":false,"isToggle":false,"keycodes":[340,0,0,0],"name":"□","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":false,"dynamicX":"0.91068375 * ${screen_width} - (px(80.0) / 100 * ${preferred_scale}) + (px(80.0) / 100 * ${preferred_scale}) - (px(160.0) / 100 * ${preferred_scale}) - (px(80.0) / 100 * ${preferred_scale}) - ${margin} + (px(80.0) / 100 * ${preferred_scale}) + ${margin} - (px(40.0) / 100 * ${preferred_scale}) - ${margin} + (px(40.0) / 100 * ${preferred_scale}) + ${margin} - (px(40.0) / 100 * ${preferred_scale}) - ${margin} + (px(40.0) / 100 * ${preferred_scale}) + ${margin}","dynamicY":"1.0 * ${screen_height} - ${height}","height":40.0,"isSwipeable":false,"isToggle":false,"keycodes":[69,0,0,0],"name":"E","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":40.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.0508547 * ${screen_width} - (px(3.3333333) / 100 * ${preferred_scale}) - ${margin} + (px(3.3333333) / 100 * ${preferred_scale}) + ${margin} - (px(13.333333) / 100 * ${preferred_scale}) - ${margin} + (px(13.333333) / 100 * ${preferred_scale}) + ${margin}","dynamicY":"0.25833333 * ${screen_height}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[341,0,0,0],"name":"Ctrl","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0},{"bgColor":1291845632,"cornerRadius":0.0,"displayInGame":true,"displayInMenu":true,"dynamicX":"0.0508547 * ${screen_width} - (px(3.3333333) / 100 * ${preferred_scale}) - ${margin} + (px(3.3333333) / 100 * ${preferred_scale}) + ${margin} - (px(13.333333) / 100 * ${preferred_scale}) - ${margin} + (px(13.333333) / 100 * ${preferred_scale}) + ${margin} + (px(160.0) / 100 * ${preferred_scale}) - ${width}","dynamicY":"0.25833333 * ${screen_height} + (px(30.0) /100 * ${preferred_scale}) + ${margin} - ${height} - ${margin}","height":30.0,"isSwipeable":false,"isToggle":false,"keycodes":[342,0,0,0],"name":"Alt","opacity":1.0,"passThruEnabled":false,"strokeColor":-1,"strokeWidth":0.0,"width":80.0}],"mControlInfoDataList":{"author":"null","desc":"control.default.desc.text","name":"control.default.title.text","version":"null"},"mDrawerDataList":[],"mJoystickDataList":[],"scaledAt":100.0,"version":8}
+{
+  "pojarush": 1,
+  "name": "Zalith (default) (edited)",
+  "layers": [
+    {
+      "id": "zalith",
+      "visible": true,
+      "visibility": "ALWAYS"
+    },
+    {
+      "id": "zalith_gui",
+      "visible": true,
+      "visibility": "ALWAYS"
+    }
+  ],
+  "buttons": [
+    {
+      "id": "zalith-0",
+      "text": "Input",
+      "layer": "zalith",
+      "x": 0.20183487236499786,
+      "y": 0.0827067643404007,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "keyboard"
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-1",
+      "text": "GUI",
+      "layer": "zalith_gui",
+      "x": 0.8990825414657593,
+      "y": 0,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "layer",
+          "ids": [
+            "zalith"
+          ],
+          "mode": 0
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-2",
+      "text": "LMB",
+      "layer": "zalith",
+      "x": 0.7997410297393799,
+      "y": 0.5735713839530945,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 53.33333206176758
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "mouse",
+          "button": 0
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-3",
+      "text": "RMB",
+      "layer": "zalith",
+      "x": 0.9006584286689758,
+      "y": 0.5735713839530945,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 53.33333206176758
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "mouse",
+          "button": 1
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-4",
+      "text": "Mouse",
+      "layer": "zalith",
+      "x": 1,
+      "y": 0,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "toggle_mouse"
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-5",
+      "text": "F3",
+      "layer": "zalith",
+      "x": 0.10091742873191833,
+      "y": 0,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "key",
+          "code": 133
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-6",
+      "text": "T",
+      "layer": "zalith",
+      "x": 0.10091742873191833,
+      "y": 0.0827067643404007,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "key",
+          "code": 48
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-7",
+      "text": "F5",
+      "layer": "zalith",
+      "x": 0.20183485746383667,
+      "y": 0,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "key",
+          "code": 135
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-8",
+      "text": "TAB",
+      "layer": "zalith",
+      "x": 0,
+      "y": 0.0827067643404007,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "key",
+          "code": 61
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-9",
+      "text": "▲",
+      "layer": "zalith",
+      "x": 0.12159767746925354,
+      "y": 0.556498646736145,
+      "width": {
+        "dp": 50
+      },
+      "height": {
+        "dp": 50
+      },
+      "visibility": "IN_GAME",
+      "press": [
+        {
+          "t": "key",
+          "code": 51
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": true,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-10",
+      "text": "▼",
+      "layer": "zalith",
+      "x": 0.12135118991136551,
+      "y": 0.8482758402824402,
+      "width": {
+        "dp": 50
+      },
+      "height": {
+        "dp": 50
+      },
+      "visibility": "IN_GAME",
+      "press": [
+        {
+          "t": "key",
+          "code": 47
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": true,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-11",
+      "text": "▶",
+      "layer": "zalith",
+      "x": 0.1889171302318573,
+      "y": 0.702387273311615,
+      "width": {
+        "dp": 50
+      },
+      "height": {
+        "dp": 50
+      },
+      "visibility": "IN_GAME",
+      "press": [
+        {
+          "t": "key",
+          "code": 32
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": true,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-12",
+      "text": "",
+      "layer": "zalith",
+      "x": 0.12159767746925354,
+      "y": 0.702387273311615,
+      "width": {
+        "dp": 50
+      },
+      "height": {
+        "dp": 50
+      },
+      "visibility": "IN_GAME",
+      "press": [],
+      "tap": [],
+      "toggle": [],
+      "swipe": true,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-13",
+      "text": "■",
+      "layer": "zalith",
+      "x": 0.9006584286689758,
+      "y": 0.7307142615318298,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 53.33333206176758
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "key",
+          "code": 62
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-14",
+      "text": "◤",
+      "layer": "zalith",
+      "x": 0.054278209805488586,
+      "y": 0.556498646736145,
+      "width": {
+        "dp": 50
+      },
+      "height": {
+        "dp": 50
+      },
+      "visibility": "IN_GAME",
+      "press": [
+        {
+          "t": "key",
+          "code": 29
+        },
+        {
+          "t": "key",
+          "code": 51
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": true,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-15",
+      "text": "◥",
+      "layer": "zalith",
+      "x": 0.1889171302318573,
+      "y": 0.556498646736145,
+      "width": {
+        "dp": 50
+      },
+      "height": {
+        "dp": 50
+      },
+      "visibility": "IN_GAME",
+      "press": [
+        {
+          "t": "key",
+          "code": 51
+        },
+        {
+          "t": "key",
+          "code": 32
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": true,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-16",
+      "text": "◢",
+      "layer": "zalith",
+      "x": 0.1889171302318573,
+      "y": 0.8482758402824402,
+      "width": {
+        "dp": 50
+      },
+      "height": {
+        "dp": 50
+      },
+      "visibility": "IN_GAME",
+      "press": [
+        {
+          "t": "key",
+          "code": 32
+        },
+        {
+          "t": "key",
+          "code": 47
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": true,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-17",
+      "text": "◣",
+      "layer": "zalith",
+      "x": 0.054278209805488586,
+      "y": 0.8482758402824402,
+      "width": {
+        "dp": 50
+      },
+      "height": {
+        "dp": 50
+      },
+      "visibility": "IN_GAME",
+      "press": [
+        {
+          "t": "key",
+          "code": 47
+        },
+        {
+          "t": "key",
+          "code": 29
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": true,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-18",
+      "text": "ESC",
+      "layer": "zalith",
+      "x": 0,
+      "y": 0,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "key",
+          "code": 111
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-19",
+      "text": "◀",
+      "layer": "zalith",
+      "x": 0.054278209805488586,
+      "y": 0.702387273311615,
+      "width": {
+        "dp": 50
+      },
+      "height": {
+        "dp": 50
+      },
+      "visibility": "IN_GAME",
+      "press": [
+        {
+          "t": "key",
+          "code": 29
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": true,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-20",
+      "text": "□",
+      "layer": "zalith",
+      "x": 0.7997410297393799,
+      "y": 0.7307142615318298,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 53.33333206176758
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "key",
+          "code": 59
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-21",
+      "text": "E",
+      "layer": "zalith",
+      "x": 0.7465171813964844,
+      "y": 1,
+      "width": {
+        "dp": 40
+      },
+      "height": {
+        "dp": 40
+      },
+      "visibility": "IN_GAME",
+      "press": [
+        {
+          "t": "key",
+          "code": 33
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-22",
+      "text": "Ctrl",
+      "layer": "zalith",
+      "x": 0.0565628781914711,
+      "y": 0.2796992361545563,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "key",
+          "code": 113
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    },
+    {
+      "id": "zalith-23",
+      "text": "Alt",
+      "layer": "zalith",
+      "x": 0.1688077747821808,
+      "y": 0.2796992361545563,
+      "width": {
+        "dp": 80
+      },
+      "height": {
+        "dp": 30
+      },
+      "visibility": "ALWAYS",
+      "press": [
+        {
+          "t": "key",
+          "code": 57
+        }
+      ],
+      "tap": [],
+      "toggle": [],
+      "swipe": false,
+      "penetrable": false,
+      "interactive": true,
+      "style": {
+        "fill": 1291845632,
+        "fillPressed": -1765884221,
+        "text": -1,
+        "textPressed": -1,
+        "stroke": -1,
+        "strokeDp": 0,
+        "radiusDp": 0,
+        "textSp": 14,
+        "radiusInPx": false,
+        "opacity": 1
+      }
+    }
+  ],
+  "sticks": []
+}

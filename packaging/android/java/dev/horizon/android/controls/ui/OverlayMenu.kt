@@ -157,7 +157,7 @@ internal fun Header(title: String) {
 }
 
 @Composable
-internal fun rowEnter(index: Int): Float {
+private fun rowEnter(index: Int): Float {
     var on by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(50L + index * 45L)
@@ -168,7 +168,7 @@ internal fun rowEnter(index: Int): Float {
 }
 
 @Composable
-internal fun MenuRow(glyph: Glyph, label: String, index: Int, chevron: Boolean = false, onClick: () -> Unit) {
+private fun MenuRow(glyph: Glyph, label: String, index: Int, chevron: Boolean = false, onClick: () -> Unit) {
     val enter = rowEnter(index)
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()

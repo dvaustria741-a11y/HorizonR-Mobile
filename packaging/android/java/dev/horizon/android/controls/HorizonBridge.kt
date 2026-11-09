@@ -18,7 +18,8 @@ object HorizonBridge {
     @JvmStatic external fun nativeIsCaptured(): Boolean
     @JvmStatic external fun nativeSetActive(on: Boolean)
 
-    fun command(line: String) = runCatching { nativeCommand(line) }
+    /** Explicit Unit return: a runCatching Result is an inline class, so Java (HorizonActivity.onPause) could not see this method. */
+    fun command(line: String) { runCatching { nativeCommand(line) } }
     fun look(dx: Float, dy: Float) = runCatching { nativeLook(dx, dy) }
     fun wheel(lines: Float) = runCatching { nativeWheel(lines) }
     fun cursor(x: Float, y: Float) = runCatching { nativeCursor(x, y) }

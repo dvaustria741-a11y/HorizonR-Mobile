@@ -22,7 +22,6 @@ enum class Glyph(val res: Int) {
     CHECK(R.drawable.ic_ctrl_check),
     GEAR(R.drawable.ic_ctrl_gear),
     MENU(R.drawable.ic_ctrl_menu),
-    PLUS(R.drawable.ic_ctrl_plus),
 }
 
 @Composable

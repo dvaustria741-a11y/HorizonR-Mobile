@@ -362,47 +362,40 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
         }
 
         if (menuOpen) {
-            Column(
-                modifier = Modifier.align(Alignment.CenterEnd).zPanel(wide = true),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Column(modifier = Modifier.align(Alignment.CenterEnd).zPanel()) {
                 Header("Edit Control Layout")
-                MenuRow(Glyph.PLUS, "Add Button", 0) { addButton(); menuOpen = false }
-                MenuRow(Glyph.PLUS, "Add Drawer", 1) { addDrawer(); menuOpen = false }
-                MenuRow(Glyph.PLUS, "Add Joystick", 2) { addJoystick(); menuOpen = false }
+                ZButton("Add Button") { addButton(); menuOpen = false }
+                ZButton("Add Drawer") { addDrawer(); menuOpen = false }
+                ZButton("Add Joystick") { addJoystick(); menuOpen = false }
                 ZSection("Save")
-                MenuRow(Glyph.LAYOUTS, "Load", 3) { dialog = Dialog.Load }
-                MenuRow(Glyph.CHECK, "Save", 4) { save() }
-                MenuRow(Glyph.BACK, "Save and Exit", 5) { if (save()) onExit() }
-                MenuRow(Glyph.CHEVRON, "Save and Share", 6) { if (save()) share() }
+                ZButton("Load") { dialog = Dialog.Load }
+                ZButton("Save") { save() }
+                ZButton("Save and Exit") { if (save()) onExit() }
+                ZButton("Save and Share") { if (save()) share() }
                 ZSection("Control Layout")
                 Row(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(ZItem).padding(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ZItem).padding(horizontal = 12.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Button Snapping", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Text("Button Snapping", color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
                     ZSwitch(snapOn) { snapOn = it; settings.snapEnabled = it }
                 }
-                Column(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(ZItem).padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    Text("Button Snapping Distance", color = ZMuted, fontSize = 13.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("-", color = ZMuted, fontSize = 18.sp, modifier = Modifier.clickable { snapDp = (snapDp - 1f).coerceAtLeast(1f); settings.snapDp = snapDp }.padding(6.dp))
-                        Slider(
-                            value = snapDp, onValueChange = { snapDp = it.roundToInt().toFloat() },
-                            onValueChangeFinished = { settings.snapDp = snapDp },
-                            valueRange = 1f..32f, modifier = Modifier.weight(1f), colors = zSliderColors()
-                        )
-                        Text("+", color = ZMuted, fontSize = 18.sp, modifier = Modifier.clickable { snapDp = (snapDp + 1f).coerceAtMost(32f); settings.snapDp = snapDp }.padding(6.dp))
-                        Text(
-                            "${snapDp.roundToInt()} dp", color = Color.White, fontSize = 13.sp,
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(HzCapsule).padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
+                Text("Button Snapping Distance", color = ZMuted, fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("-", color = ZMuted, fontSize = 18.sp, modifier = Modifier.clickable { snapDp = (snapDp - 1f).coerceAtLeast(1f); settings.snapDp = snapDp }.padding(6.dp))
+                    Slider(
+                        value = snapDp, onValueChange = { snapDp = it.roundToInt().toFloat() },
+                        onValueChangeFinished = { settings.snapDp = snapDp },
+                        valueRange = 1f..32f, modifier = Modifier.weight(1f), colors = zSliderColors()
+                    )
+                    Text("+", color = ZMuted, fontSize = 18.sp, modifier = Modifier.clickable { snapDp = (snapDp + 1f).coerceAtMost(32f); settings.snapDp = snapDp }.padding(6.dp))
+                    Text(
+                        "${snapDp.roundToInt()} dp", color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(ZItem).padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
                 }
-                MenuRow(Glyph.SLIDERS, "Select Default Control Layout", 7) { dialog = Dialog.SelectDefault }
-                MenuRow(Glyph.CLOSE, "Exit Editor", 8) { if (dirty) dialog = Dialog.ConfirmExit else onExit() }
+                ZButton("Select Default Control Layout") { dialog = Dialog.SelectDefault }
+                ZButton("Exit Editor") { if (dirty) dialog = Dialog.ConfirmExit else onExit() }
             }
         }
 
@@ -504,7 +497,7 @@ private fun setSlot(b: ControlButton, index: Int, action: Action?): ControlButto
 }
 
 @Composable
-private fun Modifier.zPanel(onLeft: Boolean = false, wide: Boolean = false): Modifier {
+private fun Modifier.zPanel(onLeft: Boolean = false): Modifier {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     val progress by animateFloatAsState(if (shown) 1f else 0f, tween(260, easing = FastOutSlowInEasing), label = "zpanel")
@@ -512,7 +505,7 @@ private fun Modifier.zPanel(onLeft: Boolean = false, wide: Boolean = false): Mod
     val dir = if (onLeft) -1f else 1f
     return this
         .fillMaxHeight()
-        .width(if (wide) 320.dp else 270.dp)
+        .width(270.dp)
         .graphicsLayer {
             translationX = dir * (1f - progress) * size.width * 0.5f
             alpha = progress
@@ -522,7 +515,7 @@ private fun Modifier.zPanel(onLeft: Boolean = false, wide: Boolean = false): Mod
         .border(1.dp, Brush.verticalGradient(listOf(HzCapsule, Color.Transparent)), shape)
         .pointerInput(Unit) { detectTapGestures { } }
         .verticalScroll(rememberScrollState())
-        .padding(start = 18.dp, end = 16.dp, top = 18.dp, bottom = 18.dp)
+        .padding(14.dp)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -646,7 +639,8 @@ private fun ZPill(text: String, onClick: () -> Unit) {
 
 @Composable
 private fun ZSection(title: String) {
-    Text(title, color = ZTeal, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp, start = 2.dp))
+    Text(title, color = ZTeal, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(ZLine))
 }
 
 @Composable
