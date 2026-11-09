@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -432,7 +433,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                 LayoutInfoBody(d.info)
                 ZButton(stringResource(R.string.layouts_close)) { dialog = null }
             }
-            Dialog.SaveExit -> ZDialog(stringResource(R.string.layouts_save_exit), { dialog = null }, width = 460.dp, maxHeight = 380.dp) {
+            Dialog.SaveExit -> ZDialog(stringResource(R.string.layouts_save_exit), { dialog = null }, width = 420.dp, maxHeight = 300.dp) {
                 val layout = controls.layout
                 val initialFile = if (currentId.startsWith("file:")) currentId.removePrefix("file:").removeSuffix(".json") else "${layout.name} $suffix"
                 LayoutSaveForm(
@@ -795,7 +796,7 @@ private fun ZDialog(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Box(
-        modifier = Modifier.fillMaxSize().background(ZScrim).pointerInput(Unit) { detectTapGestures { onDismiss() } },
+        modifier = Modifier.fillMaxSize().background(ZScrim).imePadding().pointerInput(Unit) { detectTapGestures { onDismiss() } },
         contentAlignment = Alignment.Center
     ) {
         Column(

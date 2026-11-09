@@ -73,8 +73,6 @@ import dev.horizon.android.R
 import dev.horizon.android.controls.ControlLayouts
 import dev.horizon.android.controls.ControlSettings
 
-private val FieldBox = Color(0xFF3B454B)
-
 // ---------------------------------------------------------------------------------------------
 // Pieces shared by the launcher's layout manager and the editor's dialogs (Horizon colours).
 // ---------------------------------------------------------------------------------------------
@@ -139,16 +137,16 @@ fun LayoutInfoBody(info: ControlLayouts.Info) {
 @Composable
 fun HzLabeledField(label: String, value: String, placeholder: String = "", onValue: (String) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
-        Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.padding(bottom = 4.dp, top = 6.dp))
+        Text(label, color = HzMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 3.dp, top = 4.dp))
         BasicTextField(
             value = value,
             onValueChange = onValue,
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
             cursorBrush = SolidColor(HzAccent),
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(FieldBox).padding(horizontal = 12.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(HzRow).padding(horizontal = 10.dp, vertical = 8.dp),
             decorationBox = { inner ->
-                if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = HzMuted, fontSize = 16.sp)
+                if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = HzMuted, fontSize = 14.sp)
                 inner()
             },
         )
@@ -158,15 +156,15 @@ fun HzLabeledField(label: String, value: String, placeholder: String = "", onVal
 /** Cancel / Confirm, as in Zalith's dialogs. */
 @Composable
 fun HzDialogButtons(confirmLabel: String, onCancel: () -> Unit, onConfirm: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(
-            modifier = Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(14.dp)).background(HzCapsule).clickable(onClick = onCancel),
+            modifier = Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(12.dp)).background(HzCapsule).clickable(onClick = onCancel),
             contentAlignment = Alignment.Center,
-        ) { Text(stringResource(R.string.layouts_cancel), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+        ) { Text(stringResource(R.string.layouts_cancel), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
         Box(
-            modifier = Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(14.dp)).background(HzAccent).clickable(onClick = onConfirm),
+            modifier = Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(12.dp)).background(HzAccent).clickable(onClick = onConfirm),
             contentAlignment = Alignment.Center,
-        ) { Text(confirmLabel, color = HzOnAccent, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+        ) { Text(confirmLabel, color = HzOnAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
     }
 }
 
