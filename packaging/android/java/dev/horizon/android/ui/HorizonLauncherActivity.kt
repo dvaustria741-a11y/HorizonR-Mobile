@@ -1007,16 +1007,15 @@ fun <T> LauncherSettingDropdownCard(
 
     Box(modifier = Modifier.fillMaxWidth()) {
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(16.dp),
             color = CardSlateBg,
-            modifier = Modifier
-                .fillMaxWidth()
-                .animatedPressScale { expanded = !expanded }
+            border = BorderStroke(1.dp, VoltGrayStroke),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1026,38 +1025,53 @@ fun <T> LauncherSettingDropdownCard(
                 ) {
                     Text(
                         text = title,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White
                     )
                     Text(
                         text = description,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         color = MutedSubtitleText
-                    )
-                    Text(
-                        text = "Selected: ${itemLabel(selectedItem)}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFFC5D1D8)
                     )
                 }
                 Spacer(Modifier.width(12.dp))
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = null,
-                    tint = Color.White,
+                Row(
                     modifier = Modifier
-                        .size(24.dp)
-                        .rotate(arrowRot)
-                )
+                        .widthIn(min = 120.dp, max = 220.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(CardRowBg)
+                        .border(1.dp, VoltGrayStroke, RoundedCornerShape(12.dp))
+                        .animatedPressScale { expanded = !expanded }
+                        .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = itemLabel(selectedItem),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .rotate(arrowRot)
+                    )
+                }
             }
         }
 
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(Color(0xFF262E34))
+            modifier = Modifier.background(VoltGrayRow)
         ) {
             options.forEach { option ->
                 val isSelected = option == selectedItem
@@ -1107,6 +1121,7 @@ fun LauncherSettingSliderCard(
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = CardSlateBg,
+        border = BorderStroke(1.dp, VoltGrayStroke),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1139,14 +1154,15 @@ fun LauncherSettingSliderCard(
                     colors = SliderDefaults.colors(
                         thumbColor = SkyBlueAccent,
                         activeTrackColor = SkyBlueAccent,
-                        inactiveTrackColor = Color(0xFF33424B)
+                        inactiveTrackColor = Color(0xFF2B303C)
                     ),
                     modifier = Modifier.weight(1f)
                 )
 
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = SkyBlueAccent
+                    shape = RoundedCornerShape(12.dp),
+                    color = CardRowBg,
+                    border = BorderStroke(1.dp, VoltGrayStroke)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -1157,12 +1173,12 @@ fun LauncherSettingSliderCard(
                             text = "$value$valueSuffix",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = SkyBlueDarkText
+                            color = Color.White
                         )
                         Icon(
                             imageVector = Icons.Default.ArrowLeft,
                             contentDescription = "Decrease",
-                            tint = SkyBlueDarkText,
+                            tint = Color.White,
                             modifier = Modifier
                                 .size(20.dp)
                                 .animatedPressScale {
@@ -1172,7 +1188,7 @@ fun LauncherSettingSliderCard(
                         Icon(
                             imageVector = Icons.Default.ArrowRight,
                             contentDescription = "Increase",
-                            tint = SkyBlueDarkText,
+                            tint = Color.White,
                             modifier = Modifier
                                 .size(20.dp)
                                 .animatedPressScale {
@@ -1196,6 +1212,7 @@ fun LauncherSettingToggleCard(
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = CardSlateBg,
+        border = BorderStroke(1.dp, VoltGrayStroke),
         modifier = Modifier
             .fillMaxWidth()
             .animatedPressScale { onCheckedChange(!checked) }
@@ -1229,7 +1246,10 @@ fun LauncherSettingToggleCard(
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = SkyBlueDarkText,
-                    checkedTrackColor = SkyBlueAccent
+                    checkedTrackColor = SkyBlueAccent,
+                    uncheckedThumbColor = Color(0xFF6B7280),
+                    uncheckedTrackColor = Color(0xFF0F1117),
+                    uncheckedBorderColor = VoltGrayStroke
                 )
             )
         }
@@ -1259,12 +1279,12 @@ fun <T> LauncherSubCategoryRail(
         items.forEach { item ->
             val selected = item == selectedItem
             val chipFill by animateColorAsState(
-                targetValue = if (selected) SkyBlueAccent.copy(alpha = 0.22f) else CardSlateBg.copy(alpha = 0.55f),
+                targetValue = if (selected) SkyBlueAccent.copy(alpha = 0.22f) else CardSlateBg,
                 animationSpec = tween(240, easing = FastOutSlowInEasing),
                 label = "ChipFill"
             )
             val chipBorder by animateColorAsState(
-                targetValue = if (selected) SkyBlueAccent.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.08f),
+                targetValue = if (selected) SkyBlueAccent.copy(alpha = 0.75f) else VoltGrayStroke,
                 animationSpec = tween(240, easing = FastOutSlowInEasing),
                 label = "ChipBorder"
             )
@@ -1341,6 +1361,7 @@ private fun InAppUpdateBannerCard(
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = CardSlateBg,
+        border = BorderStroke(1.dp, VoltGrayStroke),
         tonalElevation = 8.dp,
         shadowElevation = 12.dp,
         modifier = Modifier.widthIn(max = 520.dp)
@@ -1496,7 +1517,7 @@ fun CleanLauncherScreen(
     }
 
     // The launch dock (account + version + PLAY) floats at the bottom on Home and Game pages only.
-    val showLaunchDock = selectedTab == LauncherNavTab.HOME || selectedTab == LauncherNavTab.VERSIONS
+    val showLaunchDock = false // Play now lives on the Volt-style Home screen
 
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -1510,17 +1531,6 @@ fun CleanLauncherScreen(
                 HorizonAuroraBackground()
             }
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top navigation bar (brand + tab pill + quick actions):
-                // Left: Back button (only when not on HOME) + Title
-                // Right: Folder + Log (no duplicate Profile, Settings, or Download buttons!)
-                HorizonTopNav(
-                    selectedTab = selectedTab,
-                    installStatus = installStatus,
-                    onSelectTab = { selectedTab = it },
-                    onOpenDataFolder = { HorizonNativeBridge.openSystemFilesApp(context) },
-                    onOpenLogs = { selectedTab = LauncherNavTab.LOGS }
-                )
-
                 Row(
                     modifier = Modifier
                         .weight(1f)
@@ -1564,7 +1574,12 @@ fun CleanLauncherScreen(
                                     onConfigChange = onConfigChange,
                                     logEnabled = config.enableSystemLog,
                                     isHibernated = isHibernated,
-                                    onNavigate = { selectedTab = it }
+                                    onNavigate = { selectedTab = it },
+                                    activeAccount = activeAccount,
+                                    activeSkinBitmap = activeSkinBitmap,
+                                    installStatus = installStatus,
+                                    onOpenFolder = { HorizonNativeBridge.openSystemFilesApp(context) },
+                                    onLaunch = handleLaunchOrDownload
                                 )
 
                                 LauncherNavTab.VERSIONS -> CleanVersionsViewport(
@@ -1640,6 +1655,30 @@ fun CleanLauncherScreen(
                             }
                         }
                     }
+                }
+
+                AnimatedVisibility(
+                    visible = selectedTab != LauncherNavTab.HOME,
+                    enter = fadeIn(tween(240)) + slideInVertically(
+                        animationSpec = tween(300, easing = FastOutSlowInEasing),
+                        initialOffsetY = { it }
+                    ),
+                    exit = fadeOut(tween(160)) + slideOutVertically(
+                        animationSpec = tween(200, easing = FastOutLinearInEasing),
+                        targetOffsetY = { it }
+                    )
+                ) {
+                    VoltBottomNav(
+                        selectedTab = selectedTab,
+                        installStatus = installStatus,
+                        activeAccount = activeAccount,
+                        activeSkinBitmap = activeSkinBitmap,
+                        accent = SkyBlueAccent,
+                        onSelectTab = { selectedTab = it },
+                        onOpenAccount = { selectedTab = LauncherNavTab.ACCOUNTS },
+                        onOpenFolder = { HorizonNativeBridge.openSystemFilesApp(context) },
+                        onOpenLogs = { selectedTab = LauncherNavTab.LOGS }
+                    )
                 }
 
                 AnimatedVisibility(
@@ -2299,7 +2338,12 @@ private fun CleanHomeViewport(
     onConfigChange: (HorizonConfigState) -> Unit,
     logEnabled: Boolean,
     isHibernated: Boolean,
-    onNavigate: (LauncherNavTab) -> Unit = {}
+    onNavigate: (LauncherNavTab) -> Unit,
+    activeAccount: LauncherAccount,
+    activeSkinBitmap: Bitmap,
+    installStatus: AssetInstallStatus,
+    onOpenFolder: () -> Unit,
+    onLaunch: () -> Unit
 ) {
     val context = LocalContext.current
     var customWallpapers by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -2502,18 +2546,11 @@ private fun CleanHomeViewport(
                     )
             )
 
-            VoltHomeDeck(
-                onNavigate = onNavigate,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(14.dp)
-            )
-
             // Top-Right Controls: Switch between Wallpaper & 720p YouTube Trailer + Mute/Silent Toggle + Next Trailer / Import Wallpaper
             Row(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(14.dp),
+                    .align(Alignment.TopCenter)
+                    .padding(top = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -2562,78 +2599,20 @@ private fun CleanHomeViewport(
                 )
             }
 
-            // Bottom-Left Minecraft Grass Icon + Title + Active Trailer Badge + Animated Splash Quote
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .offset(y = titleOffsetY)
-                        .graphicsLayer {
-                            scaleX = titleScale
-                            scaleY = titleScale
-                            transformOrigin = TransformOrigin(0f, 1f)
-                        },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    MinecraftGrassCubeIcon(size = 40.dp)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(9.dp)
-                    ) {
-                        Text(
-                            text = "Minecraft",
-                            fontSize = 30.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White
-                        )
-                        MinecraftPixelRustBadge()
-                        LavenderTagBadge(text = "26.3")
-                    }
-                }
-
-                AnimatedVisibility(
-                    visible = !isVideoMode,
-                    enter = fadeIn(tween(420, easing = FastOutSlowInEasing)) +
-                        expandVertically(tween(420, easing = FastOutSlowInEasing)) +
-                        slideInVertically(tween(420, easing = FastOutSlowInEasing)) { h -> h / 2 },
-                    exit = fadeOut(tween(280)) +
-                        shrinkVertically(tween(340, easing = FastOutSlowInEasing)) +
-                        slideOutVertically(tween(280)) { h -> h / 2 }
-                ) {
-                    AnimatedContent(
-                        targetState = MINECRAFT_SPLASH_QUOTES[quoteIndex],
-                        transitionSpec = {
-                            (slideInVertically(tween(340)) { h -> h / 2 } + fadeIn(tween(340)))
-                                .togetherWith(
-                                    slideOutVertically(tween(260)) { h -> -h / 2 } + fadeOut(tween(240))
-                                )
-                                .using(sizeTransform = null)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth(0.92f)
-                            .animatedPressScale {
-                                if (!isVideoMode) {
-                                    quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size
-                                    wallpaperIndex = (wallpaperIndex + 1) % totalCount.coerceAtLeast(1)
-                                }
-                            },
-                        label = "MinecraftSplashQuote"
-                    ) { quote ->
-                        Text(
-                            text = "“$quote”",
-                            fontSize = 13.sp,
-                            fontStyle = FontStyle.Italic,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFFFFE082)
-                        )
-                    }
-                }
-            }
+            VoltHomeLayer(
+                accent = SkyBlueAccent,
+                activeAccount = activeAccount,
+                activeSkinBitmap = activeSkinBitmap,
+                installStatus = installStatus,
+                quote = if (isVideoMode) null else MINECRAFT_SPLASH_QUOTES[quoteIndex],
+                onQuoteTap = {
+                    quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size
+                    wallpaperIndex = (wallpaperIndex + 1) % totalCount.coerceAtLeast(1)
+                },
+                onNavigate = onNavigate,
+                onOpenFolder = onOpenFolder,
+                onLaunch = onLaunch
+            )
         }
     }
 }
@@ -2644,30 +2623,21 @@ private fun DashboardQuickIconPill(
     label: String,
     onClick: () -> Unit
 ) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = VoltGrayCard.copy(alpha = 0.90f),
-        border = BorderStroke(1.dp, VoltGrayStroke),
-        modifier = Modifier.animatedPressScale(onClick = onClick)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(34.dp)
+            .animatedPressScale(onClick = onClick)
+            .clip(RoundedCornerShape(11.dp))
+            .background(VoltGrayCard.copy(alpha = 0.92f))
+            .border(1.dp, VoltGrayStroke, RoundedCornerShape(11.dp))
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = Color.White,
-                modifier = Modifier.size(14.dp)
-            )
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = Color.White,
+            modifier = Modifier.size(17.dp)
+        )
     }
 }
 
@@ -2971,6 +2941,7 @@ private fun CleanAccountsAndSkinsViewport(
                             Surface(
                                 shape = RoundedCornerShape(18.dp),
                                 color = CardSlateBg,
+                                border = BorderStroke(1.dp, VoltGrayStroke),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
@@ -3152,6 +3123,7 @@ private fun CleanAccountsAndSkinsViewport(
                             Surface(
                                 shape = RoundedCornerShape(18.dp),
                                 color = CardSlateBg,
+                                border = BorderStroke(1.dp, VoltGrayStroke),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
@@ -3552,6 +3524,7 @@ private fun CleanAccountsAndSkinsViewport(
                                             Surface(
                                                 shape = RoundedCornerShape(10.dp),
                                                 color = CardSlateBg,
+                                                border = BorderStroke(1.dp, VoltGrayStroke),
                                                 modifier = Modifier.animatedPressScale {
                                                     val updated = accounts.map { it.copy(isActive = it.id == acc.id) }
                                                     onAccountsChange(updated)
@@ -4789,6 +4762,7 @@ private fun StoreTranslatorSelector(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = CardSlateBg,
+        border = BorderStroke(1.dp, VoltGrayStroke),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -4859,6 +4833,7 @@ private fun StoreSourceSelector(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = CardSlateBg,
+        border = BorderStroke(1.dp, VoltGrayStroke),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -5161,6 +5136,7 @@ private fun CleanStoreViewport(
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -5373,6 +5349,7 @@ private fun CleanStoreViewport(
                                     Surface(
                                         shape = RoundedCornerShape(18.dp),
                                         color = CardSlateBg,
+                                        border = BorderStroke(1.dp, VoltGrayStroke),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .animatedPressScale { selectedProject = item }
@@ -5626,6 +5603,7 @@ private fun CleanStoreViewport(
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
                                 color = CardSlateBg,
+                                border = BorderStroke(1.dp, VoltGrayStroke),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .animatedPressScale { modpackImportPicker.launch("*/*") }
@@ -5648,6 +5626,7 @@ private fun CleanStoreViewport(
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.fillMaxWidth()) {
@@ -5711,6 +5690,7 @@ private fun CleanStoreViewport(
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.fillMaxWidth()) {
@@ -5774,6 +5754,7 @@ private fun CleanStoreViewport(
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -5855,6 +5836,7 @@ private fun CleanStoreViewport(
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = CardSlateBg,
+                        border = BorderStroke(1.dp, VoltGrayStroke),
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -6148,6 +6130,7 @@ private fun CleanStoreViewport(
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = CardSlateBg,
+                        border = BorderStroke(1.dp, VoltGrayStroke),
                         modifier = Modifier
                             .width(236.dp)
                             .fillMaxHeight()
@@ -8054,6 +8037,7 @@ private fun CleanSettingsViewport(
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -8205,6 +8189,7 @@ private fun CleanSettingsViewport(
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -8249,6 +8234,7 @@ private fun CleanSettingsViewport(
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -8376,6 +8362,7 @@ private fun CleanSettingsViewport(
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .animatedPressScale { HorizonNativeBridge.resetTouchKeypadLayout(context, config) }
@@ -8498,6 +8485,7 @@ private fun CleanSettingsViewport(
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .animatedPressScale { onCheckForUpdatesManual() }
@@ -8529,6 +8517,7 @@ private fun CleanSettingsViewport(
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .animatedPressScale { showLauncherVersions = true }
@@ -8599,6 +8588,7 @@ private fun CleanSettingsViewport(
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = CardSlateBg,
+                            border = BorderStroke(1.dp, VoltGrayStroke),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -8668,6 +8658,7 @@ private fun LauncherRamAllocationCard(
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = CardSlateBg,
+        border = BorderStroke(1.dp, VoltGrayStroke),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
