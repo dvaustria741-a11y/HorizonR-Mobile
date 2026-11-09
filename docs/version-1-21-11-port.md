@@ -170,9 +170,9 @@ the common shape, runs the (patched) oracle on the remapped 1.21.11 jar and the 
 26.3 behaviour) on the same inputs, and counts differing output lines. Of 98 scripts of that shape: 21 give output
 identical to the engine (block push, combat rules, consume effects, edge backoff, entity obstruction, fall damage, food,
 food properties, item cooldowns, Java hash map, living damage, movement emission, object open map and set, piston
-movement, player equipment, player food, status tick, swimming, synced bytes and floats: 15 million output lines in all),
+movement, player equipment, player food, status tick, swimming, synced bytes and floats: about 6.6 million output lines in all),
 8 stop in the oracle, 32 do not compile, 18 need extra corpus arguments (the driver does not give them) and 12 failed
-otherwise. Seven differ (the last two below were found after the run and are explained, the first five are):
+otherwise. Seven differ; four of them come from one cause, and one turned out to be a failed oracle run, not a difference:
 
 - **`Mth.floor` overflows in 1.21.11, the engine saturates.** 1.21.11 computes `i = (int) f; f < i ? i - 1 : i`, so
   `Mth.floor` of -infinity or of any value below -2^31 returns 2147483647 (checked on the jar: `floor(-inf)`,
