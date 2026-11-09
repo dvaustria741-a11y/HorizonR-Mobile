@@ -4,7 +4,9 @@ import android.content.Intent
 import android.graphics.RectF
 import android.view.KeyEvent
 import android.widget.Toast
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,6 +41,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -83,13 +86,13 @@ import java.util.Locale
 import java.util.UUID
 import kotlin.math.roundToInt
 
-// Colours and wording of ZalithLauncher's "Edit Control Layout" screens.
-private val ZPanel = Color(0xFF1C1C1C)
-private val ZItem = Color(0xFF2A2A2A)
-private val ZBox = Color(0xFF4A4A4A)
-private val ZTeal = Color(0xFF80CBC4)
-private val ZMuted = Color(0xFFB4B4B4)
-private val ZLine = Color(0xFF6E6E6E)
+// Colours follow the Horizon launcher; wording follows the "Edit Control Layout" screens.
+private val ZPanel = HzCard
+private val ZItem = HzRow
+private val ZBox = Color(0xFF3B454B)
+private val ZTeal = HzAccent
+private val ZMuted = HzMuted
+private val ZLine = HzCapsule
 private val ZScrim = Color(0x99000000)
 
 private enum class Mode { HOLD, TAP, TOGGLE }
@@ -336,7 +339,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
             Column(
                 modifier = Modifier
                     .align(if (onLeft) Alignment.CenterStart else Alignment.CenterEnd)
-                    .zPanel()
+                    .zPanel(onLeft)
             ) {
                 when (sel) {
                     is Selection.Button -> controls.layout.buttons.getOrNull(sel.index)?.let { b ->
@@ -360,8 +363,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
 
         if (menuOpen) {
             Column(modifier = Modifier.align(Alignment.CenterEnd).zPanel()) {
-                Text("Edit Control Layout", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.align(Alignment.CenterHorizontally))
-                ZSection("Edit Control Layout")
+                Header("Edit Control Layout")
                 ZButton("Add Button") { addButton(); menuOpen = false }
                 ZButton("Add Drawer") { addDrawer(); menuOpen = false }
                 ZButton("Add Joystick") { addJoystick(); menuOpen = false }
@@ -495,15 +497,26 @@ private fun setSlot(b: ControlButton, index: Int, action: Action?): ControlButto
 }
 
 @Composable
-private fun Modifier.zPanel(): Modifier = this
-    .padding(12.dp)
-    .width(280.dp)
-    .fillMaxHeight()
-    .clip(RoundedCornerShape(8.dp))
-    .background(ZPanel)
-    .pointerInput(Unit) { detectTapGestures { } }
-    .verticalScroll(rememberScrollState())
-    .padding(10.dp)
+private fun Modifier.zPanel(onLeft: Boolean = false): Modifier {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    val progress by animateFloatAsState(if (shown) 1f else 0f, tween(260, easing = FastOutSlowInEasing), label = "zpanel")
+    val shape = if (onLeft) RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp) else RoundedCornerShape(topStart = 26.dp, bottomStart = 26.dp)
+    val dir = if (onLeft) -1f else 1f
+    return this
+        .fillMaxHeight()
+        .width(300.dp)
+        .graphicsLayer {
+            translationX = dir * (1f - progress) * size.width * 0.5f
+            alpha = progress
+        }
+        .clip(shape)
+        .background(Brush.verticalGradient(listOf(Color(0xFF283239), HzCard, HzRoot)))
+        .border(1.dp, Brush.verticalGradient(listOf(HzCapsule, Color.Transparent)), shape)
+        .pointerInput(Unit) { detectTapGestures { } }
+        .verticalScroll(rememberScrollState())
+        .padding(16.dp)
+}
 
 // ---------------------------------------------------------------------------------------------
 // Panels
@@ -619,21 +632,21 @@ private fun fmt1(v: Float) = String.format(Locale.ROOT, "%.1f", v)
 @Composable
 private fun ZPill(text: String, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.width(100.dp).height(44.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF343434)).clickable(onClick = onClick),
+        modifier = Modifier.width(100.dp).height(44.dp).clip(RoundedCornerShape(14.dp)).background(HzCapsule).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
 }
 
 @Composable
 private fun ZSection(title: String) {
-    Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+    Text(title, color = ZTeal, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp))
     Box(Modifier.fillMaxWidth().height(1.dp).background(ZLine))
 }
 
 @Composable
 private fun ZButton(text: String, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.padding(top = 8.dp).fillMaxWidth().height(52.dp).clip(RoundedCornerShape(10.dp)).background(ZItem).clickable(onClick = onClick),
+        modifier = Modifier.padding(top = 8.dp).fillMaxWidth().height(50.dp).clip(RoundedCornerShape(16.dp)).background(ZItem).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Text(text, color = Color.White, fontSize = 17.sp) }
 }
@@ -675,7 +688,7 @@ private fun ZSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
     Switch(
         checked = checked, onCheckedChange = onChange,
         colors = SwitchDefaults.colors(
-            checkedThumbColor = ZTeal, checkedTrackColor = Color(0xFF3F6460), checkedBorderColor = Color.Transparent,
+            checkedThumbColor = ZTeal, checkedTrackColor = Color(0xFF3A6478), checkedBorderColor = Color.Transparent,
             uncheckedThumbColor = Color(0xFFC8C8C8), uncheckedTrackColor = Color(0xFF555555), uncheckedBorderColor = Color.Transparent,
         )
     )
@@ -693,13 +706,14 @@ private fun ZSwitchRow(label: String, value: Boolean, onChange: (Boolean) -> Uni
 private fun ZChevron(label: String, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp)) {
         Text(label, color = ZMuted, fontSize = 17.sp, modifier = Modifier.weight(1f))
-        Text("›", color = Color.White, fontSize = 24.sp)
+        GlyphIcon(Glyph.CHEVRON, Color.White, Modifier.size(18.dp))
     }
 }
 
 @Composable
 private fun zSliderColors() = SliderDefaults.colors(
-    thumbColor = ZTeal, activeTrackColor = ZTeal, inactiveTrackColor = Color(0xFF555555),
+    thumbColor = ZTeal, activeTrackColor = ZTeal, inactiveTrackColor = Color(0xFF394952),
+    activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
 )
 
 @Composable

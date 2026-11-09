@@ -139,6 +139,8 @@ fun SettingSlider(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,
                 inactiveTrackColor = LocalControlsCardStyle.current.track,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent,
             )
         )
     }

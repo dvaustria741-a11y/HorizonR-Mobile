@@ -142,7 +142,7 @@ fun OverlayMenu(
 }
 
 @Composable
-private fun Header(title: String) {
+internal fun Header(title: String) {
     Row(modifier = Modifier.padding(start = 2.dp, top = 2.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier

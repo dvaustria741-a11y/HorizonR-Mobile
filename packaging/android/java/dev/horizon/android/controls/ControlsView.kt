@@ -2,12 +2,15 @@ package dev.horizon.android.controls
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.graphics.Movie
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -23,6 +26,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.MotionEvent
 import android.view.View
+import dev.horizon.android.R
 import dev.horizon.android.controls.Action
 import dev.horizon.android.controls.ControlButton
 import dev.horizon.android.controls.ControlLayout
@@ -96,6 +100,9 @@ class ControlsView(
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val iconRect = RectF()
+    private val menuIcon: Bitmap? by lazy { runCatching { BitmapFactory.decodeResource(resources, R.drawable.ic_ctrl_menu) }.getOrNull() }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD }
     private val cursorPath = Path()
     private var cursorDrawable: Drawable? = null
@@ -912,17 +919,12 @@ class ControlsView(
             stroke.color = Color.argb(if (dragging) 230 else 140, 139, 224, 255)
             stroke.strokeWidth = 1f * density
             canvas.drawRoundRect(menuRect, rad, rad, stroke)
-            stroke.strokeWidth = 1.8f * density
-            stroke.strokeCap = Paint.Cap.ROUND
-            stroke.color = if (dragging) Color.WHITE else Color.argb(235, 139, 224, 255)
-            val cx = menuRect.centerX()
-            val cy = menuRect.centerY()
-            val half = 7f * density
-            val gap = 4f * density
-            canvas.drawLine(cx - half, cy - gap, cx + half, cy - gap, stroke)
-            canvas.drawLine(cx - half, cy, cx + half, cy, stroke)
-            canvas.drawLine(cx - half, cy + gap, cx + half, cy + gap, stroke)
-            stroke.strokeCap = Paint.Cap.BUTT
+            menuIcon?.let { icon ->
+                val half = menuRect.height() * 0.34f
+                iconRect.set(menuRect.centerX() - half, menuRect.centerY() - half, menuRect.centerX() + half, menuRect.centerY() + half)
+                iconPaint.colorFilter = PorterDuffColorFilter(if (dragging) Color.WHITE else Color.argb(235, 139, 224, 255), PorterDuff.Mode.SRC_IN)
+                canvas.drawBitmap(icon, null, iconRect, iconPaint)
+            }
         }
         if (!editMode && !captured && virtualMouse) drawCursor(canvas)
     }
