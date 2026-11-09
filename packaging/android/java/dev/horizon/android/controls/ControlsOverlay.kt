@@ -213,9 +213,9 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
         HorizonBridge.command("key $name ${if (down) "down" else "up"}")
     }
 
-    // The engine opens its own on-screen keyboard when chat opens.
+    // Shows or hides the phone's own keyboard (the engine opens it for the focused field, or for chat in-world).
     override fun toggleKeyboard() {
-        HorizonBridge.command("key key.keyboard.t tap")
+        HorizonBridge.command("keyboard")
     }
 
     override fun toggleMenu() {

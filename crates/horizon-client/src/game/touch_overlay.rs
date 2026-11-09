@@ -64,6 +64,10 @@ static AREA_H: AtomicF32 = AtomicF32::new();
 /// in), published by the game thread every frame.
 static SURFACE_W: AtomicF32 = AtomicF32::new();
 static SURFACE_H: AtomicF32 = AtomicF32::new();
+/// The native window's physical size, which the overlay's game area maps onto (the game surface is
+/// only the part of it left after cutout insets and aspect fitting, see `native_content_rect`).
+static NATIVE_W: AtomicF32 = AtomicF32::new();
+static NATIVE_H: AtomicF32 = AtomicF32::new();
 static HUD_SCALE: AtomicF32 = AtomicF32::new();
 static HUD_W: AtomicF32 = AtomicF32::new();
 static HUD_H: AtomicF32 = AtomicF32::new();
@@ -134,14 +138,32 @@ fn drain() -> Vec<Input> {
 }
 
 /// A point in the overlay view's pixels, in the game surface's.
+///
+/// The overlay covers the whole display but the game only draws inside the native content rectangle
+/// (cutout insets, aspect fit), at `native_input_scale` of its physical size. Winit's own pointer
+/// events are taken off that rectangle's origin and scaled; points the overlay injects must be too,
+/// or the cursor and touches land that far from where they are drawn.
 fn surface_point(x: f32, y: f32) -> (f64, f64) {
     let (sw, sh) = (SURFACE_W.get(), SURFACE_H.get());
     let (aw, ah) = (AREA_W.get(), AREA_H.get());
+    let (nw, nh) = (NATIVE_W.get(), NATIVE_H.get());
     if aw > 0.0 && ah > 0.0 && sw > 0.0 && sh > 0.0 {
-        // The game window's rectangle in the overlay, scaled to the surface (which can be rendered smaller).
-        let px = ((x - AREA_X.get()) / aw * sw).clamp(0.0, sw);
-        let py = ((y - AREA_Y.get()) / ah * sh).clamp(0.0, sh);
-        return (f64::from(px), f64::from(py));
+        // The game window's rectangle in the overlay, in the window's physical pixels.
+        let (mut px, mut py) = (
+            f64::from((x - AREA_X.get()) / aw),
+            f64::from((y - AREA_Y.get()) / ah),
+        );
+        if nw > 0.0 && nh > 0.0 {
+            let [rx, ry, ..] =
+                winit::platform::android::native_content_rect([nw as u32, nh as u32]);
+            let [kx, ky] = winit::platform::android::native_input_scale();
+            px = (px * f64::from(nw) - f64::from(rx)) * kx;
+            py = (py * f64::from(nh) - f64::from(ry)) * ky;
+        } else {
+            px *= f64::from(sw);
+            py *= f64::from(sh);
+        }
+        return (px.clamp(0.0, f64::from(sw)), py.clamp(0.0, f64::from(sh)));
     }
     let (vw, vh) = (VIEW_W.get(), VIEW_H.get());
     if vw <= 0.0 || vh <= 0.0 || sw <= 0.0 || sh <= 0.0 {
@@ -302,6 +324,11 @@ impl Game<'_> {
             let size = [renderer.config.width, renderer.config.height];
             SURFACE_W.set(size[0] as f32);
             SURFACE_H.set(size[1] as f32);
+            if let Some(window) = &self.window {
+                let native = window.outer_size();
+                NATIVE_W.set(native.width as f32);
+                NATIVE_H.set(native.height as f32);
+            }
             let hud = horizon_client::hud::HudBatch::new(size);
             HUD_SCALE.set(hud.scale);
             HUD_W.set(hud.width);
@@ -330,6 +357,14 @@ impl Game<'_> {
         };
         for input in queued {
             match input {
+                Input::Command(line) if line.trim() == "keyboard" => {
+                    // The overlay's keyboard button: the phone's own keyboard, as the engine's touch UI shows it.
+                    if crate::platform::active() {
+                        crate::platform::hide();
+                    } else {
+                        self.android_show_keyboard();
+                    }
+                }
                 Input::Command(line) => {
                     self.replay_line(&line, events);
                 }
@@ -417,6 +452,15 @@ impl Game<'_> {
                         },
                         input_trace::InputOrigin::User,
                     );
+                    // A click that lands on a text field opens the phone's keyboard for it.
+                    if !down && button == MouseButton::Left && self.pad_in_menu() {
+                        if let Some(b) = self.gui_scale() {
+                            let at = [self.cursor.0 / b.scale, self.cursor.1 / b.scale];
+                            if crate::platform::field_at(at) {
+                                self.android_show_keyboard();
+                            }
+                        }
+                    }
                 }
             }
         }
