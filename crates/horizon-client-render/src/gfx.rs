@@ -3041,6 +3041,7 @@ impl Renderer {
                 &device_lost,
                 surface.get_capabilities(&adapter),
                 size,
+                &window,
                 previous.as_ref().map(|renderer| renderer.config.present_mode),
                 previous.is_none(),
             )?),

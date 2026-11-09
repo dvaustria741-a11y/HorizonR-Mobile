@@ -22,6 +22,7 @@ pub(super) fn set_up_surface(
     device_lost: &std::sync::atomic::AtomicBool,
     caps: wgpu::SurfaceCapabilities,
     size: winit::dpi::PhysicalSize<u32>,
+    window: &Window,
     keep_mode: Option<wgpu::PresentMode>,
     log_step: bool,
 ) -> std::result::Result<(wgpu::SurfaceConfiguration, wgpu::SurfaceCapabilities), String> {
@@ -62,7 +63,18 @@ pub(super) fn set_up_surface(
             config.width, config.height, config.format, config.present_mode
         ));
     }
-    Renderer::configure(device, surface, &config, None, device_lost)?;
+    let presentation = config.clone();
+    #[cfg(target_os = "android")]
+    let presentation = {
+        let mut presentation = presentation;
+        let physical = window.outer_size();
+        presentation.width = physical.width.max(1);
+        presentation.height = physical.height.max(1);
+        presentation
+    };
+    #[cfg(not(target_os = "android"))]
+    let _ = window;
+    Renderer::configure(device, surface, &presentation, None, device_lost)?;
     Ok((config, caps))
 }
 /// What `pick_adapter` knows of one of a backend's adapters.
@@ -220,6 +232,7 @@ pub(super) async fn open_adapter(
                 &device_lost,
                 caps,
                 window.inner_size(),
+                window,
                 None,
                 true,
             )
