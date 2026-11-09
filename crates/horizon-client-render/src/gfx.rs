@@ -2989,7 +2989,7 @@ impl Renderer {
             queue,
             device_lost,
             configured,
-        } = match previous {
+        } = match &mut previous {
             // Reload resources on the same device; replacing live Vulkan
             // devices can invalidate the driver's swapchain state on the same
             // window.
@@ -3041,7 +3041,7 @@ impl Renderer {
                 &device_lost,
                 surface.get_capabilities(&adapter),
                 size,
-                previous.map(|renderer| renderer.config.present_mode),
+                previous.as_ref().map(|renderer| renderer.config.present_mode),
                 previous.is_none(),
             )?),
             (None, _) => None,
