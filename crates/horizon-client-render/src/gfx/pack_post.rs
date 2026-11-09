@@ -2099,7 +2099,16 @@ fn build_pass(
         let mut fragment = program.fragment;
         packed::quantise_outputs(&mut fragment, &packed_outputs);
         packed::bitcast_outputs(&mut fragment, &int_outputs);
-        let (vs, fs) = (module(program.vertex), module(fragment));
+        // A pack's vertex stage can write more varyings than the GPU allows, though the
+        // fragment stage reads only some: drop the rest and renumber (a program within the
+        // limit is left as it is).
+        let mut vertex = program.vertex;
+        unused_outputs::fit(
+            &mut vertex,
+            &mut fragment,
+            device.limits().max_inter_stage_shader_variables,
+        );
+        let (vs, fs) = (module(vertex), module(fragment));
         let job = RenderJob {
             label: p.name.clone(),
             layout: pipeline_layout,
