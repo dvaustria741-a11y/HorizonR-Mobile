@@ -195,6 +195,10 @@ impl Game<'_> {
                 return Ok(());
             }
         }
+        #[cfg(target_os = "android")]
+        if !pressed && self.android_custom_key_held(key) {
+            return Ok(());
+        }
         // Sneak and sprint are ToggleKeyMappings: a press (or a key
         // repeat) flips them when toggling; only releases reach them
         // behind a screen (KeyboardHandler.keyPress).
@@ -378,6 +382,14 @@ impl Game<'_> {
     pub(super) fn play_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
         if pressed {
             self.pvp_click(button);
+        }
+        #[cfg(target_os = "android")]
+        if !pressed && self.android_custom_mouse_held(button) {
+            return Ok(());
+        }
+        // A mod's claimed item takes the use button (capability `input`).
+        if self.mod_mouse_use(button, pressed) {
+            return Ok(());
         }
         if self.sleeping.is_some() {
             return Ok(());

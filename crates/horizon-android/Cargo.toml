@@ -13,6 +13,7 @@ horizon-client-input = { path = "../horizon-client-input" }
 horizon-anticheat = { path = "../horizon-anticheat" }
 # The game and the native mod API are compiled in this crate (`android_main.rs`), over the client lib.
 horizon-client-lib = { path = "../horizon-client-lib", default-features = false }
+toml = "1.1"
 horizon-client-core = { path = "../horizon-client-core" }
 horizon-command = { path = "../horizon-command" }
 horizon-cosmetics = { path = "../horizon-cosmetics" }

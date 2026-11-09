@@ -22,6 +22,21 @@ pub(super) fn prepare_renderer_textures(
     )
 }
 
+/// Game API selection stays separate from the installer's recovery UI.
+pub(super) fn rendering_api(
+    settings: &horizon_client::settings::Settings,
+) -> horizon_client::graphics::GraphicsApi {
+    #[cfg(target_os = "android")]
+    {
+        let _ = settings;
+        horizon_client::android_runtime::graphics_api()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        settings.horizon.api
+    }
+}
+
 /// Upload pack textures and create the renderer on the window's device.
 pub(super) fn build_renderer(
     window: Arc<Window>,
@@ -78,6 +93,18 @@ pub(super) fn build_renderer(
         shader_pack.linear,
         shader_pack.hdr_float,
     ))?;
+    finish_renderer(&mut renderer, pack, atlas, filtering)?;
+    Ok(renderer)
+}
+
+/// What a world renderer needs once it exists, whether `build_renderer` made it or the
+/// loading screen's worker prepared it (`Loading::prepare_renderer`).
+pub(super) fn finish_renderer(
+    renderer: &mut Renderer,
+    pack: &PackResources,
+    atlas: &horizon_client::hud::HudAtlas,
+    filtering: (i32, i32),
+) -> Result<()> {
     renderer.hud.sprite_animations = atlas
         .sprite_animations
         .iter()
@@ -96,13 +123,13 @@ pub(super) fn build_renderer(
     renderer
         .hud
         .set_cit_glints(&renderer.device, &renderer.queue, cit_glints);
-    Ok(renderer)
+    Ok(())
 }
 
 /// The loading screen's renderer: one atlas (the boot screen's until the
 /// pack's GUI atlas is ready) over one opaque white block-sprite layer, an
 /// empty border texture and the title panorama once the menu bundle is ready.
-pub(super) fn loading_renderer(
+pub(crate) fn loading_renderer(
     window: Arc<Window>,
     offscreen: bool,
     atlas: Option<&horizon_client::hud::HudAtlas>,
@@ -164,7 +191,7 @@ pub(super) fn loading_renderer(
     Ok(renderer)
 }
 
-pub(super) fn loading_frame(hud: &HudBatch) -> Frame<'_> {
+pub(crate) fn loading_frame(hud: &HudBatch) -> Frame<'_> {
     Frame {
         weather: &[],
         weather_time: horizon_client::weather::Time::new(0, 0.0),
@@ -245,6 +272,7 @@ pub(super) fn loading_frame(hud: &HudBatch) -> Frame<'_> {
         chunk_fade: 0.0,
         post_effects: horizon_client::post_chain::Request::none(),
         menu_blur: None,
+        bg_cache: None,
     }
 }
 
@@ -307,6 +335,7 @@ pub(super) fn start_game<'a>(
     // Benchmarks measure the game alone.
     if game.options.benchmark.is_none() {
         game.mods.dev = game.options.dev_mods.clone();
+        game.start_moved_extras();
         game.start_mods();
     }
     // After the mods: their templates are among the ids it lists.

@@ -23,7 +23,9 @@ pub mod java;
 #[cfg(not(target_os = "android"))]
 #[path = "browser/java_instance.rs"]
 pub mod java_instance;
+#[path = "browser/lock.rs"]
 pub mod lock;
+#[path = "browser/modrinth.rs"]
 pub mod modrinth;
 
 pub use lock::{lock_home, try_lock_home, HomeLockGuard};

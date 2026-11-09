@@ -65,7 +65,8 @@ impl Game<'_> {
                     | Screen::DebugOptions
                     | Screen::HudEditor
             ) || self.book.is_some()
-                || self.win_screen_pauses())
+                || self.win_screen_pauses()
+                || self.touch_editing())
     }
     /// A screen open over gameplay while `screen` stays `Playing`: a book or
     /// lectern, a sign, a server dialog, the code of conduct, a link or
@@ -165,6 +166,8 @@ impl Game<'_> {
         self.reset_inventory_clicks();
         if !capture {
             self.stop_mining();
+            #[cfg(target_os = "android")]
+            crate::platform::capture_mouse(false);
             self.studio_rmb_down = false;
         }
         // The real pointer takes over from an agent's.
@@ -227,6 +230,11 @@ impl Game<'_> {
                 None
             };
             self.captured = self.capture_mode.is_some();
+            #[cfg(target_os = "android")]
+            {
+                self.captured =
+                    !crate::keyboard_mouse_input() || crate::platform::capture_mouse(true);
+            }
             // Windows already warped above, inside the clip's own position.
             #[cfg(not(any(target_os = "macos", target_os = "windows")))]
             if self.captured && self.focused {
@@ -265,7 +273,10 @@ impl Game<'_> {
             self.cursor = pos;
         }
         if !self.options.offscreen || self.split_window {
-            window.set_cursor_visible(!self.captured);
+            let pointer = !self.captured;
+            #[cfg(target_os = "android")]
+            let pointer = pointer && (!crate::touch_visible() || self.settings.keypad.enabled);
+            window.set_cursor_visible(pointer);
         }
     }
     /// A Linux window manager can release the native pointer grab while the
@@ -324,6 +335,12 @@ impl Game<'_> {
     pub(super) fn capture_loaded_world(&mut self) {
         // Loading may finish after focus was lost or another screen opened.
         if self.title.is_none() && self.screen == Screen::Playing {
+            // Resource/chunk loading is not player inactivity. In particular,
+            // do not enter the world already under the one-minute AFK limit.
+            #[cfg(target_os = "android")]
+            {
+                self.last_input = Instant::now();
+            }
             self.capture(true);
         }
     }

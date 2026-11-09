@@ -249,6 +249,10 @@ mod mob_looting;
 mod mob_sounds;
 mod mod_api_host;
 mod mod_browser;
+mod mod_input;
+#[cfg(feature = "mods")]
+mod mod_panel;
+mod mod_render;
 mod mods;
 mod mount_menu;
 mod mounts;
@@ -553,8 +557,9 @@ use loading_screen::{
     App, Loading, leave_fullscreen_after, missing_resources, run_event_loop, unclean_start_recovery,
 };
 use loading_window::{
-    build_renderer, loading_frame, loading_renderer, prepare_renderer_textures, start_game,
+    build_renderer, finish_renderer, prepare_renderer_textures, rendering_api, start_game,
 };
+pub(crate) use loading_window::{loading_frame, loading_renderer};
 pub use machines::native_fluids::NativeFluidTank;
 pub use maps::{NativeMapDecoration, NativeMapInfo};
 pub use native_block_entity_draw::BlockEntityDraw;
@@ -3680,7 +3685,7 @@ impl Game<'_> {
                 pick_view_vector(m.head_yaw, m.head_pitch),
             ));
         }
-        Some((self.eye_position()?, pick_view_vector(self.yaw, self.pitch)))
+        Some((self.eye_position()?, self.interaction_direction()))
     }
     /// `Player.blockInteractionRange`: the block pick's and mining's reach.
     fn reach(&self) -> f64 {
@@ -3771,6 +3776,80 @@ impl Game<'_> {
             .iter()
             .map(|b| std::array::from_fn(|i| base[i % 3] + b[i]))
             .collect()
+    }
+    /// Whether a world hold should use the held item instead of mining.
+    #[cfg(target_os = "android")]
+    pub(super) fn touch_projectile_crosshair(&self) -> bool {
+        self.held()
+            .is_some_and(|s| horizon_client::touch::projectile_crosshair(&s.item))
+    }
+    #[cfg(target_os = "android")]
+    pub(super) fn touch_item_held_use(&self) -> bool {
+        self.held().is_some_and(|stack| {
+            if horizon_client::touch::item_uses_on_tap(&stack.item) {
+                return false;
+            }
+            #[cfg(feature = "mods")]
+            if self.mods.mods.claims(&stack.item) {
+                return true;
+            }
+            let Some(info) = self.items().get(&stack.item) else {
+                return false;
+            };
+            remote::item_has_use(info)
+                || info.bundle
+                || matches!(
+                    &*stack.item,
+                    "minecraft:firework_rocket" | "minecraft:lead" | "minecraft:name_tag"
+                )
+                || info.block.is_some_and(|state| {
+                    let block = self.res.facts().get(state);
+                    ["CropBlock", "StemBlock", "NetherWartBlock", "CocoaBlock"]
+                        .iter()
+                        .any(|class| block.has_class(class))
+                })
+                || self.blocks_attacks(stack).is_some()
+        })
+    }
+    pub(super) fn touch_editing(&self) -> bool {
+        #[cfg(target_os = "android")]
+        {
+            self.pad.touch.editor.is_some()
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            false
+        }
+    }
+    fn interaction_crosshair(&self) -> bool {
+        #[cfg(target_os = "android")]
+        {
+            crate::keyboard_mouse_input()
+                || self.settings.keypad.enabled
+                || self.pad.touch.settings.crosshair()
+                || self.touch_projectile_crosshair()
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            true
+        }
+    }
+    fn interaction_direction(&self) -> [f64; 3] {
+        let forward = pick_view_vector(self.yaw, self.pitch);
+        #[cfg(target_os = "android")]
+        if let Some(point) = self.pad.touch.aim.or(self.pad.touch_aim) {
+            let fov = self.locator_camera.map_or(70.0, |c| c.3);
+            let size = self.window.as_ref().map(|w| w.inner_size());
+            let aspect = size.map_or(16.0 / 9.0, |s| s.width as f64 / s.height.max(1) as f64);
+            return horizon_client::touch::screen_direction(
+                forward,
+                pick_view_vector(self.yaw, self.pitch - 90.0),
+                point,
+                aspect,
+                fov as f64,
+            );
+        }
+        forward
     }
     /// The declared outline uses vanilla's inside-ray test and interaction override.
     fn clip_declared_outline(
@@ -7326,6 +7405,7 @@ impl Game<'_> {
         };
         let target = [pos.x, pos.y, pos.z];
         let state = self.apply_item_block_state(target, state, &stack)?;
+        self.mod_block_event(target, state, true);
         let key = (target[0], target[1], target[2]);
         if !self.world.block_entities.stateful_entity(state.0)
             && let Some(entity) = self.new_block_entity_for_state(state)
@@ -8054,6 +8134,7 @@ impl Game<'_> {
     }
     fn hud_layers(&mut self, size: [u32; 2]) -> HudBatch {
         self.pad.guide_shown.clear();
+        let margins = self.hud_safe_margins();
         let mut batch = HudBatch::new(size);
         batch.glint_colour = self.settings.extras.pvp.tweaks.glint_texel();
         // GlobalSettingsUniform's GameTime, for a resource pack's text shader.
@@ -8106,6 +8187,9 @@ impl Game<'_> {
             for found in title.lan_found_narrations((w, h)) {
                 self.say_system_queued(&found);
             }
+        }
+        if self.touch_editing() && self.title.is_some() {
+            return batch;
         }
         if self.screen == Screen::DebugOptions && self.title.is_some() {
             // DebugOptionsScreen replaces the title; no level HUD is behind it.
@@ -8173,6 +8257,9 @@ impl Game<'_> {
             } else {
                 self.settings.attack_indicator
             };
+            #[cfg(target_os = "android")]
+            let indicator =
+                horizon_client::touch::attack_indicator(indicator, self.interaction_crosshair());
             let delay = horizon_client::attack_strength::delay(self.main_hand_attack_speed());
             let strength = self.hand_strength.scale(0.0, self.main_hand_attack_speed());
             // The 3D crosshair (F3) takes the 2D one's place.
@@ -8516,6 +8603,8 @@ impl Game<'_> {
         if show_hud {
             self.draw_pad_guide(&mut batch, guide_from);
         }
+        #[cfg(target_os = "android")]
+        crate::documents::draw(&mut batch, &self.gui.atlas);
         batch
     }
     /// Slot ids: 0..36 player inventory, 100..109 crafting grid, 200 result.
@@ -14335,7 +14424,12 @@ impl Game<'_> {
         // screen does not hide it: vanilla checks the HUD and the game mode, not the screen.
         let adventure = self.mode == horizon_client::command::args::GameMode::Adventure;
         let can_build = self.may_build() || adventure;
-        let outline = if !self.ui.hide_gui && !self.entity_targeted() && can_build {
+        let touch_target_visible = touch_target_visible && !world_cached;
+        let outline = if touch_target_visible
+            && !self.ui.hide_gui
+            && !self.entity_targeted()
+            && can_build
+        {
             self.pick()
                 .filter(|h| {
                     self.may_build()
@@ -14525,7 +14619,7 @@ impl Game<'_> {
         self.glowing_vertices.get_mut().clear();
         self.shadow_only_vertices.get_mut().clear();
         pr.lap("pr_entity_setup");
-        if !title {
+        if !skip_world {
             let (built, static_sections, visible_static_sections, static_stats) =
                 spans::time("entity_geometry", || {
                     self.entity_geometry(camera, alpha, fov_degrees, billboard_frustum, entities)
@@ -14542,7 +14636,7 @@ impl Game<'_> {
             self.skin_frame.get_mut().clear_draws();
         }
         pr.lap("pr_entities");
-        let bolts = if title {
+        let bolts = if skip_world {
             Vec::new()
         } else {
             self.bolt_instances(camera)
@@ -14557,7 +14651,7 @@ impl Game<'_> {
             entities.extend(dragon);
         }
         pr.lap("pr_dragon_bolts");
-        let (celestial, stars) = if title {
+        let (celestial, stars) = if skip_world {
             (Vec::new(), None)
         } else if self.dim == Dim::Overworld
             && self.potions.effects.get("darkness").is_none()
@@ -14572,7 +14666,7 @@ impl Game<'_> {
         };
         self.custom_sky_frame([camera.x, camera.y, camera.z], &sky, (rain, thunder), title);
         pr.lap("pr_celestial");
-        let (mut hand, hand_items) = if title || self.scoping() {
+        let (mut hand, hand_items) = if skip_world || self.scoping() {
             Default::default()
         } else {
             self.hand_geometry(camera_alpha)
@@ -14585,7 +14679,7 @@ impl Game<'_> {
             self.item_activation_geometry(camera_alpha as f32, view, aspect, &mut hand);
         }
         pr.lap("pr_hand");
-        let screen = if title {
+        let screen = if skip_world {
             Vec::new()
         } else {
             let scale = self
@@ -14600,7 +14694,7 @@ impl Game<'_> {
         }
         self.outline_fill(&outline, camera, &mut entities);
         pr.lap("pr_screen_end");
-        let weather = if !title && self.can_have_weather() && self.settings.horizon.weather {
+        let weather = if !skip_world && self.can_have_weather() && self.settings.horizon.weather {
             horizon_client::spans::time("weather", || self.weather_geometry(camera, alpha))
         } else {
             Vec::new()
@@ -14610,7 +14704,7 @@ impl Game<'_> {
             .flatten();
         let see_through = std::mem::take(&mut self.see_through_vertices);
         pr.lap("pr_weather_border");
-        if title {
+        if skip_world {
             self.dynamic_lights.clear();
         } else {
             self.gather_dynamic_lights(camera, alpha);
@@ -18906,4 +19000,69 @@ mod falling_air_tick_tests {
             "admitted air must disappear on its first tick"
         );
     }
+}
+
+/// Leaves the game: the event loop ends on a desktop; on Android the launcher takes over again.
+pub(crate) fn exit_app(events: &dyn EventLoopCtl) {
+    #[cfg(target_os = "android")]
+    horizon_client::android_runtime::return_to_launcher();
+    #[cfg(not(target_os = "android"))]
+    events.exit();
+    #[cfg(target_os = "android")]
+    let _ = events;
+}
+
+/// Android: the menu's resources exist, so the launcher's loading splash may fade out onto the
+/// game instead of onto the engine's plain boot screen. Written once per process.
+#[cfg(target_os = "android")]
+fn signal_menu_ready() {
+    static SENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if SENT.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    if let Some(home) = std::env::var_os("HORIZON_HOME") {
+        let _ = std::fs::write(
+            std::path::Path::new(&home).join("zalith-game-boot.txt"),
+            "100|Main Menu Ready",
+        );
+    }
+}
+
+/// Android: counts presented frames of the real title screen (after the renderer was rebuilt with
+/// the menu atlas). The launcher splash may only fade once the menu is really on screen, otherwise
+/// the window shows black while the swapchain is rebuilt.
+#[cfg(target_os = "android")]
+fn note_title_frame() {
+    static FRAMES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    if FRAMES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1 >= 8 {
+        signal_menu_ready();
+    }
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn android_reset_bundled_mods() {
+    android_bundled::reset();
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn android_game(arguments: Vec<String>) -> Result<Box<dyn ApplicationHandler>> {
+    horizon_client::auth::clear_current();
+    let mut options = Options::read_arguments(arguments)?.ok_or("missing Android options")?;
+    if crate::performance::active() {
+        options.spikes = Some(50.0);
+    }
+    horizon_client::spans::enable(options.spikes.is_some());
+    let settings = Settings::load(&std::env::current_dir()?.join("options.txt"));
+    let root = options.resources.clone();
+    horizon_threads::put_helpers_behind();
+    // The render thread on the phone's fast cores (a no-op where they are all alike).
+    horizon_threads::prefer_big_cores();
+    Behaviours::set_cache_dir(std::env::current_dir()?.join(".horizon-cache"));
+    Ok(Box::new(loading_app(
+        options,
+        settings,
+        root,
+        None,
+        Instant::now(),
+    )?))
 }

@@ -265,8 +265,8 @@ fn packed_interface_preserves_rgb_fog_fade_and_all_hdr_tiers_on_gpu() {
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).unwrap();
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).unwrap();
     for variant in 0..3 {
-        let original = render(&device, &queue, &super::terrain_shader(false), variant);
-        let packed = render(&device, &queue, &super::terrain_shader(true), variant);
+        let original = render(&device, &queue, &super::terrain_shader_for(false), variant);
+        let packed = render(&device, &queue, &super::terrain_shader_for(true), variant);
         assert_eq!(original, packed, "RGB/alpha differs for scene {variant}");
         if variant < 2 {
             for emission in 0..16usize {

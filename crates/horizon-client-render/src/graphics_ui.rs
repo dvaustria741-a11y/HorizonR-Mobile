@@ -116,6 +116,8 @@ pub enum H {
     HdrLighting,
     BatteryMode,
     ShadowCache,
+    MenuBackgroundCache,
+    PackWorkers,
     /// Opens the shader pack list (`options_ui::Page::ShaderPacks`).
     ShaderPacks,
     GraphicsApi,
@@ -654,14 +656,16 @@ pub fn rows() -> Vec<(Page, Vec<(&'static str, Vec<Setting>)>)> {
     ];
     // Only Windows and Linux have more than one graphics API, translucent batching (Metal
     // draws flat) and GPU culling (Metal draws no count the GPU wrote).
-    if cfg!(target_os = "macos") {
+    if cfg!(any(target_os = "macos", target_os = "android")) {
         for (_, groups) in &mut pages {
             for (_, rows) in groups {
                 rows.retain(|r| {
-                    !matches!(
-                        r.item,
-                        Item::Horizon(H::GraphicsApi | H::TranslucentBatching | H::GpuCulling)
-                    )
+                    !matches!(r.item, Item::Horizon(H::GraphicsApi))
+                        && !(cfg!(target_os = "macos")
+                            && matches!(
+                                r.item,
+                                Item::Horizon(H::TranslucentBatching | H::GpuCulling)
+                            ))
                 });
             }
         }
@@ -821,6 +825,11 @@ impl H {
             }
             H::Workers => Some(g.workers as f32 / max_workers() as f32),
             H::ResolutionScale => Some((g.resolution_scale as f32 - 50.0) / 150.0),
+            // Off, then 30..100 by 5.
+            H::DynamicResolution => Some(match g.dynamic_resolution {
+                false => 0.0,
+                true => ((g.dynamic_resolution_min as f32 - 30.0) / 5.0 + 1.0) / 15.0,
+            }),
             H::UpscalingSharpness => Some(g.upscaling_sharpness as f32 / 100.0),
             // Auto, then 10..480 by 10.
             H::HdrPaperWhite => Some(g.hdr_paper_white as f32 / 480.0),
@@ -841,6 +850,7 @@ impl H {
             H::UploadBudget => Some((UPLOAD_STEPS.len() - 1) as u32),
             H::Workers => Some(max_workers()),
             H::ResolutionScale => Some(30),
+            H::DynamicResolution => Some(15),
             H::UpscalingSharpness => Some(20),
             H::HdrPaperWhite => Some(41),
             H::HdrPeak => Some(37),
@@ -979,6 +989,10 @@ impl H {
             H::BatteryMode => labelled("Battery Mode", on_off(g.battery)),
             H::ShadowCache => labelled("Shadow Cache", on_off(g.shadow_cache)),
             // A press across the row, as Calibrate...: the list it opens shows the pick.
+            H::MenuBackgroundCache => {
+                labelled("Menu Background Cache", on_off(g.menu_background_cache))
+            }
+            H::PackWorkers => labelled("Pack Worker Threads", on_off(g.pack_workers)),
             H::ShaderPacks => Text::literal(lang::get("Shader Packs...")),
             H::GraphicsApi => labelled("Graphics API", g.api.label()),
             // These two are greyed out where the device can't (`Item::blocked`): Off, as
@@ -1015,6 +1029,13 @@ impl H {
             }
             H::Workers => g.workers = (v * max_workers() as f32).round() as u32,
             H::ResolutionScale => g.resolution_scale = (50.0 + (v * 30.0).round() * 5.0) as u32,
+            H::DynamicResolution => match (v * 15.0).round() as u32 {
+                0 => g.dynamic_resolution = false,
+                step => {
+                    g.dynamic_resolution = true;
+                    g.dynamic_resolution_min = 30 + (step - 1) * 5;
+                }
+            },
             H::UpscalingSharpness => g.upscaling_sharpness = (v * 20.0).round() as u32 * 5,
             H::HdrPaperWhite => g.hdr_paper_white = (v * 48.0).round() as u32 * 10,
             H::HdrPeak => {
@@ -1327,6 +1348,8 @@ impl Item {
                         | H::TranslucentBatching
                         | H::HdrSmoothGradients
                         | H::GpuCulling
+                        | H::MenuBackgroundCache
+                        | H::PackWorkers
                 )
                 | Item::Vanilla(
                     Opt::GuiScale

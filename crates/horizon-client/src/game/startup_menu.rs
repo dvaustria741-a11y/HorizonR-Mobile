@@ -581,6 +581,8 @@ impl Loading {
                     self.menu.controls.viewport(size[0], size[1]);
                     self.menu.controls.open_editor();
                 }
+                // Mod settings open from a world's Mods page; the title has no mods running.
+                Event::ModSettings(_) => {}
                 Event::Changed => {
                     self.save_menu_settings();
                     self.apply_menu_settings();

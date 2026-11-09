@@ -16,7 +16,7 @@ impl Game<'_> {
             gui,
             self.renderer.as_ref(),
             None,
-            self.settings.horizon.api,
+            rendering_api(&self.settings),
             self.settings.horizon.translucent_batching,
             self.settings.horizon.wide_frame(),
             shader_packs::picked_pack_shape(&self.settings),
@@ -94,6 +94,19 @@ impl Game<'_> {
     }
 
     pub(super) fn apply_settings(&mut self) {
+        #[cfg(target_os = "android")]
+        {
+            self.pad.touch.settings = self.settings.touch.clone();
+            self.pad.touch.force_crosshair =
+                !crate::touch_visible() || self.settings.keypad.enabled;
+            let changed =
+                horizon_client::android_runtime::keypad_enabled() != self.settings.keypad.enabled;
+            horizon_client::android_runtime::configure_keypad_settings(&self.settings.keypad);
+            if changed {
+                self.pad.touch.clear();
+                crate::touch_input(!self.settings.keypad.enabled);
+            }
+        }
         // LocalPlayer.refreshChatAbilities: the chat shows what the Chat option allows.
         let abilities = self.chat_abilities();
         self.ui.chat.set_abilities(&self.gui.atlas.font, abilities);
@@ -154,6 +167,12 @@ impl Game<'_> {
             Some(offer) => g.lod_distance.min(offer.distance),
             None => g.lod_distance,
         };
+        // LOD Distance off: a WebAssembly mod's far terrain (`render.set-far-terrain`).
+        if distance == 0
+            && let Some(f) = self.mod_far_terrain()
+        {
+            return (f.distance, reduced || f.reduced);
+        }
         (distance, reduced)
     }
     /// The far terrain another machine's server samples for us

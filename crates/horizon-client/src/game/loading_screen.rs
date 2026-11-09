@@ -61,6 +61,8 @@ pub(super) struct Loading {
     pub(super) progress: Progress,
     pub(super) receiver: Receiver<LoaderMsg>,
     pub(super) loaded: Option<std::result::Result<Loaded, String>>,
+    pub(super) renderer_job: Option<JoinHandle<std::result::Result<Renderer, String>>>,
+    pub(super) prepared_renderer: Option<Renderer>,
     /// The loader's `Done` arrived: its channel closing afterwards is expected.
     pub(super) delivered: bool,
     pub(super) handle: Option<JoinHandle<()>>,
@@ -80,6 +82,94 @@ impl Loading {
     /// The world renderer is built on the main thread, so building it before
     /// the title is on the screen holds the title back by that build. Wait for
     /// one title frame first, unless a world is waiting to open.
+    /// Keep window/input/lifecycle events flowing while Vulkan creates the
+    /// full game's textures and pipelines. The worker never owns a surface.
+    pub(super) fn prepare_renderer(&mut self) -> Result<()> {
+        if self.menu.reload_packs {
+            return Ok(());
+        }
+        if let Some(job) = &self.renderer_job {
+            if !job.is_finished() {
+                return Ok(());
+            }
+            let job = self.renderer_job.take().unwrap();
+            self.prepared_renderer = Some(job.join().map_err(|_| "renderer worker panicked")??);
+            return Ok(());
+        }
+        if !cfg!(target_os = "android") || self.prepared_renderer.is_some() {
+            return Ok(());
+        }
+        let Some(Ok(loaded)) = &mut self.loaded else {
+            return Ok(());
+        };
+        // Without the worker's textures the renderer makes its own on the main thread.
+        if loaded.renderer_cpu.is_none() {
+            return Ok(());
+        }
+        let Some(previous) = &self.renderer else {
+            return Ok(());
+        };
+        let options = self.options.as_ref().ok_or("loading already finished")?;
+        if options.offscreen || previous.info.backend != wgpu::Backend::Vulkan {
+            return Ok(());
+        }
+        let gui = self.gui.as_ref().ok_or("missing menu bundle")?;
+        let window = self.window.clone().ok_or("window closed")?;
+        let context = previous.background_context();
+        let assets = loaded.pack.render.clone();
+        let forcefield = loaded.pack.forcefield.clone();
+        let panorama = gui.panorama.clone();
+        let hud = (
+            gui.atlas.pixels().into_owned(),
+            gui.atlas.width,
+            gui.atlas.height,
+        );
+        let glint = gui.atlas.glint.clone();
+        let glint_armor = gui.atlas.glint_armor.clone();
+        let prepared = loaded.renderer_cpu.take();
+        let api = rendering_api(&self.settings);
+        let translucent_batching = self.settings.horizon.translucent_batching;
+        let wide_frame = self.settings.horizon.wide_frame();
+        let shader_pack = shader_packs::picked_pack_shape(&self.settings);
+        self.renderer_job = Some(
+            std::thread::Builder::new()
+                .name("Renderer preparation".into())
+                .spawn(move || {
+                    let started = Instant::now();
+                    let pixels = assets.pixels.get();
+                    let result = pollster::block_on(Renderer::new_with_context(
+                        window,
+                        true,
+                        &pixels,
+                        assets.sprite_size,
+                        assets.sprite_minimum_size,
+                        assets.texture_layers,
+                        &assets.sprite_mips,
+                        &assets.animations,
+                        (&hud.0, hud.1, hud.2),
+                        (&glint.0, glint.1, glint.2),
+                        (&glint_armor.0, glint_armor.1, glint_armor.2),
+                        (&forcefield.2, forcefield.0),
+                        panorama,
+                        prepared,
+                        Some(context),
+                        api,
+                        translucent_batching,
+                        wide_frame,
+                        shader_pack.draws_flat,
+                        shader_pack.linear,
+                        shader_pack.hdr_float,
+                    ))
+                    .map_err(|error| error.to_string());
+                    log::info!(
+                        "Horizon: background renderer prepared in {} ms",
+                        started.elapsed().as_millis()
+                    );
+                    result
+                })?,
+        );
+        Ok(())
+    }
     pub(super) fn ready_for_handoff(&self) -> bool {
         self.title_drawn
             || self.menu.pending.is_some()
@@ -154,7 +244,7 @@ impl Loading {
             Some(&self.boot),
             None,
             None,
-            self.settings.horizon.api,
+            rendering_api(&self.settings),
         ) {
             Ok(r) => self.renderer = Some(r),
             Err(e) => {
@@ -163,7 +253,7 @@ impl Loading {
                     stop.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 self.error = Some(e);
-                event_loop.exit();
+                crate::game::exit_app(event_loop);
                 return;
             }
         }
@@ -189,7 +279,7 @@ impl Loading {
         follow_keymap(&mut event);
         if let Err(error) = self.menu_event(event_loop, event) {
             self.error = Some(error);
-            event_loop.exit();
+            crate::game::exit_app(event_loop);
         }
     }
     /// The menu bundle arrived: rebuild the loading screen with the real atlas
@@ -219,7 +309,7 @@ impl Loading {
             Some(&bundle.atlas),
             Some(&bundle.panorama),
             self.renderer.as_ref(),
-            self.settings.horizon.api,
+            rendering_api(&self.settings),
         ) {
             Ok(r) => {
                 horizon_client::hud::GUI_SCALE.store(self.settings.gui_scale, Ordering::Relaxed);
@@ -239,12 +329,12 @@ impl Loading {
         }
         if horizon_threads::stop_requests() > 0 {
             // No world is open yet: nothing to save.
-            event_loop.exit();
+            crate::game::exit_app(event_loop);
             return;
         }
         if let Err(error) = self.poll_menu_resources() {
             self.error = Some(error);
-            event_loop.exit();
+            crate::game::exit_app(event_loop);
             return;
         }
         self.poll_menu_realms(event_loop);
@@ -265,6 +355,17 @@ impl Loading {
         else {
             return;
         };
+        let now = Instant::now();
+        let frame_ms = self
+            .menu
+            .last_frame
+            .replace(now)
+            .map(|last| now.duration_since(last).as_secs_f32() * 1000.0);
+        #[cfg(target_os = "android")]
+        crate::diagnostics::heartbeat(
+            "game_resource_loading",
+            || serde_json::json!({"gpu":self.renderer.as_ref().map(|r| &r.info.name)}),
+        );
         let mut batch = HudBatch::new(size);
         self.draw_menu(&mut batch);
         self.menu.frame_drawn((batch.width, batch.height));
@@ -277,10 +378,23 @@ impl Loading {
             match renderer.render(&frame) {
                 Ok(true) if self.gui.is_some() && self.menu.pending.is_none() => {
                     self.title_drawn = true;
-                    self.menu.perf.title_shown()
+                    self.menu.perf.title_shown();
+                    #[cfg(target_os = "android")]
+                    note_title_frame();
                 }
                 Ok(_) => {}
                 Err(e) => log::warn!("Horizon: loading screen frame failed: {e}"),
+            }
+            if let Some(frame_ms) = frame_ms {
+                let cpu = now
+                    .elapsed()
+                    .saturating_sub(renderer.last_wait)
+                    .as_secs_f32()
+                    * 1000.0;
+                self.menu
+                    .frame_graph
+                    .record(frame_ms, cpu, renderer.gpu_times.last().copied());
+                renderer.gpu_times.clear();
             }
         }
         if !self.shown {
@@ -306,24 +420,38 @@ impl Loading {
             renderer.release_surface();
         }
         let renderer_at = Instant::now();
-        let renderer = startup::time("renderer.world", || {
-            build_renderer(
-                window.clone(),
-                options.offscreen,
-                &loaded.pack,
-                &gui,
-                self.renderer.as_ref(),
-                loaded.renderer_cpu,
-                self.settings.horizon.api,
-                self.settings.horizon.translucent_batching,
-                self.settings.horizon.wide_frame(),
-                shader_packs::picked_pack_shape(&self.settings),
-                (
-                    self.settings.file.int("textureFiltering"),
-                    self.settings.file.int("maxAnisotropyBit"),
-                ),
-            )
-        })?;
+        let filtering = (
+            self.settings.file.int("textureFiltering"),
+            self.settings.file.int("maxAnisotropyBit"),
+        );
+        let renderer = if let Some(mut renderer) = self.prepared_renderer.take() {
+            startup::time("renderer.world", || -> Result<Renderer> {
+                renderer.activate_replacement(
+                    self.renderer.as_mut().ok_or("missing loading renderer")?,
+                )?;
+                // Glyphs are still being drawn into the loading atlas until this
+                // handoff; invalidate only now, after the new GPU atlas is ready.
+                gui.atlas.font.reset_cache();
+                finish_renderer(&mut renderer, &loaded.pack, &gui.atlas, filtering)?;
+                Ok(renderer)
+            })?
+        } else {
+            startup::time("renderer.world", || {
+                build_renderer(
+                    window.clone(),
+                    options.offscreen,
+                    &loaded.pack,
+                    &gui,
+                    self.renderer.as_ref(),
+                    loaded.renderer_cpu,
+                    rendering_api(&self.settings),
+                    self.settings.horizon.translucent_batching,
+                    self.settings.horizon.wide_frame(),
+                    shader_packs::picked_pack_shape(&self.settings),
+                    filtering,
+                )
+            })?
+        };
         log::info!(
             "Horizon: world renderer ready after {} ms",
             self.started.elapsed().as_millis()
@@ -333,6 +461,13 @@ impl Loading {
         let audio = if !options.execution_role.is_client() {
             Audio::silent(&options.resources)
         } else {
+            #[cfg(target_os = "android")]
+            {
+                self.menu.audio.take().unwrap_or_else(|| {
+                    Audio::with_device(&options.resources, &self.settings.sound_device)
+                })
+            }
+            #[cfg(not(target_os = "android"))]
             Audio::with_device(&options.resources, &self.settings.sound_device)
         };
         let pack_error = loaded.pack_error.or_else(|| self.pack_error.take());
@@ -391,6 +526,17 @@ pub(super) enum App {
     Ready(Box<split::Split<'static>>),
 }
 impl ApplicationHandler for App {
+    #[cfg(target_os = "android")]
+    fn suspended(&mut self, event_loop: &ActiveEventLoop) {
+        match self {
+            App::Ready(game) => game.suspended(event_loop),
+            App::Loading(loading) => {
+                if let Some(renderer) = &mut loading.renderer {
+                    renderer.suspend_surface();
+                }
+            }
+        }
+    }
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         match self {
             App::Loading(loading) => loading.resumed(event_loop),
@@ -415,6 +561,14 @@ impl ApplicationHandler for App {
             Done,
             Failed(Box<dyn std::error::Error>),
         }
+        #[cfg(target_os = "android")]
+        if matches!(self, App::Loading(loading) if loading.renderer.as_ref().is_some_and(|r| r.suspended))
+        {
+            // A ready worker must not recreate a surface while Android owns
+            // no native window. Its messages stay queued until resumed.
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
         let step = match self {
             App::Ready(game) => {
                 game.about_to_wait(event_loop);
@@ -423,10 +577,18 @@ impl ApplicationHandler for App {
             App::Loading(loading) => {
                 loading.about_to_wait(event_loop);
                 if loading.error.is_some() {
-                    event_loop.exit();
+                    crate::game::exit_app(event_loop);
                     return;
                 }
-                match if loading.menu.reload_packs || !loading.ready_for_handoff() {
+                if let Err(error) = loading.prepare_renderer() {
+                    loading.error = Some(error);
+                    crate::game::exit_app(event_loop);
+                    return;
+                }
+                match if loading.menu.reload_packs
+                    || loading.renderer_job.is_some()
+                    || !loading.ready_for_handoff()
+                {
                     None
                 } else {
                     loading.loaded.take()
@@ -444,12 +606,12 @@ impl ApplicationHandler for App {
         match step {
             Step::Waiting => {}
             Step::Ready(game) => *self = App::Ready(game),
-            Step::Done => event_loop.exit(),
+            Step::Done => crate::game::exit_app(event_loop),
             Step::Failed(e) => {
                 if let App::Loading(loading) = self {
                     loading.error = Some(e);
                 }
-                event_loop.exit();
+                crate::game::exit_app(event_loop);
             }
         }
     }

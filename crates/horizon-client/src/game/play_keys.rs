@@ -122,7 +122,8 @@ impl Game<'_> {
                 Screen::Chat => self.close_chat(chat::ChatExit::Intentional),
                 Screen::Win => self.close_win_screen()?,
                 Screen::DebugOptions => self.close_debug_options(),
-                Screen::Mod => self.close_mod_screen(),
+                Screen::Mod if self.native_mod_screen().is_some() => self.close_mod_screen(),
+                Screen::Mod => self.close_wasm_mod_screen(true),
                 Screen::HudEditor => self.close_hud_editor(),
             },
             // `checkHotbarKeyPressed`: the keys the controls bind to the off

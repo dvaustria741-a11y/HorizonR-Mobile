@@ -77,6 +77,13 @@ mod i18n {
     pub fn tr(en: &str) -> &str {
         en
     }
+    pub fn trf(en: &str, args: &[(&str, &str)]) -> String {
+        let mut out = en.to_owned();
+        for (key, value) in args {
+            out = out.replace(&format!("{{{key}}}"), value);
+        }
+        out
+    }
 }
 mod native_mods {
     pub const INSTALLED: &str = "horizon-native-mods";

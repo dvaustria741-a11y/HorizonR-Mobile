@@ -101,7 +101,7 @@ impl Game<'_> {
     pub(super) fn menu_blur(&self) -> Option<f32> {
         let blurred = self.remote_loading()
             || self.title.as_ref().is_some_and(|t| {
-                matches!(self.screen, Screen::Options | Screen::Win)
+                matches!(self.screen, Screen::Options | Screen::Mod | Screen::Win)
                     || !matches!(t.mode, horizon_client::title::Mode::Main)
             })
             || (self.title.is_none()
@@ -132,6 +132,67 @@ impl Game<'_> {
                 rgba(16, 16, 16, 160),
             );
         }
+    }
+    /// The pause menu and the screens opened from it (Options, Advancements, Statistics, World
+    /// Options, Friends, Social, Server Links, Debug Options) that blur the paused world behind them.
+    fn pause_screen_over_world(&self) -> bool {
+        match self.screen {
+            Screen::Paused => self.pause_menu,
+            Screen::Options
+            | Screen::Stats
+            | Screen::Advancements
+            | Screen::WorldOptions
+            | Screen::Friends
+            | Screen::Social
+            | Screen::ServerLinks
+            | Screen::DebugOptions => true,
+            _ => false,
+        }
+    }
+    /// Names the menu background the renderer may keep instead of drawing the world again
+    /// (`Frame::bg_cache`). Only over the pause menu and its sub-screens of a paused single-player
+    /// world and over the inventory, a quarter second after the screen opened so the world has
+    /// settled. The paused world cannot change, so its key stays the same until the screen
+    /// does; the inventory leaves the world running, so its key changes twice a second and
+    /// the background follows at that rate. Everything else (any other screen, the title,
+    /// loading, a prompt, a book, a dialog) draws the world every frame and drops the kept
+    /// image. The renderer also drops it on a resize and when a shader pack is installed;
+    /// the key covers the screen, the blur radius and the picked pack.
+    pub(super) fn background_cache_key(&mut self) -> Option<u64> {
+        let eligible = self.settings.horizon.menu_background_cache
+            && self.title.is_none()
+            && self.player.is_some()
+            && !self.remote_loading()
+            && !self.dialog_open()
+            && self.book.is_none()
+            && self.server_packs.prompt.is_none()
+            && ((self.pause_screen_over_world() && self.pause) || self.screen == Screen::Inventory);
+        if !eligible {
+            self.bg_cache_since = None;
+            return None;
+        }
+        let age = self
+            .bg_cache_since
+            .get_or_insert_with(Instant::now)
+            .elapsed();
+        if age < Duration::from_millis(250) {
+            return None;
+        }
+        use std::hash::{Hash, Hasher};
+        let mut hash = std::collections::hash_map::DefaultHasher::new();
+        // The pause menu and the screens opened from it share one kept background: going from
+        // one to another over the same paused world does not draw the world again.
+        if self.pause_screen_over_world() {
+            0u8.hash(&mut hash);
+        } else {
+            std::mem::discriminant(&self.screen).hash(&mut hash);
+        }
+        self.settings.menu_blur.hash(&mut hash);
+        self.settings.horizon.shader_pack.hash(&mut hash);
+        if !self.pause {
+            (age.as_millis() / 500).hash(&mut hash);
+        }
+        Some(hash.finish())
     }
     /// `LevelExtractor` / `LevelRenderer`: the world border wall this frame.
     pub(super) fn border_draw(

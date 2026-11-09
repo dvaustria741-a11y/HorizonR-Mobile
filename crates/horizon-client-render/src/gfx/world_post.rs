@@ -580,7 +580,7 @@ impl Post {
         } else {
             &self.copy
         };
-        self.draw_onto(encoder, screen, &taa.show[i], pipeline, timing);
+        self.draw_onto(encoder, screen, &taa.show[i], pipeline, None, timing);
     }
 
     /// Draw what `group` binds (`bind`) onto `screen`.
@@ -596,16 +596,35 @@ impl Post {
         } else {
             &self.copy
         };
-        self.draw_onto(encoder, screen, group, pipeline, timing);
+        self.draw_onto(encoder, screen, group, pipeline, None, timing);
     }
 
-    /// Draw what `group` binds onto `screen` through `pipeline`.
+    /// `finish_with`, into `rect` (x, y, width, height) of `screen`: the part of an Android
+    /// window that is not under a display cutout or system bars.
+    pub fn finish_in_rect(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        screen: &wgpu::TextureView,
+        group: &wgpu::BindGroup,
+        rect: Option<[u32; 4]>,
+        timing: Option<&mut super::pack_timing::PassTiming>,
+    ) {
+        let pipeline = if self.antialias {
+            &self.fxaa
+        } else {
+            &self.copy
+        };
+        self.draw_onto(encoder, screen, group, pipeline, rect, timing);
+    }
+
+    /// Draw what `group` binds onto `screen` (inside `rect`, when given) through `pipeline`.
     fn draw_onto(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         screen: &wgpu::TextureView,
         group: &wgpu::BindGroup,
         pipeline: &wgpu::RenderPipeline,
+        rect: Option<[u32; 4]>,
         timing: Option<&mut super::pack_timing::PassTiming>,
     ) {
         let attachments = [Some(wgpu::RenderPassColorAttachment {
@@ -623,6 +642,10 @@ impl Post {
             color_attachments: &attachments,
             ..Default::default()
         });
+        if let Some([x, y, w, h]) = rect {
+            pass.set_viewport(x as f32, y as f32, w as f32, h as f32, 0.0, 1.0);
+            pass.set_scissor_rect(x, y, w, h);
+        }
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, group, &[]);
         pass.draw(0..3, 0..1);

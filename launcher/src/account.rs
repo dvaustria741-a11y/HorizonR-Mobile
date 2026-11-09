@@ -1824,12 +1824,21 @@ pub fn store() -> &'static dyn SecretStore {
     static STORE: OnceLock<Box<dyn SecretStore>> = OnceLock::new();
     STORE
         .get_or_init(|| {
-            #[cfg(all(not(test), any(target_os = "linux", target_os = "freebsd")))]
-            if std::env::var_os("HORIZON_NO_KEYCHAIN").is_none() {
-                return Box::new(Layered::new(
-                    Box::new(Bounded::new(SystemStore, KEYCHAIN_WAIT)),
-                    FileStore::launcher(),
-                ));
+            #[cfg(all(target_os = "android", not(test)))]
+            return Box::new(crate::secure_store::AndroidStore);
+            #[cfg(any(not(target_os = "android"), test))]
+            {
+                #[cfg(all(not(test), any(target_os = "linux", target_os = "freebsd")))]
+                if std::env::var_os("HORIZON_NO_KEYCHAIN").is_none() {
+                    return Box::new(Layered::new(
+                        Box::new(Bounded::new(SystemStore, KEYCHAIN_WAIT)),
+                        FileStore::launcher(),
+                    ));
+                }
+                keychain_or_why().unwrap_or_else(|why| {
+                    let _ = NO_KEYCHAIN_WHY.set(why);
+                    Box::<MemoryStore>::default()
+                })
             }
         })
         .as_ref()

@@ -300,6 +300,7 @@ fn official_in(index: Option<&Index>, id: &str) -> bool {
 /// What the player reads about a registry project before installing it: who made it, whether its
 /// files are signed, and for a mod what it may do, in the game's words (Options > Mods). A native
 /// mod says it runs with the player's rights, and how it fits the Horizon `instance` plays.
+#[cfg(not(target_os = "android"))]
 pub fn trust_and_capabilities(
     id: &str,
     instance: Option<&crate::instances::Instance>,
@@ -1009,7 +1010,11 @@ pub fn before_play(home: &Path) {
     });
 }
 
+// Automatic updates and the native-mod fit line need the launcher's instances, which the app lacks.
+#[cfg(not(target_os = "android"))]
+#[path = "horizon/auto.rs"]
 pub mod auto;
+#[path = "horizon/pack.rs"]
 pub mod pack;
 #[cfg(test)]
 #[path = "horizon/tests.rs"]

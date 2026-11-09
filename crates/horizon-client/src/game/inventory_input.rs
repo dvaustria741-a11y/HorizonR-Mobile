@@ -118,6 +118,10 @@ impl Game<'_> {
             return;
         }
         let (slot, outside) = self.inventory_target();
+        #[cfg(target_os = "android")]
+        if slot.is_some() {
+            self.audio.play_button_click();
+        }
         let shift = self.has_shift_down();
         let target = Target::of(slot, outside);
         let input = self.inv_clicks.press(

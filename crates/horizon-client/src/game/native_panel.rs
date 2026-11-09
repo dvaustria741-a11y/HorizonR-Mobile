@@ -215,7 +215,7 @@ impl Game<'_> {
             return None;
         };
         let of = (shown.owner.clone(), shown.version);
-        if self.screen == Screen::Creative && of.0.native_id() != "recipes" {
+        if self.screen == Screen::Creative && of.0.native_id() != Some("recipes") {
             return None;
         }
         if self.panel.of.as_ref() != Some(&of) {
@@ -260,7 +260,7 @@ impl Game<'_> {
             .panel
             .of
             .as_ref()
-            .is_some_and(|(owner, _)| owner.native_id() == "recipes");
+            .is_some_and(|(owner, _)| owner.native_id() == Some("recipes"));
         let left = if self.screen == Screen::Creative {
             Self::creative_origin(batch).0 + 198.0 + MARGIN
         } else {
@@ -413,7 +413,7 @@ impl Game<'_> {
             .panel
             .of
             .as_ref()
-            .is_some_and(|(owner, _)| owner.native_id() == "recipes");
+            .is_some_and(|(owner, _)| owner.native_id() == Some("recipes"));
         if pages > 1 || (square && !self.panel.stacks.is_empty()) {
             let labels = [
                 self.translate("gui.recipebook.previous_page", "Previous Page"),
@@ -500,7 +500,7 @@ impl Game<'_> {
             .panel
             .of
             .as_ref()
-            .is_some_and(|(owner, _)| owner.native_id() == "recipes")
+            .is_some_and(|(owner, _)| owner.native_id() == Some("recipes"))
             .then_some("horizon/jei/search_background_v2");
         let search = self.browser_search(&layout);
         // The hint shows in an empty box without focus, as the recipe book's.
@@ -594,7 +594,7 @@ impl Game<'_> {
         }
         let pages = self.browser_pages(&layout);
         let page = self.panel.page;
-        let [back, forward] = layout.browser_arrow_rects(owner.native_id() == "recipes");
+        let [back, forward] = layout.browser_arrow_rects(owner.native_id() == Some("recipes"));
         let step = if pages > 1 && page > 0 && inside(cursor, back) {
             Some(page - 1)
         } else if pages > 1 && page + 1 < pages && inside(cursor, forward) {
@@ -690,7 +690,7 @@ impl Game<'_> {
         let Some(owner) = self.browser_sync() else {
             return false;
         };
-        if owner.native_id() != "recipes" || self.panel.recipes.is_none() {
+        if owner.native_id() != Some("recipes") || self.panel.recipes.is_none() {
             return false;
         }
         self.mod_browser_closed();
@@ -699,7 +699,7 @@ impl Game<'_> {
     }
     pub(super) fn close_transferred_recipe(&mut self) {
         if let Some(owner) = self.browser_sync()
-            && owner.native_id() == "recipes"
+            && owner.native_id() == Some("recipes")
             && self.panel.recipes.is_some()
         {
             self.mod_browser_closed();

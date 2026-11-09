@@ -1063,7 +1063,7 @@ impl Game<'_> {
     ) -> Result<(), String> {
         let m = Measure(&self.gui.atlas.font);
         let c = Commands {
-            dispatcher: chat_tree(&self.remote),
+            dispatcher: chat_tree(&self.remote, &self.mods),
             registries: &self.ui.registries,
         };
         let Some(screen) = self.ui.chat_screen.as_mut() else {
