@@ -3,15 +3,23 @@ use super::world_post;
 
 pub(super) struct FrameScale {
     post: world_post::Post,
+    /// The swapchain's format: what the scaled frame is drawn onto.
     format: wgpu::TextureFormat,
+    /// The frame's own format: what every pass of the frame draws in.
+    frame_format: wgpu::TextureFormat,
     target: Option<(wgpu::Texture, wgpu::BindGroup)>,
 }
 
 impl FrameScale {
-    pub(super) fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+    pub(super) fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        frame_format: wgpu::TextureFormat,
+    ) -> Self {
         Self {
             post: world_post::Post::new(device, format),
             format,
+            frame_format,
             target: None,
         }
     }
@@ -32,7 +40,7 @@ impl FrameScale {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: self.format,
+                format: self.frame_format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,

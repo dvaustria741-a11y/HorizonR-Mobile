@@ -8735,12 +8735,22 @@ impl Renderer {
             }
         };
         #[cfg(target_os = "android")]
+        let surface_texture_format = surface_frame.as_ref().map(|f| f.texture.format());
+        #[cfg(target_os = "android")]
         let target_texture = if self.hdr.is_none() && scaled_presentation {
             self.frame_scale
                 .get_or_insert_with(|| {
+                    log::info!(
+                        "Horizon renderer: scaled frame {:?} onto swapchain {:?} (frame {:?}, overlay {:?})",
+                        self.config.format,
+                        surface_texture_format,
+                        self.output.frame.format,
+                        self.output.frame.overlay_format
+                    );
                     frame_scale::FrameScale::new(
                         &self.device,
                         self.config.format.remove_srgb_suffix(),
+                        self.output.frame.format,
                     )
                 })
                 .frame(&self.device, size)
