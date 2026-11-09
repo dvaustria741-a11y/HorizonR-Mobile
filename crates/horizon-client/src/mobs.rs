@@ -490,26 +490,47 @@ pub struct MobTypes {
 }
 impl MobTypes {
     pub fn load(root: &Path) -> crate::Result<Self> {
-        Self::load_with_models(root, true, None)
+        Self::load_with_models(root, true, None, None)
+    }
+
+    /// Load client mob data using defaults already decoded by the resource
+    /// bootstrap. This avoids decoding `items.json` a second time for Allay
+    /// inventory limits.
+    pub fn load_with_defaults(
+        root: &Path,
+        defaults: &horizon_world::item_defaults::Defaults,
+    ) -> crate::Result<Self> {
+        Self::load_with_models(root, true, None, Some(defaults))
     }
 
     /// The dedicated server needs entity facts and AI, but never their render
     /// geometry. Keep one empty part for the fields shared with the client
     /// rather than parsing and retaining every entity-model layer.
     pub fn load_for_server(root: &Path) -> crate::Result<Self> {
-        Self::load_with_models(root, false, None)
+        Self::load_with_models(root, false, None, None)
     }
 
     /// The client startup already parsed `entity-models.json` for the handoff
     /// and the other model loaders; read the model layers from that copy.
     pub fn load_with_document(root: &Path, document: &EntityModelDocument) -> crate::Result<Self> {
-        Self::load_with_models(root, true, Some(document))
+        Self::load_with_models(root, true, Some(document), None)
+    }
+
+    /// The client startup already has both the entity model document and the
+    /// item defaults. Reuse both instead of decoding either file again.
+    pub fn load_with_document_and_defaults(
+        root: &Path,
+        document: &EntityModelDocument,
+        defaults: &horizon_world::item_defaults::Defaults,
+    ) -> crate::Result<Self> {
+        Self::load_with_models(root, true, Some(document), Some(defaults))
     }
 
     fn load_with_models(
         root: &Path,
         models_needed: bool,
         document: Option<&EntityModelDocument>,
+        item_defaults: Option<&horizon_world::item_defaults::Defaults>,
     ) -> crate::Result<Self> {
         let bytes = fs::read(root.join("entity-types.json"))?;
         let types: Value = serde_json::from_slice(&bytes)?;
@@ -539,24 +560,43 @@ impl MobTypes {
         };
         // The Allay's InventoryCarrier loading needs item limits before a
         // Game exists. Other mob-only resource sets need no item data.
-        let items: HashMap<String, Value> = if types.get("minecraft:allay").is_some() {
-            serde_json::from_slice(&fs::read(root.join("items.json"))?)?
-        } else {
-            HashMap::new()
-        };
-        let item_stack_limits: Arc<HashMap<String, u32>> = Arc::new(
-            items
-                .into_iter()
-                .map(|(id, components)| {
-                    (
-                        id,
-                        components["minecraft:max_stack_size"]
-                            .as_u64()
-                            .unwrap_or(64) as u32,
+        let item_stack_limits: Arc<HashMap<String, u32>> = if types.get("minecraft:allay").is_some()
+        {
+            match item_defaults {
+                Some(items) => Arc::new(
+                    items
+                        .iter()
+                        .map(|(id, components)| {
+                            (
+                                id.clone(),
+                                components["minecraft:max_stack_size"]
+                                    .as_u64()
+                                    .unwrap_or(64) as u32,
+                            )
+                        })
+                        .collect(),
+                ),
+                None => {
+                    let items: HashMap<String, Value> =
+                        serde_json::from_slice(&fs::read(root.join("items.json"))?)?;
+                    Arc::new(
+                        items
+                            .into_iter()
+                            .map(|(id, components)| {
+                                (
+                                    id,
+                                    components["minecraft:max_stack_size"]
+                                        .as_u64()
+                                        .unwrap_or(64) as u32,
+                                )
+                            })
+                            .collect(),
                     )
-                })
-                .collect(),
-        );
+                }
+            }
+        } else {
+            Arc::new(HashMap::new())
+        };
         let mut out = HashMap::new();
         // A content mod's living type (its row names a vanilla `template`) is
         // its template's mob under its own id: the template's model, sounds
@@ -722,6 +762,8 @@ pub enum DamageKind {
     Fireball,
     Explosion,
     Fall,
+    /// `fly_into_wall`: gliding into a horizontal collision.
+    FlyIntoWall,
     FallingBlock,
     FallingStalactite,
     OnFire,
@@ -933,6 +975,7 @@ impl Damage {
         matches!(
             self.kind,
             DamageKind::Fall
+                | DamageKind::FlyIntoWall
                 | DamageKind::OnFire
                 | DamageKind::Drown
                 | DamageKind::Magic
@@ -974,6 +1017,7 @@ impl Damage {
             self.kind,
             DamageKind::Explosion
                 | DamageKind::Fall
+                | DamageKind::FlyIntoWall
                 | DamageKind::OnFire
                 | DamageKind::InFire
                 | DamageKind::Campfire
@@ -1132,6 +1176,9 @@ pub struct Extra {
     pub party_jukebox: Option<[i32; 3]>,
     /// The owner's UUID (tamed animals).
     pub owner: Option<[i32; 4]>,
+    /// `Vindicator.isJohnny`: a custom name that was ever `Johnny`, which
+    /// `setCustomName` latches and nothing clears.
+    pub johnny: bool,
     /// Slime/magma cube size (0 = not sized).
     pub size: i32,
     /// Sheep eat-grass / iron golem attack / ravager animation ticks.
@@ -1292,6 +1339,10 @@ pub struct Extra {
     /// attachment (`getPassengerRidingPosition(this).y` is its feet plus this)
     /// and the vehicle's box (`Mob.getAttackBoundingBox`, `getHitbox`).
     pub seat: Option<(u32, f64, Aabb)>,
+    /// The living vehicle `positionRider` last seated this rider on, with
+    /// its `yBodyRotO` and `yBodyRot`: a rider of a living vehicle is drawn
+    /// from that body (`LivingEntityRenderer.solveBodyRot`), not its own.
+    pub vehicle_body: Option<(u32, f32, f32)>,
     /// `Entity.boardingCooldown`: ticks after leaving a boat before a boat
     /// can pick this mob up again.
     pub boarding_cooldown: i32,
@@ -1411,22 +1462,31 @@ fn totem_death_effects() -> Vec<crate::items::ConsumeEffect> {
     ]
 }
 
-/// How far the boxes of a set of mobs reach from their positions: the widest half width and the
-/// tallest height among them. A box query over many mobs (a vehicle's, against every mob of the
-/// level) tests each mob's position against this first, and works out the box ([`Mob::bounds`],
-/// which reads the mob's whole size) only for the mobs whose position comes close.
+/// How far the boxes of a set of mobs reach from their positions: the widest reach sideways, below
+/// and above among them, worked out from each mob's real box ([`Mob::bounds`]: a shulker's grows
+/// toward its open lid, sideways or below its position). A box query over many mobs (a vehicle's,
+/// against every mob of the level) tests each mob's position against this first, and works out the
+/// box only for the mobs whose position comes close.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BoxReach {
     half_width: f64,
+    below: f64,
     height: f64,
 }
 impl BoxReach {
     pub fn of(mobs: &[Mob]) -> Self {
         mobs.iter().fold(Self::default(), |r, m| {
-            let (width, height, _) = m.dims();
+            let (b, p) = (m.bounds(), m.position);
+            let (lo, hi) = (b.min_position(), b.max_position());
             Self {
-                half_width: r.half_width.max(width / 2.0),
-                height: r.height.max(height),
+                half_width: r
+                    .half_width
+                    .max(p.x - lo.x)
+                    .max(hi.x - p.x)
+                    .max(p.z - lo.z)
+                    .max(hi.z - p.z),
+                below: r.below.max(p.y - lo.y),
+                height: r.height.max(hi.y - p.y),
             }
         })
     }
@@ -1439,7 +1499,7 @@ impl BoxReach {
             && p.x + self.half_width >= lo.x
             && p.z - self.half_width <= hi.z
             && p.z + self.half_width >= lo.z
-            && p.y <= hi.y
+            && p.y - self.below <= hi.y
             && p.y + self.height >= lo.y
     }
 }
@@ -1478,8 +1538,16 @@ pub struct Mob {
     pub gear_knockback_resistance: Option<f64>,
     pub health: f32,
     pub hurt_time: i32,
+    /// `LivingEntity.damageCooldownTime`: the hurt cooldown, 20 after a hit;
+    /// transient, never saved.
     pub invulnerable: i32,
+    /// `Entity.invulnerableTime`, saved as `invulnerable_time`: while above 0
+    /// the mob is invulnerable as with `Invulnerable` (`isTemporarilyInvulnerable`).
+    pub invulnerable_time: i32,
     pub death_time: i32,
+    /// `LivingEntity.currentImpulseContextResetGraceTime`: ticks left to keep
+    /// the impulse context after a wind charge or mace impulse.
+    pub impulse_grace_time: i32,
     pub age: u32,
     pub limb_position: f32,
     pub limb_speed: f32,
@@ -1539,6 +1607,9 @@ pub struct Mob {
     pub on_climbable: bool,
     pub fire_ticks: i32,
     pub ticks_frozen: i32,
+    /// `Entity.isInPowderSnow` as of the last mob tick, for the skeleton's
+    /// freezing tracker read at save time.
+    pub in_powder_snow: bool,
     pub glowing: bool,
     pub air: i32,
     pub last_hurt: f32,
@@ -1838,6 +1909,17 @@ pub enum MobEvent {
         source: u32,
         state: horizon_world::registry::BlockStateId,
     },
+    /// `Level.gameEvent` from the block a mob landed on (`FarmlandBlock.turnToBaseBlock`'s
+    /// BLOCK_CHANGE from the mob that trampled it, `TurtleEggBlock.decreaseEggs`' and
+    /// `Level.destroyBlock`'s BLOCK_DESTROY with no source): the game posts it, a
+    /// sculk sensor, a calibrated sensor and a warden hear it.
+    LandingGameEvent {
+        event: &'static str,
+        at: [i32; 3],
+        /// The entity that caused the change, `None` for a destroyed egg.
+        source: Option<u32>,
+        state: horizon_world::registry::BlockStateId,
+    },
     AttackPlayer(f32, [f64; 3]),
     /// `Bee.doHurtTarget` on a player: a sting that lands leaves its stinger
     /// in them and poisons them for `poison_ticks` (none on easy).
@@ -1898,6 +1980,14 @@ pub enum MobEvent {
         target: Who,
         delta: [f64; 3],
     },
+    /// `Shulker.onPeekAmountChange` for the entities kept outside the mob
+    /// list: the opening lid of `shulker` moves every armor stand with
+    /// physics whose box meets `area` (the box the lid swept) by `delta`.
+    LidPush {
+        shulker: u32,
+        area: Aabb,
+        delta: [f64; 3],
+    },
     /// `EvokerWololoSpellGoal`: a blue sheep turns red.
     Wololo {
         mob: u32,
@@ -1939,7 +2029,14 @@ pub enum MobEvent {
         ambient: Vec<&'static str>,
         color: u32,
     },
-    /// Melee or ranged damage to another mob.
+    /// Damage that bypasses `EnchantmentHelper.doPostAttackEffects` (roars,
+    /// beams, retaliation and hot-cube contact).
+    DamageMob {
+        target: u32,
+        amount: f32,
+        source: Damage,
+    },
+    /// An attack that runs post-attack effects when the hit lands.
     AttackMob {
         target: u32,
         amount: f32,
@@ -2000,6 +2097,12 @@ pub enum MobEvent {
     },
     /// Set another mob's attack target (HurtByTargetGoal alerts).
     SetTarget {
+        mob: u32,
+        target: Who,
+    },
+    /// `HoglinAi.broadcastAttackTarget` to one visible adult hoglin: its
+    /// `setAttackTargetIfCloserThanCurrent` (`piglin::receive_attack_target`).
+    HoglinAttackTarget {
         mob: u32,
         target: Who,
     },
@@ -3261,9 +3364,29 @@ pub fn entity_random(id: u32, position: Vec3) -> LegacyRandom {
     let _ = random.next_int();
     random
 }
+/// The own random (`Entity.random`) of a living entity the server makes, as
+/// `LivingEntity.<init>` leaves it: its first two draws made the UUID
+/// (`Mth.createInsecureUUID`), returned here, and the next one the yaw, which
+/// every spawn path then replaces. Constructor draws of the kind come after.
+pub fn living_random() -> (LegacyRandom, [i32; 4]) {
+    let mut random = crate::random_source::entity();
+    let uuid = crate::save::insecure_uuid(&mut random);
+    let _yaw = random.next_float();
+    (random, uuid)
+}
 impl Mob {
     pub fn new(id: u32, kind: Arc<MobType>, position: Vec3, yaw: f32) -> Self {
-        let random = entity_random(id, position);
+        Self::with_random(id, kind, position, yaw, entity_random(id, position))
+    }
+    /// `new` with the mob's own random given: the kind's constructor draws
+    /// (a chicken's egg timer) come from it.
+    pub fn with_random(
+        id: u32,
+        kind: Arc<MobType>,
+        position: Vec3,
+        yaw: f32,
+        random: LegacyRandom,
+    ) -> Self {
         let mut mob = Self {
             join: Default::default(),
             id,
@@ -3287,7 +3410,9 @@ impl Mob {
             gear_knockback_resistance: None,
             hurt_time: 0,
             invulnerable: 0,
+            invulnerable_time: 0,
             death_time: 0,
+            impulse_grace_time: 0,
             age: 0,
             limb_position: 0.0,
             limb_speed: 0.0,
@@ -3319,6 +3444,7 @@ impl Mob {
             on_climbable: false,
             fire_ticks: 0,
             ticks_frozen: 0,
+            in_powder_snow: false,
             glowing: false,
             air: 300,
             last_hurt: 0.0,
@@ -3427,6 +3553,10 @@ impl Mob {
     }
     /// `Entity.makeBoundingBox(position)`.
     pub fn bounds_at(&self, position: Vec3) -> Aabb {
+        // Shulker.makeBoundingBox: the lid's lift, not the dimensions.
+        if self.kind.species == Species::Shulker {
+            return shulker::bounds_at(self, position);
+        }
         // `width()` and `height()` in one `dims()`: every box asked for (each
         // collision, push and cart test) read the whole size twice.
         let (width, height, _) = self.dims();
@@ -3551,7 +3681,11 @@ impl Mob {
     pub fn refuses_damage(&self, source: &Damage) -> bool {
         !self.alive()
             || self.removed
-            || (self.invulnerable_flag && !source.kind.bypasses_invulnerability())
+            || (self.is_invulnerable() && !source.kind.bypasses_invulnerability())
+    }
+    /// `Entity.isInvulnerable`: `Invulnerable`, or `invulnerable_time` left.
+    pub fn is_invulnerable(&self) -> bool {
+        self.invulnerable_flag || self.invulnerable_time > 0
     }
     /// `LivingEntity.hurtServer`'s partial mob adapter, with health reductions inline.
     /// `damage` by a source with a weapon: `armor_effectiveness` runs the
@@ -3589,7 +3723,7 @@ impl Mob {
         // dead enderman), its hurt sound's pitch included.
         let enderman = self.species() == Species::Enderman
             && !self.removed
-            && !(self.invulnerable_flag && !source.kind.bypasses_invulnerability());
+            && !(self.is_invulnerable() && !source.kind.bypasses_invulnerability());
         let hurt = self.hurt_server(amount, source, armor_effectiveness, player_uuid);
         if enderman {
             enderman::after_hurt(self, &source);
@@ -3678,6 +3812,17 @@ impl Mob {
         if !amount.is_finite() {
             amount = f32::MAX;
         }
+        // LivingEntity.hurtServer: inside the hurt cooldown a hit is compared
+        // with `lastHurt` by this incoming amount, before armor and Resistance,
+        // and `actuallyHurt` gets only what it adds.
+        let incoming = amount;
+        let cooldown = self.invulnerable as f32 > 10.0;
+        if cooldown {
+            if incoming <= self.last_hurt {
+                return false;
+            }
+            amount = incoming - self.last_hurt;
+        }
         // LivingEntity.getDamageAfterArmorAbsorb asks `hurtArmor` *before*
         // `CombatRules.getDamageAfterAbsorb`, so a worn piece wears by the
         // damage the armour, toughness and enchantment reductions have not
@@ -3739,22 +3884,18 @@ impl Mob {
         let mut knock = true;
         // What came off the health, for `LivingDamageEvent.Post`.
         let mut taken = 0.0;
-        let dealt = if self.invulnerable as f32 > 10.0 {
-            if amount <= self.last_hurt {
-                return false;
-            }
-            let dealt = amount - self.last_hurt;
+        let dealt = if cooldown {
             if absorbed {
-                self.hurt_wolf_armor(dealt);
+                self.hurt_wolf_armor(amount);
             } else {
-                let through = self.soak_hit(dealt, &source);
+                let through = self.soak_hit(amount, &source);
                 taken = self.hurt_health(through, &source);
             }
-            self.last_hurt = amount;
+            self.last_hurt = incoming;
             knock = false;
-            dealt
+            amount
         } else {
-            self.last_hurt = amount;
+            self.last_hurt = incoming;
             self.invulnerable = 20;
             if absorbed {
                 self.hurt_wolf_armor(amount);
@@ -3911,7 +4052,7 @@ impl Mob {
         let cloud = self.species() == Species::Enderman
             && direct == "minecraft:area_effect_cloud"
             && !self.removed
-            && !(self.invulnerable_flag && !source.kind.bypasses_invulnerability());
+            && !(self.is_invulnerable() && !source.kind.bypasses_invulnerability());
         let hurt = self.damage(amount, source);
         if cloud {
             enderman::teleport_chance(self, &source);
@@ -4191,10 +4332,19 @@ impl Mob {
         through
     }
     /// `LivingEntity.actuallyHurt`: the absorption amount takes the damage first;
-    /// what is left reaches the health.
+    /// what is left reaches the health. `setAbsorptionAmount` stores the rest
+    /// with `Mth.clamp(amount, 0, getMaxAbsorption())`, so absorption above
+    /// `max_absorption` (from the mob's data, with no Absorption effect) is gone
+    /// after the hit.
     pub fn soak_absorption(&mut self, damage: f32) -> f32 {
         let through = (damage - self.absorption).max(0.0);
-        self.absorption = (self.absorption - (damage - through)).max(0.0);
+        let left = self.absorption - (damage - through);
+        // `Mth.clamp(float, float, float)`: `value < min ? min : Math.min(value, max)`.
+        self.absorption = if left < 0.0 {
+            0.0
+        } else {
+            left.min(armor::max_absorption(self))
+        };
         through
     }
     /// `LivingEntity.checkTotemDeathProtection`: the first hand with a
@@ -4583,7 +4733,7 @@ impl EntityModelDocument {
     }
 
     /// The parsed document, for loaders that read several keys from it.
-    pub(crate) fn value(&self) -> &Value {
+    pub fn value(&self) -> &Value {
         &self.0
     }
 }
@@ -6491,6 +6641,13 @@ mod visibility_percent_tests {
     }
 }
 
+/// Added controls (H248): `LivingEntity.hurtServer` compares a hit inside
+/// the hurt cooldown, and keeps `lastHurt`, by its incoming amount; the
+/// reductions (`actuallyHurt`) get only the accepted difference.
+#[cfg(test)]
+#[path = "hurt_cooldown_incoming_tests.rs"]
+mod hurt_cooldown_incoming_tests;
+
 #[cfg(test)]
 mod hidden_speed_mob_tick_tests {
     use super::*;
@@ -6599,6 +6756,21 @@ mod hidden_speed_mob_tick_tests {
         assert!(m.extra.hidden_effects.contains(&"minecraft:speed"));
         assert!(!m.extra.effect_fallbacks[0].ambient);
         assert!(m.extra.effect_fallbacks[0].visible);
+    }
+
+    #[test]
+    fn health_boost_death_effect_clear_clamps_health() {
+        let mut kind = (*sensor_scan_tests::kind()).clone();
+        kind.id = "minecraft:pig".into();
+        kind.species = Species::Pig;
+        let mut m = Mob::new(202, Arc::new(kind), Vec3::ZERO, 0.0);
+        finalize::set_base(&mut m, finalize::Attr::MaxHealth, 10.0);
+        m.add_effect("health_boost", 200, 1);
+        assert_eq!(m.attrs.max_health, 18.0);
+        m.health = 18.0;
+        m.apply_death_effect(&crate::items::ConsumeEffect::ClearAllEffects);
+        assert_eq!(m.attrs.max_health, 10.0);
+        assert_eq!(m.health, 10.0);
     }
 
     #[test]

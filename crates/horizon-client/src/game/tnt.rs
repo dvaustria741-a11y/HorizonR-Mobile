@@ -56,7 +56,8 @@ impl PrimedTnt {
         )
     }
 
-    pub(super) const SIZE: f64 = 0.98;
+    /// `EntityTypes.TNT`'s `sized(0.98F, 0.98F)`, widened from the float.
+    pub(super) const SIZE: f64 = 0.98_f32 as f64;
     pub(super) fn bounds(&self) -> Aabb {
         let h = Self::SIZE / 2.0;
         Aabb::new(
@@ -292,6 +293,13 @@ impl Game<'_> {
     pub(super) fn tnt_prime_allowed(&mut self, pos: BlockPos) -> bool {
         let mut cancel = false;
         self.native_tnt_primed(self.lan_acting_uuid, [pos.x, pos.y, pos.z], &mut cancel);
+        let dimension = self.dim.id();
+        self.native_tnt_primed_v2(
+            self.lan_acting_uuid,
+            dimension,
+            [pos.x, pos.y, pos.z],
+            &mut cancel,
+        );
         // `TntBlock.prime` leaves the block alone with `tnt_explodes` off, for
         // redstone, fire and an unstable block breaking alike.
         !cancel && self.ui.rules.bool("tnt_explodes")
@@ -488,7 +496,9 @@ impl Game<'_> {
                     power,
                     interaction,
                     false,
-                    super::explosion::ExplosionSource::default().with_silence(silent),
+                    super::explosion::ExplosionSource::default()
+                        .with_silence(silent)
+                        .with_entity(id, "minecraft:tnt"),
                 )
             });
             self.combat.blast_owner = None;
@@ -860,10 +870,11 @@ mod tests {
 
     #[test]
     fn a_rider_sits_on_top_of_the_tnt_less_its_own_attachment() {
-        // 64 + 0.98 (the box's top) - 0.14 (a rider's vehicle attachment).
+        // 64 + 0.98F (the box's top, `EntityAttachment.PASSENGER` at its
+        // height) - 0.14 (a rider's vehicle attachment).
         let seat = tnt_seat(Vec3::new(1.5, 64.0, -2.5), 0.14);
         assert_eq!((seat.x, seat.z), (1.5, -2.5));
-        assert!((seat.y - 64.84).abs() < 1e-9);
+        assert!((seat.y - (64.0 + f64::from(0.98_f32) - 0.14)).abs() < 1e-9);
     }
 
     #[test]
@@ -1694,7 +1705,7 @@ mod tests {
                 game.audio.heard.clear();
                 let particles = particle_count(&game);
                 let clouds = game.breath_clouds.len();
-                let xp: u32 = game.orbs.iter().map(|o| o.value * o.count).sum();
+                let xp: u32 = game.orbs.iter().map(|o| o.points() * o.count).sum();
                 game.tick_effects(true);
                 assert_eq!(game.potions.thrown_ids().count(), 0);
                 assert!(particle_count(&game) > particles, "{kind} keeps its splash");
@@ -1707,7 +1718,7 @@ mod tests {
                     game.breath_clouds.len() - clouds,
                     usize::from(kind == "lingering_potion")
                 );
-                let gained = game.orbs.iter().map(|o| o.value * o.count).sum::<u32>() - xp;
+                let gained = game.orbs.iter().map(|o| o.points() * o.count).sum::<u32>() - xp;
                 if kind == "experience_bottle" {
                     assert!((3..=11).contains(&gained), "silence keeps the experience");
                 }
@@ -1761,7 +1772,7 @@ mod tests {
                     },
                 )
                 .unwrap();
-                let xp: u32 = game.orbs.iter().map(|o| o.value * o.count).sum();
+                let xp: u32 = game.orbs.iter().map(|o| o.points() * o.count).sum();
                 let next = game.world.random.next_long();
                 assert!((3..=11).contains(&xp));
                 if let Some((audible_xp, audible_next)) = audible {

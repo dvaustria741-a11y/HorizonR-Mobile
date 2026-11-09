@@ -424,38 +424,28 @@ impl Loading {
             renderer.release_surface();
         }
         let renderer_at = Instant::now();
-        let filtering = (
-            self.settings.file.int("textureFiltering"),
-            self.settings.file.int("maxAnisotropyBit"),
-        );
-        let renderer = if let Some(mut renderer) = self.prepared_renderer.take() {
-            startup::time("renderer.world", || -> Result<Renderer> {
-                renderer.activate_replacement(
-                    self.renderer.as_mut().ok_or("missing loading renderer")?,
-                )?;
-                // Glyphs are still being drawn into the loading atlas until this
-                // handoff; invalidate only now, after the new GPU atlas is ready.
-                gui.atlas.font.reset_cache();
-                finish_renderer(&mut renderer, &loaded.pack, &gui.atlas, filtering)?;
-                Ok(renderer)
-            })?
-        } else {
-            startup::time("renderer.world", || {
-                build_renderer(
-                    window.clone(),
-                    options.offscreen,
-                    &loaded.pack,
-                    &gui,
-                    self.renderer.as_ref(),
-                    loaded.renderer_cpu,
-                    rendering_api(&self.settings),
-                    self.settings.horizon.translucent_batching,
-                    self.settings.horizon.wide_frame(),
-                    shader_packs::picked_pack_shape(&self.settings),
-                    filtering,
-                )
-            })?
-        };
+        let renderer = startup::time("renderer.world", || {
+            build_renderer(
+                window.clone(),
+                options.offscreen,
+                &loaded.pack,
+                &gui,
+                self.renderer.as_ref(),
+                loaded.renderer_cpu,
+                self.settings.horizon.api,
+                self.settings.horizon.translucent_batching,
+                &self.settings.horizon,
+                shader_packs::picked_pack_shape(&self.settings),
+                self.renderer
+                    .as_ref()
+                    .map(|r| r.display_reading())
+                    .unwrap_or_default(),
+                (
+                    self.settings.file.int("textureFiltering"),
+                    self.settings.file.int("maxAnisotropyBit"),
+                ),
+            )
+        })?;
         log::info!(
             "Horizon: world renderer ready after {} ms",
             self.started.elapsed().as_millis()
