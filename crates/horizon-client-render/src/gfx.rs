@@ -8728,10 +8728,24 @@ impl Renderer {
                         &self.device,
                         &image,
                         self.output.frame.format,
-                        self.screenshot.is_some(),
+                        self.screenshot.is_some() && !scaled_presentation,
                     )
                     .unwrap_or(image)
             }
+        };
+        #[cfg(target_os = "android")]
+        let target_texture = if self.hdr.is_none() && scaled_presentation {
+            self.frame_scale
+                .get_or_insert_with(|| {
+                    frame_scale::FrameScale::new(
+                        &self.device,
+                        self.config.format.remove_srgb_suffix(),
+                    )
+                })
+                .frame(&self.device, size)
+        } else {
+            self.frame_scale = None;
+            target_texture
         };
         // One command buffer for the frame, after the section copies staged
         // since the last one: Metal commits every command buffer wgpu-core
