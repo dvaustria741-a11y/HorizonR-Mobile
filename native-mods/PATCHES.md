@@ -101,3 +101,8 @@ only), drag and drop of packs, import and export of option files.
 Hooks: RETURN of `draw_options` (draws after Sodium, the screens cover it), and HEAD of `options_mouse`,
 `options_drag`, `options_scroll`, `options_key` (priority 200, before Sodium; it swallows keys while a
 screen is open so Escape closes it) and `native_mods`.
+
+## Ported to Horizon 2.58
+
+- `punchy`: the `hand_geometry` target is now `horizon_client::game::frame_geometry::Game<'_>::hand_geometry` (the method moved to `game/frame_geometry.rs`).
+- `sodium_horizon`: the `section_visibility` injection, its helper `visibility.rs` and the `visibility_runtime` module (`runtime.rs`) are removed. 2.58 dropped `mesher::visibility_reusing` and has its own bit-row `visibility_rows`, so the replacement is no longer needed.
