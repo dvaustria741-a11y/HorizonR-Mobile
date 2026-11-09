@@ -28,6 +28,21 @@ fn gles_source(source: &str) -> String {
     output.push_str(&source[end..rgss]);
     output.push_str(&source[rgss_end..]);
 
+    // 2.58 sends `TerrainOut` through `TerrainWire` (five vec4 locations). The packed GL
+    // interface below is already as narrow, so on GL the wire is `TerrainOut` itself and
+    // `to_wire`/`from_wire` pass it through; their `o.`/`w.` member accesses would not
+    // survive the member packing anyway.
+    let wire = output
+        .find("struct TerrainWire {")
+        .expect("terrain wire struct");
+    let from_wire = output.find("fn from_wire(").expect("terrain from_wire");
+    let wire_end = from_wire + output[from_wire..].find("\n}\n").expect("from_wire end") + 3;
+    output.replace_range(
+        wire..wire_end,
+        "fn to_wire(o: TerrainOut) -> TerrainOut {\n    return o;\n}\nfn from_wire(w: TerrainOut) -> TerrainOut {\n    return w;\n}\n",
+    );
+    let mut output = output.replace("TerrainWire", "TerrainOut");
+
     // Adreno 304 renders broken terrain with the separated scalar varyings.
     // Pack values sharing their interpolation qualifier; leave the vertex
     // buffers, texture sampling, fade, lighting, fog and HDR arithmetic alone.
@@ -101,6 +116,7 @@ mod tests {
         }
         assert!(source.contains("if in.codes.w != 0xffffffffu"));
         assert!(!source.contains("in.emissive_layer"));
+        assert!(!source.contains("TerrainWire"));
         assert_eq!(source.matches("fn sample_rgss(").count(), 1);
         assert_eq!(source.matches("fn rotated_grid(").count(), 1);
         let module = naga::front::wgsl::parse_str(&source).unwrap();
