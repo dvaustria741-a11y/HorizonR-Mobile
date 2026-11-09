@@ -58,7 +58,13 @@ fn gles_source(source: &str) -> String {
         .expect("terrain interface end")
         + start
         + 3;
-    let mut body = output[fields_end..end].to_owned();
+    let body = output[fields_end..end].to_owned();
+    // The native fluid and model shaders have varying structs of their own (with their own
+    // `spherical` and `cylindrical`): only the terrain's part takes the packed names.
+    let native = body
+        .find("struct NativeFluidOut {")
+        .unwrap_or(body.len());
+    let (mut body, native_body) = (body[..native].to_owned(), body[native..].to_owned());
     for (member, packed) in [
         ("layer", "codes.x"),
         ("emission", "codes.y"),
@@ -76,6 +82,7 @@ fn gles_source(source: &str) -> String {
             );
         }
     }
+    body.push_str(&native_body);
     output.replace_range(start..end, &(PACKED_INTERFACE.to_owned() + &body));
     output
 }
@@ -105,9 +112,9 @@ mod tests {
         let source = terrain_shader_for(true);
         let original = super::super::terrain_shader().replace("\r\n", "\n");
         assert_eq!(
-            &source[source.find("struct SkyOut {").unwrap()..],
-            &original[original.find("struct SkyOut {").unwrap()..],
-            "sky and outline shader bodies must remain unchanged"
+            &source[source.find("struct NativeFluidOut {").unwrap()..],
+            &original[original.find("struct NativeFluidOut {").unwrap()..],
+            "native, sky and outline shader bodies must remain unchanged"
         );
         assert!(!source.contains("switch layer / SPRITE_SPLIT"));
         assert!(!source.contains("uv + offsets[i] * pixel"));
