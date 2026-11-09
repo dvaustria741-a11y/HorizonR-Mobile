@@ -1186,6 +1186,12 @@ impl Graphics {
         // laptop while a world loaded: a teleport there took ~15% longer. On Apple
         // silicon only the performance cores count (horizon_threads::default_workers).
         let auto = horizon_threads::jobs::default_threads();
+        // Preserve the Android fork's render/server headroom until phone profiling.
+        let auto = if cfg!(target_os = "android") {
+            auto.saturating_sub(1).max(1)
+        } else {
+            auto
+        };
         if self.battery { auto.div_ceil(2) } else { auto }
     }
     /// The frame cap battery mode adds: 60 in a world, 30 in menus without a
@@ -1600,7 +1606,12 @@ mod tests {
         let cores = horizon_threads::worker_count();
         assert!((1..=cores.saturating_sub(1).max(1)).contains(&g.worker_threads()));
         if !cfg!(target_vendor = "apple") {
-            assert_eq!(g.worker_threads(), cores.saturating_sub(1).max(1));
+            assert_eq!(
+                g.worker_threads(),
+                cores
+                    .saturating_sub(if cfg!(target_os = "android") { 2 } else { 1 })
+                    .max(1)
+            );
         }
         // A manual count is the player's own choice, kept as asked.
         let manual = Graphics { workers: 3, ..g };

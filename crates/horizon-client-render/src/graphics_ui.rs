@@ -2768,6 +2768,7 @@ mod tests {
             H::UploadBudget,
             H::Workers,
             H::ResolutionScale,
+            H::DynamicResolution,
             H::UpscalingSharpness,
             H::HdrPaperWhite,
             H::HdrPeak,
