@@ -140,6 +140,46 @@ pub fn level_name(level: u32) -> String {
         .map_or_else(|| level.to_string(), |s| (*s).to_owned())
 }
 
+/// One registry entry from its definition (`Enchantment.DIRECT_CODEC`).
+fn parse_entry(
+    id: &str,
+    v: &Value,
+    tags: &HashMap<String, Vec<Arc<str>>>,
+    lang: &HashMap<String, String>,
+) -> Enchantment {
+    let exclusive = match &v["exclusive_set"] {
+        Value::String(s) if s.starts_with('#') => tags.get(&s[1..]).cloned().unwrap_or_default(),
+        other => string_list(other)
+            .into_iter()
+            .map(|s| Arc::from(s.as_str()))
+            .collect(),
+    };
+    let key = v["description"]["translate"].as_str().unwrap_or("");
+    Enchantment {
+        id: Arc::from(id),
+        description: lang.get(key).cloned().unwrap_or_else(|| {
+            // A data pack's entry may name itself with a literal component
+            // rather than a translation key.
+            if key.is_empty() && !v["description"].is_null() {
+                horizon_client_core::scoreboard::comp_text(&v["description"]).plain()
+            } else {
+                id.trim_start_matches("minecraft:").replace('_', " ")
+            }
+        }),
+        description_key: key.to_owned(),
+        max_level: v["max_level"].as_u64().unwrap_or(1) as u32,
+        weight: v["weight"].as_u64().unwrap_or(1) as u32,
+        anvil_cost: v["anvil_cost"].as_u64().unwrap_or(0) as u32,
+        min_cost: Cost::parse(&v["min_cost"]),
+        max_cost: Cost::parse(&v["max_cost"]),
+        supported: string_list(&v["supported_items"]),
+        primary: v.get("primary_items").map(string_list),
+        exclusive: exclusive.into_iter().collect(),
+        slots: string_list(&v["slots"]),
+        effects: v["effects"].clone(),
+    }
+}
+
 impl Enchantments {
     /// Use the same frozen registry and resolved tags as player damage.
     pub fn bind_damage_catalog(&mut self, catalog: &horizon_world::damage_source::Catalog) {
@@ -156,8 +196,8 @@ impl Enchantments {
     pub fn load(root: &Path) -> Self {
         Self::load_with(root, &horizon_world::loot::PackOverlay::NONE)
     }
-    /// Load from a resource root; `overlay` (a world's data packs' content
-    /// files) joins the game's own enchantment tags in pack order, a
+    /// `RegistryDataLoader.load`: load from a resource root; `overlay` (world-pack content
+    /// files) overrides definitions and joins enchantment tags in pack order, a
     /// `replace` file dropping the lower sources' (`TagLoader.load`).
     pub fn load_with(root: &Path, overlay: &horizon_world::loot::PackOverlay) -> Self {
         let data = root.join("data/minecraft");
@@ -225,6 +265,12 @@ impl Enchantments {
                 }
             }
         }
+        // The active pack's definition replaces the lower sources for this id.
+        for (id, entries) in overlay.kind("enchantment") {
+            if let Ok(v) = serde_json::from_slice(horizon_world::loot::PackOverlay::top(entries)) {
+                files.insert(id.to_owned(), v);
+            }
+        }
         let lang: HashMap<String, String> =
             horizon_core::prepared_files::read(&root.join("assets/minecraft/lang/en_us.json"))
                 .ok()
@@ -253,37 +299,10 @@ impl Enchantments {
                         || k.starts_with("recipe.toast.")
                 })
                 .collect();
-        let mut list = Vec::new();
-        for (id, v) in &files {
-            let exclusive = match &v["exclusive_set"] {
-                Value::String(s) if s.starts_with('#') => {
-                    tags.get(&s[1..]).cloned().unwrap_or_default()
-                }
-                other => string_list(other)
-                    .into_iter()
-                    .map(|s| Arc::from(s.as_str()))
-                    .collect(),
-            };
-            let key = v["description"]["translate"].as_str().unwrap_or("");
-            list.push(Enchantment {
-                id: Arc::from(id.as_str()),
-                description: lang
-                    .get(key)
-                    .cloned()
-                    .unwrap_or_else(|| id.trim_start_matches("minecraft:").replace('_', " ")),
-                description_key: key.to_owned(),
-                max_level: v["max_level"].as_u64().unwrap_or(1) as u32,
-                weight: v["weight"].as_u64().unwrap_or(1) as u32,
-                anvil_cost: v["anvil_cost"].as_u64().unwrap_or(0) as u32,
-                min_cost: Cost::parse(&v["min_cost"]),
-                max_cost: Cost::parse(&v["max_cost"]),
-                supported: string_list(&v["supported_items"]),
-                primary: v.get("primary_items").map(string_list),
-                exclusive: exclusive.into_iter().collect(),
-                slots: string_list(&v["slots"]),
-                effects: v["effects"].clone(),
-            });
-        }
+        let list = files
+            .iter()
+            .map(|(id, v)| parse_entry(id, v, &tags, &lang))
+            .collect::<Vec<_>>();
         let index = list
             .iter()
             .enumerate()
@@ -325,6 +344,26 @@ impl Enchantments {
     }
     pub fn get(&self, id: &str) -> Option<&Enchantment> {
         self.index.get(id).map(|&i| &self.list[i])
+    }
+    /// The table a client plays a server with: this one and the server's
+    /// entries it lacks (a data pack's), from the definitions the registry
+    /// sync sent; `None` when there are none. The names then come from the
+    /// entries' own `description`, as `Enchantment.getFullname` reads it.
+    pub fn with_entries<'a>(
+        &self,
+        entries: impl IntoIterator<Item = (&'a str, &'a Value)>,
+    ) -> Option<Self> {
+        let mut table = None::<Self>;
+        for (id, v) in entries {
+            if self.index.contains_key(id) {
+                continue;
+            }
+            let t = table.get_or_insert_with(|| self.clone());
+            let e = parse_entry(id, v, &t.tags, &t.lang);
+            t.index.insert(e.id.clone(), t.list.len());
+            t.list.push(e);
+        }
+        table
     }
     /// The longest `minecraft:ignite` the attacker's `minecraft:post_attack`
     /// effects (Fire Aspect) set on the victim, in seconds: the effects whose
@@ -903,6 +942,116 @@ pub mod tests {
     use super::*;
     use serde_json::json;
 
+    #[test]
+    fn world_pack_definitions_join_catalog_in_overlay_priority() {
+        let root = std::env::temp_dir().join(format!(
+            "horizon-enchantment-overlay-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let write = |path: &str, value: &Value| {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, serde_json::to_vec(value).unwrap()).unwrap();
+            std::fs::read(path).unwrap()
+        };
+        let definition = |description: &str, max_level| {
+            json!({
+                "description": description, "supported_items": "minecraft:diamond_sword",
+                "weight": 1, "max_level": max_level,
+                "min_cost": {"base": 1, "per_level_above_first": 0},
+                "max_cost": {"base": 1, "per_level_above_first": 0},
+                "anvil_cost": 1, "slots": ["mainhand"],
+                "effects": {"minecraft:damage": [{"effect": {"type": "minecraft:add", "value": 2.0}}]}
+            })
+        };
+        write(
+            "data/minecraft/enchantment/mending.json",
+            &definition("Vanilla retained", 1),
+        );
+        write(
+            "data/minecraft/enchantment/sharpness.json",
+            &definition("Vanilla base", 5),
+        );
+        write(
+            "data/minecraft/tags/enchantment/fixture.json",
+            &json!({"values": ["minecraft:mending"]}),
+        );
+        write(
+            "data/minecraft/tags/damage_type/fixture.json",
+            &json!({"values": ["minecraft:generic"]}),
+        );
+        write(
+            "data/minecraft/tags/entity_type/fixture.json",
+            &json!({"values": ["minecraft:pig"]}),
+        );
+        let custom = write(
+            "packs/custom/data/wpenchant/enchantment/loaded.json",
+            &definition("Custom loaded", 1),
+        );
+        let low = write(
+            "packs/low/data/minecraft/enchantment/sharpness.json",
+            &definition("Lower override", 2),
+        );
+        let high = write(
+            "packs/high/data/minecraft/enchantment/sharpness.json",
+            &definition("Higher override", 3),
+        );
+        let tag = write(
+            "packs/custom/data/wpenchant/tags/enchantment/fixture.json",
+            &json!({"values": ["wpenchant:loaded"]}),
+        );
+        let files = vec![
+            ("enchantment/wpenchant:loaded".to_owned(), vec![custom]),
+            (
+                "enchantment/minecraft:sharpness".to_owned(),
+                vec![low, high],
+            ),
+            ("tags/wpenchant:enchantment/fixture".to_owned(), vec![tag]),
+        ];
+        let base = Enchantments::load(&root);
+        let loaded =
+            Enchantments::load_with(&root, &horizon_world::loot::PackOverlay { files: &files });
+        assert_eq!(
+            loaded.get("minecraft:mending").unwrap().description,
+            "Vanilla retained"
+        );
+        assert_eq!(loaded.damage_tags, base.damage_tags);
+        assert_eq!(loaded.entity_tags, base.entity_tags);
+        assert_eq!(
+            loaded.tag("minecraft:fixture"),
+            base.tag("minecraft:fixture")
+        );
+        assert!(loaded.in_tag("wpenchant:fixture", "wpenchant:loaded"));
+        assert!(loaded.get("wpenchant:missing").is_none());
+        let custom = loaded
+            .get("wpenchant:loaded")
+            .expect("actual overlay definition must enter the catalog");
+        assert_eq!(custom.description, "Custom loaded");
+        assert_eq!(custom.max_level, 1);
+        assert_eq!(
+            loaded.get("minecraft:sharpness").unwrap().description,
+            "Higher override"
+        );
+        assert_eq!(loaded.get("minecraft:sharpness").unwrap().max_level, 3);
+        assert_eq!(
+            loaded.modify_value_with(
+                "wpenchant:loaded",
+                1,
+                "minecraft:damage",
+                &EffectContext::default(),
+                &mut LegacyRandom::new(0),
+                1.0
+            ),
+            3.0
+        );
+        assert!(Enchantments::load(&root).get("wpenchant:loaded").is_none());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     /// A small registry built from literal JSON matching the vanilla files.
     pub fn sample() -> Enchantments {
         let defs = [
@@ -1247,6 +1396,33 @@ pub mod tests {
             e.full_name_in(None, "minecraft:sharpness", 11).0,
             "sharpness XI"
         );
+    }
+
+    /// A server's data-pack enchantment the game lacks is named by the
+    /// `description` it sent (`Enchantment.getFullname`), with the level
+    /// numeral unless both the level and the maximum are 1; the game's own
+    /// entries keep their tables.
+    #[test]
+    fn synced_entries_name_themselves() {
+        let e = sample();
+        assert_eq!(e.full_name("enchex:drill", 2).0, "enchex:drill II");
+        let drill = json!({"description":{"text":"Drill"},"max_level":3,"supported_items":"#minecraft:enchantable/mining"});
+        let hex = json!({"description":"Hex","max_level":1});
+        let other = json!({"description":{"text":"Other"},"max_level":5});
+        let synced = e
+            .with_entries([
+                ("enchex:drill", &drill),
+                ("enchex:hex", &hex),
+                ("minecraft:sharpness", &other),
+            ])
+            .unwrap();
+        assert_eq!(synced.full_name("enchex:drill", 2).0, "Drill II");
+        assert_eq!(synced.full_name("enchex:drill", 1).0, "Drill I");
+        assert_eq!(synced.full_name("enchex:hex", 1).0, "Hex");
+        assert_eq!(synced.full_name("minecraft:sharpness", 1).0, "sharpness I");
+        assert_eq!(synced.list.len(), e.list.len() + 2);
+        // Nothing new: the game's table stays in use.
+        assert!(e.with_entries([("minecraft:sharpness", &other)]).is_none());
     }
 
     /// The enchantment's name and its level come from the selected language,

@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "adler2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
+
+[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -459,7 +465,7 @@ dependencies = [
  "toml",
  "tower",
  "ureq",
- "zip 2.6.1",
+ "zip",
 ]
 
 [[package]]
@@ -474,7 +480,7 @@ dependencies = [
  "sha2",
  "toml",
  "wasmparser",
- "zip 9.1.3",
+ "zip",
 ]
 
 [[package]]
@@ -488,7 +494,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "toml",
- "zip 9.1.3",
+ "zip",
 ]
 
 [[package]]
@@ -1744,23 +1750,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
-]
-
-[[package]]
-name = "zip"
-version = "9.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1156b39d142a34b999c2310a50455e0cb3760bf7efad0122f796d813bee26ccb"
-dependencies = [
- "crc32fast",
- "flate2",
- "getrandom 0.4.3",
- "indexmap",
- "memchr",
- "nix",
- "typed-path",
- "windows-sys 0.61.2",
- "zopfli",
 ]
 
 [[package]]

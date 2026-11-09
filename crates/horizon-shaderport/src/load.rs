@@ -61,7 +61,9 @@ pub(crate) fn inputs() -> GameInputs {
         clouds: Some(terrain.clone()),
         weather: Some(terrain.clone()),
         hand: Some(terrain.clone()),
-        lines: Some(terrain),
+        lines: Some(terrain.clone()),
+        // As the game's (`pack_atlas::terrain_parts`): solid, then cutout terrain.
+        terrain_parts: Some([terrain.clone(), terrain]),
         terrain_geometry: None,
         entity_geometry: None,
     }

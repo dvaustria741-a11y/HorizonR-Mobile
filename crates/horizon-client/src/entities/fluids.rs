@@ -356,8 +356,10 @@ mod tests {
             None
         ));
         // First push is damped by buoyancy before motion, second follows drag.
-        assert!((carried.position.x - at.x - 0.014 * 0.99).abs() < 1e-12);
-        assert!((carried.velocity.x - (0.014 * 0.99 * 0.98 + 0.014)).abs() < 1e-12);
+        // `setUnderwaterMovement` and the air drag are floats (0.99F, 0.98F).
+        let (water, air) = (f64::from(0.99_f32), f64::from(0.98_f32));
+        assert!((carried.position.x - at.x - 0.014 * water).abs() < 1e-12);
+        assert!((carried.velocity.x - (0.014 * water * air + 0.014)).abs() < 1e-12);
         for _ in 0..20 {
             carried.tick(
                 &world,
@@ -428,6 +430,7 @@ mod tests {
             &mut || 0.0,
             None,
             &fluids,
+            &mut |_, _| {},
         ));
         assert_eq!(still.position.x, at.x);
         assert_eq!(still.velocity.x, 0.0);
@@ -442,6 +445,7 @@ mod tests {
             &mut || 0.0,
             None,
             &fluids,
+            &mut |_, _| {},
         ));
         // Current pushes the orb, then underwater and air drag each widen
         // their float constants before multiplying the double motion.
@@ -459,6 +463,7 @@ mod tests {
                 &mut || 0.0,
                 None,
                 &fluids,
+                &mut |_, _| {},
             );
         }
         assert!(carried.position.x > at.x + 0.5);

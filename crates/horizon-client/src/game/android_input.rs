@@ -411,7 +411,7 @@ impl Game<'_> {
     pub(super) fn android_show_keyboard(&mut self) {
         // The in-world keyboard button needs a real editor to receive text.
         if !self.pad_in_menu() {
-            self.open_chat("");
+            self.open_chat("", false);
         }
         let initial = if self.dialog_open() {
             self.dialog_edit_value()

@@ -77,6 +77,9 @@ pub struct BlockEntities {
     /// The fluid tanks of mod blocks' block entities, by block state id;
     /// built with `states`, like the containers.
     mod_fluids: FxHashMap<u32, Arc<ModFluidTanks>>,
+    /// State-aware native factory ownership. Shared across level snapshots;
+    /// an empty slice means the declarations have not yet been compiled.
+    stateful_entities: Arc<[bool]>,
     /// The energy buffers of mod blocks' block entities, by block state id;
     /// built with `states`, like the containers.
     mod_energy: FxHashMap<u32, Arc<ModEnergyBuffer>>,
@@ -208,6 +211,21 @@ impl BlockEntities {
     /// The fluid tanks of a mod block's block entity in block state `state`.
     pub fn mod_fluids(&self, state: u32) -> Option<&Arc<ModFluidTanks>> {
         self.mod_fluids.get(&state)
+    }
+    pub fn set_stateful_entities(&mut self, states: Vec<bool>) {
+        self.stateful_entities = states.into();
+    }
+    pub fn has_stateful_entity_table(&self) -> bool {
+        !self.stateful_entities.is_empty()
+    }
+    pub fn stateful_entities(&self) -> Arc<[bool]> {
+        self.stateful_entities.clone()
+    }
+    pub fn stateful_entity(&self, state: u32) -> bool {
+        self.stateful_entities
+            .get(state as usize)
+            .copied()
+            .unwrap_or(false)
     }
     pub fn set_mod_energy(&mut self, energy: FxHashMap<u32, Arc<ModEnergyBuffer>>) {
         self.mod_energy = energy;
@@ -407,6 +425,16 @@ impl BlockEntities {
             self.add(pos);
         }
     }
+    /// [`Self::retain`] for unloading chunks: removes the block entities at
+    /// the positions `gone` names and changes none it keeps, so those that
+    /// sleep stay asleep (a moving player unloads chunks most ticks).
+    pub fn unload(&mut self, mut gone: impl FnMut(&Pos) -> bool) {
+        let asleep = std::mem::take(&mut self.asleep);
+        self.retain(|p, _| !gone(p));
+        self.asleep = asleep;
+        let map = &self.map;
+        self.asleep.retain(|p| map.contains_key(p));
+    }
     /// Removes the block entities `keep` refuses, and their slots
     /// (`clearAllBlockEntities` of unloaded chunks).
     pub fn retain(&mut self, mut keep: impl FnMut(&Pos, &mut BlockEntity) -> bool) {
@@ -528,6 +556,11 @@ impl BlockEntities {
         });
         Arc::clone(&self.tickers)
     }
+    /// How many block entities tick (`Level.blockEntityTickers`, the slots still live), as of
+    /// the last [`Self::tickers`]: what a diagnostics mod counts.
+    pub fn ticking_len(&self) -> usize {
+        self.live.len()
+    }
     /// Whether a slot from `tickers` still ticks.
     pub fn is_live(&self, (pos, slot): (Pos, u32)) -> bool {
         self.live.get(&pos) == Some(&slot) && self.map.contains_key(&pos)
@@ -556,6 +589,24 @@ mod tests {
             .iter()
             .map(|(p, _)| *p)
             .collect()
+    }
+
+    /// Unloading a chunk removes its block entities and leaves the others'
+    /// sleep alone; `retain`, which may change what it keeps, wakes them all.
+    #[test]
+    fn unloading_a_chunk_keeps_the_others_asleep() {
+        let mut b = level();
+        let (kept, gone) = ((1, 64, 1), (17, 64, 1));
+        b.insert(kept, hopper());
+        b.insert(gone, hopper());
+        b.sleep(kept);
+        b.sleep(gone);
+        b.unload(|p| p.0 >> 4 == 1);
+        assert!(b.get(&gone).is_none());
+        assert!(!b.is_asleep(&gone));
+        assert!(b.is_asleep(&kept));
+        b.retain(|_, _| true);
+        assert!(!b.is_asleep(&kept));
     }
 
     fn near(b: &BlockEntities, x: f64, z: f64, radius: f64) -> Vec<Pos> {

@@ -92,6 +92,10 @@ pub(super) struct Parked {
     spawn_scratch: super::natural_spawning::SpawnScratch,
     /// Server ticks since a player was last in the level.
     idle: u32,
+    /// The level's own world border (`ServerLevel.getWorldBorder`), and what its players were
+    /// last told of it (`LanHost::border_sent`).
+    border: horizon_client::worldborder::WorldBorder,
+    border_sent: Option<horizon_client::lan::border::Sent>,
 }
 
 /// Which passes of the server tick the level in place runs: the first
@@ -135,9 +139,28 @@ impl Levels {
         self.heard_open.clear();
     }
 
+    /// The chunks of each level not in place (capability `world` lends
+    /// them to server mods for a call).
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    pub(super) fn parked_chunks(
+        &mut self,
+    ) -> impl Iterator<Item = (Dim, &mut horizon_client::chunk_map::ChunkMap)> {
+        self.parked
+            .iter_mut()
+            .map(|(d, p)| (*d, &mut p.world.chunks))
+    }
+
     /// A parked level, without opening or loading it.
     pub(super) fn parked_world(&self, dim: Dim) -> Option<&World> {
         self.parked.get(&dim).map(|level| &level.world)
+    }
+
+    /// A parked level's world border.
+    pub(super) fn parked_border(
+        &self,
+        dim: Dim,
+    ) -> Option<&horizon_client::worldborder::WorldBorder> {
+        self.parked.get(&dim).map(|level| &level.border)
     }
 
     /// The worlds of the levels not in place.
@@ -150,15 +173,9 @@ impl Levels {
         self.parked.get_mut(&dim).map(|level| &mut level.world)
     }
 
-    /// The chunks of each level not in place (capability `world` lends
-    /// them to server mods for a call).
-    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
-    pub(super) fn parked_chunks(
-        &mut self,
-    ) -> impl Iterator<Item = (Dim, &mut horizon_client::chunk_map::ChunkMap)> {
-        self.parked
-            .iter_mut()
-            .map(|(d, p)| (*d, &mut p.world.chunks))
+    /// The streaming of the level not in place, in `dim`, to change.
+    pub(super) fn parked_streaming_mut(&mut self, dim: Dim) -> Option<&mut Streaming> {
+        self.parked.get_mut(&dim).map(|level| &mut level.streaming)
     }
 
     /// The level not in place, in `dim`.
@@ -192,6 +209,20 @@ impl Levels {
         self.parked.get(&dim).map(|level| level.mobs.as_slice())
     }
 
+    /// A parked level's loose entities, for `horizon-report`: items, experience orbs,
+    /// projectiles, minecarts and boats.
+    pub(super) fn parked_entity_counts(&self, dim: Dim) -> Option<[usize; 5]> {
+        self.parked.get(&dim).map(|l| {
+            [
+                l.dropped.as_slice().len(),
+                l.orbs.as_slice().len(),
+                l.projectiles.as_slice().len(),
+                l.carts.as_slice().len(),
+                l.boats.as_slice().len(),
+            ]
+        })
+    }
+
     /// The levels that are not in place, by dimension.
     /// The forced chunks of every level not in place, released.
     pub(super) fn release_parked_forced_chunks(&mut self) {
@@ -222,7 +253,7 @@ impl Game<'_> {
         let mut world = World::new(self.res.facts().air, self.level.seed);
         world.attachments = save.load_attachments();
         world.shape = self.level_shapes.get(dim.id());
-        world.fast_lava = dim == Dim::Nether;
+        world.fast_lava = self.dimension_type_of(dim).fast_lava;
         Ok(Parked {
             world,
             streaming,
@@ -273,7 +304,68 @@ impl Game<'_> {
             creaking: Default::default(),
             spawn_scratch: Default::default(),
             idle: 0,
+            border: self.load_border(dim),
+            border_sent: None,
         })
+    }
+
+    /// `MinecraftServer.prepareLevels`: before the first tick, the chunks the
+    /// open levels' restored tickets hold (forced chunks, a native mod's) are
+    /// loaded (`ChunkLoadCounter`). The first tick then finds them ticking
+    /// and unpacks their saved block and fluid ticks at the game time they
+    /// were saved at (`startTickingChunk`), not at whichever tick they finish
+    /// streaming in.
+    pub(super) fn prepare_levels(&mut self) -> Result<()> {
+        if self.options.execution_role.is_client() {
+            return Ok(());
+        }
+        let deadline = Instant::now() + Duration::from_secs(600);
+        self.wait_for_ticket_chunks(deadline);
+        let back = self.dim;
+        for dim in [Dim::Overworld, Dim::Nether, Dim::End] {
+            if dim != back && self.levels.parked.contains_key(&dim) {
+                self.enter_level(None, dim)?;
+                self.wait_for_ticket_chunks(deadline);
+            }
+        }
+        if self.dim != back {
+            self.enter_level(None, back)?;
+        }
+        Ok(())
+    }
+
+    /// Stream the level in place until each chunk its tickets make block
+    /// ticking is a ticking chunk (lit, with its neighbours loaded).
+    fn wait_for_ticket_chunks(&mut self, deadline: Instant) {
+        // A `PORTAL` ticket reaches block ticking two chunks out, a forced one one.
+        const REACH: i32 = 2;
+        loop {
+            self.update_chunk_tickets();
+            let levels = self.tickets.levels();
+            let streaming = &self.streaming;
+            let ready = streaming
+                .forced
+                .iter()
+                .chain(&streaming.mod_forced)
+                .copied()
+                .chain(self.tickets.portal_chunks())
+                .all(|(cx, cz)| {
+                    (cz - REACH..=cz + REACH).all(|z| {
+                        (cx - REACH..=cx + REACH).all(|x| {
+                            !levels.loaded_ticking(x, z) || super::ticking_chunk(&self.world, x, z)
+                        })
+                    })
+                });
+            if ready {
+                return;
+            }
+            if Instant::now() >= deadline {
+                log::warn!("Horizon: the chunks of the saved tickets did not load");
+                return;
+            }
+            self.update_world();
+            self.streaming.wait(Duration::from_millis(5));
+        }
     }
 
     /// Exchange the level in place with `p`.
@@ -339,6 +431,7 @@ impl Game<'_> {
         self.sculk.swap_level(&mut p.sculk);
         self.creaking.swap_level(&mut p.creaking);
         swap(&mut self.spawn_scratch, &mut p.spawn_scratch);
+        swap(&mut self.border, &mut p.border);
         // What only the client draws starts over.
         self.particles.clear();
         self.pickups.clear();
@@ -381,12 +474,22 @@ impl Game<'_> {
             if let Some(states) = states {
                 std::mem::swap(states, &mut p.lan_states);
             }
+            match host.as_deref_mut() {
+                Some(h) => std::mem::swap(&mut h.border_sent, &mut p.border_sent),
+                None => {
+                    if let Some(h) = self.lan.as_mut() {
+                        std::mem::swap(&mut h.border_sent, &mut p.border_sent);
+                    }
+                }
+            }
             p.idle = 0;
             let left = std::mem::replace(&mut self.dim, target);
             self.levels.parked.insert(left, p);
             if opened {
                 // The new streaming's radius and meshing options.
                 self.apply_settings();
+                // A mod's tickets held for the level while it was closed.
+                self.native_chunk_tickets_opened();
                 self.native_level_opened(target);
             }
         }
@@ -463,12 +566,16 @@ impl Game<'_> {
         let running = (!paused && !self.agent.hold_server).then(|| self.clock.world_runs());
         let server = self.serving.is_some() || self.options.dedicated.is_some();
         // A config edited while the server is paused (empty) still reloads.
+        // The parts outside every level get spans of their own, so that a slow
+        // tick's line and `horizon-report` say when a mod's tick hook took it.
         if server {
+            let _span = horizon_client::spans::guard("mod_configs_poll");
             self.native_configs_poll();
         }
         if let Some(running) = running
             && server
         {
+            let _span = horizon_client::spans::guard("mods_server_tick_start");
             self.native_lifecycle_server_tick_start(running);
         }
         let observe_level =
@@ -478,6 +585,13 @@ impl Game<'_> {
         let n = dims.len();
         let mut result = Ok(());
         for (k, dim) in dims.into_iter().enumerate() {
+            // Each level's share of the tick (the first one also reads the network and runs the
+            // tick's shared parts): `horizon-report`'s `level_*` spans.
+            let _level_span = horizon_client::spans::guard(match dim {
+                Dim::Overworld => "level_overworld",
+                Dim::Nether => "level_the_nether",
+                Dim::End => "level_the_end",
+            });
             if let Err(e) = self.enter_level(None, dim) {
                 result = Err(e);
                 break;
@@ -505,9 +619,8 @@ impl Game<'_> {
                         self.tick()
                     } else {
                         let running = running.unwrap_or_else(|| self.clock.world_runs());
-                        if running {
-                            self.tick_weather_effects();
-                        }
+                        // ClientLevel.tick: the sky flash fades in a frozen level too.
+                        self.tick_weather_effects();
                         self.tick_world(running)
                     }
                 },
@@ -531,43 +644,63 @@ impl Game<'_> {
                         moved = true;
                     }
                 }
-                if moved {
+                if moved && k + 1 < n {
                     self.enter_level(None, dim)?;
                 }
             }
+        }
+        if let Some(&first) = order.first()
+            && self.dim != first
+        {
+            let _ = self.enter_level(None, first);
         }
         self.level_pass = Pass::default();
         if result.is_err() {
             self.native_lifecycle.cancel_server_tick();
         }
         result?;
-        if let Err(error) = self.close_idle_levels() {
+        let closed = {
+            let _span = horizon_client::spans::guard("close_idle_levels");
+            self.close_idle_levels()
+        };
+        if let Err(error) = closed {
             self.native_lifecycle.cancel_server_tick();
             return Err(error);
         }
         // `ServerTickEnd`: an errored tick or an idle-close failure (at
         // the `?` above) never reaches this site.
-        self.native_lifecycle_server_tick_end(paused);
+        {
+            let _span = horizon_client::spans::guard("mods_server_tick_end");
+            self.native_lifecycle_server_tick_end(paused);
+        }
+        // The packets counted for `native_server_packets` (only while a mod counts them).
+        if server {
+            self.diagnostics_packets_tick();
+        }
         Ok(())
     }
 
     /// `tick_server` as a server thread runs it. With `HORIZON_SPIKES=MS`, a
     /// tick longer than MS is logged with its thread CPU time and spans.
     pub(super) fn tick_server_timed(&mut self, paused: bool) -> Result<()> {
-        self.tick_server_spans(paused, |_, _, _| {})
+        self.tick_server_spans(paused, |_, _, _, _| {})
     }
 
     /// `tick_server_timed`, handing the tick's wall time, thread CPU time
-    /// and spans (milliseconds) to `record` while spans are on: a dedicated
-    /// server's performance report turns them on to record its ticks.
+    /// and spans (milliseconds, summed by name) to `record` while spans are on, with how many
+    /// spans the tick itself recorded: a dedicated server's performance report turns them on to
+    /// record its ticks.
     pub(super) fn tick_server_spans(
         &mut self,
         paused: bool,
-        record: impl FnOnce(f32, Option<f32>, Vec<horizon_client::spans::Span>),
+        record: impl FnOnce(f32, Option<f32>, Vec<horizon_client::spans::Span>, usize),
     ) -> Result<()> {
         if self.options.spikes.is_none() && !horizon_client::spans::enabled() {
             return self.tick_server(paused);
         }
+        // Spans recorded since the last tick ran between ticks (the chunk pump of the wait): they
+        // stay in the tick's list, but only the tick's own count as recorded in it.
+        let between = horizon_client::spans::take_raw();
         let (started, cpu) = (Instant::now(), horizon_client::spans::thread_cpu());
         let result = horizon_client::spans::job("server_tick", || self.tick_server(paused));
         let wall = started.elapsed().as_secs_f32() * 1000.0;
@@ -575,7 +708,13 @@ impl Game<'_> {
             .zip(cpu)
             .map(|(end, start)| (end - start).as_secs_f32() * 1000.0);
         // Taken every tick: nothing else takes this thread's spans.
-        let spans = horizon_client::spans::take();
+        let raw = horizon_client::spans::take_raw();
+        let in_tick = raw.len();
+        let spans = if between.is_empty() {
+            horizon_client::spans::merge(&raw)
+        } else {
+            horizon_client::spans::merge(&[between, raw].concat())
+        };
         let notes = horizon_client::spans::take_notes();
         if let Some(threshold) = self.options.spikes
             && wall > threshold
@@ -588,7 +727,8 @@ impl Game<'_> {
                 slowest_steps(&notes)
             );
         }
-        record(wall, cpu, spans);
+        self.native_server_tick_timed(wall, cpu, &spans);
+        record(wall, cpu, spans, in_tick);
         result
     }
 
@@ -662,6 +802,8 @@ impl Game<'_> {
                     || self.mod_container_viewers.keys().any(|(k, _)| *k == d.id())
                     || self.player_bed_levels().any(|b| b == *d)
                     || forced
+                    // A native mod's tickets for a level not open yet (`native_force_chunk_in`).
+                    || self.mod_chunk_tickets.get(d).is_some_and(|l| !l.is_empty())
                     // A game test runs in its own level, players or not.
                     || self.game_tests.has_tests_in(*d)
                     || self.pregen_level() == Some(*d)
@@ -807,5 +949,209 @@ mod tests {
         levels.clear();
         assert!(levels.heard_open.is_empty());
         assert!(levels.parked.is_empty());
+    }
+
+    /// `ServerLevel.getWorldBorder`: `/worldborder` in one level leaves the others' alone.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn each_level_keeps_its_own_world_border() {
+        use crate::game::{Audio, Options, Progress, Settings, load_resources};
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.clone(),
+            None,
+            &root,
+            &settings,
+            Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&root),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+        assert!(game.run_command("worldborder set 1000"));
+        assert!(game.run_command("execute in minecraft:the_nether run worldborder set 100"));
+        assert_eq!(game.dim, Dim::Overworld);
+        assert_eq!(game.border.size(), 1000.0);
+        let nether = game.levels.parked_border(Dim::Nether).unwrap();
+        assert_eq!(nether.size(), 100.0);
+    }
+
+    /// A game on a scratch world folder, the way `dedicated.rs` opens one
+    /// (`load_world` with an absolute folder).
+    fn open_game(
+        root: &std::path::Path,
+        home: &std::path::Path,
+        world: &std::path::Path,
+    ) -> Game<'static> {
+        use crate::game::{Audio, Options, Progress, Settings, load_resources};
+        let settings = Settings::default();
+        let loaded = load_resources(
+            root.to_path_buf(),
+            None,
+            root,
+            &settings,
+            Instant::now(),
+            false,
+            true,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        // The game keeps a reference to its resources for the whole test.
+        let resources: &'static _ = Box::leak(Box::new(loaded.resources));
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.to_path_buf();
+        options.game_dir = Some(home.to_path_buf());
+        // A fixed name: no generated horizon-player.txt in the working directory.
+        options.player_name = Some("H260".into());
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(root),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+        let folder = world.to_string_lossy().into_owned();
+        game.load_world(
+            crate::game::world_loading::WorldRequest::new(
+                &folder,
+                Some("h260"),
+                Some(260),
+                true,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        game
+    }
+
+    /// Expected values from the official 26.3 dedicated server restarted on the
+    /// same world: each level's `world_border` SavedData is read when the level
+    /// is made, so the Overworld's saved border is in place for the first
+    /// command, and a first `/worldborder set` is not overwritten later.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and a scratch HORIZON_HOME"]
+    fn a_reopened_world_has_each_levels_saved_border_from_the_start() {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let home = std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap()).join("h260");
+        let world = home.join("saves/h260");
+        {
+            let mut game = open_game(&root, &home, &world);
+            // A server ticks before it saves.
+            game.tick_world(true).unwrap();
+            assert!(game.run_command("worldborder set 50"));
+            assert!(game.run_command("execute in minecraft:the_nether run worldborder set 100"));
+            game.save_game().unwrap();
+        }
+        let mut game = open_game(&root, &home, &world);
+        let mut failures = Vec::new();
+        if game.border.size() != 50.0 {
+            failures.push(format!("in place after the open: {}", game.border.size()));
+        }
+        assert!(game.run_command("worldborder set 70"));
+        game.tick_world(true).unwrap();
+        assert!(game.run_command("execute in minecraft:the_nether run worldborder get"));
+        assert!(game.run_command("execute in minecraft:the_end run worldborder get"));
+        assert_eq!(game.dim, Dim::Overworld);
+        let sizes = (
+            game.border.size(),
+            game.levels.parked_border(Dim::Nether).map(|b| b.size()),
+            game.levels.parked_border(Dim::End).map(|b| b.size()),
+        );
+        if sizes != (70.0, Some(100.0), Some(59_999_968.0)) {
+            failures.push(format!("after the first set and a tick: {sizes:?}"));
+        }
+        assert!(failures.is_empty(), "reopened borders: {failures:#?}");
+    }
+
+    /// Added controls (H260, after the baseline): a new world, and a read and a
+    /// set before the first tick that survive a tick, a save and another reopen.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and a scratch HORIZON_HOME"]
+    fn reopened_borders_keep_through_a_tick_and_a_save_and_a_new_world_has_defaults() {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let home = std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap())
+            .join("h260-controls");
+        let world = home.join("saves/h260");
+        let sizes = |game: &mut Game<'_>| {
+            assert!(game.run_command("execute in minecraft:overworld run worldborder get"));
+            assert!(game.run_command("execute in minecraft:the_nether run worldborder get"));
+            assert!(game.run_command("execute in minecraft:the_end run worldborder get"));
+            let parked = |d| game.levels.parked_border(d).map(|b| b.size());
+            let size = |d: Dim| {
+                if game.dim == d {
+                    Some(game.border.size())
+                } else {
+                    parked(d)
+                }
+            };
+            (size(Dim::Overworld), size(Dim::Nether), size(Dim::End))
+        };
+        const DEFAULT: f64 = 59_999_968.0;
+        let mut failures = Vec::new();
+        {
+            let mut game = open_game(&root, &home, &world);
+            // A new world: every level at the default.
+            if game.border.size() != DEFAULT {
+                failures.push(format!("new world in place: {}", game.border.size()));
+            }
+            game.tick_world(true).unwrap();
+            let got = sizes(&mut game);
+            if got != (Some(DEFAULT), Some(DEFAULT), Some(DEFAULT)) {
+                failures.push(format!("new world: {got:?}"));
+            }
+            assert!(game.run_command("worldborder set 50"));
+            assert!(game.run_command("execute in minecraft:the_nether run worldborder set 100"));
+            game.save_game().unwrap();
+        }
+        {
+            let mut game = open_game(&root, &home, &world);
+            // Before the first tick: the read, then the set.
+            if game.border.size() != 50.0 {
+                failures.push(format!("first read before a tick: {}", game.border.size()));
+            }
+            assert!(game.run_command("worldborder set 70"));
+            if game.border.size() != 70.0 {
+                failures.push(format!("first set before a tick: {}", game.border.size()));
+            }
+            game.tick_world(true).unwrap();
+            let got = sizes(&mut game);
+            if got != (Some(70.0), Some(100.0), Some(DEFAULT)) {
+                failures.push(format!("after a tick: {got:?}"));
+            }
+            game.save_game().unwrap();
+        }
+        {
+            let mut game = open_game(&root, &home, &world);
+            let got = sizes(&mut game);
+            if got != (Some(70.0), Some(100.0), Some(DEFAULT)) {
+                failures.push(format!("after the save and another reopen: {got:?}"));
+            }
+        }
+        assert!(failures.is_empty(), "reopened borders: {failures:#?}");
     }
 }

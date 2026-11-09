@@ -321,7 +321,7 @@ pub struct AnimateTables {
     pale_oak_logs: Vec<bool>,
     /// `FireBlock.canBurn`: states with ignite odds above zero (none waterlogged).
     burnable: Vec<bool>,
-    /// Biome id -> ambient particles and probabilities (`minecraft:visual/ambient_particles`).
+    /// Biome id -> ambient particles and probabilities from the prepared pack.
     ambient: Vec<Vec<(T, f32)>>,
     /// Per state: 1 for a pointed dripstone, 2 for one whose tip points down.
     dripstone: Vec<u8>,
@@ -511,6 +511,30 @@ impl AnimateContext<'_> {
             ],
         ))
     }
+    /// The centre, in the horizontal plane, of the pick shape's bounds before
+    /// the model offset - a flower's own box, where its collision shape is
+    /// empty. `WitherRoseBlock.animateTick` reads it off `getShape`.
+    fn outline_center(&self, state: BlockStateId) -> [f64; 2] {
+        let outline = &self.facts.get(state).outline;
+        if outline.is_empty() {
+            return [0.5; 2];
+        }
+        let seed = [
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ];
+        let [x1, z1, x2, z2] = outline.iter().fold(seed, |b, box_| {
+            [
+                b[0].min(box_[0]),
+                b[1].min(box_[2]),
+                b[2].max(box_[3]),
+                b[3].max(box_[5]),
+            ]
+        });
+        [(x1 + x2) / 2.0, (z1 + z2) / 2.0]
+    }
     /// `Level.getMaxLocalRawBrightness`: the brighter of block light and
     /// sky light less the sky darkening.
     fn max_local_raw_brightness(&self, p: [i32; 3]) -> i32 {
@@ -608,7 +632,16 @@ fn do_animate_tick(
             .chunks
             .get(&(x >> 4, z >> 4))
             .map_or(0, |c| c.biome(x, y, z));
-        for &(ty, probability) in tables.ambient.get(biome as usize).into_iter().flatten() {
+        let info = ctx.biomes.get(biome);
+        let particles: &[(T, f32)] = if ctx.biomes.pack_file(&info.name).is_some() {
+            &info.ambient_particles
+        } else {
+            tables
+                .ambient
+                .get(biome as usize)
+                .map_or(&[][..], Vec::as_slice)
+        };
+        for &(ty, probability) in particles {
             // AmbientParticle.canSpawn: random.nextFloat() <= probability.
             let random = engine.random();
             if random.next_float() <= probability {
@@ -1378,10 +1411,10 @@ fn block_animate_tick(
         }
         Animate::PointedDripstone => dripstone_drip(tables, engine, ctx, state, pos),
         Animate::WitherRose => {
-            // WitherRoseBlock.animateTick: smoke puffs at the centre of the shape.
-            let center = ctx.shape_y(pos).map_or([0.5; 2], |s| {
-                [(s.2[0] + s.2[1]) / 2.0, (s.2[2] + s.2[3]) / 2.0]
-            });
+            // WitherRoseBlock.animateTick: smoke puffs at the centre of
+            // `getShape`, the pick shape a flower's `getOffset` moves per column,
+            // which is not the (empty) collision shape.
+            let center = ctx.outline_center(state);
             let offset = ctx.offset_of(state, pos);
             let x = fx + center[0] + offset[0];
             let z = fz + center[1] + offset[2];
@@ -1490,10 +1523,13 @@ fn block_animate_tick(
             }
         }
         Animate::Beehive => {
-            // BeehiveBlock.animateTick: nextInt(1) + 1 attempts.
-            let attempts = next_int(engine.random(), 1) + 1;
-            for _ in 0..attempts {
+            // BeehiveBlock.animateTick: `for (i = 0; i < random.nextInt(1) + 1; i++)`
+            // re-reads its bound on every trip, so the level random is asked
+            // once before the attempt and once more to end the loop.
+            let mut attempt = 0;
+            while attempt < next_int(engine.random(), 1) + 1 {
                 beehive_drip(tables, engine, ctx, state, pos);
+                attempt += 1;
             }
         }
         Animate::RedstoneOre => {
