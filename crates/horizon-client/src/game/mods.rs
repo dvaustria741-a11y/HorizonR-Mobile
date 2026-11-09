@@ -683,55 +683,10 @@ fn not_built(
 }
 
 impl Game<'_> {
-    /// Lists the installed mods on the Mods page. Content mods load with the resources
-    /// (`content_root`); native ones are built into the game (`native_hooks.rs`). WebAssembly code
-    /// mods don't run any more: their rows say so, and the player hears it once in the chat
-    /// (`tell_native_now`).
-    pub(super) fn start_mods(&mut self) {
-        let dir = Self::game_dir().join(mod_list::DIR);
-        let mut paths = horizon_mods::find(&dir);
-        paths.retain(|p| !self.mods.dev.contains(p));
-        paths.extend(self.mods.dev.iter().cloned());
-        let (mut content_ids, mut live_ids) = Default::default();
-        self.settings.mods.installed = paths
-            .iter()
-            .map(|path| {
-                let file = path.file_name().unwrap_or_default().to_string_lossy();
-                let package = match horizon_mods::Package::read(path) {
-                    Ok(package) => package,
-                    Err(e) => {
-                        return Installed {
-                            id: String::new(),
-                            title: file.into_owned(),
-                            description: String::new(),
-                            problem: Some(format!("Can't be read: {e}")),
-                            dev: false,
-                            native: None,
-                        };
-                    }
-                };
-                let m = &package.manifest;
-                let problem = package.wasm.is_some().then(|| STOPPED.to_owned());
-                let dev = self.mods.dev.contains(path);
-                live_switch_of(path, &package, dev, &mut content_ids, &mut live_ids);
-                Installed {
-                    id: m.id.clone(),
-                    title: format!("{} {}", m.name, m.version),
-                    description: m.description.clone(),
-                    problem,
-                    dev,
-                    native: None,
-                }
-            })
-            .collect();
-        (self.mods.content_ids, self.mods.live_ids) = (content_ids, live_ids);
-        self.ui.options.mods_live = self.mods_live_now();
-        if self.mods.applied.is_none() {
-            self.mods.applied = Some(self.settings.mods.enabled.clone());
-        }
-        // A mod with a native version built in says so instead, and isn't news.
-        self.list_native_mods();
-        self.sync_native_switches();
+    /// What this build has built in, from `native-mods.json` beside the executable: the crash
+    /// report's list, whether native rendering hooks are on, and a row for each native mod the
+    /// launcher installed that this game wasn't built with.
+    pub(super) fn note_native_build(&mut self) {
         let built = std::env::current_exe()
             .ok()
             .and_then(|exe| std::fs::read_to_string(exe.with_file_name(BUILD_INFO)).ok())
@@ -764,7 +719,8 @@ impl Game<'_> {
         let (mut content_ids, mut live_ids) = Default::default();
         for path in paths {
             if let Ok(package) = horizon_mods::Package::read(path) {
-                live_switch_of(path, &package, &mut content_ids, &mut live_ids);
+                let dev = self.mods.dev.contains(path);
+                live_switch_of(path, &package, dev, &mut content_ids, &mut live_ids);
             }
         }
         (self.mods.content_ids, self.mods.live_ids) = (content_ids, live_ids);

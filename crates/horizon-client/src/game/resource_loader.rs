@@ -313,6 +313,8 @@ pub(super) fn loading_app(
     let loading = Loading {
         window: None,
         renderer: None,
+        renderer_job: None,
+        prepared_renderer: None,
         boot: horizon_client::hud::HudAtlas::boot(),
         gui: None,
         settings,

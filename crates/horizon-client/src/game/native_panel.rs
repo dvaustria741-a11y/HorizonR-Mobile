@@ -98,7 +98,7 @@ impl Panel {
     /// Horizon's own Recipes panel, or a mod that asked for them.
     fn viewer_style(&self, owner: &Owner) -> bool {
         let id = owner.native_id();
-        id == "recipes" || self.viewer_styled.contains(id)
+        id == Some("recipes") || id.is_some_and(|id| self.viewer_styled.contains(id))
     }
     /// What the panel shows: a native mod's, one `on`.
     pub(super) fn shown(&self, on: impl Fn(&str) -> bool) -> Option<&Shown> {
