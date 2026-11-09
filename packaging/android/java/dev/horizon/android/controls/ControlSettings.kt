@@ -117,6 +117,85 @@ class ControlSettings(context: Context) {
 object ControlLayouts {
     data class Entry(val id: String, val name: String, val removable: Boolean)
 
+    /** What the layout manager and the editor's info dialogs show about a layout. */
+    data class Info(
+        val id: String,
+        val name: String,
+        val fileName: String,
+        val author: String,
+        val version: String,
+        val description: String,
+        val removable: Boolean,
+    )
+
+    fun info(context: Context, entry: Entry, defaultName: String): Info {
+        val layout = load(context, entry.id, defaultName)
+        val fileName = when {
+            entry.id.startsWith("file:") -> entry.id.removePrefix("file:")
+            entry.id.startsWith("asset:") -> entry.id.removePrefix("asset:")
+            else -> "default.json"
+        }
+        return Info(entry.id, layout.name.ifBlank { entry.name }, fileName, layout.author, layout.version, layout.description, entry.removable)
+    }
+
+    private fun safeFileName(raw: String): String =
+        raw.trim().removeSuffix(".json").replace(Regex("[^A-Za-z0-9._ ()-]"), "_").trim().take(48).ifBlank { "layout" }
+
+    private fun uniqueFile(base: String): File {
+        var f = File(dir, "$base.json")
+        var n = 2
+        while (f.exists()) f = File(dir, "$base ($n).json").also { n++ }
+        return f
+    }
+
+    /** Writes [layout] to <fileName>.json. Overwrites only the file [currentId] already points at; otherwise picks a free name. */
+    fun saveAs(layout: ControlLayout, fileName: String, currentId: String): String {
+        dir.mkdirs()
+        val base = safeFileName(fileName)
+        val current = currentId.takeIf { it.startsWith("file:") }?.let { File(dir, it.removePrefix("file:")) }
+        val wanted = File(dir, "$base.json")
+        val target = if (current != null && current.isFile && current.name.equals(wanted.name, ignoreCase = true)) current else uniqueFile(base)
+        // Saving under another name leaves the old file alone: Save and Exit is "save as" for a renamed layout.
+        target.writeText(ControlLayout.write(layout))
+        return "file:${target.name}"
+    }
+
+    fun copy(context: Context, id: String, defaultName: String, suffix: String): String {
+        dir.mkdirs()
+        val layout = load(context, id, defaultName)
+        val base = safeFileName(layout.name + " " + suffix)
+        val target = uniqueFile(base)
+        target.writeText(ControlLayout.write(layout.copy(name = layout.name + " " + suffix)))
+        return "file:${target.name}"
+    }
+
+    fun create(defaultName: String, name: String): String {
+        dir.mkdirs()
+        val target = uniqueFile(safeFileName(name))
+        target.writeText(ControlLayout.write(DefaultLayout.create(name)))
+        return "file:${target.name}"
+    }
+
+    /** Renames the file of a saved layout; returns the new id, or null for a built-in or a name that is taken. */
+    fun renameFile(id: String, newFileName: String): String? {
+        if (!id.startsWith("file:")) return null
+        val from = File(dir, id.removePrefix("file:"))
+        val to = File(dir, safeFileName(newFileName) + ".json")
+        if (!from.isFile || (to.exists() && !to.name.equals(from.name, ignoreCase = true))) return null
+        return if (from.renameTo(to)) "file:${to.name}" else null
+    }
+
+    fun updateInfo(context: Context, id: String, defaultName: String, name: String, version: String, author: String, description: String): Boolean {
+        if (!id.startsWith("file:")) return false
+        val file = File(dir, id.removePrefix("file:"))
+        val layout = load(context, id, defaultName)
+        file.writeText(ControlLayout.write(layout.copy(name = name.ifBlank { layout.name }, version = version, author = author, description = description)))
+        return true
+    }
+
+    fun exportText(context: Context, id: String, defaultName: String): String =
+        ControlLayout.write(load(context, id, defaultName))
+
     /** ZalithLauncher's own default control map (assets/controls/zalith_default.json). */
     const val ZALITH_ID = "asset:zalith_default.json"
 

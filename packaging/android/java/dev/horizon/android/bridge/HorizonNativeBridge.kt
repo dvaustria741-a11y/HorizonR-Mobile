@@ -2683,10 +2683,25 @@ object HorizonNativeBridge {
         }
     }
 
-    private const val STORE_ICON_DIR = "zalith-store-icons"
+    private const val STORE_ICON_DIR = "store-icons"
+    private const val OLD_STORE_ICON_DIR = "zalith-store-icons"
 
-    private fun storeIconSidecar(base: File, installedFileName: String): File =
-        File(File(base, STORE_ICON_DIR), "$installedFileName.png")
+    private fun storeIconSidecar(base: File, installedFileName: String): File {
+        // Older installs kept these in "zalith-store-icons"; move that folder over once.
+        runCatching {
+            val old = File(base, OLD_STORE_ICON_DIR)
+            val new = File(base, STORE_ICON_DIR)
+            if (old.isDirectory) {
+                if (!new.exists()) {
+                    old.renameTo(new)
+                } else {
+                    old.listFiles()?.forEach { f -> File(new, f.name).takeIf { !it.exists() }?.let { f.renameTo(it) } }
+                    old.delete()
+                }
+            }
+        }
+        return File(File(base, STORE_ICON_DIR), "$installedFileName.png")
+    }
 
     /**
      * Downloads the store icon of a freshly installed Modrinth / CurseForge / registry item and keeps it

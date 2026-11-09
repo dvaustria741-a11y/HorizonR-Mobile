@@ -103,6 +103,8 @@ private sealed interface Dialog {
     data object Load : Dialog
     data object SelectDefault : Dialog
     data object ConfirmExit : Dialog
+    data object SaveExit : Dialog
+    data class Info(val info: ControlLayouts.Info) : Dialog
     data class Slot(val index: Int) : Dialog
     data class Pick(val background: Boolean) : Dialog
 }
@@ -370,7 +372,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                 ZSection("Save")
                 ZButton("Load") { dialog = Dialog.Load }
                 ZButton("Save") { save() }
-                ZButton("Save and Exit") { if (save()) onExit() }
+                ZButton("Save and Exit") { dialog = Dialog.SaveExit }
                 ZButton("Save and Share") { if (save()) share() }
                 ZSection("Control Layout")
                 Row(
@@ -400,25 +402,59 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
         }
 
         when (val d = dialog) {
-            Dialog.Load -> ZDialog("Load", { dialog = null }) {
-                ControlLayouts.list(context, defaultName).forEach { e ->
-                    ZPlain(e.name) {
-                        controls.editLayout(ControlLayouts.load(context, e.id, defaultName), null)
-                        currentId = e.id
-                        dirty = false
-                        dialog = null
-                        menuOpen = false
+            Dialog.Load -> ZDialog("Load", { dialog = null }, width = 460.dp) {
+                val infos = remember { ControlLayouts.list(context, defaultName).map { ControlLayouts.info(context, it, defaultName) } }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    infos.forEach { info ->
+                        LayoutCard(info = info, selected = info.id == currentId, onClick = {
+                            controls.editLayout(ControlLayouts.load(context, info.id, defaultName), null)
+                            currentId = info.id
+                            dirty = false
+                            dialog = null
+                            menuOpen = false
+                        }, onInfo = { dialog = Dialog.Info(info) })
                     }
                 }
             }
-            Dialog.SelectDefault -> ZDialog("Select Default Control Layout", { dialog = null }) {
-                ControlLayouts.list(context, defaultName).forEach { e ->
-                    ZPlain(if (e.id == settings.layout) "${e.name} (default)" else e.name) {
-                        settings.layout = e.id
-                        Toast.makeText(context, e.name, Toast.LENGTH_SHORT).show()
-                        dialog = null
+            Dialog.SelectDefault -> ZDialog(stringResource(R.string.layouts_select_default), { dialog = null }, width = 460.dp) {
+                val infos = remember { ControlLayouts.list(context, defaultName).map { ControlLayouts.info(context, it, defaultName) } }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    infos.forEach { info ->
+                        LayoutCard(info = info, selected = info.id == settings.layout, onClick = {
+                            settings.layout = info.id
+                            Toast.makeText(context, info.name, Toast.LENGTH_SHORT).show()
+                            dialog = null
+                        }, onInfo = { dialog = Dialog.Info(info) })
                     }
                 }
+            }
+            is Dialog.Info -> ZDialog(stringResource(R.string.layouts_more_info), { dialog = null }, width = 460.dp) {
+                LayoutInfoBody(d.info)
+                ZButton(stringResource(R.string.layouts_close)) { dialog = null }
+            }
+            Dialog.SaveExit -> ZDialog(stringResource(R.string.layouts_save_exit), { dialog = null }, width = 460.dp, maxHeight = 380.dp) {
+                val layout = controls.layout
+                val initialFile = if (currentId.startsWith("file:")) currentId.removePrefix("file:").removeSuffix(".json") else "${layout.name} $suffix"
+                LayoutSaveForm(
+                    initialFile = initialFile,
+                    initial = ControlLayouts.Info(currentId, layout.name, initialFile, layout.author, layout.version, layout.description, true),
+                    layoutName = layout.name,
+                    onCancel = { dialog = null },
+                    onConfirm = { file, name, ver, author, desc ->
+                        val edited = layout.copy(name = name.ifBlank { file }, version = ver.trim(), author = author.trim(), description = desc.trim())
+                        val saved = runCatching { ControlLayouts.saveAs(edited, file, currentId) }.getOrNull()
+                        if (saved != null) {
+                            settings.layout = saved
+                            currentId = saved
+                            dirty = false
+                            Toast.makeText(context, savedText.replace("%s", edited.name), Toast.LENGTH_SHORT).show()
+                            dialog = null
+                            onExit()
+                        } else {
+                            dialog = null
+                        }
+                    },
+                )
             }
             Dialog.ConfirmExit -> ZDialog("Exit without saving?", { dialog = null }) {
                 ZPlain("Exit Editor") { dialog = null; onExit() }
@@ -751,15 +787,21 @@ private fun ZPlain(text: String, onClick: () -> Unit) {
 
 /** A Zalith-style dialog drawn inside the editor, so it needs no window of its own. */
 @Composable
-private fun ZDialog(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+private fun ZDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    width: androidx.compose.ui.unit.Dp = 320.dp,
+    maxHeight: androidx.compose.ui.unit.Dp = 340.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Box(
         modifier = Modifier.fillMaxSize().background(ZScrim).pointerInput(Unit) { detectTapGestures { onDismiss() } },
         contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .width(320.dp)
-                .heightIn(max = 340.dp)
+                .width(width)
+                .heightIn(max = maxHeight)
                 .clip(RoundedCornerShape(8.dp))
                 .background(ZPanel)
                 .pointerInput(Unit) { detectTapGestures { } }

@@ -47,6 +47,7 @@ fun LayoutSettings(settings: ControlSettings, onEdit: (() -> Unit)?, onChange: (
     val defaultName = stringResource(R.string.controls_default_name)
     var version by remember { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf(settings.layout) }
+    var manage by remember { mutableStateOf(false) }
     val entries = remember(version) { ControlLayouts.list(context, defaultName) }
     val imported = stringResource(R.string.controls_imported, "%s")
     val failed = stringResource(R.string.controls_import_failed, "%s")
@@ -89,8 +90,17 @@ fun LayoutSettings(settings: ControlSettings, onEdit: (() -> Unit)?, onChange: (
             OutlinedButton(onClick = { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) }) {
                 Text(stringResource(R.string.controls_import))
             }
+            OutlinedButton(onClick = { manage = true }) { Text(stringResource(R.string.layouts_manage_button)) }
         }
         Hint(stringResource(R.string.controls_folder, ControlLayouts.dir.absolutePath))
+    }
+    if (manage) {
+        ManageLayoutsScreen(
+            settings = settings,
+            onClose = { manage = false; version++; selected = settings.layout },
+            onEdit = onEdit,
+            onChange = onChange,
+        )
     }
 }
 

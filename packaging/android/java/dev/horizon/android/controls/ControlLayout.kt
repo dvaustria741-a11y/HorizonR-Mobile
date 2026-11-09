@@ -85,6 +85,9 @@ data class ControlLayout(
     val layers: List<ControlLayer>,
     val buttons: List<ControlButton>,
     val sticks: List<ControlStick>,
+    val author: String = "",
+    val version: String = "",
+    val description: String = "",
 ) {
     companion object {
         const val EAST = 0
@@ -448,6 +451,11 @@ private object PojarushFormat {
     fun write(l: ControlLayout): JSONObject = JSONObject()
         .put("pojarush", 1)
         .put("name", l.name)
+        .apply {
+            if (l.author.isNotBlank()) put("author", l.author)
+            if (l.version.isNotBlank()) put("version", l.version)
+            if (l.description.isNotBlank()) put("description", l.description)
+        }
         .put("layers", JSONArray().apply { l.layers.forEach { put(JSONObject().put("id", it.id).put("visible", it.visible).put("visibility", it.visibility.name)) } })
         .put("buttons", JSONArray().apply { l.buttons.forEach { put(button(it)) } })
         .put("sticks", JSONArray().apply { l.sticks.forEach { put(stick(it)) } })
@@ -523,6 +531,9 @@ private object PojarushFormat {
 
     fun parse(json: JSONObject, fallbackName: String): ControlLayout = ControlLayout(
         name = json.optString("name").ifBlank { fallbackName },
+        author = json.optString("author"),
+        version = json.optString("version"),
+        description = json.optString("description"),
         layers = json.list("layers").map { ControlLayer(it.optString("id"), it.optBoolean("visible", true), visibility(it.optString("visibility"))) },
         buttons = json.list("buttons").map { b ->
             ControlButton(
