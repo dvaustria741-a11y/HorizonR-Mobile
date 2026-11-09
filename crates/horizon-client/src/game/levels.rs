@@ -139,6 +139,17 @@ impl Levels {
         self.heard_open.clear();
     }
 
+    /// The chunks of each level not in place (capability `world` lends
+    /// them to server mods for a call).
+    #[cfg_attr(not(feature = "mods"), allow(dead_code))]
+    pub(super) fn parked_chunks(
+        &mut self,
+    ) -> impl Iterator<Item = (Dim, &mut horizon_client::chunk_map::ChunkMap)> {
+        self.parked
+            .iter_mut()
+            .map(|(d, p)| (*d, &mut p.world.chunks))
+    }
+
     /// A parked level, without opening or loading it.
     pub(super) fn parked_world(&self, dim: Dim) -> Option<&World> {
         self.parked.get(&dim).map(|level| &level.world)
