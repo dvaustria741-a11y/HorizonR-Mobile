@@ -1822,11 +1822,11 @@ private fun HorizonTopNav(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.tab.title,
-                            tint = if (selected) Color.White else MutedSubtitleText,
-                            modifier = Modifier.size(18.dp)
+                        VoltIcon(
+                            name = voltNavIconName(item.tab),
+                            fallback = item.icon,
+                            size = 18.dp,
+                            tint = if (selected) Color.White else MutedSubtitleText
                         )
                         if (selected) {
                             Text(
@@ -1857,11 +1857,11 @@ private fun HorizonTopNav(
                     .animatedPressScale(onClick = onOpenDataFolder)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = "Data Folder",
-                        tint = Color(0xFFD5DEE5),
-                        modifier = Modifier.size(17.dp)
+                    VoltIcon(
+                        name = "ic_ui_folder",
+                        fallback = Icons.Default.Folder,
+                        size = 17.dp,
+                        tint = Color.White
                     )
                 }
             }
@@ -1874,11 +1874,11 @@ private fun HorizonTopNav(
                     .animatedPressScale(onClick = onOpenLogs)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = Icons.Default.Terminal,
-                        contentDescription = "Log",
-                        tint = accent,
-                        modifier = Modifier.size(17.dp)
+                    VoltIcon(
+                        name = "ic_ui_logs",
+                        fallback = Icons.Default.Terminal,
+                        size = 17.dp,
+                        tint = Color.White
                     )
                 }
             }
@@ -9014,9 +9014,10 @@ private fun LauncherLaunchDock(
                         },
                         label = "DockPlayIcon"
                     ) { ready ->
-                        Icon(
-                            imageVector = if (ready) Icons.Default.PlayArrow else Icons.Default.Download,
-                            contentDescription = null,
+                        VoltIcon(
+                            name = if (ready) "ic_ui_play" else "ic_ui_download",
+                            fallback = if (ready) Icons.Default.PlayArrow else Icons.Default.Download,
+                            size = 24.dp,
                             tint = if (installStatus.running) SkyBlueAccent else SkyBlueDarkText
                         )
                     }

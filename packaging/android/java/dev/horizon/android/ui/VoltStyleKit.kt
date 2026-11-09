@@ -57,21 +57,21 @@ internal val VoltMutedText = Color(0xFF9AA1AF)
  * if it is not in res/drawable-nodpi yet, a Material icon is drawn instead, also white.
  */
 @Composable
-internal fun VoltIcon(name: String, fallback: ImageVector, size: Dp, modifier: Modifier = Modifier) {
+internal fun VoltIcon(name: String, fallback: ImageVector, size: Dp, modifier: Modifier = Modifier, tint: Color = Color.White) {
     val context = LocalContext.current
     val resId = remember(name) { context.resources.getIdentifier(name, "drawable", context.packageName) }
     if (resId != 0) {
         Icon(
             painter = painterResource(id = resId),
             contentDescription = null,
-            tint = Color.White,
+            tint = tint,
             modifier = modifier.size(size)
         )
     } else {
         Icon(
             imageVector = fallback,
             contentDescription = null,
-            tint = Color.White,
+            tint = tint,
             modifier = modifier.size(size)
         )
     }
@@ -148,4 +148,16 @@ internal fun VoltHomeDeck(onNavigate: (LauncherNavTab) -> Unit, modifier: Modifi
         VoltTile("Skins", "Wardrobe", "ic_ui_skins", Icons.Default.Checkroom, 2, { onNavigate(LauncherNavTab.ACCOUNTS) }, Modifier.width(96.dp))
         VoltTile("Servers", "Quick join", "ic_ui_servers", Icons.Default.Dns, 3, { onNavigate(LauncherNavTab.SERVERS) }, Modifier.width(96.dp))
     }
+}
+
+/** Sheet icon used for a bottom/top nav tab (Home has no sheet icon and keeps its Material one). */
+internal fun voltNavIconName(tab: LauncherNavTab): String = when (tab) {
+    LauncherNavTab.VERSIONS -> "ic_ui_game"
+    LauncherNavTab.STORE -> "ic_ui_store"
+    LauncherNavTab.FILES -> "ic_ui_mods"
+    LauncherNavTab.SERVERS -> "ic_ui_servers"
+    LauncherNavTab.ACCOUNTS -> "ic_ui_skins"
+    LauncherNavTab.SETTINGS -> "ic_ui_settings"
+    LauncherNavTab.LOGS -> "ic_ui_logs"
+    else -> "ic_ui_none"
 }

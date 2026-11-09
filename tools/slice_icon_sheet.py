@@ -20,12 +20,15 @@ sheet = Image.open(sys.argv[1]).convert("RGBA")
 cw, ch = sheet.width // COLS, sheet.height // ROWS
 for i, name in enumerate(NAMES):
     cell = sheet.crop(((i % COLS) * cw, (i // COLS) * ch, (i % COLS + 1) * cw, (i // COLS + 1) * ch))
-    # brightness becomes alpha, colour is forced to pure white (works for white-on-black or white-on-transparent sheets)
+    # real transparency is kept; on opaque sheets brightness becomes alpha. Colour is forced to pure white,
+    # and faint background noise is dropped so the crop is tight.
+    has_alpha = cell.getextrema()[3][0] < 255
     px = cell.load()
     for y in range(cell.height):
         for x in range(cell.width):
             r, g, b, a = px[x, y]
-            px[x, y] = (255, 255, 255, min(a, max(r, g, b)))
+            v = a if has_alpha else max(r, g, b)
+            px[x, y] = (255, 255, 255, 0 if v < 24 else v)
     bbox = cell.getbbox()
     if bbox:
         cell = cell.crop(bbox)
