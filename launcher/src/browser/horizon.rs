@@ -424,6 +424,7 @@ fn version_of(
         blocked: index
             .revoked(&p.id, &v.file.sha256)
             .map(|r| format!("taken down: {}", r.reason))
+            .or_else(|| needs_port(v).then(|| NEEDS_PORT.to_string()))
             .or_else(|| needs_newer(v, level).then(|| NEEDS_NEWER.to_string())),
     }
 }
@@ -565,6 +566,7 @@ impl Source for Registry {
 
     fn search(&self, query: &Query) -> Result<Vec<Project>, String> {
         let index = index()?;
+        #[cfg(not(target_os = "android"))]
         let found = match query.filters.works_on {
             true => {
                 let works = works_on(&index, &crate::instances::selected());
@@ -572,6 +574,9 @@ impl Source for Registry {
             }
             false => search(&index, query),
         };
+        // The app has no launcher instances to fit mods to.
+        #[cfg(target_os = "android")]
+        let found = search(&index, query);
         refresh_ratings();
         Ok(found)
     }
@@ -812,6 +817,18 @@ fn fetch_datapack_from(
     Ok((path, v.version.clone()))
 }
 
+/// The app has no launcher instances, so no version is picked by fit: the newest installs.
+#[cfg(target_os = "android")]
+fn fitting<'a>(
+    _index: &Index,
+    _p: &'a index::Project,
+    _level: Option<u32>,
+    _home: &Path,
+) -> Option<&'a index::Version> {
+    None
+}
+
+#[cfg(not(target_os = "android"))]
 /// The version of native mod `p` that fits the Horizon played in game folder `home`
 /// ([`crate::native_fit::best`]); None for other kinds, or when the Horizon played isn't known.
 fn fitting<'a>(
@@ -833,6 +850,7 @@ fn fitting<'a>(
 
 /// A version of `p` an install may pick: made for this game, not taken down, and not needing a
 /// newer mod API than `level`.
+#[cfg(not(target_os = "android"))]
 fn usable(index: &Index, p: &index::Project, v: &index::Version, level: Option<u32>) -> bool {
     v.game == GAME && index.revoked(&p.id, &v.file.sha256).is_none() && !needs_newer(v, level)
 }
@@ -840,6 +858,7 @@ fn usable(index: &Index, p: &index::Project, v: &index::Version, level: Option<u
 /// How a registry native mod works on `instance`: whether a version of it does, with the line its
 /// best version (else its newest) reads there ([`crate::native_fit::describe`]). None for other
 /// kinds, and when the Horizon played isn't known.
+#[cfg(not(target_os = "android"))]
 pub fn works_on<'a>(
     index: &'a Index,
     instance: &crate::instances::Instance,
@@ -860,6 +879,7 @@ pub fn works_on<'a>(
 }
 
 /// Where a native mod turned on in an instance stands, for its row on the instance's Mods tab.
+#[cfg(not(target_os = "android"))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Standing {
     /// In the instance's native build, on the Horizon the instance plays.
@@ -874,6 +894,7 @@ pub enum Standing {
 
 /// [`Standing`] of the native mods `ids` (manifest ids) in `instance`, by id: from its native
 /// build's record when it plays one, else from the registry's versions.
+#[cfg(not(target_os = "android"))]
 pub fn standings(
     instance: &crate::instances::Instance,
     ids: &[String],
@@ -918,6 +939,7 @@ pub fn standings(
 }
 
 /// [`works_on`] for the projects `ids` in `instance`, by id.
+#[cfg(not(target_os = "android"))]
 pub fn works_lines(
     ids: &[String],
     instance: &crate::instances::Instance,
@@ -963,6 +985,7 @@ fn set_chosen(home: &Path, id: &str, version: Option<&str>) -> Result<(), String
 
 /// One version of a registry native mod on its project page: how it fits the Horizon played
 /// ([`crate::native_fit::describe`]) and whether it is the one the launcher would pick.
+#[cfg(not(target_os = "android"))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Fitted {
     pub fit: Option<String>,
@@ -975,6 +998,7 @@ pub struct Fitted {
 
 /// [`Fitted`] for each version of native mod `id`, by version, in `instance`; empty for other
 /// kinds or when the Horizon played isn't known.
+#[cfg(not(target_os = "android"))]
 pub fn fitted(id: &str, instance: &crate::instances::Instance) -> HashMap<String, Fitted> {
     let Ok(index) = index() else {
         return HashMap::new();
@@ -1059,6 +1083,7 @@ pub fn fitting_update(id: &str, version: &str, home: &Path) -> Option<Option<Ver
 
 /// The version of native mod `p` that builds on the Horizon `instance` plays when `newest`
 /// doesn't and an older one does: what an install picks instead of the newest.
+#[cfg(not(target_os = "android"))]
 fn older_fit(
     p: &index::Project,
     newest: &index::Version,
@@ -1088,6 +1113,7 @@ fn older_fit(
 /// Horizon `instance` plays, though their versions said they would): each one the player didn't
 /// pick a version of moves to the next older version that says it builds there, kept on or off as
 /// it was. A line per mod moved; the caller builds again once.
+#[cfg(not(target_os = "android"))]
 pub fn try_older(instance: &crate::instances::Instance, left: &[String]) -> Vec<String> {
     if left.is_empty() {
         return Vec::new();
@@ -1157,6 +1183,7 @@ pub fn try_older(instance: &crate::instances::Instance, left: &[String]) -> Vec<
 /// doesn't build on the Horizon it plays is replaced by the one of its versions that does, kept
 /// on or off as it was. Says what changed, a line per mod; a mod with no such version stays as it
 /// is (the build leaves it out).
+#[cfg(not(target_os = "android"))]
 pub fn fit_versions(instance: &crate::instances::Instance) -> Vec<String> {
     let Ok(index) = index() else {
         return Vec::new();
@@ -1231,6 +1258,17 @@ fn newest<'a>(
 }
 
 const NEEDS_NEWER: &str = "needs a newer Horizon than the game you play";
+const NEEDS_PORT: &str = "needs a native port: Horizon doesn't run WebAssembly mods any more";
+
+/// Whether version `v` is a WebAssembly mod with code: a `.hmod` that may do more than add
+/// content. The registry keeps it for the modpacks that need it; a modpack installs it with its
+/// code left out (the game doesn't run it), and the browser neither lists nor installs it.
+pub fn needs_port(v: &index::Version) -> bool {
+    v.file.name.ends_with(".hmod")
+        && v.capabilities
+            .iter()
+            .any(|c| *c != horizon_mods::Capability::Registries)
+}
 
 /// Whether version `v` calls mod API functions a game serving `level` doesn't have.
 fn needs_newer(v: &index::Version, level: Option<u32>) -> bool {
@@ -1350,7 +1388,10 @@ fn install_version_guarded(
         page: project.page.clone(),
         dependency: false,
         verdict: Some(trust_label(trust).into()),
-        skipped: Vec::new(),
+        skipped: match needs_port(v) {
+            true => vec![format!("its code ({NEEDS_PORT})")],
+            false => Vec::new(),
+        },
         namespaces: Vec::new(),
     };
     list.entries.retain(|e| !ours(e));
