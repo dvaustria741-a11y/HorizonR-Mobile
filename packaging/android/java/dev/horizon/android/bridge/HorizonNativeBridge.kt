@@ -5850,6 +5850,7 @@ object HorizonNativeBridge {
         val entries = mutableListOf<StructuredLogEntry>()
         var nextId = 1
 
+        var lastSev: LogSeverityFilter? = null
         fun parseAndAdd(rawLine: String, defaultSource: String) {
             val trimmed = rawLine.trim()
             if (trimmed.isEmpty() || trimmed.startsWith("---")) return
@@ -5858,6 +5859,7 @@ object HorizonNativeBridge {
             val body = tsMatch?.groupValues?.get(2) ?: trimmed
 
             val sev = when {
+                tsMatch == null && !trimmed.startsWith("[") && lastSev == LogSeverityFilter.ERR -> LogSeverityFilter.ERR
                 body.startsWith("[ERROR]") -> LogSeverityFilter.ERR
                 body.startsWith("[WARN]") -> LogSeverityFilter.WARN
                 body.contains("error", ignoreCase = true) || body.contains("fail", ignoreCase = true) || body.contains("panic", ignoreCase = true) -> LogSeverityFilter.ERR
@@ -5865,6 +5867,7 @@ object HorizonNativeBridge {
                 body.contains("Speed:", ignoreCase = true) || body.contains("Download", ignoreCase = true) || body.contains("Stage:", ignoreCase = true) || defaultSource == "Downloader" -> LogSeverityFilter.DL
                 else -> LogSeverityFilter.INFO
             }
+            lastSev = sev
             entries.add(
                 StructuredLogEntry(
                     id = nextId++,
