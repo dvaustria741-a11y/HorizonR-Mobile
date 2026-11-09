@@ -18,6 +18,145 @@ use horizon_client::gfx::pack_draw::EntitySpan;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 
+/// What `begin_shader_pack` hands to the worker: the pack and everything its translation needs,
+/// owned so it can leave the game thread.
+struct CpuInput {
+    pack: Pack,
+    macros: Macros,
+    properties: Properties,
+    inputs: horizon_shaders::GameInputs,
+    biome_names: Vec<String>,
+    resources: std::path::PathBuf,
+    dim_id: &'static str,
+    dimension: i32,
+    name: String,
+    separate_ao: bool,
+}
+
+/// What a pack's files say, apart from its programs.
+struct PackMeta {
+    folder: String,
+    ids: BlockIds,
+    entities: HashMap<String, i32>,
+    items: HashMap<String, i32>,
+    /// `item.properties` exists.
+    item_file: bool,
+    old_hand_light: bool,
+    vignette: bool,
+    old_lighting: bool,
+    separate_ao: bool,
+}
+
+/// A pack's parsed files and translated programs, ready for the renderer.
+struct PreparedShaderPack {
+    post: horizon_shaders::Post,
+    meta: PackMeta,
+}
+
+type ShaderWorkerResult = std::result::Result<std::result::Result<PreparedShaderPack, String>, String>;
+
+/// The pack being translated on the loader thread (Android), if any.
+struct PendingShaderJob {
+    name: String,
+    dimension: i32,
+    started: std::time::Instant,
+    rx: std::sync::mpsc::Receiver<ShaderWorkerResult>,
+}
+
+static PENDING_SHADER_JOB: std::sync::Mutex<Option<PendingShaderJob>> = std::sync::Mutex::new(None);
+
+fn clear_pending_shader_job() {
+    *PENDING_SHADER_JOB
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+}
+
+/// The part of loading a pack that touches neither the renderer nor the game: translating its
+/// programs, resolving its textures, and reading its id files.
+fn prepare_pack_cpu(input: CpuInput) -> std::result::Result<PreparedShaderPack, String> {
+    let CpuInput {
+        pack,
+        macros,
+        properties,
+        inputs,
+        biome_names,
+        resources,
+        dim_id,
+        dimension,
+        name,
+        separate_ao,
+    } = input;
+    let folder = dimension_folder_named(&pack, dim_id, dimension);
+    let mut post = load_post(&pack, &folder, &properties, &macros, &inputs);
+    // Textures that name one of the game's: from the resource packs over the game's own
+    // resources.
+    let read = |namespace: &str, path: &str| {
+        std::fs::read(resources.join("assets").join(namespace).join(path)).ok()
+    };
+    for note in horizon_shaders::resolve_resources(&mut post.textures, &read) {
+        log::warn!("shader pack {name}: {note}");
+    }
+    let names: Vec<&str> = biome_names.iter().map(String::as_str).collect();
+    post.custom.set_biomes(&names);
+    let text = pack.read_text("block.properties").unwrap_or_default();
+    let ids = BlockIds::parse(&Properties::parse(&text, &macros));
+    for note in &ids.notes {
+        log::warn!("shader pack {name}: block.properties: {note}");
+    }
+    let text = pack.read_text("entity.properties");
+    let entities = BlockIds::parse_kind(
+        &Properties::parse(text.as_deref().unwrap_or_default(), &macros),
+        "entity",
+    );
+    let item_text = pack.read_text("item.properties");
+    let items = BlockIds::parse_kind(
+        &Properties::parse(item_text.as_deref().unwrap_or_default(), &macros),
+        "item",
+    );
+    let meta = PackMeta {
+        folder,
+        ids,
+        entities: entities.plain(),
+        items: items.plain(),
+        item_file: item_text.is_some(),
+        // OQ-21: on unless the pack turns it off.
+        old_hand_light: properties
+            .get("oldHandLight")
+            .is_none_or(|v| v.trim() != "false"),
+        // On unless the pack turns it off (`vignette=false`).
+        vignette: properties
+            .get("vignette")
+            .is_none_or(|v| v.trim() != "false"),
+        // Off unless the pack turns it on (Iris shades no faces by default).
+        old_lighting: properties
+            .get("oldLighting")
+            .is_some_and(|v| v.trim() == "true"),
+        separate_ao,
+    };
+    Ok(PreparedShaderPack { post, meta })
+}
+
+impl PackIds {
+    fn from_meta(meta: PackMeta, block_items: HashMap<String, i32>) -> Self {
+        Self {
+            block_items,
+            item_file: meta.item_file,
+            items: meta.items,
+            missing_item: if meta.item_file { -1 } else { 0 },
+            old_hand_light: meta.old_hand_light,
+            vignette: meta.vignette,
+            old_lighting: meta.old_lighting,
+            separate_ao: meta.separate_ao,
+            entities: meta.entities,
+            // Both read `item.properties`.
+            missing_entity: if meta.item_file { 65535 } else { 0 },
+            missing_block: if meta.ids.is_empty() { 0 } else { 65535 },
+            blocks: meta.ids,
+            block_states: RefCell::default(),
+        }
+    }
+}
+
 /// The values the player chose for pack `name`'s options (`shaderpacks/<name>.txt`).
 fn chosen_shader_options(name: &str) -> BTreeMap<String, String> {
     let file = Game::shader_packs_dir().join(horizon_shaders::chosen_file(name));
@@ -211,6 +350,189 @@ pub(super) struct PackIds {
 }
 
 impl Game<'_> {
+    /// The steps of loading a pack that need the renderer: open it, read its properties, and
+    /// ask the renderer for the inputs its programs are translated against. `None` when the pack
+    /// could not be opened (the dimension is then marked loaded without a pack).
+    fn begin_shader_pack(
+        &mut self,
+        path: &std::path::Path,
+        name: &str,
+        dimension: i32,
+    ) -> std::result::Result<Option<CpuInput>, String> {
+        let dim_id = self.dim.id();
+        let resources = self.options.resources.clone();
+        let biomes = world_biomes!(self);
+        let biome_names: Vec<String> = biomes.list.iter().map(|b| b.name.clone()).collect();
+        let Some(renderer) = &mut self.renderer else {
+            return Ok(None);
+        };
+        match Pack::open(path).map(|p| p.with_chosen(chosen_shader_options(name))) {
+            Ok(pack) => {
+                let mut macros = Macros::standard();
+                renderer.define_pack_macros(&mut macros);
+                // Its conditionals test the pack's options too.
+                let (properties, notes) = horizon_shaders::read_properties(&pack, &mut macros);
+                for note in notes {
+                    log::warn!("shader pack {name}: {note}");
+                }
+                for note in &properties.notes {
+                    log::warn!(
+                        "shader pack {name}: shaders.properties:{}: {}",
+                        note.line,
+                        note.message
+                    );
+                }
+                let separate_ao = properties
+                    .get("separateAo")
+                    .is_some_and(|v| v.trim() == "true");
+                // Before the inputs: the terrain atlas they come from bakes it in.
+                renderer.set_separate_ao(separate_ao);
+                // Lava's faces draw with the solid terrain's program.
+                renderer.set_pack_lava_layers(
+                    ["lava_still", "lava_flow"]
+                        .iter()
+                        .filter_map(|f| {
+                            let name = format!("minecraft:block/{f}");
+                            self.pack.render.sprite_layers.get(&name).map(|&l| l as u16)
+                        })
+                        .collect(),
+                );
+                let inputs = renderer.pack_inputs();
+                Ok(Some(CpuInput {
+                    pack,
+                    macros,
+                    properties,
+                    inputs,
+                    biome_names,
+                    resources,
+                    dim_id,
+                    dimension,
+                    name: name.to_owned(),
+                    separate_ao,
+                }))
+            }
+            Err(e) => {
+                remember(path, fingerprint(path), None);
+                self.pack_ids = None;
+                log::warn!("shader pack {name}: {e}");
+                // Without a pack this can't fail.
+                let _ = renderer.set_shader_pack(dimension, None, &[]);
+                Ok(None)
+            }
+        }
+    }
+
+    /// Android: starts the worker that translates pack `name` if none runs for it, and takes its
+    /// result once it is done.
+    fn advance_shader_pack_job(&mut self, path: &std::path::Path, name: &str, dimension: i32) {
+        let mut finished = None;
+        let mut started = std::time::Instant::now();
+        {
+            let mut slot = PENDING_SHADER_JOB
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let matches_job = slot
+                .as_ref()
+                .is_some_and(|j| j.name == name && j.dimension == dimension);
+            if !matches_job {
+                *slot = None;
+                drop(slot);
+                // A pack is not the game's own code (#3525): a panic here turns it off.
+                match horizon_client::crash::contain(|| self.begin_shader_pack(path, name, dimension))
+                    .and_then(|r| r)
+                {
+                    Ok(Some(input)) => {
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        let spawned = std::thread::Builder::new()
+                            .name("shader-pack-loader".into())
+                            .spawn(move || {
+                                let res =
+                                    horizon_client::crash::contain(|| prepare_pack_cpu(input));
+                                let _ = tx.send(res);
+                            });
+                        if spawned.is_ok() {
+                            *PENDING_SHADER_JOB
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                                Some(PendingShaderJob {
+                                    name: name.to_owned(),
+                                    dimension,
+                                    started,
+                                    rx,
+                                });
+                        } else {
+                            self.shader_pack_failed(
+                                name,
+                                dimension,
+                                "could not start the shader loader thread",
+                            );
+                        }
+                    }
+                    // The pack could not be opened: `begin_shader_pack` reported it.
+                    Ok(None) => {}
+                    Err(error) => self.shader_pack_failed(name, dimension, &error),
+                }
+                slot = PENDING_SHADER_JOB
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+            }
+            if let Some(job) = slot.as_ref() {
+                use std::sync::mpsc::TryRecvError::{Disconnected, Empty};
+                match job.rx.try_recv() {
+                    Ok(res) => finished = Some(res),
+                    Err(Disconnected) => {
+                        finished = Some(Err("shader loader thread disconnected".into()));
+                    }
+                    Err(Empty) => {}
+                }
+            }
+            if finished.is_some() {
+                let job = slot.take().unwrap();
+                started = job.started;
+            }
+        }
+        if let Some(loaded) = finished {
+            self.finish_shader_pack_job(name, dimension, started, loaded);
+        }
+    }
+
+    /// Android: the pack is translated; its block table is made here and the renderer builds its
+    /// pipelines (the game draws without a pack meanwhile).
+    fn finish_shader_pack_job(
+        &mut self,
+        name: &str,
+        dimension: i32,
+        started: std::time::Instant,
+        loaded: ShaderWorkerResult,
+    ) {
+        let PreparedShaderPack { post, meta } = match loaded {
+            Ok(Ok(prepared)) => prepared,
+            Ok(Err(error)) | Err(error) => {
+                self.shader_pack_failed(name, dimension, &error);
+                return;
+            }
+        };
+        let block_items = block_item_ids(self.res.facts(), self.pack.assets.registry, &meta.ids);
+        let started_ids = std::time::Instant::now();
+        let table = terrain_state_ids(self.pack.assets.registry, &meta.ids);
+        log::info!(
+            "shader pack {name}: mc_Entity for {} of {} block states in {} ms",
+            table.chunks(2).filter(|p| p[0] != -1).count(),
+            table.len() / 2,
+            started_ids.elapsed().as_millis()
+        );
+        log::info!(
+            "shader pack {name}: folder `{}`, building its pipelines",
+            meta.folder
+        );
+        self.pack_ids = Some(PackIds::from_meta(meta, block_items));
+        if let Some(renderer) = &mut self.renderer {
+            renderer.load_shader_pack(dimension, post, table, name.to_owned(), started);
+        }
+    }
+}
+
+impl Game<'_> {
     /// Loads the pack for the current dimension when it changed, and returns this frame's
     /// inputs to the pack's uniforms.
     pub(super) fn shader_pack_inputs(
@@ -253,6 +575,7 @@ impl Game<'_> {
             self.native_shaders.select(&picked);
             self.set_translucent_layers(Vec::new());
             self.pack_ids = None;
+            clear_pending_shader_job();
             if let Some(renderer) = &mut self.renderer {
                 renderer.drop_shader_packs();
             }
@@ -304,6 +627,18 @@ impl Game<'_> {
         {
             // One of Horizon's own packs (game/native_shaders.rs).
             self.tick_native_shader_pack(&path);
+        } else if cfg!(target_os = "android")
+            && self.settings.horizon.pack_workers
+            && self
+                .renderer
+                .as_ref()
+                .is_some_and(|r| r.shader_pack_dimension() != Some(dimension))
+            && !(super::native_shaders::linear_frame_switch() && refused(&path, fingerprint(&path)))
+        {
+            // A phone takes seconds to translate a pack's programs: a worker does it while the
+            // game keeps drawing, and a later frame hands the result to the renderer. The frame
+            // the pack is picked on does no more than open it.
+            self.advance_shader_pack_job(&path, &name, dimension);
         } else if let Some(renderer) = &mut self.renderer
             && renderer.shader_pack_dimension() != Some(dimension)
             && !(super::native_shaders::linear_frame_switch() && refused(&path, fingerprint(&path)))
