@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,6 +44,7 @@ import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +66,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.window.DialogProperties
 import dev.horizon.android.R
 import dev.horizon.android.controls.ControlLayouts
@@ -193,12 +199,13 @@ fun LayoutSaveForm(
 
 @Composable
 private fun HzWindowDialog(title: String, onDismiss: () -> Unit, trailing: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    val style = LocalControlsCardStyle.current
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            modifier = Modifier.fillMaxWidth(0.86f).widthIn(max = 520.dp).clip(RoundedCornerShape(20.dp)).background(HzCard).padding(18.dp)
+            modifier = Modifier.fillMaxWidth(0.7f).widthIn(max = 440.dp).heightIn(max = 340.dp).clip(RoundedCornerShape(20.dp)).background(style.card).padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 trailing?.invoke()
             }
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), content = content)
@@ -207,34 +214,107 @@ private fun HzWindowDialog(title: String, onDismiss: () -> Unit, trailing: (@Com
 }
 
 @Composable
-private fun ToolButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+private fun PanelTool(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.size(46.dp).clip(CircleShape).background(HzRow).clickable(onClick = onClick),
+        modifier = Modifier.size(34.dp).clip(CircleShape).background(LocalControlsCardStyle.current.row).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(24.dp)) }
+    ) { Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(18.dp)) }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PanelRow(
+    info: ControlLayouts.Info,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onInfo: () -> Unit,
+) {
+    val style = LocalControlsCardStyle.current
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(style.row)
+            .then(if (selected) Modifier.border(1.dp, style.accent.copy(alpha = 0.75f), shape) else Modifier)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.SportsEsports, contentDescription = null, tint = if (selected) style.accent else Color.White, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(info.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                if (selected) stringResource(R.string.layouts_file_name, info.fileName) + "  \u2022  " + stringResource(R.string.layouts_is_default)
+                else stringResource(R.string.layouts_file_name, info.fileName),
+                color = if (selected) style.accent else style.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(style.capsule).clickable(onClick = onInfo).padding(horizontal = 10.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) { Text(stringResource(R.string.layouts_view_info), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
+    }
+}
+
+@Composable
+private fun PanelField(label: String, value: String, placeholder: String = "", onValue: (String) -> Unit, modifier: Modifier = Modifier) {
+    val style = LocalControlsCardStyle.current
+    Column(modifier = modifier) {
+        Text(label, color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp, top = 6.dp))
+        BasicTextField(
+            value = value,
+            onValueChange = onValue,
+            singleLine = true,
+            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+            cursorBrush = SolidColor(style.accent),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(style.row).padding(horizontal = 12.dp, vertical = 10.dp),
+            decorationBox = { inner ->
+                if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = style.muted, fontSize = 14.sp)
+                inner()
+            },
+        )
+    }
+}
+
+@Composable
+private fun PanelButtons(confirmLabel: String, onCancel: () -> Unit, onConfirm: () -> Unit) {
+    val style = LocalControlsCardStyle.current
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(
+            modifier = Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(style.capsule).clickable(onClick = onCancel),
+            contentAlignment = Alignment.Center,
+        ) { Text(stringResource(R.string.layouts_cancel), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+        Box(
+            modifier = Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(style.accent).clickable(onClick = onConfirm),
+            contentAlignment = Alignment.Center,
+        ) { Text(confirmLabel, color = style.onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+    }
 }
 
 @Composable
 private fun OpItem(icon: ImageVector, label: String, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Row(
         modifier = modifier.alpha(if (enabled) 1f else 0.4f).clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 14.dp),
+            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
-        Spacer(Modifier.width(14.dp))
-        Text(label, color = Color.White, fontSize = 17.sp)
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(label, color = Color.White, fontSize = 15.sp)
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// Manage Control Layouts, the launcher-side screen.
+// Manage Control Layouts: an inline card of the launcher's Controls tab (no full-screen dialog).
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-fun ManageLayoutsScreen(
+fun ManageLayoutsPanel(
     settings: ControlSettings,
-    onClose: () -> Unit,
     onEdit: (() -> Unit)?,
     onChange: (Change) -> Unit,
 ) {
@@ -256,6 +336,14 @@ fun ManageLayoutsScreen(
 
     val infos = remember(version) {
         ControlLayouts.list(context, defaultName).map { e -> ControlLayouts.info(context, e, defaultName) }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) { version++; selected = settings.layout }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val shown = infos.filter { query.isBlank() || it.name.contains(query, true) || it.fileName.contains(query, true) }
 
@@ -288,49 +376,39 @@ fun ManageLayoutsScreen(
         }.onFailure { Toast.makeText(context, failed.replace("%s", it.message.orEmpty()), Toast.LENGTH_LONG).show() }
     }
 
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)) {
-        Column(modifier = Modifier.fillMaxSize().background(HzRoot).padding(16.dp)) {
-            Text(stringResource(R.string.layouts_manage), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            if (searching) {
-                HzLabeledField(stringResource(R.string.layouts_search), query, onValue = { query = it })
-                Spacer(Modifier.height(8.dp))
-            }
-            Column(
-                modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(HzCard)
-                    .verticalScroll(rememberScrollState()).padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                shown.forEach { info ->
-                    LayoutCard(
-                        info = info,
-                        selected = selected == info.id,
-                        onClick = { operate = info },
-                        onLongClick = { choose(info.id, info.name) },
-                        onInfo = { showInfo = info },
-                    )
-                }
-            }
-            Text(stringResource(R.string.layouts_long_press_hint), color = HzMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ToolButton(Icons.Filled.Refresh, stringResource(R.string.layouts_refresh)) { version++ }
-                ToolButton(Icons.Filled.Search, stringResource(R.string.layouts_search)) { searching = !searching; if (!searching) query = "" }
-                ToolButton(Icons.Filled.NoteAdd, stringResource(R.string.controls_import)) {
+    ControlsCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.layouts_manage), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                PanelTool(Icons.Filled.Refresh, stringResource(R.string.layouts_refresh)) { version++ }
+                PanelTool(Icons.Filled.Search, stringResource(R.string.layouts_search)) { searching = !searching; if (!searching) query = "" }
+                PanelTool(Icons.Filled.NoteAdd, stringResource(R.string.controls_import)) {
                     importPicker.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*"))
                 }
-                ToolButton(Icons.Filled.Add, stringResource(R.string.layouts_new)) {
+                PanelTool(Icons.Filled.Add, stringResource(R.string.layouts_new)) {
                     val id = ControlLayouts.create(defaultName, context.getString(R.string.layouts_new_name))
                     version++
                     choose(id, context.getString(R.string.layouts_new_name))
-                    if (onEdit != null) { onClose(); onEdit() }
+                    onEdit?.invoke()
                 }
-                ToolButton(Icons.Filled.Close, stringResource(R.string.layouts_close), onClose)
             }
         }
+        if (searching) PanelField(stringResource(R.string.layouts_search), query, onValue = { query = it })
+        Column(
+            modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            shown.forEach { info ->
+                PanelRow(
+                    info = info,
+                    selected = selected == info.id,
+                    onClick = { operate = info },
+                    onLongClick = { choose(info.id, info.name) },
+                    onInfo = { showInfo = info },
+                )
+            }
+        }
+        Hint(stringResource(R.string.layouts_long_press_hint))
     }
 
     showInfo?.let { info ->
@@ -345,9 +423,9 @@ fun ManageLayoutsScreen(
         ) {
             LayoutInfoBody(info)
             Box(
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(46.dp).clip(RoundedCornerShape(14.dp)).background(HzCapsule).clickable { showInfo = null },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(40.dp).clip(RoundedCornerShape(12.dp)).background(LocalControlsCardStyle.current.capsule).clickable { showInfo = null },
                 contentAlignment = Alignment.Center,
-            ) { Text(stringResource(R.string.layouts_close), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+            ) { Text(stringResource(R.string.layouts_close), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
         }
     }
 
@@ -358,13 +436,13 @@ fun ManageLayoutsScreen(
             var author by remember { mutableStateOf(info.author) }
             var desc by remember { mutableStateOf(info.description) }
             val optional = stringResource(R.string.layouts_optional)
-            HzLabeledField(stringResource(R.string.layouts_name), name, onValue = { name = it })
+            PanelField(stringResource(R.string.layouts_name), name, onValue = { name = it })
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HzLabeledField(stringResource(R.string.layouts_version), ver, optional, { ver = it }, Modifier.weight(1f))
-                HzLabeledField(stringResource(R.string.layouts_author), author, optional, { author = it }, Modifier.weight(1f))
+                PanelField(stringResource(R.string.layouts_version), ver, optional, { ver = it }, Modifier.weight(1f))
+                PanelField(stringResource(R.string.layouts_author), author, optional, { author = it }, Modifier.weight(1f))
             }
-            HzLabeledField(stringResource(R.string.layouts_description), desc, optional, { desc = it })
-            HzDialogButtons(stringResource(R.string.layouts_confirm), { editInfo = null }) {
+            PanelField(stringResource(R.string.layouts_description), desc, optional, { desc = it })
+            PanelButtons(stringResource(R.string.layouts_confirm), { editInfo = null }) {
                 runCatching { ControlLayouts.updateInfo(context, info.id, defaultName, name, ver, author, desc) }
                 if (selected == info.id) onChange(Change.LAYOUT)
                 editInfo = null
@@ -376,8 +454,8 @@ fun ManageLayoutsScreen(
     renaming?.let { info ->
         HzWindowDialog(stringResource(R.string.layouts_rename), { renaming = null }) {
             var text by remember { mutableStateOf(info.fileName.removeSuffix(".json")) }
-            HzLabeledField(stringResource(R.string.layouts_file), text, onValue = { text = it })
-            HzDialogButtons(stringResource(R.string.layouts_confirm), { renaming = null }) {
+            PanelField(stringResource(R.string.layouts_file), text, onValue = { text = it })
+            PanelButtons(stringResource(R.string.layouts_confirm), { renaming = null }) {
                 val newId = ControlLayouts.renameFile(info.id, text)
                 if (newId == null) toast(context.getString(R.string.layouts_rename_failed))
                 else {
@@ -392,7 +470,7 @@ fun ManageLayoutsScreen(
     deleting?.let { info ->
         HzWindowDialog(stringResource(R.string.layouts_delete), { deleting = null }) {
             Text(stringResource(R.string.layouts_delete_confirm, info.fileName), color = Color.White, fontSize = 16.sp)
-            HzDialogButtons(stringResource(R.string.controls_delete), { deleting = null }) {
+            PanelButtons(stringResource(R.string.controls_delete), { deleting = null }) {
                 ControlLayouts.delete(info.id)
                 if (selected == info.id) choose(ControlLayouts.ZALITH_ID, context.getString(R.string.controls_zalith_name))
                 deleting = null
@@ -432,7 +510,6 @@ fun ManageLayoutsScreen(
                 OpItem(Icons.Filled.MoreHoriz, stringResource(R.string.layouts_edit), onEdit != null, Modifier.weight(1f)) {
                     choose(info.id, info.name)
                     operate = null
-                    onClose()
                     onEdit?.invoke()
                 }
             }

@@ -438,7 +438,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                 LayoutSaveForm(
                     initialFile = initialFile,
                     initial = ControlLayouts.Info(currentId, layout.name, initialFile, layout.author, layout.version, layout.description, true),
-                    layoutName = layout.name,
+                    layoutName = if (currentId.startsWith("file:")) layout.name else initialFile,
                     onCancel = { dialog = null },
                     onConfirm = { file, name, ver, author, desc ->
                         val edited = layout.copy(name = name.ifBlank { file }, version = ver.trim(), author = author.trim(), description = desc.trim())

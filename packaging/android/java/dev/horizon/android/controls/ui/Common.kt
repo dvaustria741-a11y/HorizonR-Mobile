@@ -60,6 +60,8 @@ data class ControlsCardStyle(
     val onAccent: Color,
     val muted: Color,
     val track: Color = Color(0xFF555555),
+    val row: Color = Color(0xFF2A3136),
+    val capsule: Color = Color(0xFF394952),
 )
 
 private val DefaultCardStyle = ControlsCardStyle(

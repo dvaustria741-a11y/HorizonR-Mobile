@@ -135,7 +135,8 @@ object ControlLayouts {
             entry.id.startsWith("asset:") -> entry.id.removePrefix("asset:")
             else -> "default.json"
         }
-        return Info(entry.id, layout.name.ifBlank { entry.name }, fileName, layout.author, layout.version, layout.description, entry.removable)
+        val shownName = if (entry.removable) layout.name.ifBlank { entry.name } else entry.name
+        return Info(entry.id, shownName, fileName, layout.author, layout.version, layout.description, entry.removable)
     }
 
     private fun safeFileName(raw: String): String =

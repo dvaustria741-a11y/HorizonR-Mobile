@@ -42,69 +42,6 @@ import java.io.File
 enum class Change { LAYOUT, CONTROLS, MOUSE, RESOLUTION }
 
 @Composable
-fun LayoutSettings(settings: ControlSettings, onEdit: (() -> Unit)?, onChange: (Change) -> Unit) {
-    val context = LocalContext.current
-    val defaultName = stringResource(R.string.controls_default_name)
-    var version by remember { mutableIntStateOf(0) }
-    var selected by remember { mutableStateOf(settings.layout) }
-    var manage by remember { mutableStateOf(false) }
-    val entries = remember(version) { ControlLayouts.list(context, defaultName) }
-    val imported = stringResource(R.string.controls_imported, "%s")
-    val failed = stringResource(R.string.controls_import_failed, "%s")
-    fun choose(id: String) {
-        settings.layout = id
-        selected = id
-        onChange(Change.LAYOUT)
-    }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        runCatching { ControlLayouts.import(context, uri) }
-            .onSuccess {
-                version++
-                choose(it.id)
-                Toast.makeText(context, imported.replace("%s", it.name), Toast.LENGTH_SHORT).show()
-            }
-            .onFailure { Toast.makeText(context, failed.replace("%s", it.message.orEmpty()), Toast.LENGTH_LONG).show() }
-    }
-    ControlsCard {
-        CardTitle(stringResource(R.string.controls_layout))
-        Hint(stringResource(R.string.controls_overlay_hint))
-        entries.forEach { e ->
-            Row(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { choose(e.id) },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(selected = selected == e.id, onClick = { choose(e.id) })
-                Text(e.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (e.removable) {
-                    TextButton(onClick = {
-                        ControlLayouts.delete(e.id)
-                        version++
-                        if (selected == e.id) choose(entries.first().id)
-                    }) { Text(stringResource(R.string.controls_delete)) }
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            onEdit?.let { Button(onClick = it) { Text(stringResource(R.string.controls_edit)) } }
-            OutlinedButton(onClick = { picker.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) }) {
-                Text(stringResource(R.string.controls_import))
-            }
-            OutlinedButton(onClick = { manage = true }) { Text(stringResource(R.string.layouts_manage_button)) }
-        }
-        Hint(stringResource(R.string.controls_folder, ControlLayouts.dir.absolutePath))
-    }
-    if (manage) {
-        ManageLayoutsScreen(
-            settings = settings,
-            onClose = { manage = false; version++; selected = settings.layout },
-            onEdit = onEdit,
-            onChange = onChange,
-        )
-    }
-}
-
-@Composable
 fun ControlsSettings(settings: ControlSettings, onChange: (Change) -> Unit) {
     ControlsCard {
         CardTitle(stringResource(R.string.nav_controls))
