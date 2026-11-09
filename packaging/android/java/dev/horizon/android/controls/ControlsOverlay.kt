@@ -101,9 +101,12 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
                 win.setFormat(PixelFormat.TRANSLUCENT)
                 win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
                 win.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
-                // Not focusable: keys and gamepads keep going to the game's window.
+                // Not focusable: keys and gamepads keep going to the game's window. ALT_FOCUSABLE_IM keeps this
+                // window below the phone keyboard; without it Android layers the overlay above the keyboard and
+                // the overlay swallows every tap on it (they reach the game as mouse clicks).
                 win.addFlags(
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
                         or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                         or WindowManager.LayoutParams.FLAG_FULLSCREEN
                         or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
@@ -197,8 +200,9 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
         v.setEditMode(next == OverlayUi.EDIT)
         // The editor has text fields, so its window takes focus; otherwise keys stay with the game.
         dialog?.window?.let { win ->
-            if (next == OverlayUi.EDIT) win.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
-            else win.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            val noFocus = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+            if (next == OverlayUi.EDIT) win.clearFlags(noFocus)
+            else win.addFlags(noFocus)
         }
         if (was == OverlayUi.EDIT && next != OverlayUi.EDIT) reloadLayout()
         v.reloadSettings()
