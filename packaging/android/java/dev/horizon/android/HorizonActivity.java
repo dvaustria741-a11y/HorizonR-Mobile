@@ -543,6 +543,18 @@ public final class HorizonActivity extends NativeActivity {
     }
 
     @Override
+    protected void onPause() {
+        // Leaving the app mid-game opens the pause menu, so the world is not left running behind it.
+        try {
+            if (!isFinishing() && dev.horizon.android.controls.HorizonBridge.INSTANCE.isCaptured()) {
+                dev.horizon.android.controls.HorizonBridge.INSTANCE.command("key key.keyboard.escape tap");
+            }
+        } catch (Throwable ignored) {
+        }
+        super.onPause();
+    }
+
+    @Override
     protected void onDestroy() {
         logMirrorRunning = false;
         mirrorLogsOnce();

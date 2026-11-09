@@ -53,8 +53,9 @@ pub enum Reason {
     Other,
 }
 
-/// `LevelLoadTracker.CLIENT_WAIT_TIMEOUT_MS`.
-pub const CLIENT_WAIT_TIMEOUT_MS: u64 = 30_000;
+/// `LevelLoadTracker.CLIENT_WAIT_TIMEOUT_MS` is 30 s; this client lets the player in sooner, and
+/// also when the server never sends the loading start event, so the screen cannot hang.
+pub const CLIENT_WAIT_TIMEOUT_MS: u64 = 15_000;
 /// `LevelLoadTracker.LEVEL_LOAD_CLOSE_DELAY_MS`: how long a new world's loading
 /// screen stays once the level is ready.
 pub const LEVEL_LOAD_CLOSE_DELAY_MS: u64 = 500;
@@ -156,6 +157,15 @@ impl LevelLoadTracker {
     }
     /// `tickClientLoad`.
     pub fn tick_client_load(&mut self, now: u64, player: PlayerCheck) {
+        if let Some(ClientState::WaitingForServer { timeout_after }) = self.state {
+            if now > timeout_after {
+                log::warn!(
+                    "Timed out while waiting for the server to start sending the level, letting the player into the world anyway"
+                );
+                self.state = Some(ClientState::Ready { ready_at: now });
+            }
+            return;
+        }
         if let Some(ClientState::WaitingForPlayerChunk {
             player_section_ready,
             timeout_after,
@@ -783,11 +793,15 @@ mod tracker_tests {
     }
 
     #[test]
-    fn the_wait_times_out_after_thirty_seconds_but_only_once_the_server_has_started() {
+    fn the_wait_times_out_in_both_waiting_states() {
         let mut tracker = LevelLoadTracker::new(0);
         tracker.start_client_load(0, Reason::Other);
+        tracker.tick_client_load(CLIENT_WAIT_TIMEOUT_MS, ALIVE);
+        assert!(!tracker.is_level_ready(CLIENT_WAIT_TIMEOUT_MS));
         tracker.tick_client_load(CLIENT_WAIT_TIMEOUT_MS + 1, ALIVE);
-        assert!(!tracker.is_level_ready(CLIENT_WAIT_TIMEOUT_MS + 1));
+        assert!(tracker.is_level_ready(CLIENT_WAIT_TIMEOUT_MS + 1));
+        let mut tracker = LevelLoadTracker::new(0);
+        tracker.start_client_load(0, Reason::Other);
         tracker.loading_packets_received();
         tracker.tick_client_load(CLIENT_WAIT_TIMEOUT_MS, ALIVE);
         assert!(!tracker.is_level_ready(CLIENT_WAIT_TIMEOUT_MS));

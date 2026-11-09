@@ -73,9 +73,7 @@
         <activity
             android:name="dev.horizon.android.HorizonActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|navigation|uiMode|density"
-            android:excludeFromRecents="true"
             android:exported="false"
-            android:finishOnTaskLaunch="true"
             android:launchMode="singleInstance"
             android:process=":game"
             android:screenOrientation="sensorLandscape"
