@@ -8738,6 +8738,19 @@ impl Renderer {
         let surface_texture_format = surface_frame.as_ref().map(|f| f.texture.format());
         #[cfg(target_os = "android")]
         let target_texture = if self.hdr.is_none() && scaled_presentation {
+            // Build the scaler for the swapchain texture's real format: it can differ from the
+            // configured one (Rgba8Unorm texture, Bgra8 config) and a view of the wrong format
+            // is a fatal validation error.
+            let scale_format = surface_texture_format
+                .map(|f| f.remove_srgb_suffix())
+                .unwrap_or_else(|| self.config.format.remove_srgb_suffix());
+            if self
+                .frame_scale
+                .as_ref()
+                .is_some_and(|s| s.format() != scale_format)
+            {
+                self.frame_scale = None;
+            }
             self.frame_scale
                 .get_or_insert_with(|| {
                     log::info!(
@@ -8749,7 +8762,7 @@ impl Renderer {
                     );
                     frame_scale::FrameScale::new(
                         &self.device,
-                        self.config.format.remove_srgb_suffix(),
+                        scale_format,
                         self.output.frame.format,
                     )
                 })

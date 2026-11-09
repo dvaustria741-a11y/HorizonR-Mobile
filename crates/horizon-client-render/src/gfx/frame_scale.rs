@@ -24,6 +24,11 @@ impl FrameScale {
         }
     }
 
+    /// The swapchain format this scaler was built for (sRGB suffix removed).
+    pub(super) fn format(&self) -> wgpu::TextureFormat {
+        self.format
+    }
+
     pub(super) fn frame(&mut self, device: &wgpu::Device, size: [u32; 2]) -> wgpu::Texture {
         if self
             .target
@@ -56,8 +61,14 @@ impl FrameScale {
 
     pub(super) fn present(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::Texture) {
         if let Some((_, group)) = &self.target {
+            // Only ask for a view format the swapchain texture can give: its own format, or the
+            // sRGB twin the surface was configured with. A mismatched format (Bgra8Unorm view of
+            // an Rgba8Unorm texture) is a fatal wgpu validation error.
+            let view_format = (output.format().remove_srgb_suffix()
+                == self.format.remove_srgb_suffix())
+            .then_some(self.format);
             let view = output.create_view(&wgpu::TextureViewDescriptor {
-                format: Some(self.format),
+                format: view_format,
                 ..Default::default()
             });
             self.post.finish_in_rect(
