@@ -34,6 +34,25 @@ mod folder;
 
 /// `Util.getPlatform().openPath`: the system file manager on the folder.
 pub fn open_folder(dir: &Path) {
+    // Android has no file manager command: its folders are the app's document provider.
+    #[cfg(target_os = "android")]
+    {
+        let folder = match dir.file_name().and_then(|s| s.to_str()) {
+            Some("resourcepacks") => Some("packs"),
+            Some("horizon-mods") => Some("mods"),
+            Some("shaderpacks") => Some("shaders"),
+            _ => None,
+        };
+        if let Some(folder) = folder {
+            let home = crate::backend::data_dir();
+            let id =
+                crate::document_store::folder_id(crate::document_store::profile(&home), folder);
+            if !crate::platform::open_documents(&id) {
+                log::warn!("Open Files, then choose Horizon Android / {folder}");
+            }
+        }
+    }
+    #[cfg(not(target_os = "android"))]
     if let Err(e) = folder::command(dir).and_then(|mut command| command.spawn()) {
         log::warn!("Horizon: could not open {}: {e}", dir.display());
     }
