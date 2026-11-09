@@ -170,9 +170,9 @@ private fun SyncDynamicLauncherPalette(palette: LauncherThemePalette, useDynamic
     activeUiPalette = remember(palette, useDynamicColor, scheme.primary, scheme.background) {
         if (useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             HorizonDynamicPalette(
-                rootBg = Color(0xFF121619),
-                cardSlateBg = Color(0xFF1E2429),
-                cardRowBg = Color(0xFF262E34),
+                rootBg = Color(0xFF0D0F16),
+                cardSlateBg = Color(0xFF171A23),
+                cardRowBg = Color(0xFF1F232E),
                 subRailCapsuleActive = scheme.primary.copy(alpha = 0.28f),
                 skyBlueAccent = scheme.primary,
                 skyBlueDarkText = Color(0xFF0A1922),
@@ -183,9 +183,9 @@ private fun SyncDynamicLauncherPalette(palette: LauncherThemePalette, useDynamic
         } else {
             when (palette) {
                 LauncherThemePalette.MATERIAL_YOU -> HorizonDynamicPalette(
-                    rootBg = Color(0xFF14181B),
-                    cardSlateBg = Color(0xFF22282C),
-                    cardRowBg = Color(0xFF2A3136),
+                    rootBg = Color(0xFF0D0F16),
+                    cardSlateBg = Color(0xFF171A23),
+                    cardRowBg = Color(0xFF1F232E),
                     subRailCapsuleActive = Color(0xFF394952),
                     skyBlueAccent = Color(0xFF8BE0FF),
                     skyBlueDarkText = Color(0xFF0E2430),
@@ -194,9 +194,9 @@ private fun SyncDynamicLauncherPalette(palette: LauncherThemePalette, useDynamic
                     mutedSubtitleText = Color(0xFF9EA8B0)
                 )
                 LauncherThemePalette.EMBERMIRE -> HorizonDynamicPalette(
-                    rootBg = Color(0xFF161215),
-                    cardSlateBg = Color(0xFF261E22),
-                    cardRowBg = Color(0xFF32272C),
+                    rootBg = Color(0xFF0D0F16),
+                    cardSlateBg = Color(0xFF171A23),
+                    cardRowBg = Color(0xFF1F232E),
                     subRailCapsuleActive = Color(0xFF4E342E),
                     skyBlueAccent = Color(0xFFFF8A65),
                     skyBlueDarkText = Color(0xFF260E07),
@@ -205,9 +205,9 @@ private fun SyncDynamicLauncherPalette(palette: LauncherThemePalette, useDynamic
                     mutedSubtitleText = Color(0xFFB5A19B)
                 )
                 LauncherThemePalette.HORIZON_RUST -> HorizonDynamicPalette(
-                    rootBg = Color(0xFF11151C),
-                    cardSlateBg = Color(0xFF1B222C),
-                    cardRowBg = Color(0xFF242D3A),
+                    rootBg = Color(0xFF0D0F16),
+                    cardSlateBg = Color(0xFF171A23),
+                    cardRowBg = Color(0xFF1F232E),
                     subRailCapsuleActive = Color(0xFF4A2C22),
                     skyBlueAccent = Color(0xFFFF7043),
                     skyBlueDarkText = Color(0xFF210B04),
@@ -216,9 +216,9 @@ private fun SyncDynamicLauncherPalette(palette: LauncherThemePalette, useDynamic
                     mutedSubtitleText = Color(0xFF98A6B8)
                 )
                 LauncherThemePalette.AMOLED_EMERALD -> HorizonDynamicPalette(
-                    rootBg = Color(0xFF070A08),
-                    cardSlateBg = Color(0xFF121A15),
-                    cardRowBg = Color(0xFF1A261E),
+                    rootBg = Color(0xFF0D0F16),
+                    cardSlateBg = Color(0xFF171A23),
+                    cardRowBg = Color(0xFF1F232E),
                     subRailCapsuleActive = Color(0xFF24422E),
                     skyBlueAccent = Color(0xFF69F0AE),
                     skyBlueDarkText = Color(0xFF052412),
@@ -1563,7 +1563,8 @@ fun CleanLauncherScreen(
                                     config = config,
                                     onConfigChange = onConfigChange,
                                     logEnabled = config.enableSystemLog,
-                                    isHibernated = isHibernated
+                                    isHibernated = isHibernated,
+                                    onNavigate = { selectedTab = it }
                                 )
 
                                 LauncherNavTab.VERSIONS -> CleanVersionsViewport(
@@ -1680,16 +1681,7 @@ private data class HorizonNavItem(val tab: LauncherNavTab, val icon: ImageVector
 
 /** Soft accent-tinted gradient outline shared by all the glass cards. */
 @Composable
-private fun horizonGlassBorder(): BorderStroke = BorderStroke(
-    1.dp,
-    Brush.linearGradient(
-        listOf(
-            SkyBlueAccent.copy(alpha = 0.50f),
-            Color.White.copy(alpha = 0.05f),
-            SkyBlueAccent.copy(alpha = 0.20f)
-        )
-    )
-)
+private fun horizonGlassBorder(): BorderStroke = BorderStroke(1.dp, VoltGrayStroke)
 
 /** Slowly drifting aurora blobs tinted by the active accent colour. Drawn behind everything. */
 @Composable
@@ -2306,7 +2298,8 @@ private fun CleanHomeViewport(
     config: HorizonConfigState,
     onConfigChange: (HorizonConfigState) -> Unit,
     logEnabled: Boolean,
-    isHibernated: Boolean
+    isHibernated: Boolean,
+    onNavigate: (LauncherNavTab) -> Unit = {}
 ) {
     val context = LocalContext.current
     var customWallpapers by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -2509,6 +2502,13 @@ private fun CleanHomeViewport(
                     )
             )
 
+            VoltHomeDeck(
+                onNavigate = onNavigate,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(14.dp)
+            )
+
             // Top-Right Controls: Switch between Wallpaper & 720p YouTube Trailer + Mute/Silent Toggle + Next Trailer / Import Wallpaper
             Row(
                 modifier = Modifier
@@ -2646,7 +2646,8 @@ private fun DashboardQuickIconPill(
 ) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = Color(0xFF181E22).copy(alpha = 0.76f),
+        color = VoltGrayCard.copy(alpha = 0.90f),
+        border = BorderStroke(1.dp, VoltGrayStroke),
         modifier = Modifier.animatedPressScale(onClick = onClick)
     ) {
         Row(
@@ -2657,7 +2658,7 @@ private fun DashboardQuickIconPill(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = SkyBlueAccent,
+                tint = Color.White,
                 modifier = Modifier.size(14.dp)
             )
             Text(
