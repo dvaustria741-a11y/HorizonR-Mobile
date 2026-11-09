@@ -661,8 +661,8 @@ impl Game<'_> {
             return true;
         }
         self.mob_hit()
-            .filter(|(_, distance)| self.before_block(*distance))
-            .is_some_and(|(i, _)| {
+            .filter(|(_, distance, _)| self.before_block(*distance))
+            .is_some_and(|(i, _, _)| {
                 self.remote_mob_takes(i, horizon_client::first_person::Hand::Main)
                     || self.remote_mob_takes(i, horizon_client::first_person::Hand::Off)
             })
