@@ -14079,6 +14079,14 @@ impl Game<'_> {
         });
     }
     fn render(&mut self) -> Result<bool> {
+        #[cfg(target_os = "android")]
+        let device_preferences = crate::device_runtime::preferences();
+        #[cfg(target_os = "android")]
+        let _native_frame = crate::device_runtime::frame(
+            device_preferences.performance_hints,
+            device_preferences.display_hz,
+            self.focused,
+        );
         if self.screenshot_sequence.is_some() {
             return self.render_sequence_frame();
         }
@@ -14220,6 +14228,9 @@ impl Game<'_> {
             return Ok(false);
         };
         pr.lap("pr_setup");
+        // Load the profile's scheme before drawing the first frame or outline.
+        #[cfg(target_os = "android")]
+        self.pad.touch.viewport(size[0], size[1]);
         let alpha = self.clock.fraction();
         // Camera.getCameraEntityPartialTicks: the view, the hand and the
         // player's own model stay smooth while the level is frozen.

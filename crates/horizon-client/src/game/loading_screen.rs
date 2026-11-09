@@ -207,7 +207,7 @@ impl Loading {
             Ok(w) => Arc::new(w),
             Err(e) => {
                 self.error = Some(e.into());
-                event_loop.exit();
+                crate::game::exit_app(event_loop);
                 return;
             }
         };
@@ -321,6 +321,10 @@ impl Loading {
         self.ui_at = Some(Instant::now());
     }
     pub(super) fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        #[cfg(target_os = "android")]
+        self.menu_android_keyboard();
+        #[cfg(target_os = "android")]
+        self.tick_menu_audio();
         // The loop may run once more after exit(): keep the first error, the
         // one that ended loading.
         if self.error.is_some() {

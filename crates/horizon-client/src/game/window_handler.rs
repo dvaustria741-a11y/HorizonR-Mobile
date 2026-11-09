@@ -534,7 +534,42 @@ impl Game<'_> {
 }
 
 impl ApplicationHandler for Game<'_> {
+    #[cfg(target_os = "android")]
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        // Android may recreate the surface while the IME changes window size.
+        // Preserve the text session; Android hides its window on real backgrounding.
+        self.android_release_touch_keys(true);
+        self.capture(false);
+        self.keys.clear();
+        self.physical_keys.clear();
+        self.pad.touch.clear();
+        if self.title.is_none() && self.screen == Screen::Playing {
+            self.screen = Screen::Paused;
+        }
+        if let Some(renderer) = &mut self.renderer {
+            renderer.suspend_surface();
+        }
+    }
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        #[cfg(target_os = "android")]
+        if let Some(renderer) = &mut self.renderer {
+            if let Some(window) = &self.window {
+                match crate::display::prepare(window) {
+                    Ok(Some(size)) => renderer.resize(size[0], size[1]),
+                    Ok(None) => {}
+                    Err(error) => log::warn!("Android display scale on resume: {error}"),
+                }
+            }
+            if let Err(error) = renderer.recreate_surface() {
+                self.error = Some(error);
+                crate::game::exit_app(event_loop);
+            } else if let Some(window) = &self.window {
+                let size = window.inner_size();
+                renderer.resize(size.width, size.height);
+            }
+            self.previous = Instant::now();
+            return;
+        }
         if self.window.is_some() {
             return;
         }
