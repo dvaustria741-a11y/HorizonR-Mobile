@@ -175,3 +175,19 @@ fun screenSize(context: Context): Pair<Int, Int> {
     }
     return maxOf(w, h) to minOf(w, h)
 }
+
+val HzRoot = Color(0xFF14181B)
+val HzCard = Color(0xFF22282C)
+val HzRow = Color(0xFF2A3136)
+val HzCapsule = Color(0xFF394952)
+val HzAccent = Color(0xFF8BE0FF)
+val HzOnAccent = Color(0xFF0E2430)
+val HzMuted = Color(0xFF9EA8B0)
+
+val HorizonCardStyle = ControlsCardStyle(
+    card = HzRow,
+    accent = HzAccent,
+    onAccent = HzOnAccent,
+    muted = HzMuted,
+    track = HzCapsule,
+)

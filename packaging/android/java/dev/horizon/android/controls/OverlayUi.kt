@@ -9,7 +9,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 
-/** What the overlay shows besides the touch layout: nothing, the ☰ menu, or the layout editor. */
+/** What the overlay shows besides the touch layout: nothing, the quick menu, or the layout editor. */
 enum class OverlayUi { NONE, MENU, EDIT }
 
 /** Lifecycle, saved state and view-model owners for the Compose views inside the overlay's window. */

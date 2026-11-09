@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.ComposeView
 import dev.horizon.android.R
 import dev.horizon.android.controls.ui.ControlEditor
 import dev.horizon.android.controls.ui.ControlsTheme
+import dev.horizon.android.controls.ui.HorizonCardStyle
 import dev.horizon.android.controls.ui.OverlayMenu
 
 /**
@@ -147,7 +148,7 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
         dialog = null
     }
 
-    /** Compose is built the first time the ☰ menu opens, so a game that never opens it pays nothing. */
+    /** Compose is built the first time the menu handle opens, so a game that never opens it pays nothing. */
     private fun ensureCompose() {
         if (composeView != null) return
         val host = frame ?: return
@@ -160,17 +161,19 @@ class ControlsOverlay(private val activity: Activity) : ControlsHost {
             val current = ui
             ControlsTheme {
                 when (current) {
-                    OverlayUi.MENU -> OverlayMenu(
-                        settings = settings,
-                        onClose = { switchUi(OverlayUi.NONE) },
-                        onPause = {
-                            switchUi(OverlayUi.NONE)
-                            toggleMenu()
-                        },
-                        onEdit = { switchUi(OverlayUi.EDIT) },
-                        onLayout = { reloadLayout() },
-                        onSettingsChanged = { view?.reloadSettings() },
-                    )
+                    OverlayUi.MENU -> ControlsTheme(HorizonCardStyle) {
+                        OverlayMenu(
+                            settings = settings,
+                            onClose = { switchUi(OverlayUi.NONE) },
+                            onPause = {
+                                switchUi(OverlayUi.NONE)
+                                toggleMenu()
+                            },
+                            onEdit = { switchUi(OverlayUi.EDIT) },
+                            onLayout = { reloadLayout() },
+                            onSettingsChanged = { view?.reloadSettings() },
+                        )
+                    }
                     OverlayUi.EDIT -> view?.let { ControlEditor(it, settings) { switchUi(OverlayUi.NONE) } }
                     OverlayUi.NONE -> {}
                 }

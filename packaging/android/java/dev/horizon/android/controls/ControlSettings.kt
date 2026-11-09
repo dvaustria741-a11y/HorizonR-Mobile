@@ -86,6 +86,12 @@ class ControlSettings(context: Context) {
     var menuY: Float
         get() = prefs.getFloat("menu_y", 0.00f)
         set(v) = prefs.edit().putFloat("menu_y", v).apply()
+    var editorGearX: Float
+        get() = prefs.getFloat("editor_gear_x", 0.50f)
+        set(v) = prefs.edit().putFloat("editor_gear_x", v).apply()
+    var editorGearY: Float
+        get() = prefs.getFloat("editor_gear_y", 0.06f)
+        set(v) = prefs.edit().putFloat("editor_gear_y", v).apply()
     var cursorImage: String
         get() = prefs.getString("cursor_image", "").orEmpty()
         set(v) = prefs.edit().putString("cursor_image", v).apply()

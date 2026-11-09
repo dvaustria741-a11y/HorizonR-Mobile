@@ -13,7 +13,7 @@
     <string name="controls_delete">Delete</string>
     <string name="controls_edit">Edit layout</string>
     <string name="controls_folder">Layout files also load from %1$s</string>
-    <string name="controls_help">In game: drag on the screen to look, hold to break, tap to use. The joystick sprints when pushed past its top edge and released. The ☰ handle at the top opens the quick menu.</string>
+    <string name="controls_help">In game: drag on the screen to look, hold to break, tap to use. The joystick sprints when pushed past its top edge and released. The menu handle at the top opens the quick menu; drag it to move it.</string>
     <string name="controls_hotbar">Tap the hotbar to select a slot</string>
     <string name="controls_import">Import layout (.json)</string>
     <string name="controls_import_failed">Could not import: %1$s</string>
@@ -89,5 +89,5 @@
     <string name="menu_edit">Edit controller</string>
     <string name="menu_layouts">Layouts</string>
     <string name="menu_quick">Quick settings</string>
-    <string name="menu_back">← Back</string>
+    <string name="menu_back">Back</string>
 </resources>

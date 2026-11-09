@@ -4,7 +4,9 @@ import android.content.Intent
 import android.graphics.RectF
 import android.view.KeyEvent
 import android.widget.Toast
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -51,6 +53,7 @@ import androidx.compose.ui.geometry.Size as GeoSize
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -232,23 +235,53 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
 
     Box(modifier = Modifier.fillMaxSize()) {
         Text(
-            "Tap the gear icon to open the menu ⚙\nTap a button to customize: edit, resize, delete, or remap",
+            "Tap the gear to open the menu, drag it to move it\nTap a button to customize: edit, resize, delete, or remap",
             color = ZMuted, fontSize = 13.sp, textAlign = TextAlign.End,
             modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 6.dp, vertical = 2.dp)
         )
+        val gearPx = with(density) { 44.dp.toPx() }
+        var gearX by remember { mutableFloatStateOf(settings.editorGearX) }
+        var gearY by remember { mutableFloatStateOf(settings.editorGearY) }
+        var gearDrag by remember { mutableStateOf(false) }
+        val gearScale by animateFloatAsState(if (gearDrag) 1.12f else 1f, label = "gear")
         Box(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 28.dp)
+                .offset {
+                    IntOffset(
+                        ((controls.width - gearPx).coerceAtLeast(0f) * gearX).roundToInt(),
+                        ((controls.height - gearPx).coerceAtLeast(0f) * gearY).roundToInt()
+                    )
+                }
                 .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.Black)
-                .clickable {
-                    menuOpen = !menuOpen
-                    if (menuOpen) controls.select(null)
+                .graphicsLayer { scaleX = gearScale; scaleY = gearScale }
+                .clip(RoundedCornerShape(14.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF2E373D), Color(0xFF1A2024))))
+                .border(1.dp, Color(0xFF394952), RoundedCornerShape(14.dp))
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        menuOpen = !menuOpen
+                        if (menuOpen) controls.select(null)
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { gearDrag = true },
+                        onDragEnd = {
+                            gearDrag = false
+                            settings.editorGearX = gearX
+                            settings.editorGearY = gearY
+                        },
+                        onDragCancel = { gearDrag = false },
+                    ) { change, drag ->
+                        change.consume()
+                        val rx = (controls.width - gearPx).coerceAtLeast(1f)
+                        val ry = (controls.height - gearPx).coerceAtLeast(1f)
+                        gearX = (gearX + drag.x / rx).coerceIn(0f, 1f)
+                        gearY = (gearY + drag.y / ry).coerceIn(0f, 1f)
+                    }
                 },
             contentAlignment = Alignment.Center
-        ) { Text("⚙", color = Color.White, fontSize = 26.sp) }
+        ) { GlyphIcon(Glyph.GEAR, Color(0xFF8BE0FF), Modifier.size(26.dp)) }
 
         // Delete / Clone sit right above the selected button, like Zalith's handle.
         val sel = selection
@@ -378,7 +411,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
             }
             Dialog.SelectDefault -> ZDialog("Select Default Control Layout", { dialog = null }) {
                 ControlLayouts.list(context, defaultName).forEach { e ->
-                    ZPlain(if (e.id == settings.layout) "✓  ${e.name}" else e.name) {
+                    ZPlain(if (e.id == settings.layout) "${e.name} (default)" else e.name) {
                         settings.layout = e.id
                         Toast.makeText(context, e.name, Toast.LENGTH_SHORT).show()
                         dialog = null

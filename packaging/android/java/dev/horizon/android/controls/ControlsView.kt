@@ -40,7 +40,7 @@ interface ControlsHost {
     fun toggleKeyboard()
     fun toggleMenu()
 
-    /** The ☰ handle was tapped: the overlay opens its menu; other hosts keep the old pause-menu behavior. */
+    /** The menu handle was tapped: the overlay opens its menu; other hosts keep the old pause-menu behavior. */
     fun openMenu() = toggleMenu()
     fun sendText(text: String)
 }
@@ -905,11 +905,24 @@ class ControlsView(
             guideY?.let { canvas.drawLine(0f, it, width.toFloat(), it, stroke) }
         }
         if (showHandle && !editMode) {
-            fill.color = alpha(Color.argb(170, 24, 24, 28), opacity.coerceAtLeast(0.50f))
-            canvas.drawRoundRect(menuRect, 8f * density, 8f * density, fill)
-            text.color = Color.WHITE
-            text.textSize = 13f * scaledDensity
-            canvas.drawText("☰", menuRect.centerX(), menuRect.centerY() - (text.descent() + text.ascent()) / 2f, text)
+            val dragging = roles.values.any { it is Role.Handle && it.moved }
+            val rad = menuRect.height() / 2f
+            fill.color = alpha(Color.argb(if (dragging) 240 else 205, 34, 40, 44), opacity.coerceAtLeast(0.55f))
+            canvas.drawRoundRect(menuRect, rad, rad, fill)
+            stroke.color = Color.argb(if (dragging) 230 else 140, 139, 224, 255)
+            stroke.strokeWidth = 1f * density
+            canvas.drawRoundRect(menuRect, rad, rad, stroke)
+            stroke.strokeWidth = 1.8f * density
+            stroke.strokeCap = Paint.Cap.ROUND
+            stroke.color = if (dragging) Color.WHITE else Color.argb(235, 139, 224, 255)
+            val cx = menuRect.centerX()
+            val cy = menuRect.centerY()
+            val half = 7f * density
+            val gap = 4f * density
+            canvas.drawLine(cx - half, cy - gap, cx + half, cy - gap, stroke)
+            canvas.drawLine(cx - half, cy, cx + half, cy, stroke)
+            canvas.drawLine(cx - half, cy + gap, cx + half, cy + gap, stroke)
+            stroke.strokeCap = Paint.Cap.BUTT
         }
         if (!editMode && !captured && virtualMouse) drawCursor(canvas)
     }
