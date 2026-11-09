@@ -20,6 +20,15 @@ RULES = [
     (re.compile(r"\bBlockState\.FULL_CODEC\b|\bFULL_CODEC\b"), "CODEC"),
     # Items build their components in the constructor in 1.21.11 (see Compat.bind).
     (re.compile(r"([\w.]+(?:\[(?:[^\[\]]|\[[^\]]*\])*\])?)\.builtInRegistryHolder\(\)\.bindComponents\("), r"dev.horizonlab.parity.Compat.bind(\1, "),
+    # The registry bootstrap copied into many oracles: layers are STATIC/WORLDGEN/DIMENSIONS/RELOADABLE, the loader
+    # is synchronous, and items carry their components from construction (no component initializers to apply).
+    (re.compile(r"\bRegistryLayer\.WORLD\b"), "RegistryLayer.WORLDGEN"),
+    (re.compile(r"\bRegistryDataLoader\.WORLD_REGISTRIES\s*,\s*Runnable::run\s*\)\.join\(\)"), "RegistryDataLoader.WORLDGEN_REGISTRIES)"),
+    (re.compile(r"(?m)^[^\n]*(?:DATA_COMPONENT_INITIALIZERS|DataComponentInitializers\.PendingComponents)[^\n]*\n"), ""),
+    # ItemStack's private (holder, count, PatchedDataComponentMap) constructor takes the ItemLike in 1.21.11.
+    (re.compile(r"getDeclaredConstructor\(net\.minecraft\.core\.Holder\.class,\s*int\.class,\s*net\.minecraft\.core\.component\.PatchedDataComponentMap\.class\)"),
+     "getDeclaredConstructor(net.minecraft.world.level.ItemLike.class,int.class,net.minecraft.core.component.PatchedDataComponentMap.class)"),
+    (re.compile(r"(stackConstructor\.newInstance\()net\.minecraft\.core\.registries\.BuiltInRegistries\.ITEM\.wrapAsHolder\(([^()]*)\)"), r"\1\2"),
     # Renamed: EntityTypes -> EntityType, ChunkPos.pack -> ChunkPos.asLong.
     (re.compile(r"\bEntityTypes\b"), "EntityType"),
     (re.compile(r"\bChunkPos\.pack\("), "ChunkPos.asLong("),

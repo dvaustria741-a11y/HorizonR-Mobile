@@ -165,10 +165,34 @@ oracle's is not, so carving is the likely cause; that has not been checked (one 
 
 ## Gameplay differences: what is measured
 
+**Oracles run on 1.21.11.** `tools/oracle_diff_1_21_11.py` takes the inputs of each `tools/test_*_parity.py` that keeps to
+the common shape, runs the (patched) oracle on the remapped 1.21.11 jar and the matching engine fixture (`world_probe`,
+26.3 behaviour) on the same inputs, and counts differing output lines. Of 98 scripts of that shape: 21 give output
+identical to the engine (block push, combat rules, consume effects, edge backoff, entity obstruction, fall damage, food,
+food properties, item cooldowns, Java hash map, living damage, movement emission, object open map and set, piston
+movement, player equipment, player food, status tick, swimming, synced bytes and floats: 15 million output lines in all),
+8 stop in the oracle, 32 do not compile, 18 need extra corpus arguments (the driver does not give them) and 12 failed
+otherwise. Seven differ (the last two below were found after the run and are explained, the first five are):
+
+- **`Mth.floor` overflows in 1.21.11, the engine saturates.** 1.21.11 computes `i = (int) f; f < i ? i - 1 : i`, so
+  `Mth.floor` of -infinity or of any value below -2^31 returns 2147483647 (checked on the jar: `floor(-inf)`,
+  `floor(-3e9f)` and `floor(-3e9)` all give 2147483647); the engine gives -2147483648. This is behind `blocking_rules`
+  (1,868 lines, the item damage function), `food_storage` (2,460), `movement_support` (962) and `water_splash` (12).
+  Only inputs outside the int range show it; ordinary play does not reach them.
+- **`living_health`: 1,362 lines differ** at `bool` answers after a health query: 1.21.11's `isDeadOrDying()` is just
+  `getHealth() <= 0`; the engine's also counts the dead flag (`health <= 0 || dead`), so for a living entity with the flag
+  set and health above 0 (or NaN) the two disagree. Which one is 26.3's is the engine's claim; this shows 1.21.11 does not.
+- **`status_effect`: 602,077 of 655,685 lines differ**, first at a `node` line (`2147483647` against `1`) and the line
+  counts differ by 41. Not analysed.
+- **`effect_attribute_modifiers`** was reported as different, but the oracle stops on its own assertion ("holder hash
+  fixture") after 49,789 of the engine's 1.4 million lines: that is a failed run, not a difference (the driver now says so).
+
+What this does not show: that 1.21.11 and 26.3 agree anywhere the oracle did not look, nor anything about mob AI.
+
 Decompiled: Vineflower 1.12.0 (the lock's pin) on the remapped jar's `world/entity`, `world/item`, `world/inventory` and
 `world/level/storage/loot` packages: 1,856 classes into 1,196 source files, no failure markers. A decompile of the whole
-jar was started first and died without output, so only these packages exist. Not read yet: no behaviour was compared
-with 26.3's code, which is not available here.
+jar was started first and died without output, so only these packages exist. Not read yet: no decompiled behaviour was compared
+with 26.3's code, which is not available here (the oracle runs below compare behaviour with the engine instead).
 
 Loot tables, 1.21.11 against 26.3 (`tools/loot_diff_1_21_11.py`, 26.3 from misode/mcmeta): 134 entity and gameplay tables
 in both versions; one entity table is new in 26.3 (`sulfur_cube`). After mapping 26.3's restructured JSON onto 1.21.11's
