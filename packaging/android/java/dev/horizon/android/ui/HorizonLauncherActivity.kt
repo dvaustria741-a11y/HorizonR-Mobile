@@ -251,9 +251,29 @@ class HorizonLauncherActivity : ComponentActivity() {
         private var hasCheckedUpdateThisSession = false
     }
 
+    /** Hides the status bar and the 3-button/gesture navigation bar; a swipe from the edge shows them briefly. */
+    private fun applyImmersiveLauncher() {
+        val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior =
+            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyImmersiveLauncher()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= 28) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        applyImmersiveLauncher()
         HorizonNativeBridge.ensureHomeDirectories(this)
         HorizonNativeBridge.syncAndRepairModsStorage(this, 0)
         HorizonNativeBridge.syncAndRepairShadersStorage(this, 0)
@@ -1020,50 +1040,50 @@ fun <T> LauncherSettingDropdownCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = title,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White
                     )
                     Text(
                         text = description,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = MutedSubtitleText
                     )
-                }
-                Spacer(Modifier.width(12.dp))
-                Row(
-                    modifier = Modifier
-                        .widthIn(min = 120.dp, max = 220.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(CardRowBg)
-                        .border(1.dp, VoltGrayStroke, RoundedCornerShape(12.dp))
-                        .animatedPressScale { expanded = !expanded }
-                        .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = itemLabel(selectedItem),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = null,
-                        tint = Color.White,
+                    Spacer(Modifier.height(4.dp))
+                    Row(
                         modifier = Modifier
-                            .size(22.dp)
-                            .rotate(arrowRot)
-                    )
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(CardRowBg)
+                            .border(1.dp, VoltGrayStroke, RoundedCornerShape(12.dp))
+                            .animatedPressScale { expanded = !expanded }
+                            .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = itemLabel(selectedItem),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .rotate(arrowRot)
+                        )
+                    }
                 }
             }
         }
@@ -1132,13 +1152,13 @@ fun LauncherSettingSliderCard(
         ) {
             Text(
                 text = title,
-                fontSize = 15.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White
             )
             Text(
                 text = description,
-                fontSize = 12.sp,
+                fontSize = 10.sp,
                 color = MutedSubtitleText
             )
 
@@ -1230,13 +1250,13 @@ fun LauncherSettingToggleCard(
             ) {
                 Text(
                     text = title,
-                    fontSize = 15.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
                 Text(
                     text = description,
-                    fontSize = 12.sp,
+                    fontSize = 10.sp,
                     color = MutedSubtitleText
                 )
             }
@@ -1525,7 +1545,10 @@ fun CleanLauncherScreen(
                 .fillMaxSize()
                 .background(LauncherRootBg)
                 .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.displayCutout))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .padding(
+                    horizontal = if (selectedTab == LauncherNavTab.HOME) 0.dp else 12.dp,
+                    vertical = if (selectedTab == LauncherNavTab.HOME) 0.dp else 6.dp
+                )
         ) {
             if (!isHibernated) {
                 HorizonAuroraBackground()
@@ -2451,9 +2474,8 @@ private fun CleanHomeViewport(
     )
 
     Surface(
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(0.dp),
         color = CardSlateBg.copy(alpha = 0.90f),
-        border = horizonGlassBorder(),
         modifier = Modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -7770,7 +7792,7 @@ private fun CleanSettingsViewport(
                 .fillMaxWidth(),
             label = "SettingsSubSectionTransition"
         ) { section ->
-            Column(
+            VoltTwoColumnScroll(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState()),
