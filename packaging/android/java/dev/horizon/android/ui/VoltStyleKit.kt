@@ -180,11 +180,11 @@ private fun VoltCircleButton(name: String, fallback: ImageVector, onClick: () ->
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(44.dp)
+            .size(36.dp)
             .animatedPressScale(onClick = onClick)
             .voltSurface(CircleShape)
     ) {
-        VoltIcon(name = name, fallback = fallback, size = 20.dp)
+        VoltIcon(name = name, fallback = fallback, size = 17.dp)
     }
 }
 
@@ -216,7 +216,7 @@ internal fun VoltBottomNav(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp)
-            .height(54.dp),
+            .height(46.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -224,24 +224,24 @@ internal fun VoltBottomNav(
             modifier = Modifier
                 .animatedPressScale(onClick = onOpenAccount)
                 .voltSurface(RoundedCornerShape(30.dp))
-                .padding(start = 8.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+                .padding(start = 6.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 34.dp, cornerRadius = 17.dp)
+            MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 28.dp, cornerRadius = 14.dp)
             Column {
                 Text(
                     text = activeAccount.username,
-                    fontSize = 13.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 90.dp)
+                    modifier = Modifier.widthIn(max = 80.dp)
                 )
                 Text(
                     text = activeAccount.accountType.badge,
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     color = accent,
                     maxLines = 1
                 )
@@ -272,14 +272,14 @@ internal fun VoltBottomNav(
                         .clip(RoundedCornerShape(22.dp))
                         .background(bg)
                         .animatedPressScale { onSelectTab(e.tab) }
-                        .padding(horizontal = 11.dp, vertical = 5.dp),
+                        .padding(horizontal = 9.dp, vertical = 3.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
-                    VoltIcon(name = e.icon, fallback = e.fallback, size = 20.dp, tint = tint)
+                    VoltIcon(name = e.icon, fallback = e.fallback, size = 17.dp, tint = tint)
                     Text(
                         text = if (e.tab == LauncherNavTab.VERSIONS && installStatus.running) "${installStatus.percent}%" else e.label,
-                        fontSize = 9.sp,
+                        fontSize = 8.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         color = tint,
                         maxLines = 1
@@ -318,7 +318,7 @@ private fun VoltBigButton(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(46.dp)
             .graphicsLayer {
                 alpha = progress
                 translationX = -(1f - progress) * 32.dp.toPx()
@@ -328,8 +328,8 @@ private fun VoltBigButton(
             .drawBehind {
                 drawRect(
                     color = tint,
-                    topLeft = Offset(0f, size.height - 3.dp.toPx()),
-                    size = Size(size.width, 3.dp.toPx())
+                    topLeft = Offset(0f, size.height - 2.dp.toPx()),
+                    size = Size(size.width, 2.dp.toPx())
                 )
                 drawLine(
                     color = Color.White.copy(alpha = 0.10f),
@@ -338,22 +338,22 @@ private fun VoltBigButton(
                     strokeWidth = 1.5f
                 )
             }
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(11.dp))
+                .size(30.dp)
+                .clip(RoundedCornerShape(9.dp))
                 .background(tint)
         ) {
-            VoltIcon(name = iconName, fallback = fallback, size = 22.dp)
+            VoltIcon(name = iconName, fallback = fallback, size = 18.dp)
         }
         Column(verticalArrangement = Arrangement.Center) {
-            Text(text = title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
-            Text(text = subtitle, fontSize = 11.sp, color = VoltMutedText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+            Text(text = subtitle, fontSize = 9.sp, color = VoltMutedText, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -372,20 +372,20 @@ private fun VoltSidePill(label: String, iconName: String, fallback: ImageVector,
     )
     Row(
         modifier = Modifier
-            .width(124.dp)
-            .height(34.dp)
+            .width(100.dp)
+            .height(28.dp)
             .graphicsLayer {
                 alpha = progress
                 translationX = (1f - progress) * 28.dp.toPx()
             }
             .animatedPressScale(onClick = onClick)
             .voltSurface(RoundedCornerShape(50))
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        VoltIcon(name = iconName, fallback = fallback, size = 18.dp)
-        Text(text = label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White, maxLines = 1)
+        VoltIcon(name = iconName, fallback = fallback, size = 15.dp)
+        Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.White, maxLines = 1)
     }
 }
 
@@ -394,11 +394,11 @@ private fun VoltSquareButton(iconName: String, fallback: ImageVector, onClick: (
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(40.dp)
+            .size(32.dp)
             .animatedPressScale(onClick = onClick)
-            .voltSurface(RoundedCornerShape(12.dp))
+            .voltSurface(RoundedCornerShape(10.dp))
     ) {
-        VoltIcon(name = iconName, fallback = fallback, size = 21.dp)
+        VoltIcon(name = iconName, fallback = fallback, size = 17.dp)
     }
 }
 
@@ -419,12 +419,12 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
     val green = Color(0xFF5FD068)
     val darkGreen = Color(0xFF2F9E44)
     val content = if (installStatus.running) accent else Color(0xFF0B3A14)
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(42.dp)
+                .height(34.dp)
                 .drawBehind {
                     if (!installStatus.running) {
                         drawRoundRect(
@@ -457,7 +457,7 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
                 VoltIcon(
                     name = if (installStatus.ready) "ic_ui_play" else "ic_ui_download",
                     fallback = if (installStatus.ready) Icons.Default.PlayArrow else Icons.Default.Download,
-                    size = 20.dp,
+                    size = 16.dp,
                     tint = content
                 )
                 Text(
@@ -465,7 +465,7 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
                     else if (installStatus.running) "${installStatus.percent}%"
                     else if (installStatus.ready) "PLAY"
                     else "INSTALL",
-                    fontSize = 17.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = content
                 )
@@ -474,14 +474,14 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(18.dp)
+                .height(14.dp)
                 .animatedPressScale(onClick = onFiles)
                 .voltSurface(RoundedCornerShape(9.dp)),
             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            VoltIcon(name = "ic_ui_folder", fallback = Icons.Default.Folder, size = 11.dp)
-            Text(text = "GAME FILES", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = VoltMutedText, maxLines = 1)
+            VoltIcon(name = "ic_ui_folder", fallback = Icons.Default.Folder, size = 9.dp)
+            Text(text = "GAME FILES", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = VoltMutedText, maxLines = 1)
         }
     }
 }
@@ -506,22 +506,22 @@ internal fun VoltHomeLayer(
     Box(modifier = modifier.fillMaxSize().padding(14.dp)) {
         Column(modifier = Modifier.align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MinecraftGrassCubeIcon(size = 34.dp)
+                MinecraftGrassCubeIcon(size = 26.dp)
                 Column {
-                    Text(text = "HORIZONR", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
-                    Text(text = "Minecraft 26.3 \u00B7 Native Rust", fontSize = 11.sp, color = VoltMutedText, maxLines = 1)
+                    Text(text = "HORIZONR", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+                    Text(text = "Minecraft 26.3 \u00B7 Native Rust", fontSize = 9.sp, color = VoltMutedText, maxLines = 1)
                 }
             }
             if (quote != null) {
                 Text(
                     text = "\u201C$quote\u201D",
-                    fontSize = 11.sp,
+                    fontSize = 9.sp,
                     fontStyle = FontStyle.Italic,
                     color = Color(0xFFFFE082),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .widthIn(max = 260.dp)
+                        .widthIn(max = 220.dp)
                         .animatedPressScale(onClick = onQuoteTap)
                 )
             }
@@ -530,16 +530,16 @@ internal fun VoltHomeLayer(
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(top = 66.dp)
-                .width(236.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(top = 52.dp)
+                .width(190.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             VoltBigButton("MODS", "Mods & packs", Color(0xFFE0455F), "ic_ui_mods", Icons.Default.Extension, 0) { onNavigate(LauncherNavTab.FILES) }
             VoltBigButton("MY SKIN", "Skin studio", Color(0xFF3F7DF0), "ic_ui_skins", Icons.Default.Checkroom, 1) { onNavigate(LauncherNavTab.ACCOUNTS) }
             VoltBigButton("SHADERS", "Browse shader packs", Color(0xFF4CB85A), "ic_ui_shaders", Icons.Default.WbSunny, 2) { onNavigate(LauncherNavTab.STORE) }
         }
 
-        Row(modifier = Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             VoltSquareButton("ic_ui_game", Icons.Default.Download) { onNavigate(LauncherNavTab.VERSIONS) }
             VoltSquareButton("ic_ui_logs", Icons.Default.Terminal) { onNavigate(LauncherNavTab.LOGS) }
             VoltSquareButton("ic_ui_folder", Icons.Default.Folder) { onOpenFolder() }
@@ -549,9 +549,9 @@ internal fun VoltHomeLayer(
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 50.dp),
+                .padding(top = 44.dp),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             VoltSidePill("Servers", "ic_ui_servers", Icons.Default.Dns, 0) { onNavigate(LauncherNavTab.SERVERS) }
             VoltSidePill("Store", "ic_ui_store", Icons.Default.Storefront, 1) { onNavigate(LauncherNavTab.STORE) }
@@ -569,42 +569,42 @@ internal fun VoltHomeLayer(
                 modifier = Modifier
                     .animatedPressScale { onNavigate(LauncherNavTab.ACCOUNTS) }
                     .voltSurface(RoundedCornerShape(30.dp))
-                    .padding(start = 7.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+                    .padding(start = 5.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 30.dp, cornerRadius = 15.dp)
+                MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 24.dp, cornerRadius = 12.dp)
                 Text(
                     text = "${activeAccount.username} \u2022 ${activeAccount.accountType.badge}",
-                    fontSize = 12.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 150.dp)
+                    modifier = Modifier.widthIn(max = 130.dp)
                 )
             }
 
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(62.dp)
+                    .height(50.dp)
                     .animatedPressScale { onNavigate(LauncherNavTab.VERSIONS) }
                     .voltSurface(RoundedCornerShape(16.dp), 0.94f)
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                MinecraftGrassCubeIcon(size = 34.dp)
+                MinecraftGrassCubeIcon(size = 28.dp)
                 Column(verticalArrangement = Arrangement.Center) {
-                    Text(text = "SELECTED VERSION", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = VoltMutedText, maxLines = 1)
-                    Text(text = "Minecraft 26.3", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+                    Text(text = "SELECTED VERSION", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = VoltMutedText, maxLines = 1)
+                    Text(text = "Minecraft 26.3", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
                     Text(
                         text = if (installStatus.ready) "Ready"
                         else if (installStatus.paused) "Paused (${installStatus.percent}%)"
                         else if (installStatus.running) "${installStatus.percent}% (${installStatus.speedText.ifBlank { "Downloading" }})"
                         else "Needs download",
-                        fontSize = 11.sp,
+                        fontSize = 9.sp,
                         color = if (installStatus.ready) Color(0xFF81C784) else if (installStatus.paused) Color(0xFFFFB74D) else accent,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -617,8 +617,46 @@ internal fun VoltHomeLayer(
                 accent = accent,
                 onLaunch = onLaunch,
                 onFiles = { onNavigate(LauncherNavTab.VERSIONS) },
-                modifier = Modifier.width(150.dp)
+                modifier = Modifier.width(124.dp)
             )
+        }
+    }
+}
+
+/**
+ * Volt-style settings grid: cards flow into two columns (each card goes to the shorter column)
+ * inside a vertically scrolling area.
+ */
+@Composable
+internal fun VoltTwoColumnScroll(
+    modifier: Modifier = Modifier,
+    verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(10.dp),
+    content: @Composable () -> Unit
+) {
+    val gap = verticalArrangement.spacing
+    androidx.compose.ui.layout.Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val gapPx = gap.roundToPx()
+        val totalW = constraints.maxWidth
+        val colW = ((totalW - gapPx) / 2).coerceAtLeast(0)
+        val childConstraints = androidx.compose.ui.unit.Constraints(
+            minWidth = colW,
+            maxWidth = colW,
+            minHeight = 0,
+            maxHeight = androidx.compose.ui.unit.Constraints.Infinity
+        )
+        val placeables = measurables.map { it.measure(childConstraints) }
+        val heights = intArrayOf(0, 0)
+        val xs = IntArray(placeables.size)
+        val ys = IntArray(placeables.size)
+        placeables.forEachIndexed { i, pl ->
+            val col = if (heights[0] <= heights[1]) 0 else 1
+            xs[i] = col * (colW + gapPx)
+            ys[i] = heights[col]
+            heights[col] = ys[i] + pl.height + gapPx
+        }
+        val totalH = (maxOf(heights[0], heights[1]) - gapPx).coerceAtLeast(0)
+        layout(totalW, totalH) {
+            placeables.forEachIndexed { i, pl -> pl.placeRelative(xs[i], ys[i]) }
         }
     }
 }

@@ -1020,50 +1020,50 @@ fun <T> LauncherSettingDropdownCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = title,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White
                     )
                     Text(
                         text = description,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = MutedSubtitleText
                     )
-                }
-                Spacer(Modifier.width(12.dp))
-                Row(
-                    modifier = Modifier
-                        .widthIn(min = 120.dp, max = 220.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(CardRowBg)
-                        .border(1.dp, VoltGrayStroke, RoundedCornerShape(12.dp))
-                        .animatedPressScale { expanded = !expanded }
-                        .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = itemLabel(selectedItem),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = null,
-                        tint = Color.White,
+                    Spacer(Modifier.height(4.dp))
+                    Row(
                         modifier = Modifier
-                            .size(22.dp)
-                            .rotate(arrowRot)
-                    )
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(CardRowBg)
+                            .border(1.dp, VoltGrayStroke, RoundedCornerShape(12.dp))
+                            .animatedPressScale { expanded = !expanded }
+                            .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = itemLabel(selectedItem),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .rotate(arrowRot)
+                        )
+                    }
                 }
             }
         }
@@ -1132,13 +1132,13 @@ fun LauncherSettingSliderCard(
         ) {
             Text(
                 text = title,
-                fontSize = 15.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White
             )
             Text(
                 text = description,
-                fontSize = 12.sp,
+                fontSize = 10.sp,
                 color = MutedSubtitleText
             )
 
@@ -1230,13 +1230,13 @@ fun LauncherSettingToggleCard(
             ) {
                 Text(
                     text = title,
-                    fontSize = 15.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
                 Text(
                     text = description,
-                    fontSize = 12.sp,
+                    fontSize = 10.sp,
                     color = MutedSubtitleText
                 )
             }
@@ -7770,7 +7770,7 @@ private fun CleanSettingsViewport(
                 .fillMaxWidth(),
             label = "SettingsSubSectionTransition"
         ) { section ->
-            Column(
+            VoltTwoColumnScroll(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState()),
