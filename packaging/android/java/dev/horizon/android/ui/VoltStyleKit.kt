@@ -420,8 +420,8 @@ private fun VoltSidePill(label: String, iconName: String, fallback: ImageVector,
     )
     Row(
         modifier = Modifier
-            .width(80.dp)
-            .height(22.dp)
+            .width(84.dp)
+            .height(23.dp)
             .graphicsLayer {
                 alpha = progress
                 translationX = (1f - progress) * 28.dp.toPx()
@@ -432,11 +432,11 @@ private fun VoltSidePill(label: String, iconName: String, fallback: ImageVector,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        VoltIcon(name = iconName, fallback = fallback, size = 11.dp, tint = VoltIconMuted)
+        VoltIcon(name = iconName, fallback = fallback, size = 13.dp, tint = VoltIconMuted)
         Text(
             text = label,
-            fontSize = 9.sp,
-            lineHeight = 11.sp,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
             fontWeight = FontWeight.Medium,
             color = VoltTextMain,
             maxLines = 1
@@ -458,7 +458,7 @@ private fun VoltSquareButton(iconName: String, fallback: ImageVector, onClick: (
 }
 
 @Composable
-private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLaunch: () -> Unit, onFiles: () -> Unit, modifier: Modifier = Modifier) {
+private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, playTime: String, onLaunch: () -> Unit, onFiles: () -> Unit, modifier: Modifier = Modifier) {
     val pulse = rememberInfiniteTransition(label = "VoltPlayPulse")
     val glow by pulse.animateFloat(
         initialValue = 0.15f,
@@ -486,7 +486,7 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(34.dp)
+                .height(38.dp)
                 .animatedPressScale(onClick = onLaunch)
                 .then(plateModifier)
                 .drawBehind {
@@ -496,23 +496,28 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
                 }
                 .padding(bottom = 4.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                VoltIcon(
-                    name = if (installStatus.ready) "ic_ui_play" else "ic_ui_download",
-                    fallback = if (installStatus.ready) Icons.Default.PlayArrow else Icons.Default.Download,
-                    size = 16.dp,
-                    tint = content
-                )
-                Text(
-                    text = if (installStatus.paused) "PAUSED"
-                    else if (installStatus.running) "${installStatus.percent}%"
-                    else if (installStatus.ready) "PLAY"
-                    else "INSTALL",
-                    fontSize = 14.sp,
-                    lineHeight = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = content
-                )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    VoltIcon(
+                        name = if (installStatus.ready) "ic_ui_play" else "ic_ui_download",
+                        fallback = if (installStatus.ready) Icons.Default.PlayArrow else Icons.Default.Download,
+                        size = 16.dp,
+                        tint = content
+                    )
+                    Text(
+                        text = if (installStatus.paused) "PAUSED"
+                        else if (installStatus.running) "${installStatus.percent}%"
+                        else if (installStatus.ready) "PLAY"
+                        else "INSTALL",
+                        fontSize = 14.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = content
+                    )
+                }
+                if (installStatus.ready && playTime.isNotEmpty()) {
+                    Text(text = playTime, fontSize = 8.sp, lineHeight = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2F6B12), maxLines = 1)
+                }
             }
         }
         Row(
@@ -596,13 +601,14 @@ internal fun VoltHomeLayer(
                 .align(Alignment.TopEnd)
                 .padding(top = 44.dp),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             VoltSidePill("Servers", "ic_ui_servers", Icons.Default.Dns, 0) { onNavigate(LauncherNavTab.SERVERS) }
             VoltSidePill("Store", "ic_ui_store", Icons.Default.Storefront, 1) { onNavigate(LauncherNavTab.STORE) }
             VoltSidePill("Worlds", "ic_ui_worlds", Icons.Default.Public, 2) { onNavigate(LauncherNavTab.FILES) }
         }
 
+        val playTime = PlayTime.label(androidx.compose.ui.platform.LocalContext.current)
         val hasVersionPlate = voltHasDrawable("bg_ui_version")
         val versionMuted = if (hasVersionPlate) Color.White.copy(alpha = 0.78f) else VoltMutedText
         Box(
@@ -639,7 +645,7 @@ internal fun VoltHomeLayer(
             ) {
                 Row(
                     modifier = Modifier
-                        .width(190.dp)
+                        .width(200.dp)
                         .height(42.dp)
                         .animatedPressScale { onNavigate(LauncherNavTab.VERSIONS) }
                         .voltPlate("bg_ui_version", RoundedCornerShape(16.dp))
@@ -650,16 +656,17 @@ internal fun VoltHomeLayer(
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(24.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .size(26.dp)
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(Color(0xFF12141C).copy(alpha = 0.85f))
                     ) {
-                        MinecraftGrassCubeIcon(size = 22.dp)
+                        MinecraftGrassCubeIcon(size = 20.dp)
                     }
                     Column(verticalArrangement = Arrangement.Center) {
                         Text(text = "SELECTED VERSION", fontSize = 7.sp, lineHeight = 8.sp, fontWeight = FontWeight.Bold, color = versionMuted, maxLines = 1)
                         Text(text = "Minecraft 26.3", fontSize = 11.sp, lineHeight = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
                         Text(
-                            text = if (installStatus.ready) "Ready"
+                            text = if (installStatus.ready) (if (playTime.isNotEmpty()) "Ready \u2022 $playTime played" else "Ready")
                             else if (installStatus.paused) "Paused (${installStatus.percent}%)"
                             else if (installStatus.running) "${installStatus.percent}% (${installStatus.speedText.ifBlank { "Downloading" }})"
                             else "Needs download",
@@ -678,6 +685,7 @@ internal fun VoltHomeLayer(
                 VoltPlayBlock(
                     installStatus = installStatus,
                     accent = accent,
+                    playTime = playTime,
                     onLaunch = onLaunch,
                     onFiles = { onNavigate(LauncherNavTab.VERSIONS) },
                     modifier = Modifier.width(124.dp)
