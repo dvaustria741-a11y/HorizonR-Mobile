@@ -53,6 +53,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontStyle
@@ -174,6 +179,45 @@ private fun Modifier.voltSurface(shape: androidx.compose.ui.graphics.Shape, alph
         .clip(shape)
         .background(VoltGrayCard.copy(alpha = alpha))
         .border(1.dp, VoltGrayStroke, shape)
+
+/**
+ * Pixel-art button plate: the left and right caps keep their proportions (no squashed corners),
+ * the flat middle stretches to any width. Falls back to a dark gray card if the PNG is missing.
+ */
+@Composable
+private fun Modifier.voltPlate(name: String, fallbackShape: androidx.compose.ui.graphics.Shape): Modifier {
+    val context = LocalContext.current
+    val resId = remember(name) { context.resources.getIdentifier(name, "drawable", context.packageName) }
+    if (resId == 0) return this.voltSurface(fallbackShape)
+    val bmp = ImageBitmap.imageResource(id = resId)
+    return this.drawBehind {
+        val w = size.width.toInt()
+        val h = size.height.toInt()
+        val sw = bmp.width
+        val sh = bmp.height
+        val scale = h.toFloat() / sh
+        val capSrc = (sh * 0.7f).toInt().coerceAtMost(sw / 3)
+        val capDst = (capSrc * scale).toInt().coerceAtMost(w / 2)
+        drawImage(
+            image = bmp,
+            srcOffset = IntOffset(0, 0), srcSize = IntSize(capSrc, sh),
+            dstOffset = IntOffset(0, 0), dstSize = IntSize(capDst, h),
+            filterQuality = FilterQuality.Medium
+        )
+        drawImage(
+            image = bmp,
+            srcOffset = IntOffset(capSrc, 0), srcSize = IntSize(sw - 2 * capSrc, sh),
+            dstOffset = IntOffset(capDst, 0), dstSize = IntSize(w - 2 * capDst, h),
+            filterQuality = FilterQuality.Medium
+        )
+        drawImage(
+            image = bmp,
+            srcOffset = IntOffset(sw - capSrc, 0), srcSize = IntSize(capSrc, sh),
+            dstOffset = IntOffset(w - capDst, 0), dstSize = IntSize(capDst, h),
+            filterQuality = FilterQuality.Medium
+        )
+    }
+}
 
 @Composable
 private fun VoltCircleButton(name: String, fallback: ImageVector, onClick: () -> Unit) {
@@ -299,7 +343,7 @@ internal fun VoltBottomNav(
 private fun VoltBigButton(
     title: String,
     subtitle: String,
-    tint: Color,
+    plate: String,
     iconName: String,
     fallback: ImageVector,
     index: Int,
@@ -324,21 +368,8 @@ private fun VoltBigButton(
                 translationX = -(1f - progress) * 32.dp.toPx()
             }
             .animatedPressScale(onClick = onClick)
-            .voltSurface(RoundedCornerShape(16.dp), 0.94f)
-            .drawBehind {
-                drawRect(
-                    color = tint,
-                    topLeft = Offset(0f, size.height - 2.dp.toPx()),
-                    size = Size(size.width, 2.dp.toPx())
-                )
-                drawLine(
-                    color = Color.White.copy(alpha = 0.10f),
-                    start = Offset(16.dp.toPx(), 0.5f),
-                    end = Offset(size.width - 16.dp.toPx(), 0.5f),
-                    strokeWidth = 1.5f
-                )
-            }
-            .padding(horizontal = 8.dp),
+            .voltPlate(plate, RoundedCornerShape(16.dp))
+            .padding(start = 8.dp, end = 8.dp, top = 1.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -347,13 +378,13 @@ private fun VoltBigButton(
             modifier = Modifier
                 .size(30.dp)
                 .clip(RoundedCornerShape(9.dp))
-                .background(tint)
+                .background(Color.Black.copy(alpha = 0.28f))
         ) {
             VoltIcon(name = iconName, fallback = fallback, size = 18.dp)
         }
         Column(verticalArrangement = Arrangement.Center) {
             Text(text = title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
-            Text(text = subtitle, fontSize = 9.sp, color = VoltMutedText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = subtitle, fontSize = 9.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -418,40 +449,28 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
     )
     val green = Color(0xFF5FD068)
     val darkGreen = Color(0xFF2F9E44)
-    val content = if (installStatus.running) accent else Color(0xFF0B3A14)
+    val content = if (installStatus.running) accent else Color(0xFF1F3D0A)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        val plateModifier = if (installStatus.running) {
+            Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(VoltGrayRow)
+        } else {
+            Modifier.voltPlate("bg_ui_play", RoundedCornerShape(14.dp))
+        }
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(34.dp)
-                .drawBehind {
-                    if (!installStatus.running) {
-                        drawRoundRect(
-                            color = green.copy(alpha = glow * 0.35f),
-                            topLeft = Offset(-4.dp.toPx(), -2.dp.toPx()),
-                            size = Size(size.width + 8.dp.toPx(), size.height + 4.dp.toPx()),
-                            cornerRadius = CornerRadius(18.dp.toPx())
-                        )
-                    }
-                }
                 .animatedPressScale(onClick = onLaunch)
-                .clip(RoundedCornerShape(14.dp))
-                .background(
-                    if (installStatus.running) Brush.verticalGradient(listOf(VoltGrayRow, VoltGrayRow))
-                    else Brush.verticalGradient(listOf(green, darkGreen))
-                )
+                .then(plateModifier)
                 .drawBehind {
                     if (installStatus.running) {
                         drawRect(color = accent.copy(alpha = 0.30f), size = Size(size.width * progress, size.height))
                     }
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.35f),
-                        start = Offset(14.dp.toPx(), 1f),
-                        end = Offset(size.width - 14.dp.toPx(), 1f),
-                        strokeWidth = 2f
-                    )
                 }
+                .padding(bottom = 4.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 VoltIcon(
@@ -474,14 +493,15 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(14.dp)
+                .height(16.dp)
                 .animatedPressScale(onClick = onFiles)
-                .voltSurface(RoundedCornerShape(9.dp)),
+                .voltPlate("bg_ui_files", RoundedCornerShape(9.dp))
+                .padding(bottom = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            VoltIcon(name = "ic_ui_folder", fallback = Icons.Default.Folder, size = 9.dp)
-            Text(text = "GAME FILES", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = VoltMutedText, maxLines = 1)
+            VoltIcon(name = "ic_ui_folder", fallback = Icons.Default.Folder, size = 9.dp, tint = Color(0xFF4A3905))
+            Text(text = "GAME FILES", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A3905), maxLines = 1)
         }
     }
 }
@@ -534,9 +554,9 @@ internal fun VoltHomeLayer(
                 .width(190.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            VoltBigButton("MODS", "Mods & packs", Color(0xFFE0455F), "ic_ui_mods", Icons.Default.Extension, 0) { onNavigate(LauncherNavTab.FILES) }
-            VoltBigButton("MY SKIN", "Skin studio", Color(0xFF3F7DF0), "ic_ui_skins", Icons.Default.Checkroom, 1) { onNavigate(LauncherNavTab.ACCOUNTS) }
-            VoltBigButton("SHADERS", "Browse shader packs", Color(0xFF4CB85A), "ic_ui_shaders", Icons.Default.WbSunny, 2) { onNavigate(LauncherNavTab.STORE) }
+            VoltBigButton("MODS", "Mods & packs", "bg_ui_mods", "ic_ui_mods", Icons.Default.Extension, 0) { onNavigate(LauncherNavTab.FILES) }
+            VoltBigButton("MY SKIN", "Skin studio", "bg_ui_skin", "ic_ui_skins", Icons.Default.Checkroom, 1) { onNavigate(LauncherNavTab.ACCOUNTS) }
+            VoltBigButton("SHADERS", "Browse shader packs", "bg_ui_shaders", "ic_ui_shaders", Icons.Default.WbSunny, 2) { onNavigate(LauncherNavTab.STORE) }
         }
 
         Row(modifier = Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

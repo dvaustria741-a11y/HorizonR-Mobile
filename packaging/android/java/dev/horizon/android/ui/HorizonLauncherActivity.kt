@@ -251,9 +251,29 @@ class HorizonLauncherActivity : ComponentActivity() {
         private var hasCheckedUpdateThisSession = false
     }
 
+    /** Hides the status bar and the 3-button/gesture navigation bar; a swipe from the edge shows them briefly. */
+    private fun applyImmersiveLauncher() {
+        val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior =
+            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyImmersiveLauncher()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= 28) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        applyImmersiveLauncher()
         HorizonNativeBridge.ensureHomeDirectories(this)
         HorizonNativeBridge.syncAndRepairModsStorage(this, 0)
         HorizonNativeBridge.syncAndRepairShadersStorage(this, 0)
@@ -1525,7 +1545,10 @@ fun CleanLauncherScreen(
                 .fillMaxSize()
                 .background(LauncherRootBg)
                 .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.displayCutout))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .padding(
+                    horizontal = if (selectedTab == LauncherNavTab.HOME) 0.dp else 12.dp,
+                    vertical = if (selectedTab == LauncherNavTab.HOME) 0.dp else 6.dp
+                )
         ) {
             if (!isHibernated) {
                 HorizonAuroraBackground()
@@ -2451,9 +2474,8 @@ private fun CleanHomeViewport(
     )
 
     Surface(
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(0.dp),
         color = CardSlateBg.copy(alpha = 0.90f),
-        border = horizonGlassBorder(),
         modifier = Modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
