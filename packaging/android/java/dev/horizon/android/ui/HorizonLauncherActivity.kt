@@ -297,8 +297,9 @@ class HorizonLauncherActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 28) {
             window.attributes = window.attributes.apply {
-                layoutInDisplayCutoutMode =
-                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= 30)
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                else android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
         applyImmersiveLauncher()
@@ -1572,7 +1573,11 @@ fun CleanLauncherScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(LauncherRootBg)
-                .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.displayCutout))
+                // Home draws its wallpaper edge to edge (under the camera cutout); its foreground insets itself.
+                .then(
+                    if (selectedTab == LauncherNavTab.HOME) Modifier
+                    else Modifier.windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.displayCutout))
+                )
                 .padding(
                     horizontal = if (selectedTab == LauncherNavTab.HOME) 0.dp else 12.dp,
                     vertical = if (selectedTab == LauncherNavTab.HOME) 0.dp else 6.dp
@@ -2595,6 +2600,7 @@ private fun CleanHomeViewport(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.displayCutout))
                     .padding(top = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
