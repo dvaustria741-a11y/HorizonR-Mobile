@@ -306,7 +306,10 @@ impl Game<'_> {
             );
         }
         // Outside a run, a window whose grab is the system's holds it exactly while the game
-        // has it grabbed; only a run leaves the two apart.
+        // has it grabbed; only a run leaves the two apart. Android never holds a system grab
+        // (`capture_mode` stays None; the overlay's capture is `platform::capture_mouse`), so there
+        // this would drop and retake the grab every frame and swallow the first look of each frame.
+        #[cfg(not(target_os = "android"))]
         if !self.internal_grab() && self.captured != self.capture_mode.is_some() {
             let grab = self.captured;
             self.captured = self.capture_mode.is_some();
