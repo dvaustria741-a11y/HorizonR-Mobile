@@ -1521,7 +1521,8 @@ object HorizonNativeBridge {
                             isActive = obj.optBoolean("isActive", false),
                             skinPath = obj.optString("skinPath", ""),
                             slimSkinModel = obj.optBoolean("slimSkinModel", false),
-                            skinSourceLabel = obj.optString("skinSourceLabel", "Default (Classic Steve)")
+                            skinSourceLabel = obj.optString("skinSourceLabel", "Default (Classic Steve)"),
+                            capePath = obj.optString("capePath", "")
                         )
                     )
                 }
@@ -1565,6 +1566,7 @@ object HorizonNativeBridge {
                     put("skinPath", acc.skinPath)
                     put("slimSkinModel", acc.slimSkinModel)
                     put("skinSourceLabel", acc.skinSourceLabel)
+                    put("capePath", acc.capePath)
                 }
             )
         }
@@ -1577,6 +1579,7 @@ object HorizonNativeBridge {
                 syncActiveSkinToGameEngine(context, sFile, active.slimSkinModel, config.profile, false)
             }
         }
+        SkinTools.syncCape(home, active)
         syncNativeHorizonAccountAndCatalog(home, active, config)
     }
 

@@ -179,7 +179,8 @@ data class LauncherReleaseEntry(
 
 enum class AccountType(val badge: String) {
     OFFLINE("Offline"),
-    MICROSOFT("Microsoft")
+    MICROSOFT("Microsoft"),
+    ELYBY("Ely.by")
 }
 
 /**
@@ -290,7 +291,8 @@ data class LauncherAccount(
     val isActive: Boolean = false,
     val skinPath: String = "",
     val slimSkinModel: Boolean = false,
-    val skinSourceLabel: String = "Default (Classic Steve)"
+    val skinSourceLabel: String = "Default (Classic Steve)",
+    val capePath: String = ""
 )
 
 data class SkinDetectionResult(

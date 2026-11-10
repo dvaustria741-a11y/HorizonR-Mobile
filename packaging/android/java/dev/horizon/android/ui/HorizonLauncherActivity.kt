@@ -269,7 +269,8 @@ enum class SettingsSubCategory(val label: String, val icon: ImageVector) {
 }
 
 enum class AccountSubCategory(val label: String, val icon: ImageVector) {
-    SKIN_STUDIO("Skin Studio", Icons.Default.Checkroom),
+    WARDROBE("Wardrobe", Icons.Default.Checkroom),
+    SKIN_STUDIO("Skin Library", Icons.Default.Checkroom),
     PROFILES("Accounts", Icons.Default.People)
 }
 
@@ -2713,7 +2714,7 @@ private fun CleanAccountsAndSkinsViewport(
     onAccountsChange: (List<LauncherAccount>) -> Unit
 ) {
     val context = LocalContext.current
-    var selectedSubTab by remember { mutableStateOf(AccountSubCategory.SKIN_STUDIO) }
+    var selectedSubTab by remember { mutableStateOf(AccountSubCategory.WARDROBE) }
     var is3DPreview by remember { mutableStateOf(true) }
     var autoRotate3D by remember { mutableStateOf(true) }
     var walkAnim3D by remember { mutableStateOf(true) }
@@ -2811,6 +2812,17 @@ private fun CleanAccountsAndSkinsViewport(
             label = "AccountSubTabTransition"
         ) { subTab ->
             when (subTab) {
+                AccountSubCategory.WARDROBE -> VoltWardrobe(
+                    accounts = accounts,
+                    activeAccount = activeAccount,
+                    activeSkinBitmap = activeSkinBitmap,
+                    config = config,
+                    skinReloadCounter = skinReloadCounter,
+                    onPickSkinFile = onLaunchSkinPicker,
+                    onSkinUpdated = onSkinUpdated,
+                    onAccountsChange = onAccountsChange
+                )
+
                 AccountSubCategory.SKIN_STUDIO -> {
                     Row(
                         modifier = Modifier.fillMaxSize(),
@@ -3579,7 +3591,7 @@ private fun CleanAccountsAndSkinsViewport(
                                                 modifier = Modifier.animatedPressScale {
                                                     val updated = accounts.map { it.copy(isActive = it.id == acc.id) }
                                                     onAccountsChange(updated)
-                                                    selectedSubTab = AccountSubCategory.SKIN_STUDIO
+                                                    selectedSubTab = AccountSubCategory.WARDROBE
                                                 }
                                             ) {
                                                 Text(
