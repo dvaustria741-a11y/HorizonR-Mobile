@@ -3056,6 +3056,14 @@ impl Renderer {
                 );
             }
             (config, caps.present_modes, hdr_output)
+        } else if let Some(context) = &previous {
+            // Pipelines prepared in the worker must target the actual window
+            // format, not the generic offscreen format.
+            (
+                context.config.clone(),
+                context.present_modes.clone(),
+                context.hdr_output,
+            )
         } else {
             let format = wgpu::TextureFormat::Bgra8Unorm;
             let config = wgpu::SurfaceConfiguration {
