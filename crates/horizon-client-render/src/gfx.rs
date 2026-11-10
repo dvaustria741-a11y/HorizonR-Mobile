@@ -12500,7 +12500,9 @@ impl Renderer {
         {
             // Sanitize only the final swapchain, after HDR/shader packs/scaling.
             // Internal emissive markers and every RGB channel remain untouched.
-            let format = self.surface_config().format.remove_srgb_suffix();
+            // The view takes the swapchain texture's own format: it can differ from the configured
+            // one (Rgba8Unorm texture, Bgra8 config), and a view of another format is fatal.
+            let format = surface.texture.format().remove_srgb_suffix();
             let output = self
                 .opaque_output
                 .get_or_insert_with(|| opaque_output::OpaqueOutput::new(&self.device, format));
@@ -13344,7 +13346,7 @@ impl Renderer {
         }
         #[cfg(target_os = "android")]
         if self.config.alpha_mode != wgpu::CompositeAlphaMode::Opaque {
-            let format = self.surface_config().format.remove_srgb_suffix();
+            let format = surface_frame.texture.format().remove_srgb_suffix();
             let output = self
                 .opaque_output
                 .get_or_insert_with(|| opaque_output::OpaqueOutput::new(&self.device, format));
