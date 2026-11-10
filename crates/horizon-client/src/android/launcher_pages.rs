@@ -58,6 +58,10 @@ pub(super) enum Action {
     ZenkaiMod(&'static str),
     PerformanceHints,
     GpuProfile,
+    ToggleSuperPerf,
+    ToggleBatteryPerf,
+    ToggleMaxFpsMode,
+    ToggleFastChunkUpload,
 }
 
 pub(super) fn button(
@@ -840,11 +844,11 @@ impl Launcher {
             self.catalog.scroll = self
                 .catalog
                 .scroll
-                .clamp(0.0, (15.0 * row_height - (h - 130.0 - 195.0)).max(0.0));
+                .clamp(0.0, (19.0 * row_height - (h - 130.0 - 195.0)).max(0.0));
             self.list_view = Some([
                 195.0,
                 h - 130.0,
-                (15.0 * row_height - (h - 130.0 - 195.0)).max(0.0),
+                (19.0 * row_height - (h - 130.0 - 195.0)).max(0.0),
             ]);
             for (i, (title, value, action)) in [
                 ("Rendering", c.renderer.label().to_owned(), Action::Renderer),
@@ -905,6 +909,46 @@ impl Launcher {
                     Action::GpuProfile,
                 ),
                 (
+                    "Super Performance Mode",
+                    if c.super_perf_mode {
+                        "On / chunk culling, minimal particles, Vulkan batching"
+                    } else {
+                        "Off"
+                    }
+                    .into(),
+                    Action::ToggleSuperPerf,
+                ),
+                (
+                    "Battery Performance Mode",
+                    if c.battery_perf_mode {
+                        "On / 60 FPS with VSync"
+                    } else {
+                        "Off"
+                    }
+                    .into(),
+                    Action::ToggleBatteryPerf,
+                ),
+                (
+                    "Max FPS Mode (260 FPS)",
+                    if c.max_fps_mode {
+                        "On / VSync off"
+                    } else {
+                        "Off"
+                    }
+                    .into(),
+                    Action::ToggleMaxFpsMode,
+                ),
+                (
+                    "Fast chunk upload boost",
+                    if c.fast_chunk_upload {
+                        "On / 4 MiB per frame"
+                    } else {
+                        "Off"
+                    }
+                    .into(),
+                    Action::ToggleFastChunkUpload,
+                ),
+                (
                     "Performance recording",
                     if c.record_performance {
                         "On / up to 30 min"
@@ -960,7 +1004,13 @@ impl Launcher {
                 );
                 if matches!(
                     action,
-                    Action::PerformanceHints | Action::Immersive | Action::Cutout
+                    Action::PerformanceHints
+                        | Action::Immersive
+                        | Action::Cutout
+                        | Action::ToggleSuperPerf
+                        | Action::ToggleBatteryPerf
+                        | Action::ToggleMaxFpsMode
+                        | Action::ToggleFastChunkUpload
                 ) {
                     toggle(
                         &mut ui,
@@ -975,6 +1025,10 @@ impl Launcher {
                             Action::PerformanceHints => c.device.performance_hints,
                             Action::Immersive => c.screen.immersive,
                             Action::Cutout => c.screen.avoid_cutout,
+                            Action::ToggleSuperPerf => c.super_perf_mode,
+                            Action::ToggleBatteryPerf => c.battery_perf_mode,
+                            Action::ToggleMaxFpsMode => c.max_fps_mode,
+                            Action::ToggleFastChunkUpload => c.fast_chunk_upload,
                             _ => c.device.gpu_profile,
                         },
                         action,
@@ -1320,6 +1374,61 @@ impl Launcher {
                 self.catalog.status="ADPF gives Android CPU frame-work hints on supported devices. It does not cap FPS or guarantee a speedup.".into();
                 self.catalog.config.save(&self.home)?;
                 crate::device_runtime::configure(self.catalog.config.device);
+            }
+            Some(Action::ToggleSuperPerf) => {
+                let c = &mut self.catalog.config;
+                c.super_perf_mode ^= true;
+                if c.super_perf_mode {
+                    c.battery_perf_mode = false;
+                    c.renderer = crate::catalog::RendererMode::Vulkan;
+                }
+                c.save(&self.home)?;
+                self.catalog.status = if self.catalog.config.super_perf_mode {
+                    "Super Performance Mode: lower distance, minimal particles, Vulkan batching. Applies on the next game launch."
+                } else {
+                    "Super Performance Mode off."
+                }
+                .into();
+            }
+            Some(Action::ToggleBatteryPerf) => {
+                let c = &mut self.catalog.config;
+                c.battery_perf_mode ^= true;
+                if c.battery_perf_mode {
+                    c.super_perf_mode = false;
+                    c.max_fps_mode = false;
+                }
+                c.save(&self.home)?;
+                self.catalog.status = if self.catalog.config.battery_perf_mode {
+                    "Battery Performance Mode: 60 FPS with VSync. Applies on the next game launch."
+                } else {
+                    "Battery Performance Mode off."
+                }
+                .into();
+            }
+            Some(Action::ToggleMaxFpsMode) => {
+                let c = &mut self.catalog.config;
+                c.max_fps_mode ^= true;
+                if c.max_fps_mode {
+                    c.battery_perf_mode = false;
+                }
+                c.save(&self.home)?;
+                self.catalog.status = if self.catalog.config.max_fps_mode {
+                    "Max FPS Mode: 260 FPS with VSync off. Applies on the next game launch."
+                } else {
+                    "Max FPS Mode off."
+                }
+                .into();
+            }
+            Some(Action::ToggleFastChunkUpload) => {
+                let c = &mut self.catalog.config;
+                c.fast_chunk_upload ^= true;
+                c.save(&self.home)?;
+                self.catalog.status = if self.catalog.config.fast_chunk_upload {
+                    "Fast chunk upload boost on. Applies on the next game launch."
+                } else {
+                    "Fast chunk upload boost off."
+                }
+                .into();
             }
             Some(Action::GpuProfile) => {
                 self.catalog.config.device.gpu_profile ^= true;

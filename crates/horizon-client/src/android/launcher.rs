@@ -382,6 +382,7 @@ impl Launcher {
             )?;
             crate::platform::hide();
             self.catalog.config.save(&self.home)?;
+            self.catalog.config.apply_experimental_to_game(&self.home);
             // Migrate the earlier launcher preset once; subsequent edits belong to Key Binds.
             let keypad_path = self
                 .catalog

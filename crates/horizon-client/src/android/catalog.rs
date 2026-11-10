@@ -54,6 +54,19 @@ pub struct Config {
     pub device: crate::device_preferences::Settings,
     pub shader_source: crate::shader_catalog::Origin,
     pub mod_source: crate::shader_catalog::Origin,
+    /// Experimental Stuff: aggressive culling, minimal particles and Vulkan batching.
+    pub super_perf_mode: bool,
+    /// Experimental Stuff: 60 FPS cap with VSync and a lower distance.
+    pub battery_perf_mode: bool,
+    /// Experimental Stuff: VSync off and a 260 FPS ceiling.
+    pub max_fps_mode: bool,
+    /// Experimental Stuff: raises the per-frame chunk mesh upload budget to 4 MiB.
+    #[serde(default = "default_true")]
+    pub fast_chunk_upload: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 pub use horizon_client::android_gamepad::InputMode as InputHost;
@@ -139,6 +152,39 @@ impl Config {
     pub fn game_home(&self, home: &Path) -> PathBuf {
         // Legacy modpack selections are ignored; their files remain untouched.
         self.profile_home(home)
+    }
+    /// Writes the Experimental Stuff profiles into the game's options for the next launch.
+    pub fn apply_experimental_to_game(&self, home: &Path) {
+        let game = self.game_home(home);
+        let _ = std::fs::create_dir_all(&game);
+        let options_path = game.join("options.txt");
+        let mut settings = horizon_client::settings::Settings::load(&options_path);
+        if self.super_perf_mode {
+            settings.render_distance = settings.render_distance.min(8);
+            settings.simulation_distance = settings.simulation_distance.min(6);
+            settings.menu_blur = 0;
+            settings.clouds = "false".into();
+            settings.particles = 2;
+            settings.entity_shadows = false;
+            settings.cutout_leaves = false;
+            settings.smooth_lighting = false;
+            settings.graphics_preset = "fast".into();
+            settings.horizon.upload_budget_kib = 1536;
+        } else if self.battery_perf_mode {
+            settings.render_distance = settings.render_distance.min(8);
+            settings.simulation_distance = settings.simulation_distance.min(5);
+            settings.max_fps = 60;
+            settings.vsync = true;
+            settings.menu_blur = 0;
+        } else if self.max_fps_mode {
+            settings.max_fps = 260;
+            settings.vsync = false;
+        }
+        if self.fast_chunk_upload {
+            settings.horizon.upload_budget_kib = settings.horizon.upload_budget_kib.max(4096);
+        }
+        settings.horizon.cave_culling = true;
+        settings.save(&options_path);
     }
 }
 #[derive(Clone, Copy, PartialEq)]
