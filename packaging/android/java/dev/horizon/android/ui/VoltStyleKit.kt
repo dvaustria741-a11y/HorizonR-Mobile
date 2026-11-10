@@ -67,10 +67,13 @@ import kotlinx.coroutines.delay
 
 /** Volt-style neutral surfaces: dark gray cards, a hairline stroke and a faint top highlight. */
 internal val VoltGrayRoot = Color(0xFF0D0F16)
-internal val VoltGrayCard = Color(0xFF171A23)
-internal val VoltGrayRow = Color(0xFF1F232E)
-internal val VoltGrayStroke = Color(0xFF2B303C)
-internal val VoltMutedText = Color(0xFF9AA1AF)
+internal val VoltGrayCard = Color(0xFF1A1D25)
+internal val VoltGrayRow = Color(0xFF272C36)
+internal val VoltGrayStroke = Color(0x24FFFFFF)
+internal val VoltGlass = Color(0xCA16191F)
+internal val VoltMutedText = Color(0xFF8F969B)
+internal val VoltIconMuted = Color(0xFFC6CCC9)
+internal val VoltTextMain = Color(0xFFF2F5F3)
 
 /**
  * White, transparent-background launcher icon.
@@ -177,13 +180,19 @@ private data class VoltNavEntry(val tab: LauncherNavTab, val label: String, val 
 private fun Modifier.voltSurface(shape: androidx.compose.ui.graphics.Shape, alpha: Float = 0.92f): Modifier =
     this
         .clip(shape)
-        .background(VoltGrayCard.copy(alpha = alpha))
+        .background(if (alpha >= 0.93f) VoltGrayCard else VoltGlass)
         .border(1.dp, VoltGrayStroke, shape)
 
 /**
  * Pixel-art button plate: the left and right caps keep their proportions (no squashed corners),
  * the flat middle stretches to any width. Falls back to a dark gray card if the PNG is missing.
  */
+@Composable
+private fun voltHasDrawable(name: String): Boolean {
+    val context = LocalContext.current
+    return remember(name) { context.resources.getIdentifier(name, "drawable", context.packageName) != 0 }
+}
+
 @Composable
 private fun Modifier.voltPlate(name: String, fallbackShape: androidx.compose.ui.graphics.Shape): Modifier {
     val context = LocalContext.current
@@ -369,26 +378,34 @@ private fun VoltBigButton(
             }
             .animatedPressScale(onClick = onClick)
             .voltPlate(plate, RoundedCornerShape(16.dp))
-            .padding(start = 8.dp, end = 8.dp, top = 1.dp, bottom = 5.dp),
+            .padding(start = 12.dp, end = 8.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .background(Color.Black.copy(alpha = 0.28f))
-        ) {
-            VoltIcon(name = iconName, fallback = fallback, size = 18.dp)
-        }
+        // Volt draws the page icon straight on the slab (no chip), white at ~92% opacity.
+        VoltIcon(name = iconName, fallback = fallback, size = 20.dp, tint = Color.White.copy(alpha = 0.92f))
         Column(verticalArrangement = Arrangement.Center) {
-            Text(text = title, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
-            Text(text = subtitle, fontSize = 9.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                text = title,
+                fontSize = 12.sp,
+                lineHeight = 14.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                maxLines = 1
+            )
+            Text(
+                text = subtitle,
+                fontSize = 8.5.sp,
+                lineHeight = 10.sp,
+                color = Color.White.copy(alpha = 0.75f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
 
+/** Volt's right-rail chip (Worlds / Servers / Replays...): glass fill, 1px glass border, muted icon, main-text label. */
 @Composable
 private fun VoltSidePill(label: String, iconName: String, fallback: ImageVector, index: Int, onClick: () -> Unit) {
     var shown by remember { mutableStateOf(false) }
@@ -403,20 +420,27 @@ private fun VoltSidePill(label: String, iconName: String, fallback: ImageVector,
     )
     Row(
         modifier = Modifier
-            .width(100.dp)
-            .height(28.dp)
+            .width(80.dp)
+            .height(22.dp)
             .graphicsLayer {
                 alpha = progress
                 translationX = (1f - progress) * 28.dp.toPx()
             }
             .animatedPressScale(onClick = onClick)
-            .voltSurface(RoundedCornerShape(50))
-            .padding(horizontal = 10.dp),
+            .voltSurface(RoundedCornerShape(50), 0.8f)
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        VoltIcon(name = iconName, fallback = fallback, size = 15.dp)
-        Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.White, maxLines = 1)
+        VoltIcon(name = iconName, fallback = fallback, size = 11.dp, tint = VoltIconMuted)
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            lineHeight = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = VoltTextMain,
+            maxLines = 1
+        )
     }
 }
 
@@ -427,9 +451,9 @@ private fun VoltSquareButton(iconName: String, fallback: ImageVector, onClick: (
         modifier = Modifier
             .size(32.dp)
             .animatedPressScale(onClick = onClick)
-            .voltSurface(RoundedCornerShape(10.dp))
+            .voltSurface(RoundedCornerShape(10.dp), 0.8f)
     ) {
-        VoltIcon(name = iconName, fallback = fallback, size = 17.dp)
+        VoltIcon(name = iconName, fallback = fallback, size = 17.dp, tint = VoltTextMain)
     }
 }
 
@@ -485,6 +509,7 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
                     else if (installStatus.ready) "PLAY"
                     else "INSTALL",
                     fontSize = 14.sp,
+                    lineHeight = 16.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = content
                 )
@@ -493,15 +518,15 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, onLa
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(16.dp)
+                .height(18.dp)
                 .animatedPressScale(onClick = onFiles)
                 .voltPlate("bg_ui_files", RoundedCornerShape(9.dp))
-                .padding(bottom = 2.dp),
+                .padding(bottom = 3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             VoltIcon(name = "ic_ui_folder", fallback = Icons.Default.Folder, size = 9.dp, tint = Color(0xFF4A3905))
-            Text(text = "GAME FILES", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A3905), maxLines = 1)
+            Text(text = "GAME FILES", fontSize = 8.sp, lineHeight = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A3905), maxLines = 1)
         }
     }
 }
@@ -551,12 +576,12 @@ internal fun VoltHomeLayer(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(top = 52.dp)
-                .width(190.dp),
+                .width(176.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             VoltBigButton("MODS", "Mods & packs", "bg_ui_mods", "ic_ui_mods", Icons.Default.Extension, 0) { onNavigate(LauncherNavTab.FILES) }
-            VoltBigButton("MY SKIN", "Skin studio", "bg_ui_skin", "ic_ui_skins", Icons.Default.Checkroom, 1) { onNavigate(LauncherNavTab.ACCOUNTS) }
-            VoltBigButton("SHADERS", "Browse shader packs", "bg_ui_shaders", "ic_ui_shaders", Icons.Default.WbSunny, 2) { onNavigate(LauncherNavTab.STORE) }
+            VoltBigButton("MY SKIN", activeAccount.username, "bg_ui_skin", "ic_ui_skins", Icons.Default.Checkroom, 1) { onNavigate(LauncherNavTab.ACCOUNTS) }
+            VoltBigButton("SHADERS", "Shader packs", "bg_ui_shaders", "ic_ui_shaders", Icons.Default.WbSunny, 2) { onNavigate(LauncherNavTab.STORE) }
         }
 
         Row(modifier = Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -578,17 +603,18 @@ internal fun VoltHomeLayer(
             VoltSidePill("Worlds", "ic_ui_worlds", Icons.Default.Public, 2) { onNavigate(LauncherNavTab.FILES) }
         }
 
-        Row(
+        val hasVersionPlate = voltHasDrawable("bg_ui_version")
+        val versionMuted = if (hasVersionPlate) Color.White.copy(alpha = 0.78f) else VoltMutedText
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
+                    .align(Alignment.BottomStart)
                     .animatedPressScale { onNavigate(LauncherNavTab.ACCOUNTS) }
-                    .voltSurface(RoundedCornerShape(30.dp))
+                    .voltSurface(RoundedCornerShape(30.dp), 0.8f)
                     .padding(start = 5.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -597,8 +623,9 @@ internal fun VoltHomeLayer(
                 Text(
                     text = "${activeAccount.username} \u2022 ${activeAccount.accountType.badge}",
                     fontSize = 10.sp,
+                    lineHeight = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
+                    color = VoltTextMain,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 130.dp)
@@ -606,39 +633,57 @@ internal fun VoltHomeLayer(
             }
 
             Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(50.dp)
-                    .animatedPressScale { onNavigate(LauncherNavTab.VERSIONS) }
-                    .voltSurface(RoundedCornerShape(16.dp), 0.94f)
-                    .padding(horizontal = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                MinecraftGrassCubeIcon(size = 28.dp)
-                Column(verticalArrangement = Arrangement.Center) {
-                    Text(text = "SELECTED VERSION", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = VoltMutedText, maxLines = 1)
-                    Text(text = "Minecraft 26.3", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
-                    Text(
-                        text = if (installStatus.ready) "Ready"
-                        else if (installStatus.paused) "Paused (${installStatus.percent}%)"
-                        else if (installStatus.running) "${installStatus.percent}% (${installStatus.speedText.ifBlank { "Downloading" }})"
-                        else "Needs download",
-                        fontSize = 9.sp,
-                        color = if (installStatus.ready) Color(0xFF81C784) else if (installStatus.paused) Color(0xFFFFB74D) else accent,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                Row(
+                    modifier = Modifier
+                        .width(230.dp)
+                        .height(50.dp)
+                        .animatedPressScale { onNavigate(LauncherNavTab.VERSIONS) }
+                        .voltPlate("bg_ui_version", RoundedCornerShape(16.dp))
+                        .padding(start = 10.dp, end = 10.dp, bottom = if (hasVersionPlate) 4.dp else 0.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF1B2D66).copy(alpha = 0.0f))
+                    ) {
+                        MinecraftGrassCubeIcon(size = 28.dp)
+                    }
+                    Column(verticalArrangement = Arrangement.Center) {
+                        Text(text = "SELECTED VERSION", fontSize = 8.sp, lineHeight = 9.sp, fontWeight = FontWeight.Bold, color = versionMuted, maxLines = 1)
+                        Text(text = "Minecraft 26.3", fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+                        Text(
+                            text = if (installStatus.ready) "Ready"
+                            else if (installStatus.paused) "Paused (${installStatus.percent}%)"
+                            else if (installStatus.running) "${installStatus.percent}% (${installStatus.speedText.ifBlank { "Downloading" }})"
+                            else "Needs download",
+                            fontSize = 9.sp,
+                            lineHeight = 10.sp,
+                            color = if (hasVersionPlate) Color.White.copy(alpha = 0.9f)
+                            else if (installStatus.ready) Color(0xFF81C784)
+                            else if (installStatus.paused) Color(0xFFFFB74D)
+                            else accent,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
-            }
 
-            VoltPlayBlock(
-                installStatus = installStatus,
-                accent = accent,
-                onLaunch = onLaunch,
-                onFiles = { onNavigate(LauncherNavTab.VERSIONS) },
-                modifier = Modifier.width(124.dp)
-            )
+                VoltPlayBlock(
+                    installStatus = installStatus,
+                    accent = accent,
+                    onLaunch = onLaunch,
+                    onFiles = { onNavigate(LauncherNavTab.VERSIONS) },
+                    modifier = Modifier.width(124.dp)
+                )
+            }
         }
     }
 }
