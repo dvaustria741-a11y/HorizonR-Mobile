@@ -646,33 +646,33 @@ internal fun VoltHomeLayer(
             ) {
                 Row(
                     modifier = Modifier
-                        .width(200.dp)
-                        .height(42.dp)
+                        .width(204.dp)
+                        .height(58.dp)
                         .animatedPressScale { onNavigate(LauncherNavTab.VERSIONS) }
                         .voltPlate("bg_ui_version", RoundedCornerShape(16.dp))
-                        .padding(start = 9.dp, end = 9.dp, bottom = if (hasVersionPlate) 3.dp else 0.dp),
+                        .padding(start = 12.dp, end = 10.dp, bottom = if (hasVersionPlate) 4.dp else 0.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(26.dp)
-                            .clip(RoundedCornerShape(7.dp))
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFF12141C).copy(alpha = 0.85f))
                     ) {
-                        MinecraftGrassCubeIcon(size = 20.dp)
+                        MinecraftGrassCubeIcon(size = 25.dp)
                     }
                     Column(verticalArrangement = Arrangement.Center) {
-                        Text(text = "SELECTED VERSION", fontSize = 7.sp, lineHeight = 8.sp, fontWeight = FontWeight.Bold, color = versionMuted, maxLines = 1)
-                        Text(text = "Minecraft 26.3", fontSize = 11.sp, lineHeight = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+                        Text(text = "SELECTED VERSION", fontSize = 8.sp, lineHeight = 9.sp, fontWeight = FontWeight.Bold, color = versionMuted, maxLines = 1)
+                        Text(text = "Minecraft 26.3", fontSize = 13.sp, lineHeight = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
                         Text(
                             text = if (installStatus.ready) (if (playTime.isNotEmpty()) "Ready \u2022 $playTime played" else "Ready")
                             else if (installStatus.paused) "Paused (${installStatus.percent}%)"
                             else if (installStatus.running) "${installStatus.percent}% (${installStatus.speedText.ifBlank { "Downloading" }})"
                             else "Needs download",
-                            fontSize = 8.sp,
-                            lineHeight = 9.sp,
+                            fontSize = 9.sp,
+                            lineHeight = 10.sp,
                             color = if (hasVersionPlate) Color.White.copy(alpha = 0.9f)
                             else if (installStatus.ready) Color(0xFF81C784)
                             else if (installStatus.paused) Color(0xFFFFB74D)

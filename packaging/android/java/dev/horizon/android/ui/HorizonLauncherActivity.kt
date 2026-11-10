@@ -3716,7 +3716,8 @@ private fun CleanServersViewport(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF283036),
+                        color = SubRailCapsuleActive,
+                        border = BorderStroke(1.dp, VoltGrayStroke),
                         modifier = Modifier.clickable { refreshTick++ }
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = SkyBlueAccent, modifier = Modifier.padding(8.dp).size(18.dp))
@@ -3731,8 +3732,8 @@ private fun CleanServersViewport(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                            Text("Add Server", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Icon(Icons.Default.Add, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(16.dp))
+                            Text("Add Server", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SkyBlueDarkText)
                         }
                     }
                 }
@@ -3762,11 +3763,12 @@ private fun CleanServersViewport(
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = CardRowBg,
+                            border = BorderStroke(1.dp, if (online) SkyBlueAccent.copy(alpha = 0.35f) else VoltGrayStroke),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier.padding(10.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 ServerIcon(iconBytes, entry.name.ifBlank { entry.address }, online)
@@ -3807,6 +3809,7 @@ private fun CleanServersViewport(
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
                                     color = SkyBlueAccent,
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
                                     modifier = Modifier.clickable { onQuickPlayServer(entry.address) }
                                 ) {
                                     Row(
@@ -3814,14 +3817,15 @@ private fun CleanServersViewport(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                        Text("Play", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(16.dp))
+                                        Text("Play", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SkyBlueDarkText)
                                     }
                                 }
                                 Box {
                                     Surface(
                                         shape = RoundedCornerShape(10.dp),
-                                        color = Color(0xFF283036),
+                                        color = SubRailCapsuleActive,
+                                        border = BorderStroke(1.dp, VoltGrayStroke),
                                         modifier = Modifier.clickable { showMenu = true }
                                     ) {
                                         Icon(Icons.Default.MoreHoriz, contentDescription = "More options", tint = Color(0xFFD5DEE5), modifier = Modifier.padding(8.dp).size(18.dp))
@@ -3862,7 +3866,8 @@ private fun ServerIcon(bytes: ByteArray?, label: String, online: Boolean) {
         modifier = Modifier
             .size(52.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF283036)),
+            .background(Color(0xFF14161D))
+            .border(1.5.dp, if (online) SkyBlueAccent.copy(alpha = 0.7f) else VoltGrayStroke, RoundedCornerShape(10.dp)),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
