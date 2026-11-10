@@ -116,6 +116,41 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
+private val wallpaperCache = android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(4)
+
+/** Decodes a wallpaper at roughly screen size (never the full file) and keeps the last few in memory. */
+private fun loadWallpaper(context: android.content.Context, idx: Int, custom: List<File>): androidx.compose.ui.graphics.ImageBitmap? {
+    val builtIn = idx % DASHBOARD_WALLPAPERS.size
+    val customIdx = idx - DASHBOARD_WALLPAPERS.size
+    val file = if (idx >= DASHBOARD_WALLPAPERS.size && customIdx in custom.indices) custom[customIdx] else null
+    val key = file?.let { "f:${it.absolutePath}:${it.lastModified()}" } ?: "r:$builtIn"
+    wallpaperCache.get(key)?.let { return it }
+    val target = context.resources.displayMetrics.widthPixels.coerceAtLeast(720)
+    fun sample(w: Int): Int {
+        var n = 1
+        while (w / (n * 2) >= target) n *= 2
+        return n
+    }
+    val bitmap = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        if (file != null) BitmapFactory.decodeFile(file.absolutePath, bounds)
+        else BitmapFactory.decodeResource(context.resources, DASHBOARD_WALLPAPERS[builtIn], bounds)
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample(bounds.outWidth) }
+        if (file != null) BitmapFactory.decodeFile(file.absolutePath, opts)
+        else BitmapFactory.decodeResource(context.resources, DASHBOARD_WALLPAPERS[builtIn], opts)
+    }.getOrNull()?.asImageBitmap() ?: return null
+    wallpaperCache.put(key, bitmap)
+    return bitmap
+}
+
+@Composable
+private fun rememberWallpaper(context: android.content.Context, idx: Int, custom: List<File>): androidx.compose.ui.graphics.ImageBitmap? {
+    val state = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, idx, custom) {
+        value = withContext(Dispatchers.IO) { loadWallpaper(context, idx, custom) }
+    }
+    return state.value
+}
+
 private val DASHBOARD_WALLPAPERS = listOf(
     R.drawable.mc_wall_01,
     R.drawable.mc_wall_02,
@@ -2444,6 +2479,14 @@ private fun CleanHomeViewport(
         }
     }
 
+    // Decode the next wallpaper off the main thread before it fades in, so the carousel never hitches.
+    LaunchedEffect(wallpaperIndex, totalCount, customWallpapers) {
+        if (!isHibernated && !isVideoMode && totalCount > 1) {
+            val next = (wallpaperIndex + 1) % totalCount
+            withContext(Dispatchers.IO) { loadWallpaper(context, next, customWallpapers) }
+        }
+    }
+
     LaunchedEffect(totalCount, isHibernated, isVideoMode) {
         while (!isHibernated && !isVideoMode) {
             delay(5000L)
@@ -2510,34 +2553,16 @@ private fun CleanHomeViewport(
                         modifier = Modifier.fillMaxSize(),
                         label = "MinecraftWallpaperCarousel"
                     ) { idx ->
-                        if (idx >= DASHBOARD_WALLPAPERS.size && (idx - DASHBOARD_WALLPAPERS.size) < customWallpapers.size) {
-                            val customFile = customWallpapers[idx - DASHBOARD_WALLPAPERS.size]
-                            val bmp = remember(customFile.absolutePath) {
-                                runCatching { BitmapFactory.decodeFile(customFile.absolutePath)?.asImageBitmap() }.getOrNull()
-                            }
-                            if (bmp != null) {
-                                Image(
-                                    bitmap = bmp,
-                                    contentDescription = "Custom Minecraft Wallpaper",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Image(
-                                    painter = painterResource(id = DASHBOARD_WALLPAPERS[0]),
-                                    contentDescription = "Minecraft Wallpaper",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                        } else {
-                            val resId = DASHBOARD_WALLPAPERS[idx % DASHBOARD_WALLPAPERS.size]
+                        val wall = rememberWallpaper(context, idx, customWallpapers)
+                        if (wall != null) {
                             Image(
-                                painter = painterResource(id = resId),
+                                bitmap = wall,
                                 contentDescription = "Minecraft Wallpaper",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize().background(VoltGrayRoot))
                         }
                     }
                 }

@@ -459,13 +459,6 @@ private fun VoltSquareButton(iconName: String, fallback: ImageVector, onClick: (
 
 @Composable
 private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, playTime: String, onLaunch: () -> Unit, onFiles: () -> Unit, modifier: Modifier = Modifier) {
-    val pulse = rememberInfiniteTransition(label = "VoltPlayPulse")
-    val glow by pulse.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.55f,
-        animationSpec = infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "VoltPlayGlow"
-    )
     val progress by animateFloatAsState(
         targetValue = (installStatus.percent / 100f).coerceIn(0f, 1f),
         animationSpec = tween(420, easing = FastOutSlowInEasing),
