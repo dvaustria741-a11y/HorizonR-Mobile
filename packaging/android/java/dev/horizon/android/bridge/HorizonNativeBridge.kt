@@ -1610,7 +1610,10 @@ object HorizonNativeBridge {
                     orientation = orientation,
                     screenAspect = screenAspect,
                     screenImmersive = obj.optBoolean("immersive", true),
-                    screenAvoidCutout = obj.optBoolean("avoid_cutout", true),
+                    // Notch avoidance is off by default; configs saved before this default
+                    // change carry the old "on" value, so they are reset once.
+                    screenAvoidCutout = obj.optBoolean("cutout_default_off", false) &&
+                        obj.optBoolean("avoid_cutout", false),
                     displayRefreshHz = obj.optInt("display_hz", 0).coerceIn(0, 240),
                     performanceHintsAdpf = obj.optBoolean("performance_hints", true),
                     gpuStageProfiling = obj.optBoolean("gpu_profile", false),
@@ -1724,6 +1727,7 @@ object HorizonNativeBridge {
             put("aspect", config.screenAspect.serdeKey)
             put("immersive", config.screenImmersive)
             put("avoid_cutout", config.screenAvoidCutout)
+            put("cutout_default_off", true)
             put("display_hz", config.displayRefreshHz)
             put("performance_hints", config.performanceHintsAdpf)
             put("gpu_profile", config.gpuStageProfiling)
@@ -1798,6 +1802,7 @@ object HorizonNativeBridge {
             put("orientation", config.orientation.serdeKey)
             put("immersive", config.screenImmersive)
             put("avoid_cutout", config.screenAvoidCutout)
+            put("cutout_default_off", true)
             put("aspect", config.screenAspect.serdeKey)
             put("input_host", config.inputHost.serdeKey)
             put("keypad_controls", config.keypadControls)
