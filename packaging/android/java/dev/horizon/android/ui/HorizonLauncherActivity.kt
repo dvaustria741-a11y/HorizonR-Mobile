@@ -6586,7 +6586,9 @@ private fun CleanFilesViewport(
     val home = remember(profileSlot) {
         HorizonNativeBridge.getProfileHome(HorizonNativeBridge.ensureHomeDirectories(context), profileSlot)
     }
-    var currentFolder by remember { mutableStateOf("mods") }
+    // Home -> Worlds opens this page on the Saves list instead of Mods.
+    var currentFolder by remember { mutableStateOf(FilesNav.pendingFolder ?: "mods") }
+    remember { FilesNav.pendingFolder = null }
     var searchQuery by remember { mutableStateOf("") }
     var filterEnabledOnly by remember { mutableStateOf(false) }
     var sortMode by remember { mutableStateOf(FilesSortMode.BY_NAME) }

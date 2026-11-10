@@ -535,6 +535,11 @@ private fun VoltPlayBlock(installStatus: AssetInstallStatus, accent: Color, play
     }
 }
 
+/** One-shot hint for the Files page: which folder tab to open first (null = Mods). */
+internal object FilesNav {
+    @JvmField var pendingFolder: String? = null
+}
+
 /**
  * Volt-style Home layer: brand top-left, stacked cards under it, square icon buttons top-right,
  * a pill list below them, and the player / version / PLAY row along the bottom.
@@ -604,7 +609,10 @@ internal fun VoltHomeLayer(
         ) {
             VoltSidePill("Servers", "ic_ui_servers", Icons.Default.Dns, 0) { onNavigate(LauncherNavTab.SERVERS) }
             VoltSidePill("Store", "ic_ui_store", Icons.Default.Storefront, 1) { onNavigate(LauncherNavTab.STORE) }
-            VoltSidePill("Worlds", "ic_ui_worlds", Icons.Default.Public, 2) { onNavigate(LauncherNavTab.FILES) }
+            VoltSidePill("Worlds", "ic_ui_worlds", Icons.Default.Public, 2) {
+                FilesNav.pendingFolder = "saves"
+                onNavigate(LauncherNavTab.FILES)
+            }
             val boostContext = androidx.compose.ui.platform.LocalContext.current
             var boostOn by remember { mutableStateOf(Boost.isOn(boostContext)) }
             VoltSidePill(if (boostOn) "Boost ON" else "Boost", "ic_ui_none", Icons.Default.Bolt, 3, active = boostOn) {
