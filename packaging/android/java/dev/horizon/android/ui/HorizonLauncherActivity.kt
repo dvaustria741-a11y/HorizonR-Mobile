@@ -68,6 +68,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -1625,6 +1628,10 @@ fun CleanLauncherScreen(
                         },
                         label = "MainTabMorphTransition"
                     ) { tab ->
+                        // Every page but Home is drawn at 80% size (Volt-like compact cards, text and tabs).
+                        val baseDensity = LocalDensity.current
+                        val compactDensity = remember(baseDensity) { Density(baseDensity.density * 0.8f, baseDensity.fontScale) }
+                        CompositionLocalProvider(LocalDensity provides if (tab == LauncherNavTab.HOME) baseDensity else compactDensity) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             when (tab) {
                                 LauncherNavTab.HOME -> CleanHomeViewport(
@@ -1711,6 +1718,7 @@ fun CleanLauncherScreen(
                                     onOpenLogs = { selectedTab = LauncherNavTab.LOGS }
                                 )
                             }
+                        }
                         }
                     }
                 }
