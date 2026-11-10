@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Checkroom
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Download
@@ -407,7 +408,7 @@ private fun VoltBigButton(
 
 /** Volt's right-rail chip (Worlds / Servers / Replays...): glass fill, 1px glass border, muted icon, main-text label. */
 @Composable
-private fun VoltSidePill(label: String, iconName: String, fallback: ImageVector, index: Int, onClick: () -> Unit) {
+private fun VoltSidePill(label: String, iconName: String, fallback: ImageVector, index: Int, active: Boolean = false, onClick: () -> Unit) {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(200L + index * 70L)
@@ -432,7 +433,7 @@ private fun VoltSidePill(label: String, iconName: String, fallback: ImageVector,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        VoltIcon(name = iconName, fallback = fallback, size = 13.dp, tint = VoltIconMuted)
+        VoltIcon(name = iconName, fallback = fallback, size = 13.dp, tint = if (active) Color(0xFF79E59C) else VoltIconMuted)
         Text(
             text = label,
             fontSize = 10.sp,
@@ -599,6 +600,13 @@ internal fun VoltHomeLayer(
             VoltSidePill("Servers", "ic_ui_servers", Icons.Default.Dns, 0) { onNavigate(LauncherNavTab.SERVERS) }
             VoltSidePill("Store", "ic_ui_store", Icons.Default.Storefront, 1) { onNavigate(LauncherNavTab.STORE) }
             VoltSidePill("Worlds", "ic_ui_worlds", Icons.Default.Public, 2) { onNavigate(LauncherNavTab.FILES) }
+            val boostContext = androidx.compose.ui.platform.LocalContext.current
+            var boostOn by remember { mutableStateOf(Boost.isOn(boostContext)) }
+            VoltSidePill(if (boostOn) "Boost ON" else "Boost", "ic_ui_none", Icons.Default.Bolt, 3, active = boostOn) {
+                boostOn = !boostOn
+                Boost.set(boostContext, boostOn)
+                android.widget.Toast.makeText(boostContext, if (boostOn) "Boost on: memory freed, game runs at higher priority" else "Boost off", android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
 
         val playTime = PlayTime.label(androidx.compose.ui.platform.LocalContext.current)

@@ -104,8 +104,8 @@ fun OverlayMenu(
                     alpha = progress
                 }
                 .clip(shape)
-                .background(Brush.verticalGradient(listOf(Color(0xFF283239), HzCard, HzRoot)))
-                .border(1.dp, Brush.verticalGradient(listOf(HzCapsule, Color.Transparent)), shape)
+                .background(Brush.verticalGradient(listOf(Color(0xFF222632), HzCard, HzRoot)))
+                .border(1.dp, Brush.verticalGradient(listOf(HzStroke, Color.Transparent)), shape)
                 .clickable(interactionSource = panel, indication = null) {}
                 .verticalScroll(rememberScrollState())
                 .padding(start = 18.dp, end = 16.dp, top = 18.dp, bottom = 18.dp),
@@ -149,7 +149,7 @@ internal fun Header(title: String) {
                 .width(4.dp)
                 .height(24.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(Brush.verticalGradient(listOf(HzAccent, Color(0xFFD0C6F2))))
+                .background(HzAccent)
         )
         Spacer(Modifier.width(10.dp))
         Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -184,6 +184,7 @@ private fun MenuRow(glyph: Glyph, label: String, index: Int, chevron: Boolean = 
             }
             .clip(RoundedCornerShape(16.dp))
             .background(if (pressed) HzCapsule else HzRow)
+            .border(1.dp, HzStroke, RoundedCornerShape(16.dp))
             .clickable(interactionSource = src, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically

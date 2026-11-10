@@ -914,15 +914,15 @@ class ControlsView(
         if (showHandle && !editMode) {
             val dragging = roles.values.any { it is Role.Handle && it.moved }
             val rad = menuRect.height() / 2f
-            fill.color = alpha(Color.argb(if (dragging) 240 else 205, 34, 40, 44), opacity.coerceAtLeast(0.55f))
+            fill.color = alpha(Color.argb(if (dragging) 240 else 205, 26, 29, 37), opacity.coerceAtLeast(0.55f))
             canvas.drawRoundRect(menuRect, rad, rad, fill)
-            stroke.color = Color.argb(if (dragging) 230 else 140, 139, 224, 255)
+            stroke.color = Color.argb(if (dragging) 230 else 140, 121, 229, 156)
             stroke.strokeWidth = 1f * density
             canvas.drawRoundRect(menuRect, rad, rad, stroke)
             menuIcon?.let { icon ->
                 val half = menuRect.height() * 0.34f
                 iconRect.set(menuRect.centerX() - half, menuRect.centerY() - half, menuRect.centerX() + half, menuRect.centerY() + half)
-                iconPaint.colorFilter = PorterDuffColorFilter(if (dragging) Color.WHITE else Color.argb(235, 139, 224, 255), PorterDuff.Mode.SRC_IN)
+                iconPaint.colorFilter = PorterDuffColorFilter(if (dragging) Color.WHITE else Color.argb(235, 121, 229, 156), PorterDuff.Mode.SRC_IN)
                 canvas.drawBitmap(icon, null, iconRect, iconPaint)
             }
         }
@@ -1005,4 +1005,4 @@ class ControlsView(
 }
 
 /** Outline of the selected button in the editor (the Zalith editor's teal). */
-private val SELECTION = 0xFF80CBC4.toInt()
+private val SELECTION = 0xFF79E59C.toInt()

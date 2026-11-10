@@ -89,6 +89,14 @@ public final class HorizonActivity extends NativeActivity {
         tokenFile.delete();
         exitFlag.delete();
 
+        // Home "Boost": threads created from here on (the engine's included) inherit display priority.
+        try {
+            if (new File(homeDir, "boost.flag").exists()) {
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
+            }
+        } catch (Throwable ignored) {
+        }
+
         showHorizonSplashDialog(homeDir);
 
         writeBootMilestone(homeDir, "15|Initializing HorizonZ Native Runtime...");

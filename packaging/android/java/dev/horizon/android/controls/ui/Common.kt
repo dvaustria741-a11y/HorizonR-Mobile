@@ -33,21 +33,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
 
-val Slate = Color(0xFF394952)
+val Slate = Color(0xFF2C313D)
 
 // The overlay menu and layout editor use ZalithLauncher's dark grey and teal. The launcher's own
 // setting cards pass their palette in through ControlsCardStyle, so they are not affected.
 val ControlsColors = darkColorScheme(
-    primary = Color(0xFF80CBC4),
-    onPrimary = Color(0xFF000000),
-    primaryContainer = Color(0xFF2A2A2A),
+    primary = Color(0xFF79E59C),
+    onPrimary = Color(0xFF0B2616),
+    primaryContainer = Color(0xFF232731),
     onPrimaryContainer = Color(0xFFE6E6E6),
-    secondary = Color(0xFF80CBC4),
-    secondaryContainer = Color(0xFF2A2A2A),
+    secondary = Color(0xFF79E59C),
+    secondaryContainer = Color(0xFF232731),
     onSecondaryContainer = Color(0xFFE6E6E6),
-    background = Color(0xFF121212),
-    surface = Color(0xFF1C1C1C),
-    surfaceVariant = Color(0xFF2A2A2A),
+    background = Color(0xFF0D0F16),
+    surface = Color(0xFF1A1D25),
+    surfaceVariant = Color(0xFF232731),
     onSurface = Color(0xFFFFFFFF),
     onSurfaceVariant = Color(0xFFB4B4B4),
     error = Color(0xFFFF8A80),
@@ -60,8 +60,8 @@ data class ControlsCardStyle(
     val onAccent: Color,
     val muted: Color,
     val track: Color = Color(0xFF555555),
-    val row: Color = Color(0xFF2A3136),
-    val capsule: Color = Color(0xFF394952),
+    val row: Color = Color(0xFF232731),
+    val capsule: Color = Color(0xFF2C313D),
 )
 
 private val DefaultCardStyle = ControlsCardStyle(
@@ -180,13 +180,15 @@ fun screenSize(context: Context): Pair<Int, Int> {
     return maxOf(w, h) to minOf(w, h)
 }
 
-val HzRoot = Color(0xFF14181B)
-val HzCard = Color(0xFF22282C)
-val HzRow = Color(0xFF2A3136)
-val HzCapsule = Color(0xFF394952)
-val HzAccent = Color(0xFF8BE0FF)
-val HzOnAccent = Color(0xFF0E2430)
-val HzMuted = Color(0xFF9EA8B0)
+// Same dark grays, hairline stroke and green accent as the launcher (Volt style); no blue anywhere.
+val HzRoot = Color(0xFF0D0F16)
+val HzCard = Color(0xFF1A1D25)
+val HzRow = Color(0xFF232731)
+val HzCapsule = Color(0xFF2C313D)
+val HzStroke = Color(0x24FFFFFF)
+val HzAccent = Color(0xFF79E59C)
+val HzOnAccent = Color(0xFF0B2616)
+val HzMuted = Color(0xFF9097A6)
 
 val HorizonCardStyle = ControlsCardStyle(
     card = HzRow,

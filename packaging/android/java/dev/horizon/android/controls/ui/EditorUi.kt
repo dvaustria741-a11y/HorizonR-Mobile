@@ -90,7 +90,7 @@ import kotlin.math.roundToInt
 // Colours follow the Horizon launcher; wording follows the "Edit Control Layout" screens.
 private val ZPanel = HzCard
 private val ZItem = HzRow
-private val ZBox = Color(0xFF3B454B)
+private val ZBox = Color(0xFF2C313D)
 private val ZTeal = HzAccent
 private val ZMuted = HzMuted
 private val ZLine = HzCapsule
@@ -254,7 +254,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                 .size(44.dp)
                 .graphicsLayer { scaleX = gearScale; scaleY = gearScale }
                 .clip(RoundedCornerShape(14.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF2E373D), Color(0xFF1A2024))))
+                .background(Brush.verticalGradient(listOf(Color(0xFF232731), Color(0xFF161920))))
                 .border(1.dp, Color(0xFF394952), RoundedCornerShape(14.dp))
                 .pointerInput(Unit) {
                     detectTapGestures {
@@ -280,7 +280,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                     }
                 },
             contentAlignment = Alignment.Center
-        ) { GlyphIcon(Glyph.GEAR, Color(0xFF8BE0FF), Modifier.size(26.dp)) }
+        ) { GlyphIcon(Glyph.GEAR, HzAccent, Modifier.size(26.dp)) }
 
         // Delete / Clone sit right above the selected button, like Zalith's handle.
         val sel = selection
@@ -545,7 +545,7 @@ private fun Modifier.zPanel(onLeft: Boolean = false): Modifier {
             alpha = progress
         }
         .clip(shape)
-        .background(Brush.verticalGradient(listOf(Color(0xFF283239), HzCard, HzRoot)))
+        .background(Brush.verticalGradient(listOf(Color(0xFF222632), HzCard, HzRoot)))
         .border(1.dp, Brush.verticalGradient(listOf(HzCapsule, Color.Transparent)), shape)
         .pointerInput(Unit) { detectTapGestures { } }
         .verticalScroll(rememberScrollState())
@@ -722,7 +722,7 @@ private fun ZSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
     Switch(
         checked = checked, onCheckedChange = onChange,
         colors = SwitchDefaults.colors(
-            checkedThumbColor = ZTeal, checkedTrackColor = Color(0xFF3A6478), checkedBorderColor = Color.Transparent,
+            checkedThumbColor = ZTeal, checkedTrackColor = Color(0xFF2F6B47), checkedBorderColor = Color.Transparent,
             uncheckedThumbColor = Color(0xFFC8C8C8), uncheckedTrackColor = Color(0xFF555555), uncheckedBorderColor = Color.Transparent,
         )
     )
