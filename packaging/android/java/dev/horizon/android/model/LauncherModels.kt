@@ -466,7 +466,7 @@ data class HorizonConfigState(
     val orientation: HorizonOrientation = HorizonOrientation.LANDSCAPE,
     val screenAspect: HorizonScreenAspect = HorizonScreenAspect.NATIVE,
     val screenImmersive: Boolean = true,
-    val screenAvoidCutout: Boolean = true,
+    val screenAvoidCutout: Boolean = false,
     val displayRefreshHz: Int = 0,
     val performanceHintsAdpf: Boolean = true,
     val gpuStageProfiling: Boolean = false,
