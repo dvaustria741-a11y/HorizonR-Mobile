@@ -7,7 +7,7 @@ pub(super) fn terrain_shader_for(gl: bool) -> String {
 }
 
 fn gles_source(source: &str) -> String {
-    let source = source.replace("\r\n", "\n");
+    let source = unroll_emissive_lookup(source.replace("\r\n", "\n"));
     let start = source
         .find("fn sprite_grad(")
         .expect("terrain sprite function");
@@ -85,6 +85,37 @@ fn gles_source(source: &str) -> String {
     body.push_str(&native_body);
     output.replace_range(start..end, &(PACKED_INTERFACE.to_owned() + &body));
     output
+}
+
+/// Adreno compilers (710 confirmed upstream) fail to link the terrain vertex shader's dynamic
+/// search of the uniform `emissive_layers` array in a robust EGL context. This writes it out as
+/// constant-index tests with the same result: the first pair whose base layer matches wins, and
+/// no match leaves the `0xffffffff` sentinel. The sorted-order early exit only saved work.
+fn unroll_emissive_lookup(mut source: String) -> String {
+    const HEAD: &str = "    for (var i = 0u; i < min(globals.emissive_count.x, 128u); i++) {";
+    let Some(start) = source.find(HEAD) else {
+        return source;
+    };
+    let body = start + HEAD.len() - 1;
+    let mut depth = 1;
+    let mut end = body + 1;
+    while depth != 0 {
+        match source.as_bytes().get(end) {
+            Some(b'{') => depth += 1,
+            Some(b'}') => depth -= 1,
+            Some(_) => {}
+            None => return source,
+        }
+        end += 1;
+    }
+    let mut branches = String::from("    var emissive_found = false;\n");
+    for i in 0..128 {
+        branches.push_str(&format!(
+            "    if !emissive_found && globals.emissive_count.x > {i}u && globals.emissive_layers[{i}].x == sprite_layer {{\n        out.emissive_layer = globals.emissive_layers[{i}].y;\n        emissive_found = true;\n    }}\n"
+        ));
+    }
+    source.replace_range(start..end, &branches);
+    source
 }
 
 const PACKED_INTERFACE: &str = "struct TerrainOut {
