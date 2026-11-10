@@ -30,6 +30,7 @@ const CRUMBLING_BLEND: wgpu::BlendState = wgpu::BlendState {
 const TERRAIN_ATTRIBUTES: [wgpu::VertexAttribute; 5] =
     wgpu::vertex_attr_array![0=>Float32x3,1=>Uint16x2,2=>Uint16,4=>Uint8x2,3=>Unorm8x4];
 
+mod entity_source;
 mod terrain_source;
 
 /// entity.wgsl after the OverlayTexture constants it reads.
@@ -4024,11 +4025,25 @@ impl Renderer {
         let entity_step = crate::spans::startup::step("renderer.entity_pipelines");
         let entity_shader = kept.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Horizon entities"),
-            source: wgpu::ShaderSource::Wgsl(entity_shader().into()),
+            source: wgpu::ShaderSource::Wgsl(
+                if gl {
+                    entity_source::legacy_overlay(&entity_shader())
+                } else {
+                    entity_shader()
+                }
+                .into(),
+            ),
         });
         let static_entity_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Horizon static block entities"),
-            source: wgpu::ShaderSource::Wgsl(static_entity_shader().into()),
+            source: wgpu::ShaderSource::Wgsl(
+                if gl {
+                    entity_source::legacy_overlay(&static_entity_shader())
+                } else {
+                    static_entity_shader()
+                }
+                .into(),
+            ),
         });
         let entity_bindings = kept.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Entity bindings"),
