@@ -1661,6 +1661,8 @@ object HorizonNativeBridge {
                     maxFpsMode = obj.optBoolean("maxFpsMode", false),
                     fastChunkUpload = obj.optBoolean("fastChunkUpload", true),
                     trustShaderPacks = obj.optBoolean("trustShaderPacks", false),
+                    frameGeneration = obj.optBoolean("frameGeneration", false),
+                    frameGenRenderScale = obj.optInt("frameGenRenderScale", 100).coerceIn(50, 100),
                     mcGuiScale = obj.optInt("mcGuiScale", 0).coerceIn(0, 4),
                     mcFov = obj.optInt("mcFov", 70).coerceIn(30, 110),
                     mcVsync = obj.optBoolean("mcVsync", true),
@@ -1799,6 +1801,8 @@ object HorizonNativeBridge {
             put("maxFpsMode", config.maxFpsMode)
             put("fastChunkUpload", config.fastChunkUpload)
             put("trustShaderPacks", config.trustShaderPacks)
+            put("frameGeneration", config.frameGeneration)
+            put("frameGenRenderScale", config.frameGenRenderScale)
         }
         synchronized(configIoLock) {
             runCatching {
@@ -1934,12 +1938,17 @@ object HorizonNativeBridge {
         }
     }
 
-    /** Experimental Stuff's profiles for horizon-graphics.txt: the chunk upload budget (KiB) and cave culling. */
+    /** Experimental Stuff's profiles for horizon-graphics.txt: the chunk upload budget (KiB), cave culling and frame generation. */
     private fun experimentalGraphicsUpdates(config: HorizonConfigState): Map<String, String> {
         val updates = linkedMapOf<String, String>()
         if (config.superPerfMode) updates["uploadBudgetKiB"] = "1536"
         if (config.fastChunkUpload) updates["uploadBudgetKiB"] = "4096"
         updates["caveCulling"] = "true"
+        // Experimental Stuff > Frame Generation: the engine's FSR 3.1 interpolation (`frameGeneration` and
+        // `resolutionScale` in horizon-graphics.txt). The launcher owns the switch, so Off is written too;
+        // the render scale is only written while it is on, so an Off launcher leaves the player's own scale.
+        updates["frameGeneration"] = if (config.frameGeneration) "fsr3.1" else "off"
+        if (config.frameGeneration) updates["resolutionScale"] = config.frameGenRenderScale.coerceIn(50, 100).toString()
         return updates
     }
 

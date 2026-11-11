@@ -8569,6 +8569,25 @@ private fun CleanSettingsViewport(
                             checked = config.trustShaderPacks,
                             onCheckedChange = { onConfigChange(config.copy(trustShaderPacks = it)) }
                         )
+
+                        LauncherSettingToggleCard(
+                            title = "Frame Generation (FSR 3.1)",
+                            description = "Shows a made frame between each two real ones (optical flow + interpolation). Real frames run at half the screen rate with VSync on, frames show about half a frame later, and it stays off under shader packs, on the title screen and over blurred menus. Check the F3 screen for the frames per second reaching the screen (applies on the next game launch)",
+                            checked = config.frameGeneration,
+                            onCheckedChange = { onConfigChange(config.copy(frameGeneration = it)) }
+                        )
+
+                        if (config.frameGeneration) {
+                            LauncherSettingSliderCard(
+                                title = "Frame Generation render resolution",
+                                description = "World resolution the game renders at while Frame Generation is on (written to resolutionScale in horizon-graphics.txt); lower it if the real frame rate is too low to interpolate well (applies on the next game launch)",
+                                value = config.frameGenRenderScale,
+                                valueRange = 50..100,
+                                step = 5,
+                                valueSuffix = "%",
+                                onValueChange = { onConfigChange(config.copy(frameGenRenderScale = it)) }
+                            )
+                        }
                     }
 
                     SettingsSubCategory.LAUNCHER -> {

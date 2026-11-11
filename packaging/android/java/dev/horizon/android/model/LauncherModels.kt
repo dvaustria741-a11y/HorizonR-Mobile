@@ -517,7 +517,9 @@ data class HorizonConfigState(
     val batteryPerfMode: Boolean = false,
     val maxFpsMode: Boolean = false,
     val fastChunkUpload: Boolean = true,
-    val trustShaderPacks: Boolean = false
+    val trustShaderPacks: Boolean = false,
+    val frameGeneration: Boolean = false,
+    val frameGenRenderScale: Int = 100
 )
 
 val MINECRAFT_SPLASH_QUOTES = listOf(
