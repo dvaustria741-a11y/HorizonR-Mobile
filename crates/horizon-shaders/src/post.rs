@@ -1425,7 +1425,22 @@ impl Loader<'_> {
     /// Stage file `path` through the preprocessor; the pack's images declared without a format
     /// (GLSL lets a write-only image omit it) get the one `image.*` gives them.
     fn preprocess(&self, path: &str) -> Preprocessed {
-        let mut pp = preprocess(self.pack, path, self.macros);
+        // Inject stage-specific macros (GBUFFERS_WATER, COMPOSITE, SHADOW, …) so packs that
+        // gate code with #ifdef GBUFFERS_TERRAIN etc. compile the right path.
+        let stage_name = path
+            .rsplit_once('/')
+            .map_or(path, |(_, n)| n)
+            .rsplit_once('.')
+            .map_or("", |(stem, _)| stem);
+        let mut stage_macros;
+        let macros_ref: &Macros = if stage_name.is_empty() {
+            self.macros
+        } else {
+            stage_macros = self.macros.clone();
+            stage_macros.define_program_stage(stage_name);
+            &stage_macros
+        };
+        let mut pp = preprocess(self.pack, path, macros_ref);
         if self.post.images.is_empty() || !pp.code.contains("image") {
             return pp;
         }

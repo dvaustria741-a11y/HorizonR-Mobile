@@ -94,6 +94,13 @@ impl Stage<'_> {
                  const mat4 hz_TextureMatrix[8] = mat4[8](mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0));\n",
             );
         }
+        // GLSL's noise built-ins are undefined / unimplemented on most drivers and in naga;
+        // packs that call them still need them to exist. All return 0 as drivers typically do.
+        if self.tokens.iter().any(|&t| matches!(t, "noise1" | "noise2" | "noise3" | "noise4")) {
+            p.push_str(
+                "float noise1(float p){return 0.0;}\n\                 float noise1(vec2 p){return 0.0;}\n\                 float noise1(vec3 p){return 0.0;}\n\                 float noise1(vec4 p){return 0.0;}\n\                 vec2 noise2(float p){return vec2(0.0);}\n\                 vec2 noise2(vec2 p){return vec2(0.0);}\n\                 vec2 noise2(vec3 p){return vec2(0.0);}\n\                 vec2 noise2(vec4 p){return vec2(0.0);}\n\                 vec3 noise3(float p){return vec3(0.0);}\n\                 vec3 noise3(vec2 p){return vec3(0.0);}\n\                 vec3 noise3(vec3 p){return vec3(0.0);}\n\                 vec3 noise3(vec4 p){return vec3(0.0);}\n\                 vec4 noise4(float p){return vec4(0.0);}\n\                 vec4 noise4(vec2 p){return vec4(0.0);}\n\                 vec4 noise4(vec3 p){return vec4(0.0);}\n\                 vec4 noise4(vec4 p){return vec4(0.0);}\n"
+            );
+        }
         if self.kind == ShaderStage::Vertex {
             p.push_str(
                 "const vec2 hz_quad[6] = vec2[6](vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0), vec2(0.0, 0.0), vec2(1.0, 1.0), vec2(0.0, 1.0));\n\
@@ -400,7 +407,14 @@ impl Stage<'_> {
                 }
                 "(" => {
                     let callee = prev(i).map_or("", |j| self.tokens[j]);
-                    let close = if matches!(callee, "shadow2D" | "shadow2DLod" | "shadow2DProj") {
+                    let close = if matches!(
+                        callee,
+                        "shadow2D"
+                            | "shadow2DLod"
+                            | "shadow2DProj"
+                            | "shadow2DRect"
+                            | "shadow2DRectProj"
+                    ) {
                         ")"
                     } else {
                         ""
@@ -665,6 +679,26 @@ impl Stage<'_> {
                 "shadow2D" if called => Some("vec4(texture".into()),
                 "shadow2DLod" if called => Some("vec4(textureLod".into()),
                 "shadow2DProj" if called => Some("vec4(textureProj".into()),
+                // EXT / ARB variants that some packs use with older GLSL profiles.
+                "shadow2DRect" if called => Some("vec4(texture".into()),
+                "shadow2DRectProj" if called => Some("vec4(textureProj".into()),
+                "texture2DProjLod" | "texture2DProjLodEXT" | "texture2DProjLodARB"
+                    if called =>
+                {
+                    Some("textureProjLod".into())
+                }
+                "textureCubeLodEXT" if called => Some("textureLod".into()),
+                "texture2DLodEXT" if called => Some("textureLod".into()),
+                "texture2DGradEXT" | "texture2DGradARB2" if called => {
+                    Some("textureGrad".into())
+                }
+                // GL_ARB_texture_rectangle / GL_NV_texture_rectangle reads.
+                "texture2DRect" if called => Some("texture".into()),
+                // Fine/coarse derivatives: alias to standard dFdx/dFdy so the
+                // pack compiles even when the backend can't distinguish them.
+                "dFdxFine" | "dFdxCoarse" if called => Some("dFdx".into()),
+                "dFdyFine" | "dFdyCoarse" if called => Some("dFdy".into()),
+                "fwidthFine" | "fwidthCoarse" if called => Some("fwidth".into()),
                 "ftransform" if called => {
                     // `ftransform()` → the transform it stands for; its `()` stays as a no-op call... so skip it.
                     // The vertex goes through the model-view matrix first, then the projection:

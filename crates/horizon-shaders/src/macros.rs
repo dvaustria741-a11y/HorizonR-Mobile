@@ -178,6 +178,95 @@ impl Macros {
         self.define("MC_MIPMAP_LEVEL", mipmap_levels.to_string());
     }
 
+    /// The macros a stage file for `program` defines for itself (spec 1.5.1 item 7):
+    /// `GBUFFERS_TERRAIN`, `COMPOSITE`, `SHADOW`, `FINAL`, etc., from the program name
+    /// (the stem without extension, relative to `shaders/` or a dimension subfolder).
+    /// Call this on a clone of the base macros before preprocessing each stage pair.
+    pub fn define_program_stage(&mut self, program: &str) {
+        // Strip any leading dimension path (`world0/`, `dimensions/0/`).
+        let name = program.rsplit_once('/').map_or(program, |(_, n)| n);
+        // Numbered post-processing passes: `composite3` → COMPOSITE + COMPOSITE_3.
+        for (prefix, base) in [
+            ("composite", "COMPOSITE"),
+            ("deferred",  "DEFERRED"),
+            ("prepare",   "PREPARE"),
+            ("setup",     "SETUP"),
+            ("begin",     "BEGIN"),
+            ("shadowcomp","SHADOWCOMP"),
+        ] {
+            if let Some(suffix) = name.strip_prefix(prefix) {
+                self.define(base, "");
+                // "composite" → COMPOSITE_0, "composite3" → COMPOSITE_3
+                let n = suffix.trim_start_matches('0');
+                if suffix.is_empty() || n.is_empty() {
+                    self.define(format!("{base}_0"), "");
+                } else if n.chars().all(|c| c.is_ascii_digit()) {
+                    self.define(format!("{base}_{n}"), "");
+                }
+                return;
+            }
+        }
+        match name {
+            "final" => { self.define("FINAL", ""); }
+            "shadow" | "shadow_add" | "shadow_cutout" | "shadow_solid" => {
+                self.define("SHADOW", "");
+            }
+            "shadow_water" => { self.define("SHADOW", ""); }
+            "gbuffers_basic" => { self.define("GBUFFERS_BASIC", ""); }
+            "gbuffers_textured" => { self.define("GBUFFERS_TEXTURED", ""); }
+            "gbuffers_textured_lit" => {
+                self.define("GBUFFERS_TEXTURED_LIT", "");
+                self.define("GBUFFERS_TEXTURED", "");
+            }
+            "gbuffers_skybasic" => { self.define("GBUFFERS_SKYBASIC", ""); }
+            "gbuffers_skytextured" => { self.define("GBUFFERS_SKYTEXTURED", ""); }
+            "gbuffers_clouds" => { self.define("GBUFFERS_CLOUDS", ""); }
+            "gbuffers_terrain"
+            | "gbuffers_terrain_solid"
+            | "gbuffers_terrain_cutout_mipped"
+            | "gbuffers_terrain_cutout" => {
+                self.define("GBUFFERS_TERRAIN", "");
+            }
+            "gbuffers_damagedblock" => { self.define("GBUFFERS_DAMAGEDBLOCK", ""); }
+            "gbuffers_block" | "gbuffers_block_translucent" => {
+                self.define("GBUFFERS_BLOCK", "");
+            }
+            "gbuffers_beaconbeam" => { self.define("GBUFFERS_BEACONBEAM", ""); }
+            "gbuffers_item" => { self.define("GBUFFERS_ITEM", ""); }
+            "gbuffers_entities" => { self.define("GBUFFERS_ENTITIES", ""); }
+            "gbuffers_entities_glowing" => {
+                self.define("GBUFFERS_ENTITIES_GLOWING", "");
+                self.define("GBUFFERS_ENTITIES", "");
+            }
+            "gbuffers_entities_translucent" => {
+                self.define("GBUFFERS_ENTITIES_TRANSLUCENT", "");
+                self.define("GBUFFERS_ENTITIES", "");
+            }
+            "gbuffers_armor_glint" => { self.define("GBUFFERS_ARMOR_GLINT", ""); }
+            "gbuffers_spidereyes" => { self.define("GBUFFERS_SPIDEREYES", ""); }
+            "gbuffers_hand" => { self.define("GBUFFERS_HAND", ""); }
+            "gbuffers_weather" => { self.define("GBUFFERS_WEATHER", ""); }
+            "gbuffers_water" => { self.define("GBUFFERS_WATER", ""); }
+            "gbuffers_hand_water" => {
+                self.define("GBUFFERS_HAND_WATER", "");
+                self.define("GBUFFERS_WATER", "");
+            }
+            "gbuffers_line" => { self.define("GBUFFERS_LINE", ""); }
+            "gbuffers_particles" => { self.define("GBUFFERS_PARTICLES", ""); }
+            "gbuffers_particles_translucent" => {
+                self.define("GBUFFERS_PARTICLES_TRANSLUCENT", "");
+                self.define("GBUFFERS_PARTICLES", "");
+            }
+            // Distant Horizons programs.
+            "dh_terrain" => { self.define("DH_TERRAIN", ""); }
+            "dh_water"   => { self.define("DH_WATER", ""); }
+            "dh_shadow"  => { self.define("DH_SHADOW", ""); self.define("SHADOW", ""); }
+            "dh_entities"=> { self.define("DH_ENTITIES", ""); }
+            _ => {}
+        }
+    }
+
+
     /// A note for each feature `iris.features.required` names that Horizon lacks; a name matches
     /// in any case. Optional features need nothing: no macro is defined for them (see `FEATURES`).
     pub fn feature_notes(properties: &crate::Properties) -> Vec<String> {
