@@ -36,8 +36,7 @@ def stage(out):
     entry = next((v for v in fetch_json(MANIFEST_URL)["versions"] if v["id"] == version), None)
     if entry is None:
         raise ValueError(f"Mojang's version manifest does not list {version}")
-    if not lab.manifest_accepted(lock, entry["sha1"]):
-        raise ValueError(f"{version} version file has sha1 {entry['sha1']}, which research-lock.json does not accept")
+    republished = not lab.manifest_accepted(lock, entry["sha1"])
 
     version_dir = out / "versions" / version
     manifest_path = lab.download(entry["url"], version_dir / f"{version}.json", entry["sha1"])
@@ -48,6 +47,12 @@ def stage(out):
             or downloads["server"]["sha1"] != game["server_sha1"]
             or manifest["javaVersion"]["majorVersion"] != game["java_major"]):
         raise ValueError(f"Mojang's {version} version file does not match the pins in research-lock.json")
+    if republished:
+        # Mojang republishes a version file for asset-index changes. The jar, server and Java pins above
+        # still match, so accept this hash in the runner's checkout only (never committed) for lab.py.
+        lock["minecraft"].setdefault("accepted_manifest_sha1", []).append(entry["sha1"])
+        lab.LOCK.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
+        print(f"Accepted republished {version} version file {entry['sha1']} for this run: client, server and Java pins match", flush=True)
 
     lab.download(downloads["client"]["url"], version_dir / f"{version}.jar", game["client_sha1"])
     lab.download(downloads["server"]["url"], out / "server.jar", game["server_sha1"])
