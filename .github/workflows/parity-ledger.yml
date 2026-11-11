@@ -9,6 +9,8 @@ on:
       - ".github/workflows/parity-ledger.yml"
       - "tools/ci_vanilla_stage.py"
       - "tools/port_ledger_pairs.py"
+      - "tools/port_ledger_consts.py"
+      - "tools/ledger_queries.txt"
   workflow_dispatch:
 
 permissions:
@@ -84,6 +86,14 @@ jobs:
           {
             echo "## Drift that lacks constants, beside the Rust (no Mojang source)"
             cat out/pairs-drift.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Constants of the queried methods
+        run: |
+          python3 tools/port_ledger_consts.py --file tools/ledger_queries.txt > out/consts.md
+          {
+            echo "## Constants in source order, beside the Rust (no Mojang source)"
+            cat out/consts.md
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4

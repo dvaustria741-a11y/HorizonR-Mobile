@@ -1,0 +1,3 @@
+# One Class.method per line. Each push that touches this file reruns the ledger and prints that method's
+# constants in source order, beside its Rust port (tools/port_ledger_consts.py). No Mojang source is printed.
+Player.tick
