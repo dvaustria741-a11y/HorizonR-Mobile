@@ -1656,6 +1656,10 @@ object HorizonNativeBridge {
                     mcRenderDistance = obj.optInt("mcRenderDistance", 8).coerceIn(2, 32),
                     mcSimulationDistance = obj.optInt("mcSimulationDistance", 8).coerceIn(5, 32),
                     mcMaxFps = obj.optInt("mcMaxFps", 120).coerceIn(30, 260),
+                    superPerfMode = obj.optBoolean("superPerfMode", false),
+                    batteryPerfMode = obj.optBoolean("batteryPerfMode", false),
+                    maxFpsMode = obj.optBoolean("maxFpsMode", false),
+                    fastChunkUpload = obj.optBoolean("fastChunkUpload", true),
                     mcGuiScale = obj.optInt("mcGuiScale", 0).coerceIn(0, 4),
                     mcFov = obj.optInt("mcFov", 70).coerceIn(30, 110),
                     mcVsync = obj.optBoolean("mcVsync", true),
@@ -1789,6 +1793,10 @@ object HorizonNativeBridge {
             put("aiAgentAutoAssistChat", config.aiAgentAutoAssistChat)
             put("aiAgentAutonomousActions", config.aiAgentAutonomousActions)
             put("aiAgentTaskPrompt", config.aiAgentTaskPrompt)
+            put("superPerfMode", config.superPerfMode)
+            put("batteryPerfMode", config.batteryPerfMode)
+            put("maxFpsMode", config.maxFpsMode)
+            put("fastChunkUpload", config.fastChunkUpload)
         }
         synchronized(configIoLock) {
             runCatching {
@@ -1913,7 +1921,20 @@ object HorizonNativeBridge {
                 )
             )
             updateOptionsTxtNonDestructively(File(dir, "options.txt"), config)
+            updateKeyValTxtNonDestructively(
+                File(dir, "horizon-graphics.txt"),
+                experimentalGraphicsUpdates(config)
+            )
         }
+    }
+
+    /** Experimental Stuff's profiles for horizon-graphics.txt: the chunk upload budget (KiB) and cave culling. */
+    private fun experimentalGraphicsUpdates(config: HorizonConfigState): Map<String, String> {
+        val updates = linkedMapOf<String, String>()
+        if (config.superPerfMode) updates["uploadBudgetKiB"] = "1536"
+        if (config.fastChunkUpload) updates["uploadBudgetKiB"] = "4096"
+        updates["caveCulling"] = "true"
+        return updates
     }
 
     fun getDeviceTotalRamMb(context: Context): Int {
@@ -1978,17 +1999,43 @@ object HorizonNativeBridge {
     }
 
     private fun updateOptionsTxtNonDestructively(optionsFile: File, config: HorizonConfigState) {
+        var renderDistance = config.mcRenderDistance
+        var simulationDistance = config.mcSimulationDistance
+        var maxFps = config.mcMaxFps
+        var vsync = config.mcVsync
+        val experimental = linkedMapOf<String, String>()
+        // Experimental Stuff: the three profiles are mutually exclusive, in this order of precedence.
+        if (config.superPerfMode) {
+            renderDistance = minOf(renderDistance, 8)
+            simulationDistance = minOf(simulationDistance, 6)
+            experimental["menuBackgroundBlurriness"] = "0"
+            experimental["renderClouds"] = "false"
+            experimental["particles"] = "2"
+            experimental["entityShadows"] = "false"
+            experimental["cutoutLeaves"] = "false"
+            experimental["ao"] = "false"
+            experimental["graphicsPreset"] = "fast"
+        } else if (config.batteryPerfMode) {
+            renderDistance = minOf(renderDistance, 8)
+            simulationDistance = minOf(simulationDistance, 5)
+            maxFps = 60
+            vsync = true
+            experimental["menuBackgroundBlurriness"] = "0"
+        } else if (config.maxFpsMode) {
+            maxFps = 260
+            vsync = false
+        }
         updateKeyValTxtNonDestructively(
             optionsFile,
             linkedMapOf(
-                "renderDistance" to config.mcRenderDistance.toString(),
-                "simulationDistance" to config.mcSimulationDistance.toString(),
-                "maxFps" to config.mcMaxFps.toString(),
+                "renderDistance" to renderDistance.toString(),
+                "simulationDistance" to simulationDistance.toString(),
+                "maxFps" to maxFps.toString(),
                 "guiScale" to config.mcGuiScale.toString(),
-                "enableVsync" to config.mcVsync.toString(),
+                "enableVsync" to vsync.toString(),
                 "fullscreen" to config.mcFullscreen.toString(),
                 "toggleSprint" to config.sprintToggle.toString()
-            )
+            ).apply { putAll(experimental) }
         )
     }
 

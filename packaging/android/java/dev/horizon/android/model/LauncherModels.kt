@@ -512,7 +512,11 @@ data class HorizonConfigState(
     val geminiModel: String = "gemini-4-argon",
     val aiAgentAutoAssistChat: Boolean = true,
     val aiAgentAutonomousActions: Boolean = true,
-    val aiAgentTaskPrompt: String = "Help the player in Minecraft 26.3, answer chat/instructions, and run control actions when asked."
+    val aiAgentTaskPrompt: String = "Help the player in Minecraft 26.3, answer chat/instructions, and run control actions when asked.",
+    val superPerfMode: Boolean = false,
+    val batteryPerfMode: Boolean = false,
+    val maxFpsMode: Boolean = false,
+    val fastChunkUpload: Boolean = true
 )
 
 val MINECRAFT_SPLASH_QUOTES = listOf(

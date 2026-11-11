@@ -265,7 +265,8 @@ enum class SettingsSubCategory(val label: String, val icon: ImageVector) {
     AI_AGENT("AI Agent", Icons.Default.AutoAwesome),
     CONTROLS("Controls", Icons.Default.Games),
     GAMEPAD("Gamepad", Icons.Default.SportsEsports),
-    LAUNCHER("Launcher", Icons.Default.ViewInAr)
+    LAUNCHER("Launcher", Icons.Default.ViewInAr),
+    EXPERIMENTAL("Experimental Stuff", Icons.Default.Science)
 }
 
 enum class AccountSubCategory(val label: String, val icon: ImageVector) {
@@ -8509,6 +8510,57 @@ private fun CleanSettingsViewport(
                             description = "Disable OpenAL event callbacks if Bluetooth controllers or headsets cause audio stutter",
                             checked = config.disableAudioSafeMode,
                             onCheckedChange = { onConfigChange(config.copy(disableAudioSafeMode = it)) }
+                        )
+                    }
+
+                    SettingsSubCategory.EXPERIMENTAL -> {
+                        LauncherSettingToggleCard(
+                            title = "Super Performance Mode",
+                            description = "Aggressive chunk culling, fast clouds, minimal particles & Vulkan batching (applies on the next game launch)",
+                            checked = config.superPerfMode,
+                            onCheckedChange = { on ->
+                                onConfigChange(
+                                    if (on) config.copy(
+                                        superPerfMode = true,
+                                        batteryPerfMode = false,
+                                        renderer = HorizonRendererMode.VULKAN
+                                    ) else config.copy(superPerfMode = false)
+                                )
+                            }
+                        )
+
+                        LauncherSettingToggleCard(
+                            title = "Battery Performance Mode",
+                            description = "Caps framerate to 60 FPS with VSync and lowers distances (applies on the next game launch)",
+                            checked = config.batteryPerfMode,
+                            onCheckedChange = { on ->
+                                onConfigChange(
+                                    if (on) config.copy(
+                                        batteryPerfMode = true,
+                                        superPerfMode = false,
+                                        maxFpsMode = false
+                                    ) else config.copy(batteryPerfMode = false)
+                                )
+                            }
+                        )
+
+                        LauncherSettingToggleCard(
+                            title = "Max FPS Mode (Uncapped 260 FPS)",
+                            description = "Disables VSync and unlocks the framerate ceiling (applies on the next game launch)",
+                            checked = config.maxFpsMode,
+                            onCheckedChange = { on ->
+                                onConfigChange(
+                                    if (on) config.copy(maxFpsMode = true, batteryPerfMode = false)
+                                    else config.copy(maxFpsMode = false)
+                                )
+                            }
+                        )
+
+                        LauncherSettingToggleCard(
+                            title = "Fast Chunk Upload Boost",
+                            description = "Raises the per-frame chunk mesh upload budget to 4 MiB so new terrain appears sooner",
+                            checked = config.fastChunkUpload,
+                            onCheckedChange = { onConfigChange(config.copy(fastChunkUpload = it)) }
                         )
                     }
 
