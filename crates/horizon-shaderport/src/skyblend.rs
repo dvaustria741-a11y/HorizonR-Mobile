@@ -212,9 +212,17 @@ fn clear_buffers(files: &mut Files, add: &[(String, Vec<u32>)]) -> (Vec<u32>, Ve
     let mut bufs: Vec<u32> = add.iter().flat_map(|(_, b)| b.iter().copied()).collect();
     bufs.sort_unstable();
     bufs.dedup();
-    // Only with a clear colour of its own: the default for colortex0 is the fog colour, which
-    // the pack would then add its sky onto.
-    bufs.retain(|&b| srcs.iter().any(|(_, t)| names(b).iter().any(|n| t.contains(&format!("{n}ClearColor")))));
+    // We clear all sky-blend buffers that no early program reads, even when the
+    // pack has no explicit <n>ClearColor line.  Horizon's default clear (black,
+    // alpha=1) is neutral; the sky programs' alpha=0 (enforced by gpu_fix
+    // pad_outputs) means no white accumulation.  colortex0 is special: its
+    // default clear is the fog colour, so we keep the guard there only.
+    bufs.retain(|&b| {
+        b != 0
+            || srcs
+                .iter()
+                .any(|(_, t)| names(b).iter().any(|n| t.contains(&format!("{n}ClearColor"))))
+    });
     bufs.retain(|&b| {
         !srcs.iter().any(|(path, text)| {
             early(path)
