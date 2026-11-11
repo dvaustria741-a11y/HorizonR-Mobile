@@ -13,6 +13,12 @@ struct Stars {
 @vertex fn vs_stars(@location(0) position: vec3<f32>) -> @builtin(position) vec4<f32> {
     return stars.clip_from_sky * vec4(position, 1.0);
 }
+// At the far plane, for the sky drawn after solid terrain (gfx/late_sky.rs).
+@vertex fn vs_stars_late(@location(0) position: vec3<f32>) -> @builtin(position) vec4<f32> {
+    var clip = stars.clip_from_sky * vec4(position, 1.0);
+    clip.z = 0.0;
+    return clip;
+}
 
 // The colour premultiplied, as the celestial blend (src alpha, one) would: the pipeline adds it.
 // The alpha is HDR output's mark (hdr.wgsl): stars are points of light, at the bright tier,

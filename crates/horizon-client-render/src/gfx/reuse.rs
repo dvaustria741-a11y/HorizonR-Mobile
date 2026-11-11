@@ -69,6 +69,8 @@ pub struct Reuse {
     bind_group_layouts: Kept<wgpu::BindGroupLayout>,
     pipeline_layouts: Kept<wgpu::PipelineLayout>,
     render: Kept<wgpu::RenderPipeline>,
+    /// Pipelines only some GPUs take (`On::try_create_render_pipeline`); a refusal is kept too.
+    tried: Kept<Option<wgpu::RenderPipeline>>,
 }
 
 impl Reuse {
@@ -86,6 +88,7 @@ impl Reuse {
         self.bind_group_layouts.keep_only(generation);
         self.pipeline_layouts.keep_only(generation);
         self.render.keep_only(generation);
+        self.tried.keep_only(generation);
     }
     /// How many objects are kept.
     pub fn len(&self) -> usize {
@@ -93,6 +96,7 @@ impl Reuse {
             + self.bind_group_layouts.len()
             + self.pipeline_layouts.len()
             + self.render.len()
+            + self.tried.len()
     }
     fn current(&self) -> u32 {
         self.generation.load(std::sync::atomic::Ordering::Relaxed)
@@ -149,6 +153,28 @@ impl On<'_> {
         let key = format!("{descriptor:?}");
         self.reuse.render.get(key, self.generation, || {
             self.device.create_render_pipeline(descriptor)
+        })
+    }
+    /// `create_render_pipeline` for a path only some GPUs take: None where the device refuses it,
+    /// so the frame can keep the usual pipeline. A refusal is kept too: only the first attempt
+    /// reports one, and a pipeline kept after it would be invalid.
+    pub fn try_create_render_pipeline(
+        &self,
+        descriptor: &wgpu::RenderPipelineDescriptor<'_>,
+    ) -> Option<wgpu::RenderPipeline> {
+        let key = format!("{descriptor:?}");
+        self.reuse.tried.get(key, self.generation, || {
+            let validation = self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            let internal = self.device.push_error_scope(wgpu::ErrorFilter::Internal);
+            let pipeline = self.device.create_render_pipeline(descriptor);
+            let internal = pollster::block_on(internal.pop());
+            match internal.or(pollster::block_on(validation.pop())) {
+                Some(error) => {
+                    log::warn!("{:?} unavailable: {error}", descriptor.label);
+                    None
+                }
+                None => Some(pipeline),
+            }
         })
     }
 }

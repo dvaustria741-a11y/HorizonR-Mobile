@@ -30,7 +30,9 @@ const CRUMBLING_BLEND: wgpu::BlendState = wgpu::BlendState {
 const TERRAIN_ATTRIBUTES: [wgpu::VertexAttribute; 5] =
     wgpu::vertex_attr_array![0=>Float32x3,1=>Uint16x2,2=>Uint16,4=>Uint8x2,3=>Unorm8x4];
 
+mod adreno;
 mod entity_source;
+mod late_sky;
 mod terrain_source;
 
 /// entity.wgsl after the OverlayTexture constants it reads.
@@ -245,6 +247,7 @@ pub mod panorama;
 mod readback;
 mod resident;
 mod reuse;
+mod solid_paths;
 mod stars;
 mod surface_setup;
 use surface_setup::{AdapterChoice, AdapterFailure, open_adapter, pick_adapter, set_up_surface};
@@ -1249,6 +1252,8 @@ pub struct Renderer {
     /// `solid` split in two passes for the world pass (terrain.wgsl's `opaque_quad`).
     solid_opaque: SolidPipeline,
     solid_cutout: SolidPipeline,
+    /// Cheaper pipelines for those two passes, on Adreno's Vulkan (`solid_paths`).
+    solid_paths: Option<solid_paths::SolidPaths>,
     translucent: wgpu::RenderPipeline,
     translucent_mark: wgpu::RenderPipeline,
     /// A native mod's world warp (`world_warp`): nothing made until a mod gives one.
@@ -1288,6 +1293,9 @@ pub struct Renderer {
     sunrise_pipeline: wgpu::RenderPipeline,
     sunrise_buffer: wgpu::Buffer,
     dark_disc: wgpu::RenderPipeline,
+    /// The vanilla sky after solid terrain (`late_sky`), and whether frames take it.
+    late_sky: Option<late_sky::LateSky>,
+    late_sky_on: bool,
     /// Clears the world pass's depth to the far plane so the first-person hand draws in the
     /// same pass (`hand_in_world`), as the hand's own pass would clear it.
     depth_reset: wgpu::RenderPipeline,
@@ -4732,7 +4740,7 @@ impl Renderer {
             },
             ..additive_descriptor
         });
-        let celestial_pipeline = kept.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let celestial_descriptor = wgpu::RenderPipelineDescriptor {
             label: Some("Celestial bodies"),
             layout: Some(&entity_layout),
             vertex: wgpu::VertexState {
@@ -4786,7 +4794,8 @@ impl Renderer {
             }),
             multiview_mask: None,
             cache: None,
-        });
+        };
+        let celestial_pipeline = kept.create_render_pipeline(&celestial_descriptor);
         drop(entity_step);
         // WorldBorderRenderer: misc/forcefield.png as a MipmappedTexture
         // (repeat, linear minification with mipmaps, nearest magnification).
@@ -5068,9 +5077,9 @@ impl Renderer {
             .flags
             .contains(wgpu::DownlevelFlags::INDIRECT_EXECUTION);
         let flat_wanted = flat::wanted(&adapter, &device);
-        // Metal draws solid terrain in two passes (`split_solid`): meshes put all
-        // their opaque quads first, so each pass draws its part in a run or two.
-        crate::mesher::group_parts(adapter.get_info().backend == wgpu::Backend::Metal);
+        // Metal and Adreno's Android Vulkan draw solid terrain in two passes (`split_solid`):
+        // meshes put all their opaque quads first, so each pass draws its part in a run or two.
+        crate::mesher::group_parts(adreno::splits_solid(&adapter.get_info()));
         // Readable as storage where flat draws run: a shader pack's terrain program reads them.
         let arena = arena::Arena::new(
             &device,
@@ -5220,6 +5229,30 @@ impl Renderer {
         if let (Some(flat), Some(arena)) = (&mut flat, &translucent_arena) {
             flat.set_translucent_page_vertices(arena.page_vertices());
         }
+        // Cheaper solid terrain shaders for Adreno's Vulkan, tried once: a driver that refuses
+        // them keeps the usual pipelines. Without HDR output (`hdr_output`).
+        let solid_paths = (adreno::adreno_vulkan(&adapter.get_info()) && hdr_output.is_none())
+            .then(|| {
+                let mut constants = plain_constants.to_vec();
+                constants.push((
+                    "HDR_WRITE_LIGHT",
+                    f64::from(u8::from(frame_format == LINEAR_FRAME)),
+                ));
+                solid_paths::SolidPaths::new(
+                    &adreno::TerrainModule {
+                        kept: &kept,
+                        shader: &shader,
+                        format: frame_format,
+                        constants: &constants,
+                        vertex_constants: &[],
+                    },
+                    &bindings,
+                    &layout,
+                    flat.as_ref().map(|flat| &flat.draw_layout),
+                    &terrain_buffers,
+                )
+            })
+            .flatten();
         // Without indirect draws (OpenGL before 4.0 without indirect execution, or
         // before 4.2 + GL_ARB_shader_draw_parameters without indirect first instance)
         // even creating an indirect buffer fails; one draw per section reads
@@ -5259,6 +5292,31 @@ impl Renderer {
         let uploads = upload::Uploads::new(&device);
         let section_uploads = upload::Uploads::with_chunk(&device, SECTION_UPLOAD_CHUNK);
         let stars = stars::Stars::new(&device, frame_format);
+        // The vanilla sky after solid terrain, tried once: a driver that refuses a pipeline keeps
+        // the usual order. Its constants are those of the usual sky pipelines.
+        let late_sky = adreno::adreno_vulkan(&adapter_info)
+            .then(|| {
+                let mut constants = sprite_constants.to_vec();
+                constants.push((
+                    "HDR_WRITE_LIGHT",
+                    f64::from(u8::from(frame_format == LINEAR_FRAME)),
+                ));
+                late_sky::LateSky::new(
+                    &adreno::TerrainModule {
+                        kept: &kept,
+                        shader: &shader,
+                        format: frame_format,
+                        constants: &constants,
+                        vertex_constants: &[],
+                    },
+                    &layout,
+                    (&sunrise_buffers, sunrise_blend),
+                    alpha_blend,
+                    &celestial_descriptor,
+                    &stars,
+                )
+            })
+            .flatten();
         let custom_sky = custom_sky::CustomSky::new(&device, frame_format);
         let entity_outline = entity_outline::EntityOutline::new(
             &device,
@@ -5321,6 +5379,7 @@ impl Renderer {
             solid,
             solid_opaque,
             solid_cutout,
+            solid_paths,
             translucent,
             translucent_mark,
             world_warps,
@@ -5341,6 +5400,8 @@ impl Renderer {
             sunrise_pipeline,
             sunrise_buffer,
             dark_disc,
+            late_sky,
+            late_sky_on: true,
             depth_reset,
             lines,
             lines_secondary,
@@ -5952,6 +6013,46 @@ impl Renderer {
             self.offscreen = Some(Self::offscreen_target(&self.device, &self.config));
         }
         self.depth = Self::depth(&self.device, &self.config);
+    }
+    /// Whether frames that may take it draw cutouts without their fade (`solid_paths`).
+    pub fn static_cutout_on(&self) -> bool {
+        self.solid_paths
+            .as_ref()
+            .is_some_and(|p| p.static_cutout_on)
+    }
+    /// Whether frames that may take it draw whole sections through less work (`solid_paths`).
+    pub fn settled_terrain_on(&self) -> bool {
+        self.solid_paths.as_ref().is_some_and(|p| p.settled_on)
+    }
+    /// Switches drawing whole sections through less work, for A/B checks.
+    pub fn set_settled_terrain(&mut self, on: bool) -> Result<()> {
+        match &mut self.solid_paths {
+            Some(paths) => paths.settled_on = on,
+            None if on => return Err("the cheaper terrain shaders are off on this device".into()),
+            None => {}
+        }
+        Ok(())
+    }
+    /// Switches drawing cutouts without their fade, for A/B checks.
+    pub fn set_static_cutout(&mut self, on: bool) -> Result<()> {
+        match &mut self.solid_paths {
+            Some(paths) => paths.static_cutout_on = on,
+            None if on => return Err("the cheaper terrain shaders are off on this device".into()),
+            None => {}
+        }
+        Ok(())
+    }
+    /// Whether frames that may take it draw the sky after solid terrain (`late_sky`).
+    pub fn late_sky_on(&self) -> bool {
+        self.late_sky_on
+    }
+    /// Switches drawing the sky after solid terrain, for A/B checks.
+    pub fn set_late_sky(&mut self, on: bool) -> Result<()> {
+        if on && self.late_sky.is_none() {
+            return Err("the late sky is off on this device".into());
+        }
+        self.late_sky_on = on;
+        Ok(())
     }
     /// Whether sections are drawn as one index list per frame (`flat`).
     pub fn flat_draws(&self) -> bool {
@@ -9529,11 +9630,11 @@ impl Renderer {
         self.phase2_pages.clear();
         self.solid_runs.clear();
         self.phase2_runs.clear();
-        // On Metal, phase 1 goes the opaque quads of every list, then the cutout
+        // Where the solid pass splits, phase 1 goes the opaque quads of every list, then the cutout
         // ones (`Part`), each solid pass drawing its own: `[..opaque_draws]`,
         // then the rest; phase 2 likewise. A fading list's quads all draw in the
         // cutout pass.
-        let split_solid = self.info.backend == wgpu::Backend::Metal && !warp_on;
+        let split_solid = adreno::splits_solid(&self.info) && !warp_on && !gpu_frame;
         let parts = |fading: bool| -> &'static [(u8, Quads)] {
             match (split_solid, fading) {
                 (false, _) => &[(0, Quads::All)],
@@ -9542,10 +9643,6 @@ impl Renderer {
             }
         };
         let (mut opaque_draws, mut phase2_opaque) = (0, 0);
-        debug_assert!(
-            !(split_solid && gpu_frame),
-            "GPU culling is never offered on Metal"
-        );
         // In a GPU frame the GPU draws the solid quads of the whole sections within the
         // render distance that have records (`SectionGpu::gpu_draws_solid`), and the walk
         // listed those among them with translucent quads. Here stay those fading in or out
@@ -11083,10 +11180,17 @@ impl Renderer {
             Some(w) => w.solid.get(hdr),
             None => material.map_or(self.solid.get(hdr), |(m, _)| &m.solid),
         };
-        // Two solid passes only where a discard costs the GPU its hidden surface
-        // removal: Apple's tiled GPUs, behind Metal. Elsewhere the second pass
-        // would double the solid draw calls and vertex work for nothing.
-        let split_solid = self.info.backend == wgpu::Backend::Metal && !warp_on;
+        // Two solid passes only where a discard costs the GPU its hidden surface removal
+        // (`adreno::splits_solid`); GPU-culled frames keep the single pass.
+        let split_solid = adreno::splits_solid(&self.info) && !warp_on && !gpu_frame;
+        // What this frame's instances allow its two solid passes (`solid_paths`).
+        let solid_passes = self
+            .solid_paths
+            .as_ref()
+            .filter(|_| split_solid && material.is_none() && !hdr && self.pack_post.is_none())
+            .map_or_else(Default::default, |paths| {
+                paths.for_frame(&self.origins, self.texture_filtering)
+            });
         let translucent_pipeline = match warped {
             Some(w) => &w.translucent,
             None => material.map_or(&self.translucent, |(m, _)| &m.translucent),
@@ -11168,7 +11272,29 @@ impl Renderer {
             });
             pass.set_bind_group(0, &self.group, &[]);
             pack_frame(&mut pass);
-            if frame.title || (sky_visible && (frame.skybox || frame.end_sky)) {
+            // The vanilla Overworld sky waits for solid terrain (`late_sky`).
+            let late_sky = self.late_sky.as_ref().filter(|_| {
+                self.late_sky_on
+                    && !frame.title
+                    && frame.skybox
+                    && !frame.end_sky
+                    && !pack_draws_sky
+                    && !pack_draws_celestial
+                    && !native_sky_pass
+                    && !warp_on
+                    && self.native.is_none()
+                    && self.pack_post.is_none()
+                    && mirror_plane.is_none()
+                    && cull.is_none()
+                    && !gpu_frame
+                    && !self.custom_sky.is_drawing()
+                    && !self
+                        .core_sky
+                        .as_ref()
+                        .is_some_and(|c| c.draws_disc() || c.draws_stars())
+            });
+            if late_sky.is_none() && (frame.title || (sky_visible && (frame.skybox || frame.end_sky)))
+            {
                 if !frame.title && frame.skybox && !pack_draws_sky && !native_sky_pass {
                     match self
                         .native
@@ -11335,9 +11461,17 @@ impl Renderer {
                     let passes: &[(&wgpu::RenderPipeline, Calls, Calls)] = match pack_flat {
                         Some(p) => &[(&p.0, 0..flat.phase1_calls, 0..phase2_calls)],
                         None if split_solid => &[
-                            (flat.solid_opaque.get(hdr), 0..opaque, 0..phase2_split),
                             (
-                                flat.solid_cutout.get(hdr),
+                                solid_passes
+                                    .opaque(true)
+                                    .unwrap_or_else(|| flat.solid_opaque.get(hdr)),
+                                0..opaque,
+                                0..phase2_split,
+                            ),
+                            (
+                                solid_passes
+                                    .cutout(true)
+                                    .unwrap_or_else(|| flat.solid_cutout.get(hdr)),
                                 cutout..flat.phase1_calls,
                                 phase2_split..phase2_calls,
                             ),
@@ -11396,12 +11530,16 @@ impl Renderer {
                     let passes: &[(&wgpu::RenderPipeline, Draws, Draws)] = match material {
                         None if split_solid => &[
                             (
-                                self.solid_opaque.get(hdr),
+                                solid_passes
+                                    .opaque(false)
+                                    .unwrap_or_else(|| self.solid_opaque.get(hdr)),
                                 0..opaque,
                                 phase1_draws..phase2_cutout,
                             ),
                             (
-                                self.solid_cutout.get(hdr),
+                                solid_passes
+                                    .cutout(false)
+                                    .unwrap_or_else(|| self.solid_cutout.get(hdr)),
                                 cutout..phase1_draws,
                                 phase2_cutout..solid_draws,
                             ),
@@ -11566,6 +11704,33 @@ impl Renderer {
             let hdr_mark = warped.map_or(&self.hdr_mark_pipeline, |w| &w.hdr_mark);
             let hdr_entity_mark =
                 warped.map_or(&self.hdr_entity_mark_pipeline, |w| &w.hdr_entity_mark);
+            // At the far plane, it reads the depth solids left, in the usual order of its parts.
+            if let Some(sky) = late_sky.filter(|_| sky_visible) {
+                pass.set_bind_group(0, &self.group, &[]);
+                pass.set_pipeline(&sky.sky);
+                pass.draw(0..3, 0..1);
+                if frame.sky.sunrise_color[3] > 0.001 {
+                    pass.set_pipeline(&sky.sunrise);
+                    pass.set_vertex_buffer(0, self.sunrise_buffer.slice(..));
+                    pass.draw(0..sunrise_fan::VERTICES as u32, 0..1);
+                }
+                if celestial_vertices > 0 {
+                    pass.set_pipeline(&sky.celestial);
+                    pass.set_bind_group(0, &self.entity_group, &[]);
+                    pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.set_vertex_buffer(0, self.celestial_buffer.slice(..));
+                    pass.draw_indexed(0..(celestial_vertices as u32 / 4) * 6, 0, 0..1);
+                    pass.set_bind_group(0, &self.group, &[]);
+                }
+                if frame.stars.is_some() {
+                    self.stars.draw_through(&mut pass, &sky.stars);
+                    pass.set_bind_group(0, &self.group, &[]);
+                }
+                if frame.dark_disc {
+                    pass.set_pipeline(&sky.dark_disc);
+                    pass.draw(0..3, 0..1);
+                }
+            }
             if static_entity_quads > 0 {
                 pass.set_pipeline(
                     warped.map_or(&self.static_entity_pipeline, |w| &w.static_entities),
