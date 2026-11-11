@@ -94,12 +94,10 @@ impl Stage<'_> {
                  const mat4 hz_TextureMatrix[8] = mat4[8](mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0));\n",
             );
         }
-        // GLSL's noise built-ins are undefined / unimplemented on most drivers and in naga;
-        // packs that call them still need them to exist. All return 0 as drivers typically do.
+        // GLSL's noise built-ins: undefined on most drivers; packs that call them need them
+        // to compile. All overloads return 0.0 / vec*(0.0), matching typical driver behaviour.
         if self.tokens.iter().any(|&t| matches!(t, "noise1" | "noise2" | "noise3" | "noise4")) {
-            p.push_str(
-                "float noise1(float p){return 0.0;}\n\                 float noise1(vec2 p){return 0.0;}\n\                 float noise1(vec3 p){return 0.0;}\n\                 float noise1(vec4 p){return 0.0;}\n\                 vec2 noise2(float p){return vec2(0.0);}\n\                 vec2 noise2(vec2 p){return vec2(0.0);}\n\                 vec2 noise2(vec3 p){return vec2(0.0);}\n\                 vec2 noise2(vec4 p){return vec2(0.0);}\n\                 vec3 noise3(float p){return vec3(0.0);}\n\                 vec3 noise3(vec2 p){return vec3(0.0);}\n\                 vec3 noise3(vec3 p){return vec3(0.0);}\n\                 vec3 noise3(vec4 p){return vec3(0.0);}\n\                 vec4 noise4(float p){return vec4(0.0);}\n\                 vec4 noise4(vec2 p){return vec4(0.0);}\n\                 vec4 noise4(vec3 p){return vec4(0.0);}\n\                 vec4 noise4(vec4 p){return vec4(0.0);}\n"
-            );
+            p.push_str(&noise_stubs());
         }
         if self.kind == ShaderStage::Vertex {
             p.push_str(
@@ -689,7 +687,7 @@ impl Stage<'_> {
                 }
                 "textureCubeLodEXT" if called => Some("textureLod".into()),
                 "texture2DLodEXT" if called => Some("textureLod".into()),
-                "texture2DGradEXT" | "texture2DGradARB2" if called => {
+                "texture2DGradEXT" | "texture2DGradARB" if called => {
                     Some("textureGrad".into())
                 }
                 // GL_ARB_texture_rectangle / GL_NV_texture_rectangle reads.
@@ -1308,4 +1306,24 @@ pub(super) fn attribute_value(name: &str, ty: &str) -> String {
         "vaNormal" => "vec3(0.0, 0.0, 1.0)".into(),
         _ => format!("{ty}(0)"),
     }
+}
+
+
+/// GLSL's `noise1` – `noise4` stubs: all genType overloads returning the zero of their return
+/// type, matching what GPU drivers typically return (the spec leaves the value undefined).
+/// naga has no built-in for these functions; without stubs any pack that calls them fails to
+/// translate.
+fn noise_stubs() -> String {
+    let mut out = String::new();
+    for (name, ret) in [
+        ("noise1", "float"),
+        ("noise2", "vec2"),
+        ("noise3", "vec3"),
+        ("noise4", "vec4"),
+    ] {
+        for arg in ["float", "vec2", "vec3", "vec4"] {
+            out.push_str(&format!("{ret} {name}({arg} p) {{ return {ret}(0.0); }}\n"));
+        }
+    }
+    out
 }
