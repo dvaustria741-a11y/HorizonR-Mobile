@@ -5883,6 +5883,7 @@ impl Renderer {
     /// be reused for an in-process renderer handoff, but never after suspension.
     #[cfg(target_os = "android")]
     pub fn suspend_surface(&mut self) {
+        self.frame_gen.stop();
         self.suspended = true;
         self.surface = None;
         self.spare_surface
@@ -7679,6 +7680,9 @@ impl Renderer {
         if !on {
             self.frame_gen.stop();
         }
+        if on && !self.frame_gen.on {
+            self.frame_gen.gave_up = false;
+        }
         self.frame_gen.on = on;
     }
     /// `upscale`: output pixels per rendered pixel, for TAA to rebuild (1: native).
@@ -8754,6 +8758,7 @@ impl Renderer {
         // own post passes, HDR (or the 16-bit frame it was started with) or the title screen.
         let fg = self.frame_gen.on
             && !self.frame_gen.paused
+            && !self.frame_gen.gave_up
             && self.hdr.is_none()
             && self.output.frame.format == self.config.format.remove_srgb_suffix()
             && !frame.title

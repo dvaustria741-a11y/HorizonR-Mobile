@@ -48,6 +48,12 @@ pub struct FrameGen {
     /// The present thread failed to show a frame (or died): until the renderer has
     /// acquired a frame itself, the normal path runs and handles the surface.
     pub paused: bool,
+    /// The present thread failed again and again, or the swapchain can't take its frames:
+    /// the normal path draws until the setting is switched off and on.
+    pub gave_up: bool,
+    /// Recent present thread failures and when the last one was.
+    fails: u32,
+    last_fail: Option<Instant>,
     gpu: Option<Gpu>,
     presenter: Option<Presenter>,
     /// When the last real frame was handed over, and the time between real frames.
@@ -105,6 +111,9 @@ impl FrameGen {
         Self {
             on: false,
             paused: false,
+            gave_up: false,
+            fails: 0,
+            last_fail: None,
             gpu: None,
             presenter: None,
             last: None,
@@ -229,14 +238,39 @@ impl FrameGen {
             Presenter::start(device, queue, surface.clone(), window.clone(), config)
         });
         // A closed channel: the thread died.
+        // Never wait for the present thread for long: a stuck one must not freeze the
+        // renderer (the picture stops while sound and input go on).
+        let wait = Duration::from_millis(500);
         let pair = if presenter.failed() {
             None
         } else {
-            presenter.free.recv().ok().zip(presenter.free.recv().ok())
+            presenter
+                .free
+                .recv_timeout(wait)
+                .ok()
+                .zip(presenter.free.recv_timeout(wait).ok())
         };
         if pair.is_none() {
+            let incompatible = presenter.incompatible.load(Ordering::Relaxed);
             self.stop();
             self.paused = true;
+            let now = Instant::now();
+            self.fails = match self.last_fail {
+                Some(t) if now - t < Duration::from_secs(10) => self.fails + 1,
+                _ => 1,
+            };
+            self.last_fail = Some(now);
+            if incompatible || self.fails >= 4 {
+                log::warn!(
+                    "Horizon renderer: frame generation is off until it is switched on again ({})",
+                    if incompatible {
+                        "the swapchain's frames differ from its own"
+                    } else {
+                        "its present thread keeps failing"
+                    }
+                );
+                self.gave_up = true;
+            }
         }
         pair
     }
@@ -389,7 +423,26 @@ impl FrameGen {
                 interval: self.interval,
             }
         };
-        let _ = send.send(pair);
+        // A full channel for long means the thread is stuck: drop the pair (the renderer
+        // takes over at its next frame) instead of waiting for it.
+        let mut pair = pair;
+        let give_up = Instant::now() + Duration::from_millis(500);
+        loop {
+            match send.try_send(pair) {
+                Ok(()) => break,
+                Err(mpsc::TrySendError::Disconnected(_)) => break,
+                Err(mpsc::TrySendError::Full(back)) => {
+                    if Instant::now() >= give_up {
+                        if let Some(p) = &self.presenter {
+                            p.failed.store(true, Ordering::Relaxed);
+                        }
+                        break;
+                    }
+                    pair = back;
+                    thread::sleep(Duration::from_millis(1));
+                }
+            }
+        }
     }
 }
 
@@ -430,6 +483,10 @@ struct Presenter {
     free: mpsc::Receiver<wgpu::Texture>,
     /// The surface gave something other than a frame: the renderer takes it back.
     failed: Arc<AtomicBool>,
+    /// The swapchain's frames aren't the format and size of the frames drawn into.
+    incompatible: Arc<AtomicBool>,
+    /// Ends the thread without more frames shown.
+    quit: Arc<AtomicBool>,
     thread: Option<thread::JoinHandle<()>>,
 }
 
@@ -451,11 +508,15 @@ impl Presenter {
         let vsync = config.present_mode == wgpu::PresentMode::Fifo;
         let failed = Arc::new(AtomicBool::new(false));
         let failed_here = failed.clone();
+        let incompatible = Arc::new(AtomicBool::new(false));
+        let incompatible_here = incompatible.clone();
+        let quit = Arc::new(AtomicBool::new(false));
+        let quit_here = quit.clone();
         let thread = thread::Builder::new()
             .name("Frame generation present".into())
             .spawn(move || {
                 let show = |texture: &wgpu::Texture| {
-                    if failed_here.load(Ordering::Relaxed) {
+                    if failed_here.load(Ordering::Relaxed) || quit_here.load(Ordering::Relaxed) {
                         return;
                     }
                     // Anything but a frame (outdated, lost, occluded...): the renderer
@@ -463,15 +524,32 @@ impl Presenter {
                     // without frame generation. A suboptimal frame still shows.
                     let target = match surface.get_current_texture() {
                         wgpu::CurrentSurfaceTexture::Success(t) => t,
-                        wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
-                            failed_here.store(true, Ordering::Relaxed);
-                            t
-                        }
+                        // Android reports this every frame for some rotations: it still
+                        // shows, and taking over for each would restart this thread
+                        // each frame.
+                        wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
                         _ => {
                             failed_here.store(true, Ordering::Relaxed);
                             return;
                         }
                     };
+                    // A copy between other formats or sizes is invalid: nothing would be
+                    // drawn and the picture would stay as it was.
+                    if target.texture.format() != texture.format()
+                        || target.texture.size() != texture.size()
+                    {
+                        log::warn!(
+                            "Horizon renderer: frame generation frame {:?} {:?} vs swapchain {:?} {:?}",
+                            texture.format(),
+                            texture.size(),
+                            target.texture.format(),
+                            target.texture.size()
+                        );
+                        incompatible_here.store(true, Ordering::Relaxed);
+                        failed_here.store(true, Ordering::Relaxed);
+                        queue.present(target);
+                        return;
+                    }
                     let mut encoder = device.create_command_encoder(&Default::default());
                     encoder.copy_texture_to_texture(
                         texture.as_image_copy(),
@@ -509,6 +587,8 @@ impl Presenter {
             send: Some(send),
             free,
             failed,
+            incompatible,
+            quit,
             thread: Some(thread),
         }
     }
@@ -522,8 +602,18 @@ impl Presenter {
 impl Drop for Presenter {
     fn drop(&mut self) {
         self.send = None;
+        self.quit.store(true, Ordering::Relaxed);
         if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
+            // Not forever: a thread stuck in the swapchain is left to end by itself.
+            let end = Instant::now() + Duration::from_millis(500);
+            while !thread.is_finished() && Instant::now() < end {
+                thread::sleep(Duration::from_millis(2));
+            }
+            if thread.is_finished() {
+                let _ = thread.join();
+            } else {
+                log::warn!("Horizon renderer: frame generation present thread left running");
+            }
         }
     }
 }
