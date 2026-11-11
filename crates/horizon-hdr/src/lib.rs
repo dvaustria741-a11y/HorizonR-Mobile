@@ -6,6 +6,29 @@
 #[cfg(target_os = "linux")]
 pub mod wayland;
 
+/// A shader module compiled without wgpu's runtime checks (bounds checks and loop bounding):
+/// the game crate forbids the unsafe code that takes. Only for a player who chose it for
+/// shader packs (`horizon-client-render`'s `pack_checks`): a program that indexes out of range
+/// reads whatever the driver returns, and one that never ends stops the GPU instead of ending.
+pub fn create_unchecked_shader_module(
+    device: &wgpu::Device,
+    descriptor: wgpu::ShaderModuleDescriptor<'_>,
+) -> wgpu::ShaderModule {
+    // SAFETY: the caller is the player's explicit opt-in; wgpu documents that such a module may
+    // misbehave on a shader that is out of range or does not terminate, not that it is unsound
+    // for the process.
+    unsafe {
+        device.create_shader_module_trusted(
+            descriptor,
+            wgpu::ShaderRuntimeChecks {
+                bounds_checks: false,
+                force_loop_bounding: false,
+                ..wgpu::ShaderRuntimeChecks::checked()
+            },
+        )
+    }
+}
+
 /// Opens a Vulkan device with `VK_EXT_hdr_metadata` too, when the GPU offers
 /// it, so [`set_metadata`] can tell the compositor the real peak brightness.
 /// `None` leaves opening to wgpu.

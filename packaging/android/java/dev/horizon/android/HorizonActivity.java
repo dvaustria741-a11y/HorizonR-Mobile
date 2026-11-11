@@ -734,6 +734,10 @@ public final class HorizonActivity extends NativeActivity {
                     try { Os.unsetenv("HORIZON_QUICK_PLAY_WORLD"); } catch (Exception ignored) {}
                 }
 
+                // Experimental Stuff > Trust shader packs: pack programs compile without wgpu's runtime checks.
+                Os.setenv("HORIZON_PACK_TRUSTED_SHADERS",
+                        "1".equals(intent.getStringExtra("HORIZON_PACK_TRUSTED_SHADERS")) ? "1" : "0", true);
+
                 String renderBackend = intent.getStringExtra("HORIZON_WGPU_BACKEND");
                 if (renderBackend != null && !renderBackend.isEmpty()) {
                     Os.setenv("WGPU_BACKEND", renderBackend, true);

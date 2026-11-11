@@ -2123,7 +2123,7 @@ fn build_pass(
         let module = |mut m: naga::Module| {
             share_samplers(&mut m, &slots);
             storage_formats_of(&mut m, &entries);
-            device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            super::pack_checks::module(device, wgpu::ShaderModuleDescriptor {
                 label: Some(&p.name),
                 source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(m)),
             })
@@ -2360,7 +2360,7 @@ fn build_compute(
         let mut module = c.module;
         share_samplers(&mut module, &slots);
         storage_formats_of(&mut module, &entries);
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let module = super::pack_checks::module(device, wgpu::ShaderModuleDescriptor {
             label: Some(&name),
             source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(module)),
         });

@@ -33,6 +33,7 @@ const TERRAIN_ATTRIBUTES: [wgpu::VertexAttribute; 5] =
 mod adreno;
 mod entity_source;
 mod late_sky;
+mod pack_checks;
 mod terrain_source;
 
 /// entity.wgsl after the OverlayTexture constants it reads.

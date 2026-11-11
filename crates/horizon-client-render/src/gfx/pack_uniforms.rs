@@ -2112,7 +2112,7 @@ pub(super) mod initial_history_tests {
             usage: wgpu::BufferUsages::UNIFORM,
         });
         let module = |module| {
-            device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            super::pack_checks::module(device, wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(module)),
             })

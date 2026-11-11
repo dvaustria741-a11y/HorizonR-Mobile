@@ -1660,6 +1660,7 @@ object HorizonNativeBridge {
                     batteryPerfMode = obj.optBoolean("batteryPerfMode", false),
                     maxFpsMode = obj.optBoolean("maxFpsMode", false),
                     fastChunkUpload = obj.optBoolean("fastChunkUpload", true),
+                    trustShaderPacks = obj.optBoolean("trustShaderPacks", false),
                     mcGuiScale = obj.optInt("mcGuiScale", 0).coerceIn(0, 4),
                     mcFov = obj.optInt("mcFov", 70).coerceIn(30, 110),
                     mcVsync = obj.optBoolean("mcVsync", true),
@@ -1797,6 +1798,7 @@ object HorizonNativeBridge {
             put("batteryPerfMode", config.batteryPerfMode)
             put("maxFpsMode", config.maxFpsMode)
             put("fastChunkUpload", config.fastChunkUpload)
+            put("trustShaderPacks", config.trustShaderPacks)
         }
         synchronized(configIoLock) {
             runCatching {
@@ -6263,6 +6265,7 @@ object HorizonNativeBridge {
             putExtra("HORIZON_PLAYER_NAME", activeAccount.username)
             putExtra("HORIZON_ORIENTATION", config.orientation.serdeKey)
             putExtra("HORIZON_WGPU_BACKEND", if (config.renderer == HorizonRendererMode.OPENGL) "gl" else "vulkan")
+            putExtra("HORIZON_PACK_TRUSTED_SHADERS", if (config.trustShaderPacks) "1" else "0")
             putExtra("HORIZON_RAM_ALLOCATION_MB", config.ramAllocationMb)
             putExtra("HORIZON_DEVICE_TOTAL_RAM_MB", totalRamMb)
             putExtra("HORIZON_SHADER_PACK", activeShaderPack)

@@ -8562,6 +8562,13 @@ private fun CleanSettingsViewport(
                             checked = config.fastChunkUpload,
                             onCheckedChange = { onConfigChange(config.copy(fastChunkUpload = it)) }
                         )
+
+                        LauncherSettingToggleCard(
+                            title = "Trust shader packs (skip safety checks)",
+                            description = "Compile shader pack programs without bounds and loop checks: the same picture for a well-written pack, with less GPU time. A broken pack may glitch or freeze the game instead of being stopped (applies on the next game launch)",
+                            checked = config.trustShaderPacks,
+                            onCheckedChange = { onConfigChange(config.copy(trustShaderPacks = it)) }
+                        )
                     }
 
                     SettingsSubCategory.LAUNCHER -> {
