@@ -78,6 +78,14 @@ jobs:
             cat out/pairs.md
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Pair constant drift with the Rust
+        run: |
+          python3 tools/port_ledger_pairs.py --kinds drift --require-numbers --limit 25 --rust-lines 60 --max-chars 500000 > out/pairs-drift.md
+          {
+            echo "## Drift that lacks constants, beside the Rust (no Mojang source)"
+            cat out/pairs-drift.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: parity-ledger

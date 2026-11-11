@@ -24,12 +24,16 @@ MAX_CALLEES = 40
 MAX_TOKENS = 20
 
 
-def select_gaps(led, kinds, limit):
-    """Per kind, the best-ranked gaps, one entry for each (vanilla method, Rust fn) with its callees gathered."""
+def select_gaps(led, kinds, limit, require_numbers=False):
+    """Per kind, the best-ranked gaps, one entry for each (vanilla method, Rust fn) with its callees gathered.
+
+    With require_numbers only gaps that name missing constants are taken, the most constants first."""
     picked = []
     for kind in kinds:
         entries = OrderedDict()
-        for g in sorted((g for g in led["gaps"] if g["kind"] == kind), key=port_ledger.gap_rank):
+        pool = [g for g in led["gaps"] if g["kind"] == kind and (g.get("numbers") or not require_numbers)]
+        rank = (lambda g: (-len(g.get("numbers", ())), g.get("vanilla", ""))) if require_numbers else port_ledger.gap_rank
+        for g in sorted(pool, key=rank):
             key = (g.get("vanilla"), g.get("fn"))
             entry = entries.get(key)
             if entry is None:
@@ -119,8 +123,8 @@ def render_entry(root, led, entry, rust_lines):
     return "\n".join(out)
 
 
-def render(root, led, kinds, limit, rust_lines, max_chars):
-    chosen = select_gaps(led, kinds, limit)
+def render(root, led, kinds, limit, rust_lines, max_chars, require_numbers=False):
+    chosen = select_gaps(led, kinds, limit, require_numbers)
     parts = ["Vanilla side is names and numbers from the bytecode only. No Mojang source is printed.", ""]
     size = sum(len(p) + 1 for p in parts)
     for i, entry in enumerate(chosen):
@@ -140,12 +144,13 @@ def main(argv=None):
     ap.add_argument("--kinds", nargs="+", default=list(DEFAULT_KINDS), choices=sorted(port_ledger.GAP_ORDER))
     ap.add_argument("--limit", type=int, default=12, help="entries per kind")
     ap.add_argument("--rust-lines", type=int, default=60, help="Rust lines shown per function")
+    ap.add_argument("--require-numbers", action="store_true", help="only gaps that name missing constants")
     ap.add_argument("--max-chars", type=int, default=600_000)
     args = ap.parse_args(argv)
     if args.limit < 1 or args.rust_lines < 1:
         sys.exit("--limit and --rust-lines must be at least 1")
     sys.stdout.write(render(port_ledger.ROOT, port_ledger.load(), args.kinds, args.limit, args.rust_lines,
-                            args.max_chars))
+                            args.max_chars, args.require_numbers))
 
 
 if __name__ == "__main__":

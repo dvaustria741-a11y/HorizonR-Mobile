@@ -52,6 +52,16 @@ class PairsTests(unittest.TestCase):
         led["gaps"].append(dict(led["gaps"][0], vanilla="a/Camera.getMaxZoom", callee="a/Camera.missing"))
         self.assertEqual(len(pairs.select_gaps(led, ("seam",), 1)), 1)
 
+    def test_require_numbers_keeps_only_drift_that_names_constants_most_first(self):
+        led = ledger()
+        led["gaps"] += [
+            {"kind": "drift", "vanilla": "a/Camera.getMaxZoom", "fn": 1, "ids": [], "numbers": ["n:0.07"]},
+            {"kind": "drift", "vanilla": "a/Camera.alignWithEntity", "fn": 0, "ids": ["id:x"], "numbers": ["n:0.1", "n:0.2"]},
+        ]
+        chosen = pairs.select_gaps(led, ("drift",), 5, require_numbers=True)
+        self.assertEqual([e["gap"]["vanilla"] for e in chosen], ["a/Camera.alignWithEntity", "a/Camera.getMaxZoom"])
+        self.assertEqual(len(pairs.select_gaps(led, ("drift",), 5)), 3)
+
     def test_java_facts_are_names_and_numbers_only(self):
         facts = pairs.java_facts(ledger(), "a/Camera.alignWithEntity")
         self.assertEqual(facts["lines"], "10-30")
