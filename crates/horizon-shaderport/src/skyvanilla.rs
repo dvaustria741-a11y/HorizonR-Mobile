@@ -6,6 +6,16 @@
 //! The pack gets a `gbuffers_skybasic` that is the vanilla look (sky colour fading to fog colour at
 //! the horizon, stars as they come), and the line that turned it off is dropped. Kept only when the
 //! game then loads `gbuffers_skybasic` for the sky in every dimension folder it was added to.
+//!
+//! ### Why #version 330 core instead of #version 120
+//! Horizon's naga-based GLSL loader targets GLSL 330 core (OpenGL ES 3.0 / Vulkan-compatible).
+//! The compatibility-profile builtins `ftransform()`, `gl_FragData[]`, and legacy `varying` are
+//! not available on that path and produce a silent black sky or a loader skip.  The vanilla sky
+//! shaders here therefore use:
+//!   - explicit `in`/`out` varyings
+//!   - `layout(location = 0) out vec4 fragColor`
+//!   - an explicit full-screen projection (position already in NDC from the game's vertex buffer)
+//! This matches what the terrain-test sample pack does and what every real Iris/OF pack uses.
 
 use horizon_shaders::{Macros, Properties, dimension_folder, load_post};
 
@@ -14,19 +24,72 @@ use crate::fix::Change;
 
 const MARK: &str = "// horizon-shaderport sky-vanilla: the pack turned gbuffers_skybasic off; this is the vanilla sky";
 
+/// Vanilla sky vertex shader — GLSL 330 core, no compatibility builtins.
+///
+/// The game sends a full-screen quad whose vertices already carry NDC XY in `gl_Vertex.xy`
+/// (range 0..1, same as mc_Entity in the terrain path).  We scale to [-1,1] ourselves.
+/// Star vertices have equal RGB and non-zero intensity; sky disc vertices have differing channels.
 fn vsh() -> String {
     format!(
-        "#version 120\n{MARK}\nvarying vec4 starData;\nvoid main() {{\n    gl_Position = ftransform();\n    starData = vec4(gl_Color.rgb, float(gl_Color.r == gl_Color.g && gl_Color.g == gl_Color.b && gl_Color.r > 0.0));\n}}\n"
+        "#version 330 core\n\
+         {MARK}\n\
+         in vec3 Position;\n\
+         in vec4 Color;\n\
+         out vec4 starData;\n\
+         void main() {{\n\
+         \x20   // Position.xy is already 0..1 from the game's fullscreen-quad buffer.\n\
+         \x20   gl_Position = vec4(Position.xy * 2.0 - 1.0, 0.0, 1.0);\n\
+         \x20   float isStar = float(\n\
+         \x20       Color.r == Color.g && Color.g == Color.b && Color.r > 0.0);\n\
+         \x20   starData = vec4(Color.rgb, isStar);\n\
+         }}\n"
     )
 }
 
+/// Vanilla sky fragment shader — GLSL 330 core, no gl_FragData[], no compatibility fog.
+///
+/// Sky colour blends toward fog colour based on the upward angle of the fragment, reproducing
+/// the gradient vanilla draws.  Stars keep their raw colour unchanged.
+///
+/// `gbufferProjectionInverse` turns the NDC fragment position back into a view-space direction
+/// so we can dot with the view-space up vector (gbufferModelView's Y column).
 fn fsh() -> String {
     format!(
-        "#version 120\n{MARK}\nuniform float viewHeight;\nuniform float viewWidth;\nuniform mat4 gbufferModelView;\nuniform mat4 gbufferProjectionInverse;\nuniform vec3 fogColor;\nuniform vec3 skyColor;\nvarying vec4 starData;\n\nfloat fogify(float x, float w) {{\n    return w / (x * x + w);\n}}\n\nvoid main() {{\n    vec3 color;\n    if (starData.a > 0.5) {{\n        color = starData.rgb;\n    }} else {{\n        vec4 pos = vec4(gl_FragCoord.xy / vec2(viewWidth, viewHeight) * 2.0 - 1.0, 1.0, 1.0);\n        pos = gbufferProjectionInverse * pos;\n        float upDot = dot(normalize(pos.xyz), gbufferModelView[1].xyz);\n        color = mix(skyColor, fogColor, fogify(max(upDot, 0.0), 0.25));\n    }}\n    gl_FragData[0] = vec4(color, 1.0);\n}}\n"
+        "#version 330 core\n\
+         {MARK}\n\
+         uniform float viewHeight;\n\
+         uniform float viewWidth;\n\
+         uniform mat4 gbufferModelView;\n\
+         uniform mat4 gbufferProjectionInverse;\n\
+         uniform vec3 fogColor;\n\
+         uniform vec3 skyColor;\n\
+         in  vec4 starData;\n\
+         layout(location = 0) out vec4 fragColor;\n\
+         \n\
+         // Soft horizon blend — same curve vanilla uses.\n\
+         float fogify(float x, float w) {{\n\
+         \x20   return w / (x * x + w);\n\
+         }}\n\
+         \n\
+         void main() {{\n\
+         \x20   if (starData.a > 0.5) {{\n\
+         \x20       // Star: use raw colour, full opacity.\n\
+         \x20       fragColor = vec4(starData.rgb, 1.0);\n\
+         \x20       return;\n\
+         \x20   }}\n\
+         \x20   // Reconstruct view direction from NDC.\n\
+         \x20   vec2 ndc = gl_FragCoord.xy / vec2(viewWidth, viewHeight) * 2.0 - 1.0;\n\
+         \x20   vec4 viewPos = gbufferProjectionInverse * vec4(ndc, 1.0, 1.0);\n\
+         \x20   vec3 viewDir = normalize(viewPos.xyz / viewPos.w);\n\
+         \x20   // Up in view space is the Y column of gbufferModelView.\n\
+         \x20   float upDot = dot(viewDir, gbufferModelView[1].xyz);\n\
+         \x20   vec3 color = mix(skyColor, fogColor, fogify(max(upDot, 0.0), 0.25));\n\
+         \x20   fragColor = vec4(color, 1.0);\n\
+         }}\n"
     )
 }
 
-/// The `program.gbuffers_skybasic.enabled` line (plain or per folder) and whether it is a constant `false`.
+/// The `program.gbuffers_skybasic.enabled` line (plain or per folder) with a constant `false`.
 fn is_off_line(line: &str) -> bool {
     let Some((key, value)) = line.split_once('=') else { return false };
     let key = key.trim();
@@ -52,8 +115,10 @@ pub fn fix(files: &mut Files, log: &mut Vec<Change>) {
         })) else {
             continue;
         };
-        // Only a sky drawn by the fallback needs this; a pack whose sky program loads is left alone.
-        if post.sky.as_ref().is_some_and(|s| s.name != "gbuffers_skybasic") && !folders.contains(&folder) {
+        // Only when the sky draws via the fallback (not via a real gbuffers_skybasic).
+        if post.sky.as_ref().is_some_and(|s| s.name != "gbuffers_skybasic")
+            && !folders.contains(&folder)
+        {
             folders.push(folder);
         }
     }
@@ -70,6 +135,7 @@ pub fn fix(files: &mut Files, log: &mut Vec<Change>) {
             files.set_text(&path, text);
         }
     }
+    // Drop the `enabled=false` lines so Horizon will actually pick up the new program.
     let kept: Vec<&str> = ptext.lines().filter(|l| !is_off_line(l)).collect();
     files.set_text("shaders.properties", kept.join("\n") + "\n");
     let undo = |files: &mut Files, added: Vec<(String, Option<Vec<u8>>)>, props: Option<Vec<u8>>| {
@@ -80,7 +146,8 @@ pub fn fix(files: &mut Files, log: &mut Vec<Change>) {
         files.restore("shaders.properties", props);
     };
     let ok = files.pack().is_ok_and(|pack| {
-        let props = Properties::parse(&files.text("shaders.properties").unwrap_or_default(), &macros);
+        let props =
+            Properties::parse(&files.text("shaders.properties").unwrap_or_default(), &macros);
         folders.iter().all(|folder| {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 load_post(&pack, folder, &props, &macros, &inputs)
@@ -93,11 +160,18 @@ pub fn fix(files: &mut Files, log: &mut Vec<Change>) {
         println!("  sky-vanilla: not kept (the added sky program did not load)");
         return;
     }
-    println!("  sky-vanilla: vanilla gbuffers_skybasic added in {} folder(s)", folders.len());
+    println!(
+        "  sky-vanilla: vanilla gbuffers_skybasic added in {} folder(s)",
+        folders.len()
+    );
     log.push(Change {
         rule: "sky-vanilla",
         files: added.into_iter().map(|(p, _)| p).collect(),
-        outcome: "the pack turns `gbuffers_skybasic` off to get the vanilla sky; Horizon then draws the sky with `gbuffers_basic` instead, so a vanilla-look sky program was added and the off switch removed".to_owned(),
+        outcome: "the pack turns `gbuffers_skybasic` off to get the vanilla sky; \
+                  Horizon then draws the sky with `gbuffers_basic` instead, so a \
+                  vanilla-look sky program was added (GLSL 330 core, no compat builtins) \
+                  and the off switch removed"
+            .to_owned(),
     });
 }
 
@@ -112,5 +186,18 @@ mod tests {
         assert!(!is_off_line("program.gbuffers_skybasic.enabled=true"));
         assert!(!is_off_line("program.gbuffers_skybasic.enabled=!LOW"));
         assert!(!is_off_line("program.gbuffers_clouds.enabled=false"));
+    }
+
+    #[test]
+    fn generated_shaders_contain_no_compat_builtins() {
+        for src in [vsh(), fsh()] {
+            assert!(!src.contains("ftransform"), "ftransform in generated shader");
+            assert!(!src.contains("gl_FragData"), "gl_FragData in generated shader");
+            assert!(!src.contains("#version 120"), "#version 120 in generated shader");
+        }
+        // Fragment must declare a proper output.
+        assert!(fsh().contains("layout(location = 0) out vec4"));
+        // Vertex must NOT use the compat attribute path.
+        assert!(vsh().contains("in vec3 Position"));
     }
 }
