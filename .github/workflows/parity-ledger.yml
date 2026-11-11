@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/parity-ledger.yml"
       - "tools/ci_vanilla_stage.py"
+      - "tools/port_ledger_pairs.py"
   workflow_dispatch:
 
 permissions:
@@ -66,6 +67,15 @@ jobs:
             echo '```'
             head -n 80 out/coverage.txt
             echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pair client and seam gaps with the Rust
+        run: |
+          mkdir -p out
+          python3 tools/port_ledger_pairs.py --kinds client seam --limit 12 --rust-lines 60 > out/pairs.md
+          {
+            echo "## Client and seam gaps beside the Rust (no Mojang source)"
+            cat out/pairs.md
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
