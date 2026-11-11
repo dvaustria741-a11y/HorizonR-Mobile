@@ -436,21 +436,35 @@ pub fn out_arg_temporary(files: &Files, _: &Eval) -> Edits {
 
 // ---- pad-outputs ---------------------------------------------------------------------------
 
-/// The `vec4` type and `vec4(x, …, 1.0)` for an output of type `ty`; `None` for types left alone.
-fn widen(ty: &str, x: &str) -> Option<(String, String)> {
+/// The `vec4` type and `vec4(x, …, pad)` for an output of type `ty`; `None` for types left alone.
+///
+/// `sky_pass` controls the alpha pad value.  Sky programs output colour with alpha=1 by default,
+/// but when that alpha reaches a blended composite pass the frames accumulate to white.  For sky
+/// programs the pad sentinel is 0.0 so the blend equation sees a transparent source.
+fn widen(ty: &str, x: &str, sky_pass: bool) -> Option<(String, String)> {
     let (v4, zero, one) = match ty.chars().next()? {
         'i' => ("ivec4", "0", "1"),
         'u' => ("uvec4", "0u", "1u"),
         _ => ("vec4", "0.0", "1.0"),
     };
+    // Sky programs: pad with alpha=0 to avoid white-frame accumulation when
+    // a downstream blended pass reads the sky buffer.
+    let pad = if sky_pass { zero } else { one };
     let n = match ty {
         "float" | "int" | "uint" => 1,
         "vec2" | "ivec2" | "uvec2" => 2,
         "vec3" | "ivec3" | "uvec3" => 3,
         _ => return None,
     };
-    let fill: Vec<&str> = std::iter::repeat_n(zero, 3 - n).chain([one]).collect();
+    let fill: Vec<&str> = std::iter::repeat_n(zero, 3 - n).chain([pad]).collect();
     Some((v4.to_owned(), format!("{v4}({x}, {})", fill.join(", "))))
+}
+
+/// Returns true when `path` belongs to a sky geometry program (gbuffers_sky*).
+/// Sky outputs padded with alpha=1 cause white-sky accumulation on blended passes.
+fn is_sky_program(path: &str) -> bool {
+    let base = path.rsplit('/').next().unwrap_or(path);
+    base.starts_with("gbuffers_sky")
 }
 
 /// Fragment outputs narrower than four components become private globals; a new `vec4`
@@ -475,7 +489,8 @@ pub fn pad_outputs(files: &Files, _: &Eval) -> Edits {
             }
             let words: Vec<&str> = text[at + 3..semi].split_whitespace().collect();
             let [ty, name] = words[..] else { continue };
-            if !name.bytes().all(is_ident_byte) || widen(ty, name).is_none() {
+            let sky_pass = is_sky_program(&path);
+            if !name.bytes().all(is_ident_byte) || widen(ty, name, sky_pass).is_none() {
                 continue;
             }
             let quals = text[line_start..at].trim();
@@ -530,7 +545,8 @@ pub fn pad_outputs(files: &Files, _: &Eval) -> Edits {
         out.insert_str(close + 1, &wrapper);
         out.replace_range(main_at..main_at + 4, "hzp_pad_main");
         for (s, e, quals, ty, name) in decls.iter().rev() {
-            let (v4, padded) = widen(ty, name).unwrap();
+            let sky_pass = is_sky_program(&path);
+        let (v4, padded) = widen(ty, name, sky_pass).unwrap();
             let indent = &text[*s..*s + (text[*s..].len() - text[*s..].trim_start().len())];
             let sep = if quals.is_empty() { "" } else { " " };
             let new = format!(
