@@ -476,9 +476,30 @@ fn translate(
     // struct as its members packed into vectors (`struct_parts`).
     let mut locations: BTreeMap<String, (u32, String)> = BTreeMap::new();
     let mut split: BTreeMap<String, (String, Vec<(String, String)>)> = BTreeMap::new();
+    // A varying the fragment stage never reads stays in the vertex stage as a private global: it
+    // would take one of the device's few inter-stage locations for nothing (the `final` of LIGHT
+    // Shaders declares 29 and reads 10, and an Adreno 619 allows 27).
+    let mut private: Vec<String> = Vec::new();
+    let fragment_reads = |name: &str| {
+        f.tokens
+            .iter()
+            .enumerate()
+            .any(|(i, t)| *t == name && !f.removed.iter().any(|r| r.contains(&i)))
+    };
+    let plain = |decl: &str| {
+        !["flat", "smooth", "noperspective", "centroid", "sample", "invariant"]
+            .iter()
+            .any(|q| decl.starts_with(q))
+    };
     let vars = v.outs.iter().map(|o| (&v, o));
     for (stage, var) in vars.chain(f.ins.iter().map(|i| (&f, i))) {
         if locations.contains_key(&var.name) || split.contains_key(&var.name) {
+            continue;
+        }
+        if !var.structure && plain(var.decl.as_str()) && !fragment_reads(var.name.as_str()) {
+            if stage.kind == ShaderStage::Vertex {
+                private.push(var.decl.replace('@', &var.name));
+            }
             continue;
         }
         if var.structure {
@@ -550,6 +571,11 @@ fn translate(
                 decl.replace("@", name)
             )
             .unwrap();
+        }
+        if stage.kind == ShaderStage::Vertex {
+            for decl in &private {
+                writeln!(h, "{decl}").unwrap();
+            }
         }
         for (name, (global, _)) in split.iter().filter(|(_, (g, _))| !g.is_empty()) {
             writeln!(h, "{}", global.replace("@", name)).unwrap();
@@ -2385,6 +2411,34 @@ layout(local_size_x = 1) in;
             Target::Buffers,
         );
         assert!(p.is_ok(), "{:?}", p.err());
+    }
+
+    /// A varying the fragment stage never reads takes no inter-stage location: a device allows few
+    /// (27 on an Adreno 619), and the `final` of LIGHT Shaders 1.9.0 declares 29 and reads 10.
+    #[test]
+    fn varyings_the_fragment_never_reads_take_no_location() {
+        let vsh = "#version 120\nvarying vec2 texcoord;\nvarying vec3 unread;\nvoid main() {\n    \
+                   gl_Position = ftransform();\n    texcoord = gl_MultiTexCoord0.xy;\n    \
+                   unread = vec3(1.0);\n}\n";
+        let fsh = "#version 120\nvarying vec2 texcoord;\nvarying vec3 unread;\n\
+                   void main() { gl_FragColor = vec4(texcoord, 0.0, 1.0); }\n";
+        let p = program(
+            &[("composite.vsh", vsh), ("composite.fsh", fsh)],
+            Target::Buffers,
+        )
+        .expect("translates");
+        let result = p.vertex.entry_points[0].function.result.as_ref().unwrap();
+        let locations: Vec<u32> = match &p.vertex.types[result.ty].inner {
+            naga::TypeInner::Struct { members, .. } => members
+                .iter()
+                .filter_map(|member| match member.binding {
+                    Some(naga::Binding::Location { location, .. }) => Some(location),
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        assert_eq!(locations, [0]);
     }
 
     /// #8174: the interpolation qualifiers on a varying, in the order and the profile packs write
