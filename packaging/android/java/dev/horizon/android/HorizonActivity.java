@@ -738,6 +738,10 @@ public final class HorizonActivity extends NativeActivity {
                 Os.setenv("HORIZON_PACK_TRUSTED_SHADERS",
                         "1".equals(intent.getStringExtra("HORIZON_PACK_TRUSTED_SHADERS")) ? "1" : "0", true);
 
+                // Experimental Stuff > Define missing shader switches: on unless the launcher says "0".
+                Os.setenv("HORIZON_PACK_AUTO_SWITCHES",
+                        "0".equals(intent.getStringExtra("HORIZON_PACK_AUTO_SWITCHES")) ? "0" : "1", true);
+
                 String renderBackend = intent.getStringExtra("HORIZON_WGPU_BACKEND");
                 if (renderBackend != null && !renderBackend.isEmpty()) {
                     Os.setenv("WGPU_BACKEND", renderBackend, true);

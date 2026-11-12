@@ -73,6 +73,47 @@ pub fn value_options(pack: &Pack) -> BTreeMap<String, String> {
     out
 }
 
+/// The master switches Horizon can define for a pack that tests them and defines them nowhere.
+const MISSING_SWITCHES: [&str; 1] = ["WAVING_PLANTS"];
+
+/// The [`MISSING_SWITCHES`] a pack's sources test (`#ifdef` or `#ifndef`) but no file defines,
+/// on or off (`#define NAME` or `//#define NAME`): what is behind them never runs, whatever the
+/// player picks. LIGHT Shaders 1.9.0 tests `WAVING_PLANTS` in its terrain program and lists it on
+/// its Waving screen, but defines it in no file, so no loader waves its plants.
+pub fn missing_switches(pack: &Pack) -> Vec<&'static str> {
+    let texts = option_texts(pack);
+    MISSING_SWITCHES
+        .iter()
+        .copied()
+        .filter(|name| {
+            let (mut tested, mut defined) = (false, false);
+            for line in texts.iter().flat_map(|t| t.lines()) {
+                let line = line.trim();
+                let (commented, rest) = match line.strip_prefix("//") {
+                    Some(rest) => (true, rest.trim_start()),
+                    None => (false, line),
+                };
+                let Some((directive, rest)) = rest
+                    .strip_prefix('#')
+                    .map(str::trim_start)
+                    .and_then(|r| r.split_once(|c: char| c.is_whitespace()))
+                else {
+                    continue;
+                };
+                if rest.split_whitespace().next() != Some(*name) {
+                    continue;
+                }
+                match directive {
+                    "ifdef" | "ifndef" if !commented => tested = true,
+                    "define" => defined = true,
+                    _ => {}
+                }
+            }
+            tested && !defined
+        })
+        .collect()
+}
+
 /// `macros` with the pack's options at their defaults: the switches that are on, and the
 /// value options. `shaders.properties` and the program switches test them (3.3, 8.1).
 pub fn with_options(pack: &Pack, macros: &crate::Macros) -> crate::Macros {
@@ -391,6 +432,21 @@ fn option_texts(pack: &Pack) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A switch the pack's programs test and no file defines, on or off, is missing: LIGHT Shaders
+    /// 1.9.0's `WAVING_PLANTS`.
+    #[test]
+    fn a_tested_switch_no_file_defines_is_missing() {
+        let pack = |terrain: &str| {
+            let bytes = crate::pack::tests::zip(&[("shaders/gbuffers_terrain.vsh", terrain)]);
+            Pack::from_zip_bytes("p.zip", bytes).unwrap()
+        };
+        let tested = "#version 120\n#ifdef WAVING_PLANTS\n#define WAVING_LEAVES\n#endif\nvoid main() {}\n";
+        assert_eq!(missing_switches(&pack(tested)), ["WAVING_PLANTS"]);
+        assert!(missing_switches(&pack(&format!("#define WAVING_PLANTS\n{tested}"))).is_empty());
+        assert!(missing_switches(&pack(&format!("//#define WAVING_PLANTS\n{tested}"))).is_empty());
+        assert!(missing_switches(&pack("#version 120\nvoid main() {}\n")).is_empty());
+    }
 
     /// `shaders.properties` read as the game reads it: its conditionals see the pack's options
     /// and the macros given (the renderer's vendor here), and the features it turns on are then

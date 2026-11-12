@@ -518,6 +518,7 @@ data class HorizonConfigState(
     val maxFpsMode: Boolean = false,
     val fastChunkUpload: Boolean = true,
     val trustShaderPacks: Boolean = false,
+    val autoShaderSwitches: Boolean = true,
     val frameGeneration: Boolean = false,
     val frameGenRenderScale: Int = 100
 )

@@ -349,6 +349,24 @@ pub(super) struct PackIds {
     pub(super) separate_ao: bool,
 }
 
+/// Experimental Stuff > "Define missing shader switches" (`HORIZON_PACK_AUTO_SWITCHES`, set by the
+/// Android launcher; unset elsewhere means off).
+fn auto_switches() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("HORIZON_PACK_AUTO_SWITCHES").is_ok_and(|v| v == "1"))
+}
+
+/// Defines, for the pack's programs, a master switch they test and no file of the pack defines.
+fn define_missing_switches(pack: &Pack, name: &str, macros: &mut Macros) {
+    if !auto_switches() {
+        return;
+    }
+    for switch in horizon_shaders::missing_switches(pack) {
+        log::info!("shader pack {name}: `{switch}` is tested and defined nowhere in the pack: defined for it");
+        macros.define(switch, "");
+    }
+}
+
 impl Game<'_> {
     /// The steps of loading a pack that need the renderer: open it, read its properties, and
     /// ask the renderer for the inputs its programs are translated against. `None` when the pack
@@ -370,6 +388,7 @@ impl Game<'_> {
             Ok(pack) => {
                 let mut macros = Macros::standard();
                 renderer.define_pack_macros(&mut macros);
+                define_missing_switches(&pack, name, &mut macros);
                 // Its conditionals test the pack's options too.
                 let (properties, notes) = horizon_shaders::read_properties(&pack, &mut macros);
                 for note in notes {
@@ -652,6 +671,7 @@ impl Game<'_> {
                     Ok(pack) => {
                         let mut macros = Macros::standard();
                         renderer.define_pack_macros(&mut macros);
+                        define_missing_switches(&pack, name, &mut macros);
                         // Its conditionals test the pack's options too.
                         let (properties, notes) =
                             horizon_shaders::read_properties(&pack, &mut macros);

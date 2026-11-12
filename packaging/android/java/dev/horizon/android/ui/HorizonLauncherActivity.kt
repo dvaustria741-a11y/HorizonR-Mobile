@@ -8571,6 +8571,13 @@ private fun CleanSettingsViewport(
                         )
 
                         LauncherSettingToggleCard(
+                            title = "Define missing shader switches",
+                            description = "A shader pack that tests a master switch it never defines gets that switch defined, so its own options take effect. Only Waving Plants for now (LIGHT Shaders lists it but never defines it, so no plant waves). Waving costs some GPU time (applies on the next game launch)",
+                            checked = config.autoShaderSwitches,
+                            onCheckedChange = { onConfigChange(config.copy(autoShaderSwitches = it)) }
+                        )
+
+                        LauncherSettingToggleCard(
                             title = "Frame Generation (FSR 3.1)",
                             description = "Shows a made frame between each two real ones (optical flow + interpolation). Real frames run at half the screen rate with VSync on, frames show about half a frame later, and it stays off under shader packs, on the title screen and over blurred menus. Check the F3 screen for the frames per second reaching the screen (applies on the next game launch)",
                             checked = config.frameGeneration,
