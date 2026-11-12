@@ -4111,7 +4111,16 @@ impl PackPost {
         let mut groups = [None, None];
         for (i, pass) in [&mut sky.basic, &mut sky.textured].into_iter().enumerate() {
             if let Some(pass) = pass {
+                // The disc, the sunset fan, the stars and the void carry no texture, and their
+                // coordinates are (0, 0): `texture` reads a white texel, so a program that stands
+                // in for a missing or disabled `gbuffers_skybasic` (`gbuffers_basic`, 2.3 and 2.5)
+                // draws the vertex colour, not the corner of the block atlas.
+                let own = (i == 0)
+                    .then(|| std::mem::replace(&mut pass.atlas, Some(self.dummy.clone())));
                 groups[i] = Some(self.bind(device, queue, encoder, pass, size));
+                if let Some(own) = own {
+                    pass.atlas = own;
+                }
                 self.mips_valid &= !pass.written;
             }
         }
