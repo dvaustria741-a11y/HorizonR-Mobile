@@ -357,3 +357,10 @@ state of Starling's `crates/horizon-client-render/src/touch.rs` at the same comm
 
 `crates/horizon-client-render/src/android_runtime.rs` and `android_runtime/tests/` are adapted from the
 input part of Starling's `crates/horizon-client-render/src/android_runtime.rs` at the same commit.
+
+## Fonts bundled in the Android launcher
+
+- **Inter**, copyright 2020 The Inter Project Authors (https://github.com/rsms/inter), SIL Open Font License 1.1.
+- **JetBrains Mono**, copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono), SIL Open Font License 1.1.
+
+Both are used unmodified (`packaging/android/res/font/`). The license text is at https://scripts.sil.org/OFL.

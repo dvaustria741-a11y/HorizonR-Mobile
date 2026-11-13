@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.horizon.android.ui.theme.ControlsTypography
 import java.util.Locale
 
 val Slate = Color(0xFF2C313D)
@@ -84,7 +85,7 @@ fun ControlsTheme(style: ControlsCardStyle? = null, content: @Composable () -> U
         onSurfaceVariant = used.muted,
     )
     CompositionLocalProvider(LocalControlsCardStyle provides used) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(colorScheme = scheme, typography = ControlsTypography, content = content)
     }
 }
 
@@ -92,23 +93,23 @@ fun ControlsTheme(style: ControlsCardStyle? = null, content: @Composable () -> U
 @Composable
 fun ControlsCard(content: @Composable () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(10.dp),
         color = LocalControlsCardStyle.current.card,
         contentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
     }
 }
 
 @Composable
 fun CardTitle(text: String) {
-    Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+    Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
 }
 
 @Composable
 fun Hint(text: String) {
-    Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(text, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 fun fmt(v: Float): String = String.format(Locale.ROOT, "%.2f", v)

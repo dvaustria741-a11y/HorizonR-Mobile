@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -48,6 +49,9 @@ import androidx.compose.ui.unit.sp
 import dev.horizon.android.R
 import dev.horizon.android.controls.ControlLayouts
 import dev.horizon.android.controls.ControlSettings
+import dev.horizon.android.ui.theme.HzColor
+import dev.horizon.android.ui.theme.HzMotion
+import dev.horizon.android.ui.theme.HzShape
 import kotlinx.coroutines.delay
 
 /** The panel the menu handle opens in game: pause, edit the layout, switch layouts, quick sliders. */
@@ -83,10 +87,12 @@ fun OverlayMenu(
 
     val progress by animateFloatAsState(
         targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(if (shown) 280 else 180, easing = FastOutSlowInEasing),
+        animationSpec = tween(
+            durationMillis = if (shown) HzMotion.Medium else HzMotion.Short,
+            easing = if (shown) HzMotion.Ease else HzMotion.EaseIn
+        ),
         label = "menu"
     )
-    val shape = RoundedCornerShape(topStart = 26.dp, bottomStart = 26.dp)
 
     Box(
         modifier = Modifier
@@ -98,18 +104,17 @@ fun OverlayMenu(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
-                .width(320.dp)
+                .width(280.dp)
                 .graphicsLayer {
-                    translationX = (1f - progress) * size.width * 0.5f
+                    translationX = (1f - progress) * size.width * 0.2f
                     alpha = progress
                 }
-                .clip(shape)
-                .background(Brush.verticalGradient(listOf(Color(0xFF222632), HzCard, HzRoot)))
-                .border(1.dp, Brush.verticalGradient(listOf(HzStroke, Color.Transparent)), shape)
+                .background(HzColor.Panel)
+                .drawBehind { drawLine(HzColor.Hairline, Offset(0.5f, 0f), Offset(0.5f, size.height), 1f) }
                 .clickable(interactionSource = panel, indication = null) {}
                 .verticalScroll(rememberScrollState())
-                .padding(start = 18.dp, end = 16.dp, top = 18.dp, bottom = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             when (page) {
                 1 -> {
@@ -143,16 +148,16 @@ fun OverlayMenu(
 
 @Composable
 internal fun Header(title: String) {
-    Row(modifier = Modifier.padding(start = 2.dp, top = 2.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = Modifier.padding(start = 2.dp, top = 0.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .width(4.dp)
-                .height(24.dp)
+                .width(3.dp)
+                .height(14.dp)
                 .clip(RoundedCornerShape(2.dp))
                 .background(HzAccent)
         )
-        Spacer(Modifier.width(10.dp))
-        Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.width(8.dp))
+        Text(title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -160,10 +165,10 @@ internal fun Header(title: String) {
 private fun rowEnter(index: Int): Float {
     var on by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(50L + index * 45L)
+        delay(40L + index * 35L)
         on = true
     }
-    val v by animateFloatAsState(if (on) 1f else 0f, tween(300, easing = FastOutSlowInEasing), label = "rowEnter")
+    val v by animateFloatAsState(if (on) 1f else 0f, tween(HzMotion.Medium, easing = HzMotion.Ease), label = "rowEnter")
     return v
 }
 
@@ -178,23 +183,23 @@ private fun MenuRow(glyph: Glyph, label: String, index: Int, chevron: Boolean = 
             .fillMaxWidth()
             .graphicsLayer {
                 alpha = enter
-                translationX = (1f - enter) * 36.dp.toPx()
+                translationX = (1f - enter) * 16.dp.toPx()
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (pressed) HzCapsule else HzRow)
-            .border(1.dp, HzStroke, RoundedCornerShape(16.dp))
+            .clip(HzShape.Panel)
+            .background(if (pressed) HzColor.PanelHi else HzColor.Panel)
+            .border(1.dp, HzColor.Hairline, HzShape.Panel)
             .clickable(interactionSource = src, indication = null, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(HzCapsule), contentAlignment = Alignment.Center) {
-            GlyphIcon(glyph, HzAccent, Modifier.size(20.dp))
+        Box(modifier = Modifier.size(26.dp).clip(HzShape.Control).background(HzColor.PanelHi), contentAlignment = Alignment.Center) {
+            GlyphIcon(glyph, HzAccent, Modifier.size(15.dp))
         }
-        Spacer(Modifier.width(12.dp))
-        Text(label, modifier = Modifier.weight(1f), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (chevron) GlyphIcon(Glyph.CHEVRON, HzMuted, Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(label, modifier = Modifier.weight(1f), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (chevron) GlyphIcon(Glyph.CHEVRON, HzMuted, Modifier.size(14.dp))
     }
 }
 
@@ -210,19 +215,19 @@ private fun LayoutRow(name: String, active: Boolean, index: Int, onClick: () -> 
             .fillMaxWidth()
             .graphicsLayer {
                 alpha = enter
-                translationX = (1f - enter) * 36.dp.toPx()
+                translationX = (1f - enter) * 16.dp.toPx()
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (pressed) HzCapsule else HzRow)
-            .border(1.dp, HzAccent.copy(alpha = 0.7f * bg), RoundedCornerShape(16.dp))
+            .clip(HzShape.Panel)
+            .background(if (pressed) HzColor.PanelHi else HzColor.Panel)
+            .border(1.dp, if (active) HzAccent.copy(alpha = 0.7f * bg) else HzColor.Hairline, HzShape.Panel)
             .clickable(interactionSource = src, indication = null, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 14.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(name, modifier = Modifier.weight(1f), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (active) GlyphIcon(Glyph.CHECK, HzAccent, Modifier.size(18.dp))
+        Text(name, modifier = Modifier.weight(1f), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (active) GlyphIcon(Glyph.CHECK, HzAccent, Modifier.size(15.dp))
     }
 }
 
@@ -232,14 +237,14 @@ private fun BackRow(onClick: () -> Unit) {
     val pressed by src.collectIsPressedAsState()
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (pressed) HzCapsule else Color.Transparent)
+            .clip(HzShape.Control)
+            .background(if (pressed) HzColor.PanelHi else Color.Transparent)
             .clickable(interactionSource = src, indication = null, onClick = onClick)
             .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        GlyphIcon(Glyph.BACK, HzAccent, Modifier.size(20.dp))
+        GlyphIcon(Glyph.BACK, HzAccent, Modifier.size(15.dp))
         Spacer(Modifier.width(4.dp))
-        Text(stringResource(R.string.menu_back), color = HzAccent, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Text(stringResource(R.string.menu_back), color = HzAccent, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }

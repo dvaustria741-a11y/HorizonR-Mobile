@@ -91,35 +91,35 @@ fun LayoutCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(if (selected) HzCapsule else HzRow)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.SportsEsports, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
+        Icon(Icons.Filled.SportsEsports, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(info.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(info.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (info.description.isNotBlank()) {
-                Text(info.description, color = HzMuted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(info.description, color = HzMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Text(stringResource(R.string.layouts_file_name, info.fileName), color = HzMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (selected) Text(stringResource(R.string.layouts_is_default), color = HzAccent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.layouts_file_name, info.fileName), color = HzMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (selected) Text(stringResource(R.string.layouts_is_default), color = HzAccent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.width(10.dp))
         Box(
-            modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(HzCapsule).clickable(onClick = onInfo).padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(HzCapsule).clickable(onClick = onInfo).padding(horizontal = 14.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center,
-        ) { Text(stringResource(R.string.layouts_view_info), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+        ) { Text(stringResource(R.string.layouts_view_info), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium) }
     }
 }
 
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-        Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(130.dp))
-        Text(value, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(130.dp))
+        Text(value, color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
     }
 }
 
@@ -137,16 +137,16 @@ fun LayoutInfoBody(info: ControlLayouts.Info) {
 @Composable
 fun HzLabeledField(label: String, value: String, placeholder: String = "", onValue: (String) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
-        Text(label, color = HzMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 3.dp, top = 4.dp))
+        Text(label, color = HzMuted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 3.dp, top = 4.dp))
         BasicTextField(
             value = value,
             onValueChange = onValue,
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+            textStyle = TextStyle(color = Color.White, fontSize = 13.sp),
             cursorBrush = SolidColor(HzAccent),
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(HzRow).padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(HzRow).padding(horizontal = 10.dp, vertical = 8.dp),
             decorationBox = { inner ->
-                if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = HzMuted, fontSize = 14.sp)
+                if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = HzMuted, fontSize = 13.sp)
                 inner()
             },
         )
@@ -158,13 +158,13 @@ fun HzLabeledField(label: String, value: String, placeholder: String = "", onVal
 fun HzDialogButtons(confirmLabel: String, onCancel: () -> Unit, onConfirm: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(
-            modifier = Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(12.dp)).background(HzCapsule).clickable(onClick = onCancel),
+            modifier = Modifier.weight(1f).height(32.dp).clip(RoundedCornerShape(8.dp)).background(HzCapsule).clickable(onClick = onCancel),
             contentAlignment = Alignment.Center,
-        ) { Text(stringResource(R.string.layouts_cancel), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+        ) { Text(stringResource(R.string.layouts_cancel), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
         Box(
-            modifier = Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(12.dp)).background(HzAccent).clickable(onClick = onConfirm),
+            modifier = Modifier.weight(1f).height(32.dp).clip(RoundedCornerShape(8.dp)).background(HzAccent).clickable(onClick = onConfirm),
             contentAlignment = Alignment.Center,
-        ) { Text(confirmLabel, color = HzOnAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+        ) { Text(confirmLabel, color = HzOnAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
     }
 }
 
@@ -200,10 +200,10 @@ private fun HzWindowDialog(title: String, onDismiss: () -> Unit, trailing: (@Com
     val style = LocalControlsCardStyle.current
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            modifier = Modifier.fillMaxWidth(0.7f).widthIn(max = 440.dp).heightIn(max = 340.dp).clip(RoundedCornerShape(20.dp)).background(style.card).padding(16.dp)
+            modifier = Modifier.fillMaxWidth(0.7f).widthIn(max = 440.dp).heightIn(max = 340.dp).clip(RoundedCornerShape(10.dp)).background(style.card).padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 trailing?.invoke()
             }
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), content = content)
@@ -229,7 +229,7 @@ private fun PanelRow(
     onInfo: () -> Unit,
 ) {
     val style = LocalControlsCardStyle.current
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(8.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -243,7 +243,7 @@ private fun PanelRow(
         Icon(Icons.Filled.SportsEsports, contentDescription = null, tint = if (selected) style.accent else Color.White, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(info.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(info.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 if (selected) stringResource(R.string.layouts_file_name, info.fileName) + "  \u2022  " + stringResource(R.string.layouts_is_default)
                 else stringResource(R.string.layouts_file_name, info.fileName),
@@ -252,9 +252,9 @@ private fun PanelRow(
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(style.capsule).clickable(onClick = onInfo).padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(style.capsule).clickable(onClick = onInfo).padding(horizontal = 10.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center,
-        ) { Text(stringResource(R.string.layouts_view_info), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
+        ) { Text(stringResource(R.string.layouts_view_info), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium) }
     }
 }
 
@@ -262,16 +262,16 @@ private fun PanelRow(
 private fun PanelField(label: String, value: String, placeholder: String = "", onValue: (String) -> Unit, modifier: Modifier = Modifier) {
     val style = LocalControlsCardStyle.current
     Column(modifier = modifier) {
-        Text(label, color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp, top = 6.dp))
+        Text(label, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp, top = 6.dp))
         BasicTextField(
             value = value,
             onValueChange = onValue,
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+            textStyle = TextStyle(color = Color.White, fontSize = 13.sp),
             cursorBrush = SolidColor(style.accent),
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(style.row).padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(style.row).padding(horizontal = 12.dp, vertical = 10.dp),
             decorationBox = { inner ->
-                if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = style.muted, fontSize = 14.sp)
+                if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = style.muted, fontSize = 13.sp)
                 inner()
             },
         )
@@ -283,26 +283,26 @@ private fun PanelButtons(confirmLabel: String, onCancel: () -> Unit, onConfirm: 
     val style = LocalControlsCardStyle.current
     Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(
-            modifier = Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(style.capsule).clickable(onClick = onCancel),
+            modifier = Modifier.weight(1f).height(32.dp).clip(RoundedCornerShape(8.dp)).background(style.capsule).clickable(onClick = onCancel),
             contentAlignment = Alignment.Center,
-        ) { Text(stringResource(R.string.layouts_cancel), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+        ) { Text(stringResource(R.string.layouts_cancel), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
         Box(
-            modifier = Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp)).background(style.accent).clickable(onClick = onConfirm),
+            modifier = Modifier.weight(1f).height(32.dp).clip(RoundedCornerShape(8.dp)).background(style.accent).clickable(onClick = onConfirm),
             contentAlignment = Alignment.Center,
-        ) { Text(confirmLabel, color = style.onAccent, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+        ) { Text(confirmLabel, color = style.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
     }
 }
 
 @Composable
 private fun OpItem(icon: ImageVector, label: String, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Row(
-        modifier = modifier.alpha(if (enabled) 1f else 0.4f).clip(RoundedCornerShape(12.dp))
+        modifier = modifier.alpha(if (enabled) 1f else 0.4f).clip(RoundedCornerShape(8.dp))
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(12.dp))
-        Text(label, color = Color.White, fontSize = 15.sp)
+        Text(label, color = Color.White, fontSize = 13.sp)
     }
 }
 
@@ -376,7 +376,7 @@ fun ManageLayoutsPanel(
 
     ControlsCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.layouts_manage), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.layouts_manage), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 PanelTool(Icons.Filled.Refresh, stringResource(R.string.layouts_refresh)) { version++ }
                 PanelTool(Icons.Filled.Search, stringResource(R.string.layouts_search)) { searching = !searching; if (!searching) query = "" }
@@ -421,9 +421,9 @@ fun ManageLayoutsPanel(
         ) {
             LayoutInfoBody(info)
             Box(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(40.dp).clip(RoundedCornerShape(12.dp)).background(LocalControlsCardStyle.current.capsule).clickable { showInfo = null },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(32.dp).clip(RoundedCornerShape(8.dp)).background(LocalControlsCardStyle.current.capsule).clickable { showInfo = null },
                 contentAlignment = Alignment.Center,
-            ) { Text(stringResource(R.string.layouts_close), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            ) { Text(stringResource(R.string.layouts_close), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
         }
     }
 
@@ -467,7 +467,7 @@ fun ManageLayoutsPanel(
 
     deleting?.let { info ->
         HzWindowDialog(stringResource(R.string.layouts_delete), { deleting = null }) {
-            Text(stringResource(R.string.layouts_delete_confirm, info.fileName), color = Color.White, fontSize = 16.sp)
+            Text(stringResource(R.string.layouts_delete_confirm, info.fileName), color = Color.White, fontSize = 13.sp)
             PanelButtons(stringResource(R.string.controls_delete), { deleting = null }) {
                 ControlLayouts.delete(info.id)
                 if (selected == info.id) choose(ControlLayouts.ZALITH_ID, context.getString(R.string.controls_zalith_name))
@@ -480,7 +480,7 @@ fun ManageLayoutsPanel(
     operate?.let { info ->
         val file = info.removable
         HzWindowDialog(stringResource(R.string.layouts_operate), { operate = null }) {
-            Text(stringResource(R.string.layouts_operate_desc), color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+            Text(stringResource(R.string.layouts_operate_desc), color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
             Row(Modifier.fillMaxWidth()) {
                 OpItem(Icons.Filled.ContentCopy, stringResource(R.string.layouts_copy), true, Modifier.weight(1f)) {
                     runCatching { ControlLayouts.copy(context, info.id, defaultName, copySuffix) }

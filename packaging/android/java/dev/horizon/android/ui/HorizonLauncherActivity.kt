@@ -96,6 +96,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import dev.horizon.android.R
+import dev.horizon.android.ui.theme.HzColor
+import dev.horizon.android.ui.theme.HzFont
+import dev.horizon.android.ui.theme.HzMotion
+import dev.horizon.android.ui.theme.HzShape
 import dev.horizon.android.HorizonActivity
 import dev.horizon.android.bridge.*
 import dev.horizon.android.model.*
@@ -1571,29 +1575,28 @@ fun CleanLauncherScreen(
     val showLaunchDock = false // Play now lives on the Volt-style Home screen
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(LauncherRootBg)
-                // Home draws its wallpaper edge to edge (under the camera cutout); its foreground insets itself.
-                .then(
-                    if (selectedTab == LauncherNavTab.HOME) Modifier
-                    else Modifier.windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.displayCutout))
-                )
-                .padding(
-                    horizontal = if (selectedTab == LauncherNavTab.HOME) 0.dp else 12.dp,
-                    vertical = if (selectedTab == LauncherNavTab.HOME) 0.dp else 6.dp
-                )
-        ) {
+        Box(modifier = Modifier.fillMaxSize().background(LauncherRootBg)) {
             if (!isHibernated) {
                 HorizonAuroraBackground()
             }
-            Column(modifier = Modifier.fillMaxSize()) {
+            Row(modifier = Modifier.fillMaxSize()) {
+              HzSideRail(
+                  selectedTab = selectedTab,
+                  installStatus = installStatus,
+                  accent = SkyBlueAccent,
+                  onSelectTab = { selectedTab = it },
+                  onOpenFolder = { HorizonNativeBridge.openSystemFilesApp(context) }
+              )
+              Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 4.dp)
+                        // Home draws its wallpaper edge to edge; every other page sits inside the insets with a small margin.
+                        .then(
+                            if (selectedTab == LauncherNavTab.HOME) Modifier
+                            else Modifier.windowInsetsPadding(hzContentInsets()).padding(horizontal = 10.dp, vertical = 8.dp)
+                        )
                 ) {
                     // Main Morphing Content Area:
                     // Smoothly expands/contracts its width and morphs
@@ -1604,30 +1607,17 @@ fun CleanLauncherScreen(
                             .weight(1f)
                             .fillMaxHeight(),
                         transitionSpec = {
-                            val forward = targetState.ordinal >= initialState.ordinal
-                            (fadeIn(animationSpec = tween(250, easing = FastOutSlowInEasing)) +
-                                scaleIn(
-                                    initialScale = 0.96f,
-                                    animationSpec = tween(250, easing = FastOutSlowInEasing)
-                                ) +
-                                slideInHorizontally(
-                                    animationSpec = tween(280, easing = FastOutSlowInEasing),
-                                    initialOffsetX = { fullW -> if (forward) fullW / 10 else -fullW / 10 }
-                                ))
-                                .togetherWith(
-                                    fadeOut(animationSpec = tween(180, easing = FastOutLinearInEasing)) +
-                                        slideOutHorizontally(
-                                            animationSpec = tween(200, easing = FastOutLinearInEasing),
-                                            targetOffsetX = { fullW -> if (forward) -fullW / 14 else fullW / 14 }
-                                        )
-                                )
+                            // Quick fade plus a few dp of lift; no scaling, so big pages are never re-rasterised mid-transition.
+                            (fadeIn(animationSpec = tween(HzMotion.Short, delayMillis = 50, easing = HzMotion.Ease)) +
+                                slideInVertically(animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease)) { it / 40 })
+                                .togetherWith(fadeOut(animationSpec = tween(HzMotion.Quick, easing = FastOutLinearInEasing)))
                                 .using(sizeTransform = null)
                         },
                         label = "MainTabMorphTransition"
                     ) { tab ->
-                        // Every page but Home is drawn at 80% size (Volt-like compact cards, text and tabs).
+                        // Every page but Home is drawn at 76% size: the dense, desktop-like scale.
                         val baseDensity = LocalDensity.current
-                        val compactDensity = remember(baseDensity) { Density(baseDensity.density * 0.8f, baseDensity.fontScale) }
+                        val compactDensity = remember(baseDensity) { Density(baseDensity.density * 0.76f, baseDensity.fontScale) }
                         CompositionLocalProvider(LocalDensity provides if (tab == LauncherNavTab.HOME) baseDensity else compactDensity) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             when (tab) {
@@ -1721,30 +1711,6 @@ fun CleanLauncherScreen(
                 }
 
                 AnimatedVisibility(
-                    visible = selectedTab != LauncherNavTab.HOME,
-                    enter = fadeIn(tween(240)) + slideInVertically(
-                        animationSpec = tween(300, easing = FastOutSlowInEasing),
-                        initialOffsetY = { it }
-                    ),
-                    exit = fadeOut(tween(160)) + slideOutVertically(
-                        animationSpec = tween(200, easing = FastOutLinearInEasing),
-                        targetOffsetY = { it }
-                    )
-                ) {
-                    VoltBottomNav(
-                        selectedTab = selectedTab,
-                        installStatus = installStatus,
-                        activeAccount = activeAccount,
-                        activeSkinBitmap = activeSkinBitmap,
-                        accent = SkyBlueAccent,
-                        onSelectTab = { selectedTab = it },
-                        onOpenAccount = { selectedTab = LauncherNavTab.ACCOUNTS },
-                        onOpenFolder = { HorizonNativeBridge.openSystemFilesApp(context) },
-                        onOpenLogs = { selectedTab = LauncherNavTab.LOGS }
-                    )
-                }
-
-                AnimatedVisibility(
                     visible = showLaunchDock,
                     enter = fadeIn(tween(260)) + slideInVertically(
                         animationSpec = tween(320, easing = FastOutSlowInEasing),
@@ -1764,6 +1730,7 @@ fun CleanLauncherScreen(
                         onLaunchOrDownload = handleLaunchOrDownload
                     )
                 }
+              }
             }
         }
 
@@ -1785,38 +1752,18 @@ private data class HorizonNavItem(val tab: LauncherNavTab, val icon: ImageVector
 @Composable
 private fun horizonGlassBorder(): BorderStroke = BorderStroke(1.dp, VoltGrayStroke)
 
-/** Slowly drifting aurora blobs tinted by the active accent colour. Drawn behind everything. */
+/** One faint accent wash in the top-left corner. Static, so it is drawn once and costs nothing per frame. */
 @Composable
 private fun HorizonAuroraBackground() {
     val accent = SkyBlueAccent
-    val transition = rememberInfiniteTransition(label = "Aurora")
-    val a by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(15000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "AuroraA"
-    )
-    val b by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(21000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "AuroraB"
-    )
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-        val r = maxOf(w, h) * 0.55f
-        val c1 = Offset(w * (0.05f + 0.35f * a), h * (0.05f + 0.35f * b))
-        val c2 = Offset(w * (0.95f - 0.35f * b), h * (0.95f - 0.40f * a))
-        drawCircle(
-            brush = Brush.radialGradient(listOf(accent.copy(alpha = 0.24f), Color.Transparent), center = c1, radius = r),
-            radius = r,
-            center = c1
-        )
-        drawCircle(
-            brush = Brush.radialGradient(listOf(Color(0xFF7C4DFF).copy(alpha = 0.17f), Color.Transparent), center = c2, radius = r),
-            radius = r,
-            center = c2
+        val r = maxOf(size.width, size.height) * 0.7f
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(accent.copy(alpha = 0.07f), Color.Transparent),
+                center = Offset(size.width * 0.15f, 0f),
+                radius = r
+            )
         )
     }
 }
@@ -2494,14 +2441,14 @@ private fun CleanHomeViewport(
 
     LaunchedEffect(totalCount, isHibernated, isVideoMode) {
         while (!isHibernated && !isVideoMode) {
-            delay(5000L)
+            delay(9000L)
             wallpaperIndex = (wallpaperIndex + 1) % totalCount.coerceAtLeast(1)
         }
     }
 
     LaunchedEffect(isHibernated, isVideoMode) {
         while (!isHibernated && !isVideoMode) {
-            delay(5000L)
+            delay(9000L)
             var next = (MINECRAFT_SPLASH_QUOTES.indices).random()
             if (next == quoteIndex) {
                 next = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size
@@ -2553,7 +2500,7 @@ private fun CleanHomeViewport(
                     AnimatedContent(
                         targetState = wallpaperIndex % totalCount.coerceAtLeast(1),
                         transitionSpec = {
-                            fadeIn(animationSpec = tween(900)).togetherWith(fadeOut(animationSpec = tween(900))).using(sizeTransform = null)
+                            fadeIn(animationSpec = tween(700)).togetherWith(fadeOut(animationSpec = tween(700))).using(sizeTransform = null)
                         },
                         modifier = Modifier.fillMaxSize(),
                         label = "MinecraftWallpaperCarousel"
@@ -2590,10 +2537,8 @@ private fun CleanHomeViewport(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
-                        Brush.radialGradient(
-                            colors = listOf(SkyBlueAccent.copy(alpha = 0.20f), Color.Transparent),
-                            center = Offset(0f, Float.POSITIVE_INFINITY),
-                            radius = 1100f
+                        Brush.horizontalGradient(
+                            colors = listOf(Color.Black.copy(alpha = 0.50f), Color.Black.copy(alpha = 0.08f))
                         )
                     )
             )
@@ -2602,8 +2547,8 @@ private fun CleanHomeViewport(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.displayCutout))
-                    .padding(top = 14.dp),
+                    .windowInsetsPadding(hzContentInsets())
+                    .padding(top = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -2679,17 +2624,17 @@ private fun DashboardQuickIconPill(
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(34.dp)
-            .animatedPressScale(onClick = onClick)
-            .clip(RoundedCornerShape(11.dp))
-            .background(VoltGrayCard.copy(alpha = 0.92f))
-            .border(1.dp, VoltGrayStroke, RoundedCornerShape(11.dp))
+            .size(28.dp)
+            .animatedPressScale(pressedScale = 0.94f, onClick = onClick)
+            .clip(HzShape.Control)
+            .background(HzColor.Glass)
+            .border(1.dp, HzColor.Hairline, HzShape.Control)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = Color.White,
-            modifier = Modifier.size(17.dp)
+            modifier = Modifier.size(15.dp)
         )
     }
 }
@@ -4133,7 +4078,7 @@ private fun CleanLogsViewport(
                             ) {
                                 Text(
                                     text = entry.timestamp,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = HzFont.Mono,
                                     fontSize = 10.sp,
                                     color = MutedSubtitleText
                                 )
@@ -4151,7 +4096,7 @@ private fun CleanLogsViewport(
                                 }
                                 Text(
                                     text = entry.message,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = HzFont.Mono,
                                     fontSize = 11.sp,
                                     color = Color(0xFFE1E8ED),
                                     modifier = Modifier.weight(1f)
@@ -4808,7 +4753,7 @@ private fun CleanVersionsViewport(
                                 ) {
                                     Text(
                                         text = logContent,
-                                        fontFamily = FontFamily.Monospace,
+                                        fontFamily = HzFont.Mono,
                                         fontSize = 10.sp,
                                         color = Color(0xFFA5D6A7)
                                     )
@@ -5497,7 +5442,7 @@ private fun CleanStoreViewport(
                                                     Text(
                                                         text = listOf(item.version, item.author).filter { it.isNotBlank() }.joinToString(" · "),
                                                         fontSize = 10.sp,
-                                                        fontFamily = FontFamily.Monospace,
+                                                        fontFamily = HzFont.Mono,
                                                         color = MutedSubtitleText,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis
@@ -6538,7 +6483,7 @@ private fun StoreOrFileItemIconBadge(
             Text(
                 text = initials,
                 fontSize = 15.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = HzFont.Mono,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White
             )
