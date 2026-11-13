@@ -827,6 +827,12 @@ pub struct Graphics {
     /// Android: load shader packs on two worker threads while the game keeps drawing; off loads
     /// them on the frame that picks the pack.
     pub pack_workers: bool,
+    /// Adaptive Render Distance (Horizon setting), off by default: while frames run slow the drawn
+    /// distance shrinks a chunk at a time, and grows back once there is room
+    /// (`adaptive_distance::AdaptiveDistance`). Chunks stay loaded; only what is drawn moves.
+    pub adaptive_distance: bool,
+    /// Fewest chunks Adaptive Render Distance draws (4..=32).
+    pub adaptive_distance_min: u32,
     /// The graphics API (Windows only; see `GraphicsApi`).
     pub api: GraphicsApi,
     /// Translucent quads in vertex buffers of their own (`gfx`'s translucent arena), so their
@@ -906,6 +912,8 @@ impl Default for Graphics {
             shadow_cache: false,
             menu_background_cache: true,
             pack_workers: true,
+            adaptive_distance: false,
+            adaptive_distance_min: 6,
             api: GraphicsApi::Auto,
             translucent_batching: true,
             hdr_smooth_gradients: true,
@@ -1056,6 +1064,10 @@ impl Graphics {
                 "hdrSmoothGradients" => g.hdr_smooth_gradients = flag(g.hdr_smooth_gradients),
                 "menuBackgroundCache" => g.menu_background_cache = flag(g.menu_background_cache),
                 "packWorkers" => g.pack_workers = flag(g.pack_workers),
+                "adaptiveDistance" => g.adaptive_distance = flag(g.adaptive_distance),
+                "adaptiveDistanceMin" => {
+                    g.adaptive_distance_min = number(g.adaptive_distance_min).clamp(4, 32)
+                }
                 "graphicsApi" => g.api = GraphicsApi::from_name(value).unwrap_or_default(),
                 "pickedShaderPack" => g.shader_pack = value.to_owned(),
                 "overlay" => {
@@ -1072,7 +1084,7 @@ impl Graphics {
     }
     pub fn serialize(&self) -> String {
         let mut text = format!(
-            "preset:{}\nlodDistance:{}\nfarDetail:{}\ncaveCulling:{}\nentityCulling:{}\nentityCullingPrecheck:{}\nparticleCulling:{}\nleafCulling:{}\nopaqueIce:{}\nblockEntityCacheShulkerBoxes:{}\nblockEntityCacheSigns:{}\nblockEntityCacheDecoratedPots:{}\nblockEntityCacheBells:{}\nblockEntityCacheChests:{}\nblockEntityCacheBanners:{}\nblockEntityCacheCopperGolemStatues:{}\nchunkUpdates:{}\nuploadBudgetKiB:{}\ntextureBudgetMiB:{}\nsky:{}\nfog:{}\nweather:{}\nanimatedTextures:{}\nditherCutoutMips:{}\npresentMode:{}\nframePacing:{}\nworkers:{}\noverlay:{}\nresolutionScale:{}\ndynamicResolution:{}\ndynamicResolutionMin:{}\nfxaa:{}\ntaa:{}\nupscaling:{}\nupscalingSharpness:{}\nscreenshotQuality:{}\nframeGeneration:{}\nhdr:{}\nhdrPaperWhite:{}\nhdrPeak:{}\nhdrBlackLevel:{}\nhdrUiBrightness:{}\nhdrLighting:{}\nhdrKey:{}\nbatteryMode:{}\nshadowCache:{}\ngraphicsApi:{}\npickedShaderPack:{}\nbatchTranslucent:{}\nhdrSmoothGradients:{}\ngpuCulling:{}\nmenuBackgroundCache:{}\npackWorkers:{}\n",
+            "preset:{}\nlodDistance:{}\nfarDetail:{}\ncaveCulling:{}\nentityCulling:{}\nentityCullingPrecheck:{}\nparticleCulling:{}\nleafCulling:{}\nopaqueIce:{}\nblockEntityCacheShulkerBoxes:{}\nblockEntityCacheSigns:{}\nblockEntityCacheDecoratedPots:{}\nblockEntityCacheBells:{}\nblockEntityCacheChests:{}\nblockEntityCacheBanners:{}\nblockEntityCacheCopperGolemStatues:{}\nchunkUpdates:{}\nuploadBudgetKiB:{}\ntextureBudgetMiB:{}\nsky:{}\nfog:{}\nweather:{}\nanimatedTextures:{}\nditherCutoutMips:{}\npresentMode:{}\nframePacing:{}\nworkers:{}\noverlay:{}\nresolutionScale:{}\ndynamicResolution:{}\ndynamicResolutionMin:{}\nfxaa:{}\ntaa:{}\nupscaling:{}\nupscalingSharpness:{}\nscreenshotQuality:{}\nframeGeneration:{}\nhdr:{}\nhdrPaperWhite:{}\nhdrPeak:{}\nhdrBlackLevel:{}\nhdrUiBrightness:{}\nhdrLighting:{}\nhdrKey:{}\nbatteryMode:{}\nshadowCache:{}\ngraphicsApi:{}\npickedShaderPack:{}\nbatchTranslucent:{}\nhdrSmoothGradients:{}\ngpuCulling:{}\nmenuBackgroundCache:{}\npackWorkers:{}\nadaptiveDistance:{}\nadaptiveDistanceMin:{}\n",
             self.preset.name(),
             self.lod_distance,
             self.far_detail.name(),
@@ -1133,6 +1145,8 @@ impl Graphics {
             self.gpu_culling.key(),
             bool_text(self.menu_background_cache),
             bool_text(self.pack_workers),
+            bool_text(self.adaptive_distance),
+            self.adaptive_distance_min,
         );
         text += &self.blue_map.serialize();
         text
@@ -1337,6 +1351,8 @@ mod tests {
             shadow_cache: true,
             menu_background_cache: false,
             pack_workers: false,
+            adaptive_distance: true,
+            adaptive_distance_min: 9,
             api: GraphicsApi::Dx12,
             translucent_batching: false,
             hdr_smooth_gradients: false,

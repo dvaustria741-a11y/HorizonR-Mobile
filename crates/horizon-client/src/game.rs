@@ -2967,6 +2967,8 @@ struct Game<'a> {
     gpu_utilization: f64,
     /// GPU Culling's Auto mode: what it has decided from the frames' CPU and GPU times.
     gpu_culling_auto: horizon_client::autotune::GpuCullingAuto,
+    /// Adaptive Render Distance: how far terrain is drawn, from the frames' own cost.
+    adaptive_distance: horizon_client::adaptive_distance::AdaptiveDistance,
     /// The mobs `mob_geometry` drew last frame (`lastEntityRenderStateCount`).
     rendered_mobs: std::cell::Cell<usize>,
     /// Whether a native mod requested background blur for this frame (`apply_screen_blur`).
@@ -12829,6 +12831,29 @@ impl Game<'_> {
                                     self.gpu_culling_auto.reset();
                                 }
                             }
+                            // Adaptive Render Distance: only frames of a settled world in play
+                            // count; a window that loading or a menu spoiled is dropped.
+                            if self.adaptive_distance.enabled() {
+                                if self.screen == Screen::Playing
+                                    && !self.streaming.terrain_loading()
+                                {
+                                    let busy = ms(cpu).max(r.gpu_times.last().copied().unwrap_or(0.0));
+                                    if let Some(step) = self
+                                        .adaptive_distance
+                                        .observe(busy, self.streaming.radius)
+                                    {
+                                        log::info!(
+                                            "Horizon: Adaptive Render Distance {} a chunk, drawing {} of {} ({} ms busy)",
+                                            if step < 0 { "takes" } else { "gives back" },
+                                            self.adaptive_distance.apply(self.streaming.radius),
+                                            self.streaming.radius,
+                                            busy
+                                        );
+                                    }
+                                } else {
+                                    self.adaptive_distance.skip_window();
+                                }
+                            }
                             self.frame_stats.record_cpu(ms(cpu));
                             let render = r.last_encode;
                             let phases = [
@@ -13508,6 +13533,7 @@ impl<'a> Game<'a> {
             debug_refresh: Default::default(),
             gpu_utilization: 0.0,
             gpu_culling_auto: horizon_client::autotune::GpuCullingAuto::new(),
+            adaptive_distance: horizon_client::adaptive_distance::AdaptiveDistance::new(),
             rendered_mobs: Default::default(),
             screen_blur_requested: Default::default(),
             spawn_counts: HashMap::new(),

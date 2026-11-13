@@ -8578,6 +8578,25 @@ private fun CleanSettingsViewport(
                         )
 
                         LauncherSettingToggleCard(
+                            title = "Adaptive Render Distance",
+                            description = "Draws terrain one chunk nearer while frames run slow and gives it back once there is room, so the frame rate holds without you touching render distance. Chunks stay loaded and fog closes in with the drawn distance. Check the log for its steps (applies on the next game launch)",
+                            checked = config.adaptiveRenderDistance,
+                            onCheckedChange = { onConfigChange(config.copy(adaptiveRenderDistance = it)) }
+                        )
+
+                        if (config.adaptiveRenderDistance) {
+                            LauncherSettingSliderCard(
+                                title = "Adaptive Render Distance minimum",
+                                description = "Fewest chunks it will draw (written to adaptiveDistanceMin in horizon-graphics.txt; applies on the next game launch)",
+                                value = config.adaptiveRenderDistanceMin,
+                                valueRange = 4..32,
+                                step = 1,
+                                valueSuffix = " chunks",
+                                onValueChange = { onConfigChange(config.copy(adaptiveRenderDistanceMin = it)) }
+                            )
+                        }
+
+                        LauncherSettingToggleCard(
                             title = "Trust shader packs (skip safety checks)",
                             description = "Compile shader pack programs without bounds and loop checks: the same picture for a well-written pack, with less GPU time. A broken pack may glitch or freeze the game instead of being stopped (applies on the next game launch)",
                             checked = config.trustShaderPacks,

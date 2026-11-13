@@ -1664,8 +1664,10 @@ object HorizonNativeBridge {
                     autoShaderSwitches = obj.optBoolean("autoShaderSwitches", true),
                     frameGeneration = obj.optBoolean("frameGeneration", false),
                     frameGenRenderScale = obj.optInt("frameGenRenderScale", 100).coerceIn(50, 100),
-                    fpsBoostPack = obj.optBoolean("fpsBoostPack", true),
+                    fpsBoostPack = obj.optBoolean("fpsBoostPack", false),
                     aggressiveFpsTricks = obj.optBoolean("aggressiveFpsTricks", false),
+                    adaptiveRenderDistance = obj.optBoolean("adaptiveRenderDistance", false),
+                    adaptiveRenderDistanceMin = obj.optInt("adaptiveRenderDistanceMin", 6).coerceIn(4, 32),
                     mcGuiScale = obj.optInt("mcGuiScale", 0).coerceIn(0, 4),
                     mcFov = obj.optInt("mcFov", 70).coerceIn(30, 110),
                     mcVsync = obj.optBoolean("mcVsync", true),
@@ -1809,6 +1811,8 @@ object HorizonNativeBridge {
             put("frameGenRenderScale", config.frameGenRenderScale)
             put("fpsBoostPack", config.fpsBoostPack)
             put("aggressiveFpsTricks", config.aggressiveFpsTricks)
+            put("adaptiveRenderDistance", config.adaptiveRenderDistance)
+            put("adaptiveRenderDistanceMin", config.adaptiveRenderDistanceMin)
         }
         synchronized(configIoLock) {
             runCatching {
@@ -1968,6 +1972,10 @@ object HorizonNativeBridge {
                 "blockEntityCacheCopperGolemStatues"
             )) updates[key] = "true"
         }
+        // Experimental Stuff > Adaptive Render Distance: the engine's own governor (`adaptiveDistance` and
+        // `adaptiveDistanceMin` in horizon-graphics.txt). The launcher owns the switch, so Off is written too.
+        updates["adaptiveDistance"] = if (config.adaptiveRenderDistance) "true" else "false"
+        if (config.adaptiveRenderDistance) updates["adaptiveDistanceMin"] = config.adaptiveRenderDistanceMin.coerceIn(4, 32).toString()
         // Experimental Stuff > Aggressive FPS Tricks: these do change the picture a little (opaque ice, chunkier
         // leaves, no animated textures, world resolution drops to 70% while frames run slow).
         if (config.aggressiveFpsTricks) {
