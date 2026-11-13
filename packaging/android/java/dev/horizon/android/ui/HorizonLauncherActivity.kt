@@ -4896,15 +4896,15 @@ private fun CleanStoreViewport(
                     ) {
                         // Dedicated Top Header Bar (NEVER overlaps cards!) showing `19 of 19 • playhorizon.dev/mods` + Pagination + Refresh
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
+                            shape = HzShape.Panel,
+                            color = HzColor.Panel,
+                            border = BorderStroke(1.dp, HzColor.Hairline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -4992,13 +4992,13 @@ private fun CleanStoreViewport(
                         // Active Download Progress Bar with Pause / Resume / Cancel
                         AnimatedVisibility(visible = storeProgress.running) {
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = SubRailCapsuleActive,
+                                shape = HzShape.Panel,
+                                color = HzColor.PanelHi,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                                    modifier = Modifier.padding(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -5061,7 +5061,7 @@ private fun CleanStoreViewport(
                                         trackColor = Color(0xFF263238),
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(5.dp)
+                                            .height(3.dp)
                                             .clip(RoundedCornerShape(50))
                                     )
                                 }
@@ -5100,207 +5100,142 @@ private fun CleanStoreViewport(
                         } else {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                contentPadding = PaddingValues(bottom = 8.dp)
                             ) {
                                 items(catalogItems, key = { it.id }) { item ->
                                     val installState = HorizonNativeBridge.getStoreItemInstallState(item, installedMap)
                                     val installedVer = installedMap[item.id] ?: installedMap[item.slug]
                                     val isCurrentlyDownloading = storeProgress.running && storeProgress.activeItemId == item.id
 
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = CardSlateBg,
-                                        border = BorderStroke(1.dp, VoltGrayStroke),
+                                    Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .animatedPressScale { selectedProject = item }
+                                            .animatedPressScale(pressedScale = 0.99f) { selectedProject = item }
+                                            .drawBehind {
+                                                drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
+                                            }
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            // Left 48dp Pixel-Style Square Icon Badge (matching `429816.jpg`)
-                                            StoreAsyncProjectIcon(
-                                                iconUrl = item.iconUrl,
-                                                title = item.title,
-                                                isMod = item.category == StoreCategory.MOD || item.category == StoreCategory.NATIVE_MOD,
-                                                isWorld = item.category == StoreCategory.MODPACK,
-                                                size = 48.dp
-                                            )
+                                        StoreAsyncProjectIcon(
+                                            iconUrl = item.iconUrl,
+                                            title = item.title,
+                                            isMod = item.category == StoreCategory.MOD || item.category == StoreCategory.NATIVE_MOD,
+                                            isWorld = item.category == StoreCategory.MODPACK,
+                                            size = 38.dp
+                                        )
 
-                                            Spacer(Modifier.width(12.dp))
-
-                                            // Middle Column: Title + Summary + Rating Stars & Downloads + Version & Author (`429816.jpg` exact layout!)
-                                            Column(
-                                                modifier = Modifier.weight(1f),
-                                                verticalArrangement = Arrangement.spacedBy(3.dp)
-                                            ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    Text(
-                                                        text = item.title,
-                                                        fontSize = 14.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color.White,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                        modifier = Modifier.weight(1f, fill = false)
-                                                    )
-                                                    // Kind Badge (`MOD`, `NATIVE MOD`, `MODPACK`, `RESOURCE PACK`, `SHADER PACK`)
-                                                    Surface(
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        color = Color(0xFF14181E)
-                                                    ) {
-                                                        Text(
-                                                            text = item.kindBadge,
-                                                            fontSize = 9.sp,
-                                                            fontWeight = FontWeight.ExtraBold,
-                                                            color = Color(0xFFD5DEE5),
-                                                            maxLines = 1,
-                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                    LavenderTagBadge(text = item.versionBadge)
-                                                }
-
+                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 Text(
-                                                    text = item.summary,
-                                                    fontSize = 11.sp,
-                                                    color = Color(0xFFD0D8DE),
+                                                    text = item.title,
+                                                    fontSize = 12.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = Color.White,
                                                     maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false)
                                                 )
+                                                Text(
+                                                    text = item.kindBadge,
+                                                    fontFamily = HzFont.Mono,
+                                                    fontSize = 8.5.sp,
+                                                    color = MutedSubtitleText,
+                                                    maxLines = 1,
+                                                    modifier = Modifier
+                                                        .border(1.dp, HzColor.Hairline, HzShape.Chip)
+                                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                )
+                                                Text(
+                                                    text = item.versionBadge,
+                                                    fontFamily = HzFont.Mono,
+                                                    fontSize = 9.sp,
+                                                    color = SkyBlueAccent,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                            Text(
+                                                text = item.summary,
+                                                fontSize = 10.5.sp,
+                                                color = Color(0xFFB8C1C9),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "\u2605 ${String.format(Locale.US, "%.1f", item.ratingScore)} (${item.ratingCount})  \u00B7  ${item.formattedDownloads}" +
+                                                    listOf(item.version, item.author).filter { it.isNotBlank() }.joinToString("  \u00B7  ", prefix = "  \u00B7  "),
+                                                fontFamily = HzFont.Mono,
+                                                fontSize = 9.5.sp,
+                                                color = MutedSubtitleText,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
 
-                                                // Star rating + downloads + version + author (`★★★★★ 4.5 (2) · 5.6k downloads   0.1.1 · levzzz5154`)
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        when {
+                                            isCurrentlyDownloading -> StoreActionButton(
+                                                label = "${storeProgress.percent}%",
+                                                icon = Icons.Default.Cancel,
+                                                bg = Color(0xFF3A2326),
+                                                fg = HzColor.Danger
+                                            ) { showCancelStoreDialog = true }
+
+                                            installState == StoreInstallState.UPDATE_AVAILABLE -> Column(
+                                                horizontalAlignment = Alignment.End,
+                                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                StoreActionButton(
+                                                    label = "Update",
+                                                    icon = Icons.Default.SystemUpdateAlt,
+                                                    bg = Color(0xFFFFB74D),
+                                                    fg = Color(0xFF261600),
+                                                    enabled = !storeProgress.running
                                                 ) {
-                                                    Text(
-                                                        text = "★★★★★ ${String.format(Locale.US, "%.1f", item.ratingScore)} (${item.ratingCount}) · ${item.formattedDownloads}",
-                                                        fontSize = 10.sp,
-                                                        color = Color(0xFFFFCA28),
-                                                        maxLines = 1
-                                                    )
-                                                    Text(
-                                                        text = listOf(item.version, item.author).filter { it.isNotBlank() }.joinToString(" · "),
-                                                        fontSize = 10.sp,
-                                                        fontFamily = HzFont.Mono,
-                                                        color = MutedSubtitleText,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
+                                                    if (item.isCompatibleWith26_3) startItemDownload(item)
+                                                    else pendingIncompatibleItem = item
+                                                }
+                                                Text(
+                                                    text = "v${installedVer ?: "0.1"} \u2192 v${item.version}",
+                                                    fontFamily = HzFont.Mono,
+                                                    fontSize = 8.5.sp,
+                                                    color = Color(0xFFFFB74D),
+                                                    maxLines = 1
+                                                )
+                                            }
+
+                                            installState == StoreInstallState.INSTALLED -> Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                    Icon(Icons.Default.CheckCircle, contentDescription = "Installed", tint = Color(0xFF81C784), modifier = Modifier.size(13.dp))
+                                                    Text("Installed", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFF81C784))
+                                                }
+                                                Box(
+                                                    contentAlignment = Alignment.Center,
+                                                    modifier = Modifier
+                                                        .size(26.dp)
+                                                        .animatedPressScale(pressedScale = 0.94f) {
+                                                            HorizonNativeBridge.uninstallStoreItem(context, item, profileSlot, logEnabled)
+                                                            installedMap = HorizonNativeBridge.getInstalledStoreVersionsMap(context, profileSlot)
+                                                        }
+                                                        .clip(HzShape.Control)
+                                                        .background(HzColor.PanelHi)
+                                                ) {
+                                                    Icon(Icons.Outlined.Delete, contentDescription = "Uninstall", tint = HzColor.Danger, modifier = Modifier.size(14.dp))
                                                 }
                                             }
 
-                                            Spacer(Modifier.width(10.dp))
-
-                                            // Right Action Column: Installed / Update / Cancel / Install Button
-                                            Column(
-                                                horizontalAlignment = Alignment.End,
-                                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                                            else -> StoreActionButton(
+                                                label = "Install",
+                                                icon = Icons.Default.Download,
+                                                bg = SkyBlueAccent,
+                                                fg = SkyBlueDarkText,
+                                                enabled = !storeProgress.running
                                             ) {
-                                                when {
-                                                    isCurrentlyDownloading -> {
-                                                        Surface(
-                                                            shape = RoundedCornerShape(10.dp),
-                                                            color = Color(0xFF3A2326),
-                                                            modifier = Modifier.animatedPressScale { showCancelStoreDialog = true }
-                                                        ) {
-                                                            Row(
-                                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                                verticalAlignment = Alignment.CenterVertically,
-                                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                            ) {
-                                                                Icon(Icons.Default.Cancel, contentDescription = "Cancel", tint = Color(0xFFFF8A80), modifier = Modifier.size(14.dp))
-                                                                Text("${storeProgress.percent}% Cancel", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF8A80))
-                                                            }
-                                                        }
-                                                    }
-
-                                                    installState == StoreInstallState.UPDATE_AVAILABLE -> {
-                                                        Surface(
-                                                            shape = RoundedCornerShape(10.dp),
-                                                            color = Color(0xFFFFB74D),
-                                                            modifier = Modifier.animatedPressScale(enabled = !storeProgress.running) {
-                                                                if (item.isCompatibleWith26_3) startItemDownload(item)
-                                                                else pendingIncompatibleItem = item
-                                                            }
-                                                        ) {
-                                                            Row(
-                                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                                verticalAlignment = Alignment.CenterVertically,
-                                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                            ) {
-                                                                Icon(Icons.Default.SystemUpdateAlt, contentDescription = "Update", tint = Color(0xFF261600), modifier = Modifier.size(14.dp))
-                                                                Text("Update", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF261600))
-                                                            }
-                                                        }
-                                                        Text(
-                                                            text = "v${installedVer ?: "0.1"} → v${item.version}",
-                                                            fontSize = 9.sp,
-                                                            color = Color(0xFFFFB74D),
-                                                            maxLines = 1
-                                                        )
-                                                    }
-
-                                                    installState == StoreInstallState.INSTALLED -> {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                        ) {
-                                                            Surface(
-                                                                shape = RoundedCornerShape(10.dp),
-                                                                color = Color(0xFF1E3E29)
-                                                            ) {
-                                                                Row(
-                                                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                                                                    verticalAlignment = Alignment.CenterVertically,
-                                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                                ) {
-                                                                    Icon(Icons.Default.CheckCircle, contentDescription = "Installed", tint = Color(0xFF81C784), modifier = Modifier.size(14.dp))
-                                                                    Text("Installed", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C784))
-                                                                }
-                                                            }
-                                                            Icon(
-                                                                imageVector = Icons.Outlined.Delete,
-                                                                contentDescription = "Uninstall",
-                                                                tint = Color(0xFFFF8A80),
-                                                                modifier = Modifier
-                                                                    .size(18.dp)
-                                                                    .animatedPressScale {
-                                                                        HorizonNativeBridge.uninstallStoreItem(context, item, profileSlot, logEnabled)
-                                                                        installedMap = HorizonNativeBridge.getInstalledStoreVersionsMap(context, profileSlot)
-                                                                    }
-                                                            )
-                                                        }
-                                                    }
-
-                                                    else -> {
-                                                        Surface(
-                                                            shape = RoundedCornerShape(10.dp),
-                                                            color = SkyBlueAccent,
-                                                            modifier = Modifier.animatedPressScale(enabled = !storeProgress.running) {
-                                                                if (item.isCompatibleWith26_3) startItemDownload(item)
-                                                                else pendingIncompatibleItem = item
-                                                            }
-                                                        ) {
-                                                            Row(
-                                                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-                                                                verticalAlignment = Alignment.CenterVertically,
-                                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                            ) {
-                                                                Icon(Icons.Default.Download, contentDescription = "Install", tint = SkyBlueDarkText, modifier = Modifier.size(14.dp))
-                                                                Text("Install", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SkyBlueDarkText)
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                                if (item.isCompatibleWith26_3) startItemDownload(item)
+                                                else pendingIncompatibleItem = item
                                             }
                                         }
                                     }
@@ -6117,6 +6052,32 @@ private fun CleanStoreViewport(
                 }
             }
         }
+    }
+}
+
+/** Compact action button for list rows: 26 dp tall, small radius, dims when disabled. */
+@Composable
+private fun StoreActionButton(
+    label: String,
+    icon: ImageVector,
+    bg: Color,
+    fg: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .height(26.dp)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.5f }
+            .animatedPressScale(enabled = enabled, pressedScale = 0.96f, onClick = onClick)
+            .clip(HzShape.Control)
+            .background(bg)
+            .padding(horizontal = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(imageVector = icon, contentDescription = label, tint = fg, modifier = Modifier.size(13.dp))
+        Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1)
     }
 }
 
