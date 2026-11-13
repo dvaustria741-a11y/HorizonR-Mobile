@@ -3751,161 +3751,107 @@ private fun CleanLogsViewport(
             onSelect = { selectedCategory = it }
         )
 
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = CardSlateBg.copy(alpha = 0.90f),
-            border = horizonGlassBorder(),
+        // Toolbar: search, severity filter, copy, clear.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(28.dp)
+                    .clip(HzShape.Control)
+                    .background(HzColor.PanelHi)
+                    .border(1.dp, HzColor.Hairline, HzShape.Control)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null, tint = MutedSubtitleText, modifier = Modifier.size(14.dp))
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (searchQuery.isEmpty()) {
+                        Text("Filter: url, speed, wgpu, skin", fontFamily = HzFont.Mono, fontSize = 11.sp, color = MutedSubtitleText, maxLines = 1)
+                    }
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        singleLine = true,
+                        textStyle = TextStyle(color = Color.White, fontSize = 11.sp, fontFamily = HzFont.Mono),
+                        cursorBrush = SolidColor(SkyBlueAccent),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            HzSegmented(
+                options = LogSeverityFilter.entries.map { it.label },
+                selected = LogSeverityFilter.entries.indexOf(selectedSeverity),
+                accent = SkyBlueAccent,
+                onSelect = { selectedSeverity = LogSeverityFilter.entries[it] },
+                modifier = Modifier.width((46 * LogSeverityFilter.entries.size).dp)
+            )
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(28.dp)
+                    .animatedPressScale(pressedScale = 0.94f) {
+                        val raw = filteredEntries.joinToString("\n") { "[${it.timestamp}] [${it.sourceTag}/${it.severity.label}] ${it.message}" }
+                        HorizonNativeBridge.copyToClipboard(context, "HorizonR Logs", raw)
+                    }
+                    .clip(HzShape.Control)
+                    .background(HzColor.PanelHi)
+            ) { Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Color(0xFFD5DEE5), modifier = Modifier.size(14.dp)) }
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(28.dp)
+                    .animatedPressScale(pressedScale = 0.94f) {
+                        HorizonNativeBridge.clearLogs(context)
+                        refreshTick += 1
+                    }
+                    .clip(HzShape.Control)
+                    .background(HzColor.PanelHi)
+            ) { Icon(Icons.Default.DeleteSweep, contentDescription = "Clear", tint = HzColor.Danger, modifier = Modifier.size(14.dp)) }
+        }
+
+        // Console: one flat line per entry, mono type, colour only on the severity.
+        LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .clip(HzShape.Panel)
+                .background(Color(0xFF0A0D12))
+                .border(1.dp, HzColor.Hairline, HzShape.Panel),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Top Search & Action Toolbar
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = CardRowBg,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(34.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 14.dp),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            if (searchQuery.isEmpty()) {
-                                Text("Search logs (URL, speed, wgpu, skin)...", fontSize = 12.sp, color = MutedSubtitleText)
-                            }
-                            BasicTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                singleLine = true,
-                                textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
-                                cursorBrush = SolidColor(SkyBlueAccent),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-
-                    LogSeverityFilter.entries.forEach { sev ->
-                        val selected = selectedSeverity == sev
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = if (selected) SubRailCapsuleActive else CardRowBg,
-                            modifier = Modifier.animatedPressScale { selectedSeverity = sev }
-                        ) {
-                            Text(
-                                text = sev.label,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (selected) SkyBlueAccent else MutedSubtitleText,
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = SkyBlueAccent,
-                        modifier = Modifier.animatedPressScale {
-                            val raw = filteredEntries.joinToString("\n") { "[${it.timestamp}] [${it.sourceTag}/${it.severity.label}] ${it.message}" }
-                            HorizonNativeBridge.copyToClipboard(context, "HorizonR Logs", raw)
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = SkyBlueDarkText, modifier = Modifier.size(14.dp))
-                            Text("Copy", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SkyBlueDarkText)
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF3A2326),
-                        modifier = Modifier.animatedPressScale {
-                            HorizonNativeBridge.clearLogs(context)
-                            refreshTick += 1
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = "Clear", tint = Color(0xFFFF8A80), modifier = Modifier.size(14.dp))
-                            Text("Clear", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF8A80))
-                        }
-                    }
+            items(filteredEntries, key = { it.id }) { entry ->
+                val sevColor = when (entry.severity) {
+                    LogSeverityFilter.ERR -> Color(0xFFFF6B6B)
+                    LogSeverityFilter.WARN -> Color(0xFFFFB74D)
+                    LogSeverityFilter.DL -> Color(0xFF66BB6A)
+                    else -> SkyBlueAccent
                 }
-
-                // Log Console List
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF12171B))
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(filteredEntries, key = { it.id }) { entry ->
-                        val badgeColor = when (entry.severity) {
-                            LogSeverityFilter.ERR -> Color(0xFFFF5252)
-                            LogSeverityFilter.WARN -> Color(0xFFFFB74D)
-                            LogSeverityFilter.DL -> Color(0xFF66BB6A)
-                            else -> SkyBlueAccent
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFF1A2126),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = entry.timestamp,
-                                    fontFamily = HzFont.Mono,
-                                    fontSize = 10.sp,
-                                    color = MutedSubtitleText
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = badgeColor.copy(alpha = 0.18f)
-                                ) {
-                                    Text(
-                                        text = "${entry.sourceTag} • ${entry.severity.label}",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = badgeColor,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                                Text(
-                                    text = entry.message,
-                                    fontFamily = HzFont.Mono,
-                                    fontSize = 11.sp,
-                                    color = Color(0xFFE1E8ED),
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                    Text(
+                        text = entry.timestamp,
+                        fontFamily = HzFont.Mono, fontSize = 10.sp, lineHeight = 14.sp,
+                        color = Color(0xFF5E6672), maxLines = 1
+                    )
+                    Text(
+                        text = entry.severity.label,
+                        fontFamily = HzFont.Mono, fontSize = 10.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold,
+                        color = sevColor, maxLines = 1, modifier = Modifier.width(34.dp)
+                    )
+                    Text(
+                        text = "${entry.sourceTag}  ${entry.message}",
+                        fontFamily = HzFont.Mono, fontSize = 10.5.sp, lineHeight = 14.sp,
+                        color = if (entry.severity == LogSeverityFilter.ERR) Color(0xFFFFC9C9) else Color(0xFFC9D1DA),
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
