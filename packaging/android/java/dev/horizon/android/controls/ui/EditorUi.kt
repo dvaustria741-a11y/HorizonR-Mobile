@@ -4,6 +4,11 @@ import android.content.Intent
 import android.graphics.RectF
 import android.view.KeyEvent
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -83,6 +88,9 @@ import dev.horizon.android.controls.Selection
 import dev.horizon.android.controls.Size
 import dev.horizon.android.controls.Style
 import dev.horizon.android.controls.Visibility
+import dev.horizon.android.ui.theme.HzInter
+import dev.horizon.android.ui.theme.HzMotion
+import dev.horizon.android.ui.theme.hzScrollbar
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.roundToInt
