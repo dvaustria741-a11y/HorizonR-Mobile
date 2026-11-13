@@ -8564,6 +8564,20 @@ private fun CleanSettingsViewport(
                         )
 
                         LauncherSettingToggleCard(
+                            title = "FPS Boost Pack",
+                            description = "Turns on the engine's own culling and caching switches: async entity and particle culling, hidden-leaf culling, GPU culling (Auto), translucent batching, block entity cache, menu background cache and shader packs loaded on worker threads. The picture stays the same. Only written while on, so turning it off keeps what the in-game menus say (applies on the next game launch)",
+                            checked = config.fpsBoostPack,
+                            onCheckedChange = { onConfigChange(config.copy(fpsBoostPack = it)) }
+                        )
+
+                        LauncherSettingToggleCard(
+                            title = "Aggressive FPS Tricks",
+                            description = "More FPS for a slightly worse picture: opaque ice, chunkier leaves, no animated textures, and Dynamic Resolution down to 70% while frames run slow (applies on the next game launch)",
+                            checked = config.aggressiveFpsTricks,
+                            onCheckedChange = { onConfigChange(config.copy(aggressiveFpsTricks = it)) }
+                        )
+
+                        LauncherSettingToggleCard(
                             title = "Trust shader packs (skip safety checks)",
                             description = "Compile shader pack programs without bounds and loop checks: the same picture for a well-written pack, with less GPU time. A broken pack may glitch or freeze the game instead of being stopped (applies on the next game launch)",
                             checked = config.trustShaderPacks,

@@ -1664,6 +1664,8 @@ object HorizonNativeBridge {
                     autoShaderSwitches = obj.optBoolean("autoShaderSwitches", true),
                     frameGeneration = obj.optBoolean("frameGeneration", false),
                     frameGenRenderScale = obj.optInt("frameGenRenderScale", 100).coerceIn(50, 100),
+                    fpsBoostPack = obj.optBoolean("fpsBoostPack", true),
+                    aggressiveFpsTricks = obj.optBoolean("aggressiveFpsTricks", false),
                     mcGuiScale = obj.optInt("mcGuiScale", 0).coerceIn(0, 4),
                     mcFov = obj.optInt("mcFov", 70).coerceIn(30, 110),
                     mcVsync = obj.optBoolean("mcVsync", true),
@@ -1805,6 +1807,8 @@ object HorizonNativeBridge {
             put("autoShaderSwitches", config.autoShaderSwitches)
             put("frameGeneration", config.frameGeneration)
             put("frameGenRenderScale", config.frameGenRenderScale)
+            put("fpsBoostPack", config.fpsBoostPack)
+            put("aggressiveFpsTricks", config.aggressiveFpsTricks)
         }
         synchronized(configIoLock) {
             runCatching {
@@ -1946,6 +1950,33 @@ object HorizonNativeBridge {
         if (config.superPerfMode) updates["uploadBudgetKiB"] = "1536"
         if (config.fastChunkUpload) updates["uploadBudgetKiB"] = "4096"
         updates["caveCulling"] = "true"
+        // Experimental Stuff > FPS Boost Pack: engine switches that cut CPU/GPU work without changing the picture
+        // (async entity and particle culling, hidden-leaf culling, GPU culling where it pays off, translucent
+        // batching, cached block entities and menu background, shader packs loaded on worker threads). They are
+        // only written while on, so turning it off leaves whatever the player set in the game's own menus.
+        if (config.fpsBoostPack) {
+            updates["entityCulling"] = "async"
+            updates["particleCulling"] = "async"
+            updates["leafCulling"] = "hidden"
+            updates["gpuCulling"] = "auto"
+            updates["batchTranslucent"] = "true"
+            updates["menuBackgroundCache"] = "true"
+            updates["packWorkers"] = "true"
+            for (key in listOf(
+                "blockEntityCacheShulkerBoxes", "blockEntityCacheSigns", "blockEntityCacheDecoratedPots",
+                "blockEntityCacheBells", "blockEntityCacheChests", "blockEntityCacheBanners",
+                "blockEntityCacheCopperGolemStatues"
+            )) updates[key] = "true"
+        }
+        // Experimental Stuff > Aggressive FPS Tricks: these do change the picture a little (opaque ice, chunkier
+        // leaves, no animated textures, world resolution drops to 70% while frames run slow).
+        if (config.aggressiveFpsTricks) {
+            updates["opaqueIce"] = "true"
+            updates["leafCulling"] = "solid_aggressive"
+            updates["animatedTextures"] = "false"
+            updates["dynamicResolution"] = "true"
+            updates["dynamicResolutionMin"] = "70"
+        }
         // Experimental Stuff > Frame Generation: the engine's FSR 3.1 interpolation (`frameGeneration` and
         // `resolutionScale` in horizon-graphics.txt). The launcher owns the switch, so Off is written too;
         // the render scale is only written while it is on, so an Off launcher leaves the player's own scale.
