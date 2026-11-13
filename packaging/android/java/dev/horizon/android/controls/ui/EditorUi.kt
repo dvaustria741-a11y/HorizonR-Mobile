@@ -357,8 +357,13 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
             }
         }
 
-        if (menuOpen) {
-            Column(modifier = Modifier.align(Alignment.CenterEnd).zPanel()) {
+        AnimatedVisibility(
+            visible = menuOpen,
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+            enter = fadeIn(tween(HzMotion.Base)) + slideInHorizontally(tween(HzMotion.Slow, easing = HzMotion.Emphasized)) { it / 4 },
+            exit = fadeOut(tween(HzMotion.Fast)) + slideOutHorizontally(tween(HzMotion.Base, easing = HzMotion.Standard)) { it / 4 },
+        ) {
+            Column(modifier = Modifier.zPanel(animate = false)) {
                 Header("Edit Control Layout")
                 ZButton("Add Button") { addButton(); menuOpen = false }
                 ZButton("Add Drawer") { addDrawer(); menuOpen = false }
@@ -369,25 +374,19 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                 ZButton("Save and Exit") { dialog = Dialog.SaveForm(After.EXIT) }
                 ZButton("Save and Share") { dialog = Dialog.SaveForm(After.SHARE) }
                 ZSection("Control Layout")
-                Row(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ZItem).padding(horizontal = 12.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Button Snapping", color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    ZSwitch(snapOn) { snapOn = it; settings.snapEnabled = it }
-                }
-                Text("Button Snapping Distance", color = ZMuted, fontSize = 13.sp)
+                ZSwitchRow("Button Snapping", snapOn) { snapOn = it; settings.snapEnabled = it }
+                ZLabel("Button Snapping Distance")
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("-", color = ZMuted, fontSize = 18.sp, modifier = Modifier.clickable { snapDp = (snapDp - 1f).coerceAtLeast(1f); settings.snapDp = snapDp }.padding(6.dp))
+                    Text("-", color = ZMuted, fontSize = 16.sp, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { snapDp = (snapDp - 1f).coerceAtLeast(1f); settings.snapDp = snapDp }.padding(horizontal = 8.dp, vertical = 4.dp))
                     Slider(
                         value = snapDp, onValueChange = { snapDp = it.roundToInt().toFloat() },
                         onValueChangeFinished = { settings.snapDp = snapDp },
                         valueRange = 1f..32f, modifier = Modifier.weight(1f), colors = zSliderColors()
                     )
-                    Text("+", color = ZMuted, fontSize = 18.sp, modifier = Modifier.clickable { snapDp = (snapDp + 1f).coerceAtMost(32f); settings.snapDp = snapDp }.padding(6.dp))
+                    Text("+", color = ZMuted, fontSize = 16.sp, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { snapDp = (snapDp + 1f).coerceAtMost(32f); settings.snapDp = snapDp }.padding(horizontal = 8.dp, vertical = 4.dp))
                     Text(
-                        "${snapDp.roundToInt()} dp", color = Color.White, fontSize = 13.sp,
-                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(ZItem).padding(horizontal = 8.dp, vertical = 4.dp)
+                        "${snapDp.roundToInt()} dp", color = Color.White, fontSize = 11.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(ZBox).padding(horizontal = 6.dp, vertical = 3.dp)
                     )
                 }
                 ZButton("Select Default Control Layout") { dialog = Dialog.SelectDefault }
@@ -531,25 +530,27 @@ private fun setSlot(b: ControlButton, index: Int, action: Action?): ControlButto
 }
 
 @Composable
-private fun Modifier.zPanel(onLeft: Boolean = false): Modifier {
-    var shown by remember { mutableStateOf(false) }
+private fun Modifier.zPanel(onLeft: Boolean = false, animate: Boolean = true): Modifier {
+    var shown by remember { mutableStateOf(!animate) }
     LaunchedEffect(Unit) { shown = true }
-    val progress by animateFloatAsState(if (shown) 1f else 0f, tween(260, easing = FastOutSlowInEasing), label = "zpanel")
-    val shape = if (onLeft) RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp) else RoundedCornerShape(topStart = 26.dp, bottomStart = 26.dp)
+    val progress by animateFloatAsState(if (shown) 1f else 0f, tween(HzMotion.Base, easing = HzMotion.Emphasized), label = "zpanel")
+    val shape = if (onLeft) RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp) else RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)
     val dir = if (onLeft) -1f else 1f
+    val scroll = rememberScrollState()
     return this
         .fillMaxHeight()
-        .width(270.dp)
+        .width(PANEL_W)
         .graphicsLayer {
-            translationX = dir * (1f - progress) * size.width * 0.5f
+            translationX = dir * (1f - progress) * size.width * 0.18f
             alpha = progress
         }
         .clip(shape)
-        .background(Brush.verticalGradient(listOf(Color(0xFF222632), HzCard, HzRoot)))
-        .border(1.dp, Brush.verticalGradient(listOf(HzCapsule, Color.Transparent)), shape)
+        .background(ZPanel)
+        .border(1.dp, ZLine, shape)
         .pointerInput(Unit) { detectTapGestures { } }
-        .verticalScroll(rememberScrollState())
-        .padding(14.dp)
+        .hzScrollbar(scroll)
+        .verticalScroll(scroll)
+        .padding(horizontal = 10.dp, vertical = 8.dp)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -665,29 +666,48 @@ private fun fmt1(v: Float) = String.format(Locale.ROOT, "%.1f", v)
 
 @Composable
 private fun ZPill(text: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(ZRadius)
     Box(
-        modifier = Modifier.width(100.dp).height(44.dp).clip(RoundedCornerShape(14.dp)).background(HzCapsule).clickable(onClick = onClick),
+        modifier = Modifier
+            .width(PILL_W)
+            .height(PILL_H)
+            .animatedPressScale(pressedScale = 0.95f, onClick = onClick)
+            .clip(shape)
+            .background(HzCapsule)
+            .border(1.dp, ZLine, shape),
         contentAlignment = Alignment.Center
-    ) { Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+    ) { Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
 }
 
 @Composable
 private fun ZSection(title: String) {
-    Text(title, color = ZTeal, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp))
-    Box(Modifier.fillMaxWidth().height(1.dp).background(ZLine))
+    Row(modifier = Modifier.padding(top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(width = 2.dp, height = 10.dp).background(ZTeal))
+        Text(
+            title.uppercase(Locale.ROOT), color = ZMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+            letterSpacing = 0.8.sp, modifier = Modifier.padding(start = 6.dp)
+        )
+    }
 }
 
 @Composable
 private fun ZButton(text: String, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(40.dp).clip(RoundedCornerShape(14.dp)).background(ZItem).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) { Text(text, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+        modifier = Modifier
+            .padding(top = 5.dp)
+            .fillMaxWidth()
+            .height(30.dp)
+            .animatedPressScale(pressedScale = 0.98f, onClick = onClick)
+            .clip(RoundedCornerShape(ZRadius))
+            .background(ZItem)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.CenterStart
+    ) { Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1) }
 }
 
 @Composable
 private fun ZLabel(text: String) {
-    Text(text, color = ZMuted, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp))
+    Text(text, color = ZMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 7.dp, bottom = 2.dp))
 }
 
 @Composable
@@ -698,49 +718,62 @@ private fun ZField(key: String, initial: String, numeric: Boolean, onValue: (Str
 @Composable
 private fun ZFieldBox(key: String, initial: String, numeric: Boolean, onValue: (String) -> Unit) {
     var text by remember(key) { mutableStateOf(initial) }
+    val shape = RoundedCornerShape(7.dp)
     BasicTextField(
         value = text,
         onValueChange = { text = it; onValue(it) },
         singleLine = true,
-        textStyle = TextStyle(color = Color.White, fontSize = 17.sp, textAlign = TextAlign.Center),
+        textStyle = TextStyle(color = Color.White, fontFamily = HzInter, fontSize = 13.sp, textAlign = TextAlign.Center),
         cursorBrush = SolidColor(ZTeal),
         keyboardOptions = KeyboardOptions(keyboardType = if (numeric) KeyboardType.Decimal else KeyboardType.Text),
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ZBox).padding(horizontal = 10.dp, vertical = 14.dp),
+        modifier = Modifier.fillMaxWidth().clip(shape).background(ZBox).border(1.dp, ZLine, shape).padding(horizontal = 8.dp, vertical = 7.dp),
     )
 }
 
 @Composable
 private fun ZSpinner(text: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(7.dp)
     Text(
-        text, color = Color.White, fontSize = 15.sp, textAlign = TextAlign.Center, maxLines = 2,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp, horizontal = 4.dp)
+        text, color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center, maxLines = 2,
+        modifier = Modifier.fillMaxWidth().clip(shape).background(ZBox).border(1.dp, ZLine, shape).clickable(onClick = onClick).padding(vertical = 7.dp, horizontal = 4.dp)
     )
 }
 
+/** Small desktop-style switch: 32 x 18 dp, the knob slides on a graphics-free offset. */
 @Composable
 private fun ZSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
-    Switch(
-        checked = checked, onCheckedChange = onChange,
-        colors = SwitchDefaults.colors(
-            checkedThumbColor = ZTeal, checkedTrackColor = Color(0xFF2F6B47), checkedBorderColor = Color.Transparent,
-            uncheckedThumbColor = Color(0xFFC8C8C8), uncheckedTrackColor = Color(0xFF555555), uncheckedBorderColor = Color.Transparent,
+    val x by animateFloatAsState(if (checked) 1f else 0f, tween(HzMotion.Fast, easing = HzMotion.Standard), label = "zswitch")
+    Box(
+        modifier = Modifier
+            .size(width = 32.dp, height = 18.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(if (checked) Color(0xFF2F6B47) else Color(0xFF3A404C))
+            .clickable { onChange(!checked) }
+            .padding(2.dp)
+    ) {
+        Box(
+            Modifier
+                .offset { IntOffset((x * 14.dp.toPx()).roundToInt(), 0) }
+                .size(14.dp)
+                .clip(CircleShape)
+                .background(if (checked) ZTeal else Color(0xFFC8C8C8))
         )
-    )
+    }
 }
 
 @Composable
 private fun ZSwitchRow(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Text(label, color = Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(label, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
         ZSwitch(value, onChange)
     }
 }
 
 @Composable
 private fun ZChevron(label: String, onClick: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp)) {
-        Text(label, color = ZMuted, fontSize = 17.sp, modifier = Modifier.weight(1f))
-        GlyphIcon(Glyph.CHEVRON, Color.White, Modifier.size(18.dp))
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 7.dp)) {
+        Text(label, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        GlyphIcon(Glyph.CHEVRON, ZMuted, Modifier.size(13.dp))
     }
 }
 
@@ -754,8 +787,8 @@ private fun zSliderColors() = SliderDefaults.colors(
 private fun ZSeek(label: String, value: Int, onDone: (Int) -> Unit) {
     var current by remember(value) { mutableFloatStateOf(value.toFloat()) }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-        Text(label, color = ZMuted, fontSize = 17.sp, modifier = Modifier.weight(1f))
-        Text("${current.roundToInt()}%", color = ZMuted, fontSize = 17.sp)
+        Text(label, color = ZMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Text("${current.roundToInt()}%", color = Color.White, fontSize = 11.sp)
     }
     Slider(
         value = current, onValueChange = { current = it },
@@ -766,46 +799,65 @@ private fun ZSeek(label: String, value: Int, onDone: (Int) -> Unit) {
 
 @Composable
 private fun ZCheck(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onChange(!value) }) {
-        Checkbox(
-            checked = value, onCheckedChange = onChange,
-            colors = CheckboxDefaults.colors(checkedColor = ZTeal, checkmarkColor = Color.Black, uncheckedColor = Color(0xFFCCCCCC))
-        )
-        Text(label, color = Color.White, fontSize = 17.sp)
+    val box = RoundedCornerShape(4.dp)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { onChange(!value) }.padding(vertical = 6.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(15.dp).clip(box).background(if (value) ZTeal else ZBox).border(1.dp, if (value) ZTeal else ZMuted, box),
+            contentAlignment = Alignment.Center
+        ) { if (value) GlyphIcon(Glyph.CHECK, HzOnAccent, Modifier.size(10.dp)) }
+        Text(label, color = Color.White, fontSize = 12.sp)
     }
 }
 
 @Composable
 private fun ZPlain(text: String, onClick: () -> Unit) {
     Text(
-        text, color = Color.White, fontSize = 17.sp,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 13.dp)
+        text, color = Color.White, fontSize = 13.sp,
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 9.dp)
     )
 }
 
-/** A Zalith-style dialog drawn inside the editor, so it needs no window of its own. */
+/** A dialog drawn inside the editor, so it needs no window of its own. Scrim and card ease in together. */
 @Composable
 private fun ZDialog(
     title: String,
     onDismiss: () -> Unit,
-    width: androidx.compose.ui.unit.Dp = 320.dp,
+    width: androidx.compose.ui.unit.Dp = 300.dp,
     maxHeight: androidx.compose.ui.unit.Dp = 340.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    val p by animateFloatAsState(if (shown) 1f else 0f, tween(HzMotion.Base, easing = HzMotion.Emphasized), label = "zdialog")
+    val shape = RoundedCornerShape(12.dp)
     Box(
-        modifier = Modifier.fillMaxSize().background(ZScrim).imePadding().pointerInput(Unit) { detectTapGestures { onDismiss() } },
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { alpha = p }
+            .background(ZScrim)
+            .imePadding()
+            .pointerInput(Unit) { detectTapGestures { onDismiss() } },
         contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
+                .graphicsLayer {
+                    scaleX = 0.96f + 0.04f * p
+                    scaleY = 0.96f + 0.04f * p
+                }
                 .width(width)
                 .heightIn(max = maxHeight)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(shape)
                 .background(ZPanel)
+                .border(1.dp, ZLine, shape)
                 .pointerInput(Unit) { detectTapGestures { } }
                 .padding(14.dp)
         ) {
-            Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
+            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp))
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), content = content)
         }
     }
@@ -874,14 +926,14 @@ private fun ColorDialog(initial: Int, onDismiss: () -> Unit, onPick: (Int) -> Un
                     }
                 },
                 singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 17.sp, textAlign = TextAlign.Center),
+                textStyle = TextStyle(color = Color.White, fontFamily = HzInter, fontSize = 14.sp, textAlign = TextAlign.Center),
                 cursorBrush = SolidColor(ZTeal),
                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(ZBox).padding(horizontal = 10.dp, vertical = 12.dp),
             )
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
-            Text("Cancel", color = ZTeal, fontSize = 17.sp, modifier = Modifier.clickable(onClick = onDismiss).padding(12.dp))
-            Text("OK", color = ZTeal, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onPick(current()) }.padding(12.dp))
+            Text("Cancel", color = ZTeal, fontSize = 13.sp, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onDismiss).padding(horizontal = 12.dp, vertical = 8.dp))
+            Text("OK", color = ZTeal, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onPick(current()) }.padding(horizontal = 12.dp, vertical = 8.dp))
         }
     }
 }

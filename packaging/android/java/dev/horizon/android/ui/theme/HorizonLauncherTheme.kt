@@ -6,6 +6,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -73,9 +74,11 @@ fun HorizonLauncherTheme(
         )
     }
 
+    val typography = remember { LauncherTypography.withFamily(HzInter) }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = LauncherTypography,
-        content = content
+        typography = typography,
+        content = { ProvideHzText(content) }
     )
 }

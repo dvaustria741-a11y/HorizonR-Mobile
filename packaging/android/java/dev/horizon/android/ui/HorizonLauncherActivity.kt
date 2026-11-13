@@ -100,6 +100,11 @@ import dev.horizon.android.HorizonActivity
 import dev.horizon.android.bridge.*
 import dev.horizon.android.model.*
 import dev.horizon.android.ui.theme.HorizonLauncherTheme
+import dev.horizon.android.ui.theme.HzBackdrop
+import dev.horizon.android.ui.theme.HzMotion
+import dev.horizon.android.ui.theme.HzPixel
+import dev.horizon.android.ui.theme.HzRadius
+import dev.horizon.android.ui.theme.hzVerticalScroll
 import dev.horizon.android.controls.ControlEditorActivity
 import dev.horizon.android.controls.ControlSettings
 import dev.horizon.android.controls.ui.ControlsCardStyle
@@ -502,7 +507,7 @@ fun Modifier.animatedPressScale(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed && enabled) pressedScale else 1f,
-        animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing),
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 700f),
         label = "PressScale"
     )
     this
@@ -1350,7 +1355,7 @@ fun <T> LauncherSubCategoryRail(
                 label = "ChipIconTint"
             )
             Surface(
-                shape = RoundedCornerShape(50),
+                shape = RoundedCornerShape(HzRadius.chip),
                 color = chipFill,
                 border = BorderStroke(1.dp, chipBorder),
                 modifier = Modifier
@@ -1586,7 +1591,7 @@ fun CleanLauncherScreen(
                 )
         ) {
             if (!isHibernated) {
-                HorizonAuroraBackground()
+                HzBackdrop()
             }
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
@@ -1605,22 +1610,13 @@ fun CleanLauncherScreen(
                             .fillMaxHeight(),
                         transitionSpec = {
                             val forward = targetState.ordinal >= initialState.ordinal
-                            (fadeIn(animationSpec = tween(250, easing = FastOutSlowInEasing)) +
-                                scaleIn(
-                                    initialScale = 0.96f,
-                                    animationSpec = tween(250, easing = FastOutSlowInEasing)
-                                ) +
+                            // Fade plus a short slide, nothing scaled: two big screens never both resize mid-frame.
+                            (fadeIn(animationSpec = tween(HzMotion.Base, delayMillis = 50, easing = HzMotion.Emphasized)) +
                                 slideInHorizontally(
-                                    animationSpec = tween(280, easing = FastOutSlowInEasing),
-                                    initialOffsetX = { fullW -> if (forward) fullW / 10 else -fullW / 10 }
+                                    animationSpec = tween(HzMotion.Slow, easing = HzMotion.Emphasized),
+                                    initialOffsetX = { fullW -> if (forward) fullW / 16 else -fullW / 16 }
                                 ))
-                                .togetherWith(
-                                    fadeOut(animationSpec = tween(180, easing = FastOutLinearInEasing)) +
-                                        slideOutHorizontally(
-                                            animationSpec = tween(200, easing = FastOutLinearInEasing),
-                                            targetOffsetX = { fullW -> if (forward) -fullW / 14 else fullW / 14 }
-                                        )
-                                )
+                                .togetherWith(fadeOut(animationSpec = tween(HzMotion.Fast, easing = FastOutLinearInEasing)))
                                 .using(sizeTransform = null)
                         },
                         label = "MainTabMorphTransition"
@@ -1785,42 +1781,6 @@ private data class HorizonNavItem(val tab: LauncherNavTab, val icon: ImageVector
 @Composable
 private fun horizonGlassBorder(): BorderStroke = BorderStroke(1.dp, VoltGrayStroke)
 
-/** Slowly drifting aurora blobs tinted by the active accent colour. Drawn behind everything. */
-@Composable
-private fun HorizonAuroraBackground() {
-    val accent = SkyBlueAccent
-    val transition = rememberInfiniteTransition(label = "Aurora")
-    val a by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(15000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "AuroraA"
-    )
-    val b by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(21000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "AuroraB"
-    )
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-        val r = maxOf(w, h) * 0.55f
-        val c1 = Offset(w * (0.05f + 0.35f * a), h * (0.05f + 0.35f * b))
-        val c2 = Offset(w * (0.95f - 0.35f * b), h * (0.95f - 0.40f * a))
-        drawCircle(
-            brush = Brush.radialGradient(listOf(accent.copy(alpha = 0.24f), Color.Transparent), center = c1, radius = r),
-            radius = r,
-            center = c1
-        )
-        drawCircle(
-            brush = Brush.radialGradient(listOf(Color(0xFF7C4DFF).copy(alpha = 0.17f), Color.Transparent), center = c2, radius = r),
-            radius = r,
-            center = c2
-        )
-    }
-}
-
 /**
  * Top navigation: brand on the left, a pill tab bar in the centre (the selected tab expands
  * to show its label), quick actions on the right. Replaces the old left icon rail.
@@ -1862,11 +1822,12 @@ private fun HorizonTopNav(
         ) {
             MinecraftGrassCubeIcon(size = 26.dp)
             Text(
-                text = "HorizonR",
+                text = "HORIZONR",
                 style = TextStyle(
-                    brush = Brush.linearGradient(listOf(Color.White, accent, Color(0xFFB39DFF))),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontFamily = HzPixel,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
                 )
             )
             AnimatedVisibility(
@@ -1874,7 +1835,7 @@ private fun HorizonTopNav(
                 enter = fadeIn(tween(180)) + expandHorizontally(tween(200)),
                 exit = fadeOut(tween(150)) + shrinkHorizontally(tween(180))
             ) {
-                Surface(shape = RoundedCornerShape(50), color = SubRailCapsuleActive) {
+                Surface(shape = RoundedCornerShape(HzRadius.chip), color = SubRailCapsuleActive) {
                     Text(
                         text = if (installStatus.paused) "Paused ${installStatus.percent}%"
                         else "${installStatus.percent}% • ${installStatus.speedText.ifBlank { "Downloading" }}",
@@ -1890,7 +1851,7 @@ private fun HorizonTopNav(
 
         // Centre tab pill
         Surface(
-            shape = RoundedCornerShape(50),
+            shape = RoundedCornerShape(HzRadius.chip),
             color = CardSlateBg.copy(alpha = 0.82f),
             border = horizonGlassBorder()
         ) {
@@ -1909,7 +1870,7 @@ private fun HorizonTopNav(
                     Row(
                         modifier = Modifier
                             .height(32.dp)
-                            .clip(RoundedCornerShape(50))
+                            .clip(RoundedCornerShape(HzRadius.chip))
                             .background(
                                 Brush.horizontalGradient(
                                     listOf(
@@ -2878,7 +2839,7 @@ private fun CleanAccountsAndSkinsViewport(
                                     }
 
                                     Surface(
-                                        shape = RoundedCornerShape(50),
+                                        shape = RoundedCornerShape(HzRadius.chip),
                                         color = SkyBlueAccent,
                                         modifier = Modifier.animatedPressScale { is3DPreview = !is3DPreview }
                                     ) {
@@ -2944,7 +2905,7 @@ private fun CleanAccountsAndSkinsViewport(
                                 ) {
                                     if (is3DPreview) {
                                         Surface(
-                                            shape = RoundedCornerShape(50),
+                                            shape = RoundedCornerShape(HzRadius.chip),
                                             color = if (autoRotate3D) SubRailCapsuleActive else CardRowBg,
                                             modifier = Modifier.animatedPressScale { autoRotate3D = !autoRotate3D }
                                         ) {
@@ -2957,7 +2918,7 @@ private fun CleanAccountsAndSkinsViewport(
                                             )
                                         }
                                         Surface(
-                                            shape = RoundedCornerShape(50),
+                                            shape = RoundedCornerShape(HzRadius.chip),
                                             color = if (walkAnim3D) SubRailCapsuleActive else CardRowBg,
                                             modifier = Modifier.animatedPressScale { walkAnim3D = !walkAnim3D }
                                         ) {
@@ -2971,7 +2932,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         }
                                     } else {
                                         Surface(
-                                            shape = RoundedCornerShape(50),
+                                            shape = RoundedCornerShape(HzRadius.chip),
                                             color = SubRailCapsuleActive,
                                             modifier = Modifier.animatedPressScale { showBackView2D = !showBackView2D }
                                         ) {
@@ -2999,7 +2960,7 @@ private fun CleanAccountsAndSkinsViewport(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .verticalScroll(rememberScrollState()),
+                                .hzVerticalScroll(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Surface(
@@ -3160,7 +3121,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         listOf(false to "Wide (4px Steve)", true to "Slim (3px Alex)").forEach { (isSlim, label) ->
                                             val selected = activeAccount.slimSkinModel == isSlim
                                             Surface(
-                                                shape = RoundedCornerShape(50),
+                                                shape = RoundedCornerShape(HzRadius.chip),
                                                 color = if (selected) SkyBlueAccent else CardRowBg,
                                                 modifier = Modifier.animatedPressScale {
                                                     val updatedList = accounts.map { acc ->
@@ -3404,7 +3365,7 @@ private fun CleanAccountsAndSkinsViewport(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(14.dp)
-                                .verticalScroll(rememberScrollState()),
+                                .hzVerticalScroll(),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
@@ -3425,7 +3386,7 @@ private fun CleanAccountsAndSkinsViewport(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Surface(
-                                        shape = RoundedCornerShape(50),
+                                        shape = RoundedCornerShape(HzRadius.chip),
                                         color = Color(0xFF1E2428),
                                         modifier = Modifier
                                             .weight(1f)
@@ -3454,7 +3415,7 @@ private fun CleanAccountsAndSkinsViewport(
                                     AccountType.entries.forEach { t ->
                                         val isSelected = selectedAccountType == t
                                         Surface(
-                                            shape = RoundedCornerShape(50),
+                                            shape = RoundedCornerShape(HzRadius.chip),
                                             color = if (isSelected) SubRailCapsuleActive else Color(0xFF1E2428),
                                             modifier = Modifier.animatedPressScale { selectedAccountType = t }
                                         ) {
@@ -3793,7 +3754,7 @@ private fun CleanServersViewport(
                                 ServerIcon(iconBytes, entry.name.ifBlank { entry.address }, online)
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Surface(shape = RoundedCornerShape(50), color = dot, modifier = Modifier.size(8.dp)) {}
+                                        Surface(shape = RoundedCornerShape(HzRadius.chip), color = dot, modifier = Modifier.size(8.dp)) {}
                                         Text(
                                             entry.name.ifBlank { "Minecraft Server" },
                                             fontSize = 14.sp,
@@ -4025,7 +3986,7 @@ private fun CleanLogsViewport(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(HzRadius.chip),
                         color = CardRowBg,
                         modifier = Modifier
                             .weight(1f)
@@ -4054,7 +4015,7 @@ private fun CleanLogsViewport(
                     LogSeverityFilter.entries.forEach { sev ->
                         val selected = selectedSeverity == sev
                         Surface(
-                            shape = RoundedCornerShape(50),
+                            shape = RoundedCornerShape(HzRadius.chip),
                             color = if (selected) SubRailCapsuleActive else CardRowBg,
                             modifier = Modifier.animatedPressScale { selectedSeverity = sev }
                         ) {
@@ -4369,7 +4330,7 @@ private fun CleanVersionsViewport(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(14.dp)
-                .verticalScroll(rememberScrollState()),
+                .hzVerticalScroll(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header Row: Simple Title & Subtitle (Status pill removed per user request!)
@@ -4542,7 +4503,7 @@ private fun CleanVersionsViewport(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(7.dp)
-                                    .clip(RoundedCornerShape(50))
+                                    .clip(RoundedCornerShape(HzRadius.chip))
                             )
                         }
                     }
@@ -4804,7 +4765,7 @@ private fun CleanVersionsViewport(
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(Color(0xFF0E1215))
                                         .padding(8.dp)
-                                        .verticalScroll(rememberScrollState())
+                                        .hzVerticalScroll()
                                 ) {
                                     Text(
                                         text = logContent,
@@ -5247,7 +5208,7 @@ private fun CleanStoreViewport(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Surface(
-                                        shape = RoundedCornerShape(50),
+                                        shape = RoundedCornerShape(HzRadius.chip),
                                         color = CardRowBg
                                     ) {
                                         Row(
@@ -5369,7 +5330,7 @@ private fun CleanStoreViewport(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(5.dp)
-                                            .clip(RoundedCornerShape(50))
+                                            .clip(RoundedCornerShape(HzRadius.chip))
                                     )
                                 }
                             }
@@ -5383,7 +5344,7 @@ private fun CleanStoreViewport(
                                     modifier = Modifier
                                         .width(180.dp)
                                         .height(4.dp)
-                                        .clip(RoundedCornerShape(50))
+                                        .clip(RoundedCornerShape(HzRadius.chip))
                                 )
                             }
                         } else if (catalogItems.isEmpty()) {
@@ -5621,7 +5582,7 @@ private fun CleanStoreViewport(
                         modifier = Modifier
                             .width(208.dp)
                             .fillMaxHeight()
-                            .verticalScroll(rememberScrollState()),
+                            .hzVerticalScroll(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         StoreSourceSelector(
@@ -5997,7 +5958,7 @@ private fun CleanStoreViewport(
                                         modifier = Modifier
                                             .width(180.dp)
                                             .height(4.dp)
-                                            .clip(RoundedCornerShape(50))
+                                            .clip(RoundedCornerShape(HzRadius.chip))
                                     )
                                 }
                             } else {
@@ -6208,7 +6169,7 @@ private fun CleanStoreViewport(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(14.dp)
-                                .verticalScroll(rememberScrollState()),
+                                .hzVerticalScroll(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(9.dp)
                         ) {
@@ -6224,7 +6185,7 @@ private fun CleanStoreViewport(
                                 Spacer(Modifier.width(6.dp))
 
                                 Surface(
-                                    shape = RoundedCornerShape(50),
+                                    shape = RoundedCornerShape(HzRadius.chip),
                                     color = if (isFav) Color(0xFF3A2329) else CardRowBg,
                                     modifier = Modifier.animatedPressScale {
                                         favoriteIds = HorizonNativeBridge.toggleProjectFavorite(context, detailProj.id)
@@ -6434,12 +6395,12 @@ private fun StoreRightSearchPill(
     onValueChange: (String) -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(50),
+        shape = RoundedCornerShape(HzRadius.chip),
         color = CardRowBg,
         modifier = Modifier
             .fillMaxWidth()
             .height(36.dp)
-            .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(50))
+            .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(HzRadius.chip))
     ) {
         Row(
             modifier = Modifier
@@ -6830,7 +6791,7 @@ private fun CleanFilesViewport(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
-                            .clip(RoundedCornerShape(50))
+                            .clip(RoundedCornerShape(HzRadius.chip))
                     )
                     Text("${prog.percent}% • ${prog.stage}", fontSize = 12.sp, color = Color.White)
                     val clock = if (prog.elapsedSec >= 60) "${prog.elapsedSec / 60}m ${prog.elapsedSec % 60}s" else "${prog.elapsedSec}s"
@@ -7071,12 +7032,12 @@ private fun CleanFilesViewport(
 
                     // Pill Search Input
                     Surface(
-                        shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(HzRadius.chip),
                         color = CardRowBg,
                         modifier = Modifier
                             .weight(1f)
                             .height(34.dp)
-                            .border(1.dp, Color(0xFF3E4A52), RoundedCornerShape(50))
+                            .border(1.dp, Color(0xFF3E4A52), RoundedCornerShape(HzRadius.chip))
                     ) {
                         Box(
                             modifier = Modifier
@@ -7104,7 +7065,7 @@ private fun CleanFilesViewport(
 
                     // Item counter badge
                     Surface(
-                        shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(HzRadius.chip),
                         color = CardRowBg
                     ) {
                         Text(
@@ -7138,7 +7099,7 @@ private fun CleanFilesViewport(
 
                     // `+ Import` action button
                     Surface(
-                        shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(HzRadius.chip),
                         color = CardRowBg,
                         modifier = Modifier.animatedPressScale {
                             if (currentFolder == "shaderpacks") {
@@ -7161,7 +7122,7 @@ private fun CleanFilesViewport(
 
                     // `↓ Store` action button (switches directly to Store tab with matching category!)
                     Surface(
-                        shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(HzRadius.chip),
                         color = SubRailCapsuleActive,
                         modifier = Modifier.animatedPressScale {
                             val targetCat = when (currentFolder) {
@@ -7844,7 +7805,7 @@ private fun CleanSettingsViewport(
             VoltTwoColumnScroll(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
+                    .hzVerticalScroll(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 when (section) {

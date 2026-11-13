@@ -14,6 +14,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Typography
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
@@ -31,6 +32,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.horizon.android.ui.theme.ProvideHzText
+import dev.horizon.android.ui.theme.withFamily
+import dev.horizon.android.ui.theme.HzInter
 import java.util.Locale
 
 val Slate = Color(0xFF2C313D)
@@ -84,7 +88,11 @@ fun ControlsTheme(style: ControlsCardStyle? = null, content: @Composable () -> U
         onSurfaceVariant = used.muted,
     )
     CompositionLocalProvider(LocalControlsCardStyle provides used) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(
+            colorScheme = scheme,
+            typography = remember { Typography().withFamily(HzInter) },
+            content = { ProvideHzText(content) }
+        )
     }
 }
 
@@ -92,7 +100,7 @@ fun ControlsTheme(style: ControlsCardStyle? = null, content: @Composable () -> U
 @Composable
 fun ControlsCard(content: @Composable () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(12.dp),
         color = LocalControlsCardStyle.current.card,
         contentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.fillMaxWidth()

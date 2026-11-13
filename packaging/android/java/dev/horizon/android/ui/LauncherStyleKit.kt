@@ -69,6 +69,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontStyle
 import dev.horizon.android.bridge.AssetInstallStatus
 import dev.horizon.android.model.LauncherAccount
+import dev.horizon.android.ui.theme.HzPixel
+import dev.horizon.android.ui.theme.HzRadius
 import kotlinx.coroutines.delay
 
 /** Volt-style neutral surfaces: dark gray cards, a hairline stroke and a faint top highlight. */
@@ -128,7 +130,7 @@ internal fun VoltTile(
         animationSpec = tween(420, easing = FastOutSlowInEasing),
         label = "VoltTileIn"
     )
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(HzRadius.card)
     Column(
         modifier = modifier
             .graphicsLayer {
@@ -178,6 +180,7 @@ internal fun voltNavIconName(tab: LauncherNavTab): String = when (tab) {
     LauncherNavTab.ACCOUNTS -> "ic_ui_skins"
     LauncherNavTab.SETTINGS -> "ic_ui_settings"
     LauncherNavTab.LOGS -> "ic_ui_logs"
+    LauncherNavTab.HOME -> "ic_ui_home"
     else -> "ic_ui_none"
 }
 
@@ -241,7 +244,7 @@ private fun VoltCircleButton(name: String, fallback: ImageVector, onClick: () ->
         modifier = Modifier
             .size(36.dp)
             .animatedPressScale(onClick = onClick)
-            .voltSurface(CircleShape)
+            .voltSurface(RoundedCornerShape(HzRadius.control))
     ) {
         VoltIcon(name = name, fallback = fallback, size = 17.dp)
     }
@@ -262,7 +265,7 @@ internal fun VoltBottomNav(
 ) {
     val entries = remember {
         listOf(
-            VoltNavEntry(LauncherNavTab.HOME, "Home", "ic_ui_none", Icons.Default.Home),
+            VoltNavEntry(LauncherNavTab.HOME, "Home", "ic_ui_home", Icons.Default.Home),
             VoltNavEntry(LauncherNavTab.VERSIONS, "Game", "ic_ui_game", Icons.Default.Download),
             VoltNavEntry(LauncherNavTab.STORE, "Store", "ic_ui_store", Icons.Default.Storefront),
             VoltNavEntry(LauncherNavTab.FILES, "Mods", "ic_ui_mods", Icons.Default.Extension),
@@ -282,12 +285,12 @@ internal fun VoltBottomNav(
         Row(
             modifier = Modifier
                 .animatedPressScale(onClick = onOpenAccount)
-                .voltSurface(RoundedCornerShape(30.dp))
+                .voltSurface(RoundedCornerShape(HzRadius.card))
                 .padding(start = 6.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 28.dp, cornerRadius = 14.dp)
+            MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 28.dp, cornerRadius = 7.dp)
             Column {
                 Text(
                     text = activeAccount.username,
@@ -309,7 +312,7 @@ internal fun VoltBottomNav(
 
         Row(
             modifier = Modifier
-                .voltSurface(RoundedCornerShape(30.dp))
+                .voltSurface(RoundedCornerShape(HzRadius.card))
                 .padding(horizontal = 5.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -328,7 +331,7 @@ internal fun VoltBottomNav(
                 )
                 Column(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(22.dp))
+                        .clip(RoundedCornerShape(HzRadius.control))
                         .background(bg)
                         .animatedPressScale { onSelectTab(e.tab) }
                         .padding(horizontal = 9.dp, vertical = 3.dp),
@@ -433,7 +436,7 @@ private fun VoltSidePill(label: String, iconName: String, fallback: ImageVector,
                 translationX = (1f - progress) * 28.dp.toPx()
             }
             .animatedPressScale(onClick = onClick)
-            .voltSurface(RoundedCornerShape(50), 0.8f)
+            .voltSurface(RoundedCornerShape(HzRadius.chip), 0.8f)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -562,7 +565,7 @@ internal fun VoltHomeLayer(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MinecraftGrassCubeIcon(size = 26.dp)
                 Column {
-                    Text(text = "HORIZONR", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+                    Text(text = "HORIZONR", fontFamily = HzPixel, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                     Text(text = "Minecraft 26.3 \u00B7 Native Rust", fontSize = 9.sp, color = VoltMutedText, maxLines = 1)
                 }
             }
@@ -615,7 +618,7 @@ internal fun VoltHomeLayer(
             }
             val boostContext = androidx.compose.ui.platform.LocalContext.current
             var boostOn by remember { mutableStateOf(Boost.isOn(boostContext)) }
-            VoltSidePill(if (boostOn) "Boost ON" else "Boost", "ic_ui_none", Icons.Default.Bolt, 3, active = boostOn) {
+            VoltSidePill(if (boostOn) "Boost ON" else "Boost", "ic_ui_boost", Icons.Default.Bolt, 3, active = boostOn) {
                 boostOn = !boostOn
                 Boost.set(boostContext, boostOn)
                 android.widget.Toast.makeText(boostContext, if (boostOn) "Boost on: memory freed, game runs at higher priority" else "Boost off", android.widget.Toast.LENGTH_SHORT).show()
@@ -634,12 +637,12 @@ internal fun VoltHomeLayer(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .animatedPressScale { onNavigate(LauncherNavTab.ACCOUNTS) }
-                    .voltSurface(RoundedCornerShape(30.dp), 0.8f)
+                    .voltSurface(RoundedCornerShape(HzRadius.card), 0.8f)
                     .padding(start = 5.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 24.dp, cornerRadius = 12.dp)
+                MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 24.dp, cornerRadius = 6.dp)
                 Text(
                     text = "${activeAccount.username} \u2022 ${activeAccount.accountType.badge}",
                     fontSize = 10.sp,

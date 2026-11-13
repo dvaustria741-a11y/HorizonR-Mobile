@@ -104,6 +104,13 @@ x86/x64 instead of the POPCNT instruction, which CPUs before Nehalem lack (#7264
 by The Pixelify Sans Project Authors, licensed under the SIL Open Font License 1.1
 (`crates/horizon-theme/fonts/OFL-PixelifySans.txt`).
 
+## Inter (Android launcher)
+
+`packaging/android/res/font/inter_*.ttf` are [Inter](https://github.com/rsms/inter) 4.0 by The Inter
+Project Authors, subset to Latin, licensed under the SIL Open Font License 1.1
+(`packaging/android/assets/licenses/Inter-OFL.txt`). The Android launcher also reuses Pixelify Sans
+(`packaging/android/res/font/pixelify_sans_*.ttf`, licence in `packaging/android/assets/licenses/PixelifySans-OFL.txt`).
+
 ## Pixelarticons
 
 `crates/horizon-theme/icons/pixel/*.svg` are icons from

@@ -91,7 +91,7 @@ fun LayoutCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(if (selected) HzCapsule else HzRow)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -200,7 +200,7 @@ private fun HzWindowDialog(title: String, onDismiss: () -> Unit, trailing: (@Com
     val style = LocalControlsCardStyle.current
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            modifier = Modifier.fillMaxWidth(0.7f).widthIn(max = 440.dp).heightIn(max = 340.dp).clip(RoundedCornerShape(20.dp)).background(style.card).padding(16.dp)
+            modifier = Modifier.fillMaxWidth(0.7f).widthIn(max = 440.dp).heightIn(max = 340.dp).clip(RoundedCornerShape(12.dp)).background(style.card).padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))

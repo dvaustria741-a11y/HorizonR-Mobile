@@ -146,13 +146,13 @@ internal fun Header(title: String) {
     Row(modifier = Modifier.padding(start = 2.dp, top = 2.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .width(4.dp)
-                .height(24.dp)
+                .width(3.dp)
+                .height(16.dp)
                 .clip(RoundedCornerShape(2.dp))
                 .background(HzAccent)
         )
-        Spacer(Modifier.width(10.dp))
-        Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.width(8.dp))
+        Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
