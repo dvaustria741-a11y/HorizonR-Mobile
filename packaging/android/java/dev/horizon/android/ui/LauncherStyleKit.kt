@@ -650,7 +650,11 @@ internal fun HzSwitch(checked: Boolean, accent: Color, onChange: (Boolean) -> Un
     )
 }
 
-/** Thin slider: 3 dp track, small thumb. Tap or drag anywhere on it; values snap to [step]. */
+/**
+ * Slider: 3 dp track, small thumb that grows with a soft halo while held, tick marks when the steps are few,
+ * a light haptic tick on every new value, and a fill that glides on taps but follows the finger exactly on drags.
+ * Everything is one draw pass, so dragging never recomposes more than the value it reports.
+ */
 @Composable
 internal fun HzSlider(
     value: Int,
@@ -658,39 +662,129 @@ internal fun HzSlider(
     step: Int,
     accent: Color,
     onValue: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tickEvery: Int? = null,
+    onDragging: (Boolean) -> Unit = {}
 ) {
     val emit by androidx.compose.runtime.rememberUpdatedState(onValue)
+    val report by androidx.compose.runtime.rememberUpdatedState(onDragging)
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var dragging by remember { mutableStateOf(false) }
+    var last by remember { mutableStateOf(value) }
     val span = (range.last - range.first).coerceAtLeast(1)
-    val fraction = ((value - range.first).toFloat() / span).coerceIn(0f, 1f)
+    val target = ((value - range.first).toFloat() / span).coerceIn(0f, 1f)
+    val shown by animateFloatAsState(
+        targetValue = target,
+        animationSpec = if (dragging) androidx.compose.animation.core.snap<Float>() else tween(HzMotion.Short, easing = HzMotion.Ease),
+        label = "HzSliderFill"
+    )
+    val grow by animateFloatAsState(
+        targetValue = if (dragging) 1f else 0f,
+        animationSpec = tween(HzMotion.Short, easing = HzMotion.Ease),
+        label = "HzSliderGrow"
+    )
+    val tickStep = tickEvery ?: if (span / step <= 20) step else 0
     fun pick(x: Float, w: Float): Int {
         val raw = range.first + (x / w).coerceIn(0f, 1f) * span
         val snapped = range.first + Math.round((raw - range.first) / step) * step
         return snapped.coerceIn(range.first, range.last)
     }
+    fun commit(v: Int) {
+        if (v != last) {
+            last = v
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+        }
+        emit(v)
+    }
     Box(
         modifier = modifier
-            .height(26.dp)
+            .height(28.dp)
             .pointerInput(range, step) {
-                detectTapGestures { o -> emit(pick(o.x, size.width.toFloat())) }
+                detectTapGestures { o -> commit(pick(o.x, size.width.toFloat())) }
             }
             .pointerInput(range, step) {
                 detectHorizontalDragGestures(
-                    onDragStart = { o -> emit(pick(o.x, size.width.toFloat())) }
+                    onDragStart = { o ->
+                        dragging = true
+                        report(true)
+                        commit(pick(o.x, size.width.toFloat()))
+                    },
+                    onDragEnd = { dragging = false; report(false) },
+                    onDragCancel = { dragging = false; report(false) }
                 ) { change, _ ->
                     change.consume()
-                    emit(pick(change.position.x, size.width.toFloat()))
+                    commit(pick(change.position.x, size.width.toFloat()))
                 }
             }
             .drawBehind {
                 val cy = size.height / 2f
                 val h = 3.dp.toPx()
-                val thumb = 5.5.dp.toPx()
-                drawRoundRect(Color(0xFF2C313B), Offset(0f, cy - h / 2f), Size(size.width, h), CornerRadius(h / 2f))
-                drawRoundRect(accent, Offset(0f, cy - h / 2f), Size(size.width * fraction, h), CornerRadius(h / 2f))
-                drawCircle(accent, thumb, Offset((size.width * fraction).coerceIn(thumb, size.width - thumb), cy))
+                val thumb = (5.dp + 2.dp * grow).toPx()
+                val pad = 8.dp.toPx()
+                val trackW = size.width
+                val fillX = (trackW * shown).coerceIn(thumb, trackW - thumb)
+                drawRoundRect(Color(0xFF2C313B), Offset(0f, cy - h / 2f), Size(trackW, h), CornerRadius(h / 2f))
+                if (tickStep > 0) {
+                    var v = range.first
+                    while (v <= range.last) {
+                        val x = trackW * (v - range.first).toFloat() / span
+                        val on = x <= fillX
+                        drawLine(
+                            color = if (on) Color.White.copy(alpha = 0.55f) else Color(0xFF4A5260),
+                            start = Offset(x.coerceIn(0.5f, trackW - 0.5f), cy - 5.dp.toPx() * 0.5f - h),
+                            end = Offset(x.coerceIn(0.5f, trackW - 0.5f), cy - h),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                        v += tickStep
+                    }
+                }
+                drawRoundRect(accent, Offset(0f, cy - h / 2f), Size(fillX, h), CornerRadius(h / 2f))
+                if (grow > 0.01f) drawCircle(accent.copy(alpha = 0.20f * grow), thumb + pad * 0.5f * grow, Offset(fillX, cy))
+                drawCircle(accent, thumb, Offset(fillX, cy))
             }
     )
+}
+
+/** Two or three flat segments in one capsule. The selected segment fills with the accent colour. */
+@Composable
+internal fun HzSegmented(
+    options: List<String>,
+    selected: Int,
+    accent: Color,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val onAccent = if (accent.luminance() > 0.45f) Color(0xFF0B0F0D) else Color.White
+    Row(
+        modifier = modifier
+            .height(28.dp)
+            .clip(HzShape.Control)
+            .background(HzColor.PanelHi)
+            .border(1.dp, HzColor.Hairline, HzShape.Control)
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        options.forEachIndexed { i, label ->
+            val on = i == selected
+            val bg by animateColorAsState(if (on) accent else Color.Transparent, tween(HzMotion.Short), label = "SegBg")
+            val fg by animateColorAsState(if (on) onAccent else VoltIconMuted, tween(HzMotion.Short), label = "SegFg")
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(HzShape.Chip)
+                    .background(bg)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { onSelect(i) }
+                    .padding(horizontal = 10.dp)
+            ) {
+                Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1)
+            }
+        }
+    }
 }
 
 /**

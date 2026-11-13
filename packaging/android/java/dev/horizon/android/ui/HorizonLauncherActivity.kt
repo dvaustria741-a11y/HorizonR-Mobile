@@ -8598,160 +8598,65 @@ private fun LauncherRamAllocationCard(
         ramAllocationMb.coerceIn(minRamMb, maxRamMb)
     }
 
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = CardSlateBg,
-        border = BorderStroke(1.dp, VoltGrayStroke),
-        modifier = Modifier.fillMaxWidth()
+    var dragging by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
+            }
+            .padding(horizontal = 2.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "RAM Allocation (Minecraft 26.3 Engine)",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        LavenderTagBadge(
-                            text = if (isUnlimited) "Unlimited (Default OS)" else "$sliderDisplayMb MB"
-                        )
-                    }
-                    Text(
-                        text = "Detected Phone RAM: $totalRamMb MB (~${String.format(Locale.US, "%.1f", totalRamMb / 1024f)} GB) • Available: $availRamMb MB",
-                        fontSize = 11.sp,
-                        color = SkyBlueAccent
-                    )
-                    Text(
-                        text = if (isUnlimited) {
-                            "Default Mode Active: Dynamically follows the Android OS maximum limit (Recommended)"
-                        } else {
-                            "Manual memory allocation limit for the Rust runtime, WGPU & Minecraft textures: $sliderDisplayMb MB"
-                        },
-                        fontSize = 11.sp,
-                        color = MutedSubtitleText
-                    )
-                }
-            }
-
-            // Mode Selector Pills: [ Bebas / Limit OS Android (Default) ]  [ Manual Adjust (Slider) ]
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isUnlimited) SkyBlueAccent else CardRowBg,
-                    modifier = Modifier
-                        .weight(1f)
-                        .animatedPressScale { onRamChange(0) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (isUnlimited) Icons.Default.CheckCircle else Icons.Default.AllInclusive,
-                            contentDescription = null,
-                            tint = if (isUnlimited) SkyBlueDarkText else SkyBlueAccent,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "Unrestricted / Android OS Limit (Default)",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isUnlimited) SkyBlueDarkText else Color.White,
-                            maxLines = 1
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (!isUnlimited) SkyBlueAccent else CardRowBg,
-                    modifier = Modifier
-                        .weight(1f)
-                        .animatedPressScale {
-                            if (isUnlimited) {
-                                val recommended = ((totalRamMb * 3) / 4 / 256 * 256).coerceIn(minRamMb, maxRamMb)
-                                onRamChange(recommended)
-                            }
-                        }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = null,
-                            tint = if (!isUnlimited) SkyBlueDarkText else SkyBlueAccent,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = if (!isUnlimited) "Manual: $sliderDisplayMb MB" else "Manual Adjust (Slider)",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (!isUnlimited) SkyBlueDarkText else Color.White,
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
-
-            // Slider Row (1024 MB .. totalRamMb, step 256 MB)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Slider(
-                    value = sliderDisplayMb.toFloat(),
-                    onValueChange = { rawVal ->
-                        val snapped = ((rawVal.toInt() + 128) / 256) * 256
-                        val clamped = snapped.coerceIn(minRamMb, maxRamMb)
-                        onRamChange(clamped)
-                    },
-                    valueRange = minRamMb.toFloat()..maxRamMb.toFloat(),
-                    colors = SliderDefaults.colors(
-                        thumbColor = SkyBlueAccent,
-                        activeTrackColor = SkyBlueAccent,
-                        inactiveTrackColor = Color(0xFF33424B)
-                    ),
-                    modifier = Modifier.weight(1f)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("RAM allocation", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = VoltTextMain)
+                Text(
+                    text = "Phone ${String.format(Locale.US, "%.1f", totalRamMb / 1024f)} GB  \u00B7  free $availRamMb MB",
+                    fontFamily = HzFont.Mono, fontSize = 10.sp, color = MutedSubtitleText
                 )
-
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isUnlimited) SubRailCapsuleActive else SkyBlueAccent
-                ) {
-                    Text(
-                        text = if (isUnlimited) "OS Limit" else "$sliderDisplayMb MB",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (isUnlimited) SkyBlueAccent else SkyBlueDarkText,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                    )
-                }
             }
+            Text(
+                text = if (isUnlimited) "OS limit" else "$sliderDisplayMb MB",
+                fontFamily = HzFont.Mono, fontSize = 11.sp, maxLines = 1,
+                color = if (isUnlimited) MutedSubtitleText else SkyBlueDarkText,
+                modifier = Modifier
+                    .clip(HzShape.Chip)
+                    .background(if (isUnlimited) HzColor.PanelHi else SkyBlueAccent)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
         }
+
+        HzSegmented(
+            options = listOf("Android default", "Manual"),
+            selected = if (isUnlimited) 0 else 1,
+            accent = SkyBlueAccent,
+            onSelect = { i ->
+                if (i == 0) onRamChange(0)
+                else if (isUnlimited) onRamChange(((totalRamMb * 3) / 4 / 256 * 256).coerceIn(minRamMb, maxRamMb))
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("${minRamMb / 1024}G", fontFamily = HzFont.Mono, fontSize = 9.sp, color = MutedSubtitleText)
+            HzSlider(
+                value = sliderDisplayMb,
+                range = minRamMb..maxRamMb,
+                step = 256,
+                tickEvery = 1024,
+                accent = if (isUnlimited && !dragging) MutedSubtitleText else SkyBlueAccent,
+                onValue = { onRamChange(it) },
+                onDragging = { dragging = it },
+                modifier = Modifier.weight(1f)
+            )
+            Text("${maxRamMb / 1024}G", fontFamily = HzFont.Mono, fontSize = 9.sp, color = MutedSubtitleText)
+        }
+        Text(
+            text = if (isUnlimited) "Follows the Android limit (recommended). Drag the slider to set a manual cap."
+            else "Manual cap for the runtime, wgpu and textures.",
+            fontSize = 10.5.sp, color = MutedSubtitleText
+        )
     }
 }
 
