@@ -8,6 +8,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -606,6 +610,198 @@ internal fun VoltTwoColumnScroll(
         val totalH = (maxOf(heights[0], heights[1]) - gapPx).coerceAtLeast(0)
         layout(totalW, totalH) {
             placeables.forEachIndexed { i, pl -> pl.placeRelative(xs[i], ys[i]) }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Desktop-style settings parts: rows instead of cards, a vertical category list instead of chips
+// ---------------------------------------------------------------------------------------------
+
+/** 30 x 17 dp switch. The thumb slides and the track fades to the accent; drawn in one pass. */
+@Composable
+internal fun HzSwitch(checked: Boolean, accent: Color, onChange: (Boolean) -> Unit) {
+    val t by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = tween(HzMotion.Short, easing = HzMotion.Ease),
+        label = "HzSwitch"
+    )
+    val onAccent = if (accent.luminance() > 0.45f) Color(0xFF0B0F0D) else Color.White
+    Box(
+        modifier = Modifier
+            .size(width = 30.dp, height = 17.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(9.dp))
+            .drawBehind {
+                drawRect(androidx.compose.ui.graphics.lerp(Color(0xFF2C313B), accent, t))
+                val r = size.height / 2f - 3.dp.toPx()
+                val left = size.height / 2f
+                val right = size.width - size.height / 2f
+                drawCircle(
+                    color = androidx.compose.ui.graphics.lerp(Color(0xFF9AA1AB), onAccent, t),
+                    radius = r,
+                    center = Offset(left + (right - left) * t, size.height / 2f)
+                )
+            }
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+                role = androidx.compose.ui.semantics.Role.Switch
+            ) { onChange(!checked) }
+    )
+}
+
+/** Thin slider: 3 dp track, small thumb. Tap or drag anywhere on it; values snap to [step]. */
+@Composable
+internal fun HzSlider(
+    value: Int,
+    range: IntRange,
+    step: Int,
+    accent: Color,
+    onValue: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val emit by androidx.compose.runtime.rememberUpdatedState(onValue)
+    val span = (range.last - range.first).coerceAtLeast(1)
+    val fraction = ((value - range.first).toFloat() / span).coerceIn(0f, 1f)
+    fun pick(x: Float, w: Float): Int {
+        val raw = range.first + (x / w).coerceIn(0f, 1f) * span
+        val snapped = range.first + Math.round((raw - range.first) / step) * step
+        return snapped.coerceIn(range.first, range.last)
+    }
+    Box(
+        modifier = modifier
+            .height(26.dp)
+            .pointerInput(range, step) {
+                detectTapGestures { o -> emit(pick(o.x, size.width.toFloat())) }
+            }
+            .pointerInput(range, step) {
+                detectHorizontalDragGestures(
+                    onDragStart = { o -> emit(pick(o.x, size.width.toFloat())) }
+                ) { change, _ ->
+                    change.consume()
+                    emit(pick(change.position.x, size.width.toFloat()))
+                }
+            }
+            .drawBehind {
+                val cy = size.height / 2f
+                val h = 3.dp.toPx()
+                val thumb = 5.5.dp.toPx()
+                drawRoundRect(Color(0xFF2C313B), Offset(0f, cy - h / 2f), Size(size.width, h), CornerRadius(h / 2f))
+                drawRoundRect(accent, Offset(0f, cy - h / 2f), Size(size.width * fraction, h), CornerRadius(h / 2f))
+                drawCircle(accent, thumb, Offset((size.width * fraction).coerceIn(thumb, size.width - thumb), cy))
+            }
+    )
+}
+
+/**
+ * One setting: title and a short description on the left, the control on the right, a hairline under it.
+ * Pass [onClick] to make the whole row the touch target (toggles).
+ */
+@Composable
+internal fun HzSettingRow(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    control: @Composable () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ) else Modifier)
+            .drawBehind {
+                drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
+            }
+            .padding(horizontal = 2.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(text = title, fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = VoltTextMain)
+            if (description.isNotBlank()) {
+                Text(text = description, fontSize = 10.5.sp, lineHeight = 14.sp, color = VoltMutedText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        control()
+    }
+}
+
+/** A mono value box with a dropdown arrow; the caller anchors the menu to it. */
+@Composable
+internal fun HzSelectBox(text: String, open: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val rot by animateFloatAsState(if (open) 180f else 0f, tween(HzMotion.Short, easing = HzMotion.Ease), label = "HzSelArrow")
+    Row(
+        modifier = modifier
+            .widthIn(min = 110.dp, max = 200.dp)
+            .height(28.dp)
+            .animatedPressScale(pressedScale = 0.97f, onClick = onClick)
+            .clip(HzShape.Control)
+            .background(HzColor.PanelHi)
+            .border(1.dp, HzColor.Hairline, HzShape.Control)
+            .padding(start = 9.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = text, fontFamily = HzFont.Mono, fontSize = 11.sp, color = VoltTextMain,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+        )
+        Icon(
+            imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = VoltMutedText,
+            modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = rot }
+        )
+    }
+}
+
+/** Vertical category list for master-detail pages. Selected row gets a flat fill and a slim accent bar. */
+@Composable
+internal fun <T> HzCategoryList(
+    items: List<T>,
+    selected: T,
+    label: (T) -> String,
+    icon: (T) -> ImageVector,
+    accent: Color,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .width(150.dp)
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        items.forEach { item ->
+            val on = item == selected
+            val sel by animateFloatAsState(if (on) 1f else 0f, tween(HzMotion.Short, easing = HzMotion.Ease), label = "CatSel")
+            val tint by animateColorAsState(if (on) Color.White else VoltMutedText, tween(HzMotion.Short), label = "CatTint")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(32.dp)
+                    .animatedPressScale(pressedScale = 0.98f) { onSelect(item) }
+                    .clip(HzShape.Control)
+                    .drawBehind {
+                        if (sel > 0.01f) {
+                            drawRoundRect(HzColor.PanelHi.copy(alpha = sel), cornerRadius = CornerRadius(6.dp.toPx()))
+                            val barH = size.height * 0.5f * sel
+                            drawRoundRect(
+                                accent.copy(alpha = sel), Offset(0f, (size.height - barH) / 2f),
+                                Size(2.5.dp.toPx(), barH), CornerRadius(2.dp.toPx())
+                            )
+                        }
+                    }
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(imageVector = icon(item), contentDescription = null, tint = tint, modifier = Modifier.size(15.dp))
+                Text(text = label(item), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

@@ -1040,10 +1040,7 @@ fun MinecraftSkin3DPreviewCanvas(
     }
 }
 
-/**
- * Launcher-style Settings Dropdown Card (`429668.jpg` style):
- * Full-width dark slate rounded card with Title, Description subtitle, `Selected: <value>`, and right dropdown arrow.
- */
+/** A setting with a fixed set of choices: label left, a value box right that opens a menu. */
 @Composable
 fun <T> LauncherSettingDropdownCard(
     title: String,
@@ -1054,115 +1051,40 @@ fun <T> LauncherSettingDropdownCard(
     onSelect: (T) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val arrowRot by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(220),
-        label = "SettingDropdownArrow"
-    )
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = CardSlateBg,
-            border = BorderStroke(1.dp, VoltGrayStroke),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+    HzSettingRow(title = title, description = description) {
+        Box {
+            HzSelectBox(text = itemLabel(selectedItem), open = expanded) { expanded = !expanded }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(HzColor.PanelHi)
             ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = title,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = description,
-                        fontSize = 10.sp,
-                        color = MutedSubtitleText
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(CardRowBg)
-                            .border(1.dp, VoltGrayStroke, RoundedCornerShape(12.dp))
-                            .animatedPressScale { expanded = !expanded }
-                            .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = itemLabel(selectedItem),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier
-                                .size(22.dp)
-                                .rotate(arrowRot)
-                        )
-                    }
-                }
-            }
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(VoltGrayRow)
-        ) {
-            options.forEach { option ->
-                val isSelected = option == selectedItem
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = itemLabel(option),
-                            fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) SkyBlueAccent else Color.White
-                        )
-                    },
-                    trailingIcon = if (isSelected) {
-                        {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = null,
-                                tint = SkyBlueAccent,
-                                modifier = Modifier.size(16.dp)
+                options.forEach { option ->
+                    val isSelected = option == selectedItem
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = itemLabel(option),
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) SkyBlueAccent else Color.White
                             )
+                        },
+                        trailingIcon = if (isSelected) {
+                            { Icon(Icons.Default.Check, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(14.dp)) }
+                        } else null,
+                        onClick = {
+                            expanded = false
+                            onSelect(option)
                         }
-                    } else null,
-                    onClick = {
-                        expanded = false
-                        onSelect(option)
-                    }
-                )
+                    )
+                }
             }
         }
     }
 }
 
-/**
- * Launcher-style Slider Card (`429668.jpg` bottom card style):
- * Title + Subtitle + thick track slider on left + Sky-Blue `<  50%  >` stepper pill on right!
- */
+/** A numeric setting: label left, thin slider + mono value right. */
 @Composable
 fun LauncherSettingSliderCard(
     title: String,
@@ -1173,86 +1095,26 @@ fun LauncherSettingSliderCard(
     valueSuffix: String = "%",
     onValueChange: (Int) -> Unit
 ) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = CardSlateBg,
-        border = BorderStroke(1.dp, VoltGrayStroke),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+    HzSettingRow(title = title, description = description) {
+        Row(
+            modifier = Modifier.width(250.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
+            HzSlider(
+                value = value, range = valueRange, step = step, accent = SkyBlueAccent,
+                onValue = onValueChange, modifier = Modifier.weight(1f)
             )
             Text(
-                text = description,
-                fontSize = 10.sp,
-                color = MutedSubtitleText
+                text = "$value$valueSuffix",
+                fontFamily = HzFont.Mono, fontSize = 11.sp, color = VoltTextMain, maxLines = 1,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier
+                    .widthIn(min = 44.dp)
+                    .clip(HzShape.Chip)
+                    .background(HzColor.PanelHi)
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
             )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Slider(
-                    value = value.toFloat(),
-                    onValueChange = { onValueChange(it.toInt().coerceIn(valueRange.first, valueRange.last)) },
-                    valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
-                    colors = SliderDefaults.colors(
-                        thumbColor = SkyBlueAccent,
-                        activeTrackColor = SkyBlueAccent,
-                        inactiveTrackColor = Color(0xFF2B303C)
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = CardRowBg,
-                    border = BorderStroke(1.dp, VoltGrayStroke)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "$value$valueSuffix",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Icon(
-                            imageVector = Icons.Default.ArrowLeft,
-                            contentDescription = "Decrease",
-                            tint = Color.White,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .animatedPressScale {
-                                    onValueChange((value - step).coerceIn(valueRange.first, valueRange.last))
-                                }
-                        )
-                        Icon(
-                            imageVector = Icons.Default.ArrowRight,
-                            contentDescription = "Increase",
-                            tint = Color.White,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .animatedPressScale {
-                                    onValueChange((value + step).coerceIn(valueRange.first, valueRange.last))
-                                }
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -1264,55 +1126,14 @@ fun LauncherSettingToggleCard(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = CardSlateBg,
-        border = BorderStroke(1.dp, VoltGrayStroke),
-        modifier = Modifier
-            .fillMaxWidth()
-            .animatedPressScale { onCheckedChange(!checked) }
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Text(
-                    text = title,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-                Text(
-                    text = description,
-                    fontSize = 10.sp,
-                    color = MutedSubtitleText
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = SkyBlueDarkText,
-                    checkedTrackColor = SkyBlueAccent,
-                    uncheckedThumbColor = Color(0xFF6B7280),
-                    uncheckedTrackColor = Color(0xFF0F1117),
-                    uncheckedBorderColor = VoltGrayStroke
-                )
-            )
-        }
+    HzSettingRow(title = title, description = description, onClick = { onCheckedChange(!checked) }) {
+        HzSwitch(checked = checked, accent = SkyBlueAccent, onChange = onCheckedChange)
     }
 }
 
 /**
- * Vertical Sub-Navigation Rail with Capsule Active Indicator (`429668.jpg` & `429665.jpg` left rail style).
+ * Flat tab strip: icon + label, a 2 dp accent underline grows under the selected tab.
+ * No pills, no scaling; only colour and one line change, so it stays cheap above scrolling lists.
  */
 @Composable
 fun <T> LauncherSubCategoryRail(
@@ -1322,67 +1143,51 @@ fun <T> LauncherSubCategoryRail(
     itemIcon: (T) -> ImageVector,
     onSelect: (T) -> Unit
 ) {
-    // Horizontal chip row: sits under the top bar, scrolls sideways, selected chip glows + lifts.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 2.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .drawBehind {
+                drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
+            }
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         items.forEach { item ->
             val selected = item == selectedItem
-            val chipFill by animateColorAsState(
-                targetValue = if (selected) SkyBlueAccent.copy(alpha = 0.22f) else CardSlateBg,
-                animationSpec = tween(240, easing = FastOutSlowInEasing),
-                label = "ChipFill"
+            val line by animateFloatAsState(
+                targetValue = if (selected) 1f else 0f,
+                animationSpec = tween(HzMotion.Short, easing = HzMotion.Ease),
+                label = "TabLine"
             )
-            val chipBorder by animateColorAsState(
-                targetValue = if (selected) SkyBlueAccent.copy(alpha = 0.75f) else VoltGrayStroke,
-                animationSpec = tween(240, easing = FastOutSlowInEasing),
-                label = "ChipBorder"
+            val tint by animateColorAsState(
+                targetValue = if (selected) Color.White else MutedSubtitleText,
+                animationSpec = tween(HzMotion.Short),
+                label = "TabTint"
             )
-            val chipLift by animateFloatAsState(
-                targetValue = if (selected) 1.04f else 1f,
-                animationSpec = spring(dampingRatio = 0.62f, stiffness = 420f),
-                label = "ChipLift"
-            )
-            val iconTint by animateColorAsState(
-                targetValue = if (selected) SkyBlueAccent else MutedSubtitleText,
-                animationSpec = tween(240),
-                label = "ChipIconTint"
-            )
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = chipFill,
-                border = BorderStroke(1.dp, chipBorder),
+            Row(
                 modifier = Modifier
-                    .graphicsLayer {
-                        scaleX = chipLift
-                        scaleY = chipLift
+                    .animatedPressScale(pressedScale = 0.97f) { onSelect(item) }
+                    .drawBehind {
+                        val w = size.width * line
+                        drawRect(
+                            color = SkyBlueAccent,
+                            topLeft = Offset((size.width - w) / 2f, size.height - 2.dp.toPx()),
+                            size = androidx.compose.ui.geometry.Size(w, 2.dp.toPx())
+                        )
                     }
-                    .animatedPressScale { onSelect(item) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
-                ) {
-                    Icon(
-                        imageVector = itemIcon(item),
-                        contentDescription = itemLabel(item),
-                        tint = iconTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = itemLabel(item),
-                        fontSize = 12.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selected) Color.White else MutedSubtitleText,
-                        maxLines = 1
-                    )
-                }
+                Icon(imageVector = itemIcon(item), contentDescription = itemLabel(item), tint = tint, modifier = Modifier.size(14.dp))
+                Text(
+                    text = itemLabel(item),
+                    fontSize = 12.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = tint,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -3658,159 +3463,156 @@ private fun CleanServersViewport(
         )
     }
 
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = CardSlateBg.copy(alpha = 0.90f),
-        border = horizonGlassBorder(),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Toolbar: title and count on the left, actions on the right.
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Servers", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Spacer(Modifier.width(8.dp))
+            Text("${servers.size}", fontFamily = HzFont.Mono, fontSize = 11.sp, color = MutedSubtitleText)
+            Spacer(Modifier.weight(1f))
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(28.dp)
+                    .animatedPressScale(pressedScale = 0.94f) { refreshTick++ }
+                    .clip(HzShape.Control)
+                    .background(HzColor.PanelHi)
+            ) { Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color(0xFFD5DEE5), modifier = Modifier.size(15.dp)) }
+            Spacer(Modifier.width(6.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .height(28.dp)
+                    .animatedPressScale(pressedScale = 0.96f) { editing = null; showEditor = true }
+                    .clip(HzShape.Control)
+                    .background(SkyBlueAccent)
+                    .padding(horizontal = 10.dp)
             ) {
-                Column {
-                    Text("Servers", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Text("${servers.size} saved", fontSize = 11.sp, color = MutedSubtitleText)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = SubRailCapsuleActive,
-                        border = BorderStroke(1.dp, VoltGrayStroke),
-                        modifier = Modifier.clickable { refreshTick++ }
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = SkyBlueAccent, modifier = Modifier.padding(8.dp).size(18.dp))
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = SkyBlueAccent,
-                        modifier = Modifier.clickable { editing = null; showEditor = true }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(16.dp))
-                            Text("Add Server", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SkyBlueDarkText)
-                        }
-                    }
-                }
+                Icon(Icons.Default.Add, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(14.dp))
+                Text("Add server", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = SkyBlueDarkText)
             }
+        }
 
-            if (servers.isEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Text("No servers yet. Tap Add Server to save one.", fontSize = 13.sp, color = MutedSubtitleText)
+        if (servers.isEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                Text("No servers yet. Add one to see its status here.", fontSize = 12.sp, color = MutedSubtitleText)
+            }
+        } else {
+            // Column headers
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .drawBehind { drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f) }
+                    .padding(start = 56.dp, end = 118.dp, bottom = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val head = @Composable { t: String, m: Modifier ->
+                    Text(t, fontFamily = HzFont.Mono, fontSize = 9.sp, letterSpacing = 1.sp, color = MutedSubtitleText, modifier = m)
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(servers.toList(), key = { System.identityHashCode(it) }) { entry ->
-                        val status = statuses[entry.address]
-                        val known = statuses.containsKey(entry.address)
-                        val iconBytes = status?.favicon
-                            ?: (entry.raw["icon"]?.value as? String)?.let { HorizonServerStore.decodeFavicon(it) }
-                        var showMenu by remember { mutableStateOf(false) }
-                        val online = known && status != null && status.online
-                        val dot = when {
-                            !known || status == null -> Color(0xFFFFD54F)
-                            status.online -> Color(0xFF66BB6A)
-                            else -> Color(0xFFEF5350)
+                head("SERVER", Modifier.weight(1f))
+                head("PLAYERS", Modifier.width(62.dp))
+                head("PING", Modifier.width(48.dp))
+                head("VERSION", Modifier.width(96.dp))
+            }
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                items(servers.toList(), key = { System.identityHashCode(it) }) { entry ->
+                    val status = statuses[entry.address]
+                    val known = statuses.containsKey(entry.address)
+                    val iconBytes = status?.favicon
+                        ?: (entry.raw["icon"]?.value as? String)?.let { HorizonServerStore.decodeFavicon(it) }
+                    var showMenu by remember { mutableStateOf(false) }
+                    val online = known && status != null && status.online
+                    val dot = when {
+                        !known || status == null -> Color(0xFFFFD54F)
+                        status.online -> Color(0xFF66BB6A)
+                        else -> Color(0xFFEF5350)
+                    }
+                    val mono = HzFont.Mono
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .drawBehind { drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f) }
+                            .padding(vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.BottomEnd) {
+                            ServerIcon(iconBytes, entry.name.ifBlank { entry.address }, online)
+                            Box(
+                                modifier = Modifier
+                                    .size(9.dp)
+                                    .clip(CircleShape)
+                                    .background(HzColor.Rail)
+                                    .padding(1.5.dp)
+                                    .clip(CircleShape)
+                                    .background(dot)
+                            )
                         }
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = CardRowBg,
-                            border = BorderStroke(1.dp, if (online) SkyBlueAccent.copy(alpha = 0.35f) else VoltGrayStroke),
-                            modifier = Modifier.fillMaxWidth()
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(
+                                entry.name.ifBlank { "Minecraft Server" },
+                                fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                            val sub = when {
+                                !known || status == null -> "Checking..."
+                                !status.online -> "Offline or unreachable"
+                                status.motd.isNotBlank() -> status.motd.replace('\n', ' ')
+                                else -> entry.address
+                            }
+                            Text(sub, fontSize = 10.sp, color = MutedSubtitleText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(
+                            if (online) "${status!!.playersOnline}/${status.playersMax}" else "-",
+                            fontFamily = mono, fontSize = 11.sp, color = Color(0xFFD5DEE5), maxLines = 1, modifier = Modifier.width(62.dp)
+                        )
+                        Text(
+                            if (online && status!!.pingMs >= 0) "${status.pingMs} ms" else "-",
+                            fontFamily = mono, fontSize = 11.sp, color = Color(0xFFD5DEE5), maxLines = 1, modifier = Modifier.width(48.dp)
+                        )
+                        Text(
+                            if (online && status!!.version.isNotBlank()) status.version else "-",
+                            fontFamily = mono, fontSize = 10.sp, color = MutedSubtitleText, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis, modifier = Modifier.width(96.dp)
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .height(26.dp)
+                                .animatedPressScale(pressedScale = 0.96f) { onQuickPlayServer(entry.address) }
+                                .clip(HzShape.Control)
+                                .background(SkyBlueAccent)
+                                .padding(horizontal = 8.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(14.dp))
+                            Text("Play", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = SkyBlueDarkText)
+                        }
+                        Box {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .animatedPressScale(pressedScale = 0.94f) { showMenu = true }
+                                    .clip(HzShape.Control)
+                                    .background(HzColor.PanelHi)
+                            ) { Icon(Icons.Default.MoreHoriz, contentDescription = "More options", tint = Color(0xFFD5DEE5), modifier = Modifier.size(15.dp)) }
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false },
+                                modifier = Modifier.background(HzColor.PanelHi)
                             ) {
-                                ServerIcon(iconBytes, entry.name.ifBlank { entry.address }, online)
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Surface(shape = RoundedCornerShape(50), color = dot, modifier = Modifier.size(8.dp)) {}
-                                        Text(
-                                            entry.name.ifBlank { "Minecraft Server" },
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false)
-                                        )
-                                        Text(
-                                            entry.address,
-                                            fontSize = 11.sp,
-                                            color = MutedSubtitleText,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    val detail = when {
-                                        !known || status == null -> "Checking..."
-                                        !status.online -> "Offline or unreachable"
-                                        else -> buildString {
-                                            append("${status.playersOnline}/${status.playersMax} players")
-                                            if (status.pingMs >= 0) append("  \u2022  ${status.pingMs} ms")
-                                            if (status.version.isNotBlank()) append("  \u2022  ${status.version}")
-                                        }
-                                    }
-                                    Text(detail, fontSize = 11.sp, color = Color(0xFFD5DEE5), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    if (online && status!!.motd.isNotBlank()) {
-                                        Text(status.motd, fontSize = 11.sp, color = MutedSubtitleText, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = SkyBlueAccent,
-                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                                    modifier = Modifier.clickable { onQuickPlayServer(entry.address) }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(16.dp))
-                                        Text("Play", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SkyBlueDarkText)
-                                    }
-                                }
-                                Box {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = SubRailCapsuleActive,
-                                        border = BorderStroke(1.dp, VoltGrayStroke),
-                                        modifier = Modifier.clickable { showMenu = true }
-                                    ) {
-                                        Icon(Icons.Default.MoreHoriz, contentDescription = "More options", tint = Color(0xFFD5DEE5), modifier = Modifier.padding(8.dp).size(18.dp))
-                                    }
-                                    DropdownMenu(
-                                        expanded = showMenu,
-                                        onDismissRequest = { showMenu = false },
-                                        modifier = Modifier.background(Color(0xFF283036))
-                                    ) {
-                                        DropdownMenuItem(
-                                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
-                                            text = { Text("Edit", fontSize = 12.sp, color = Color.White) },
-                                            onClick = { showMenu = false; editing = entry; showEditor = true }
-                                        )
-                                        DropdownMenuItem(
-                                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(17.dp)) },
-                                            text = { Text("Remove", fontSize = 12.sp, color = Color(0xFFFF8A80)) },
-                                            onClick = { showMenu = false; pendingDelete = entry }
-                                        )
-                                    }
-                                }
+                                DropdownMenuItem(
+                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp)) },
+                                    text = { Text("Edit", fontSize = 12.sp, color = Color.White) },
+                                    onClick = { showMenu = false; editing = entry; showEditor = true }
+                                )
+                                DropdownMenuItem(
+                                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = HzColor.Danger, modifier = Modifier.size(15.dp)) },
+                                    text = { Text("Remove", fontSize = 12.sp, color = HzColor.Danger) },
+                                    onClick = { showMenu = false; pendingDelete = entry }
+                                )
                             }
                         }
                     }
@@ -3828,10 +3630,10 @@ private fun ServerIcon(bytes: ByteArray?, label: String, online: Boolean) {
     }
     Box(
         modifier = Modifier
-            .size(52.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .size(36.dp)
+            .clip(HzShape.Control)
             .background(Color(0xFF14161D))
-            .border(1.5.dp, if (online) SkyBlueAccent.copy(alpha = 0.7f) else VoltGrayStroke, RoundedCornerShape(10.dp)),
+            .border(1.dp, if (online) SkyBlueAccent.copy(alpha = 0.7f) else VoltGrayStroke, HzShape.Control),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
@@ -7761,37 +7563,45 @@ private fun CleanSettingsViewport(
         LauncherVersionsDialog(onDismiss = { showLauncherVersions = false })
     }
 
-    Column(
+    // Master-detail: categories on the left, one single column of rows on the right.
+    Row(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        LauncherSubCategoryRail(
+        HzCategoryList(
             items = SettingsSubCategory.entries,
-            selectedItem = selectedSection,
-            itemLabel = { it.label },
-            itemIcon = { it.icon },
+            selected = selectedSection,
+            label = { it.label },
+            icon = { it.icon },
+            accent = SkyBlueAccent,
             onSelect = { selectedSection = it }
         )
 
         AnimatedContent(
             targetState = selectedSection,
             transitionSpec = {
-                (fadeIn(tween(220, easing = FastOutSlowInEasing)) +
-                    slideInVertically(tween(220, easing = FastOutSlowInEasing)) { h -> h / 14 })
-                    .togetherWith(fadeOut(tween(150)))
+                (fadeIn(tween(HzMotion.Short, delayMillis = 40, easing = HzMotion.Ease)) +
+                    slideInVertically(tween(HzMotion.Medium, easing = HzMotion.Ease)) { h -> h / 40 })
+                    .togetherWith(fadeOut(tween(HzMotion.Quick)))
                     .using(sizeTransform = null)
             },
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxHeight(),
             label = "SettingsSubSectionTransition"
         ) { section ->
-            VoltTwoColumnScroll(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(end = 4.dp, bottom = 12.dp)
             ) {
+                Text(
+                    text = section.label.uppercase(),
+                    fontFamily = HzFont.Mono, fontSize = 10.sp, letterSpacing = 1.sp,
+                    color = MutedSubtitleText,
+                    modifier = Modifier.padding(start = 2.dp, bottom = 6.dp)
+                )
                 when (section) {
                     SettingsSubCategory.RENDERER -> {
                         LauncherRamAllocationCard(
