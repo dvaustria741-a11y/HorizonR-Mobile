@@ -3144,234 +3144,180 @@ private fun CleanAccountsAndSkinsViewport(
                 }
 
                 AccountSubCategory.PROFILES -> {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = CardSlateBg.copy(alpha = 0.90f),
-                        border = horizonGlassBorder(),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
+                    // Master-detail: accounts on the left, the add-account form on the right.
+                    Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Column(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(14.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
                         ) {
                             Text(
-                                text = "Player Accounts & Microsoft Sign-In",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                text = "ACCOUNTS  ${accounts.size}",
+                                fontFamily = HzFont.Mono, fontSize = 10.sp, letterSpacing = 1.sp,
+                                color = MutedSubtitleText,
+                                modifier = Modifier.padding(start = 2.dp, bottom = 6.dp)
                             )
-
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = CardRowBg,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(50),
-                                        color = Color(0xFF1E2428),
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(36.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(horizontal = 14.dp),
-                                            contentAlignment = Alignment.CenterStart
-                                        ) {
-                                            if (newAccountName.isEmpty()) {
-                                                Text("Enter Player Name / Gamertag...", fontSize = 12.sp, color = MutedSubtitleText)
-                                            }
-                                            BasicTextField(
-                                                value = newAccountName,
-                                                onValueChange = { newAccountName = it },
-                                                singleLine = true,
-                                                textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
-                                                cursorBrush = SolidColor(SkyBlueAccent),
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-
-                                    AccountType.entries.forEach { t ->
-                                        val isSelected = selectedAccountType == t
-                                        Surface(
-                                            shape = RoundedCornerShape(50),
-                                            color = if (isSelected) SubRailCapsuleActive else Color(0xFF1E2428),
-                                            modifier = Modifier.animatedPressScale { selectedAccountType = t }
-                                        ) {
-                                            Text(
-                                                text = t.badge,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (isSelected) SkyBlueAccent else MutedSubtitleText,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = SkyBlueAccent,
-                                        modifier = Modifier.animatedPressScale {
-                                            if (newAccountName.isNotBlank()) {
-                                                val added = LauncherAccount(
-                                                    id = UUID.randomUUID().toString(),
-                                                    username = newAccountName.trim(),
-                                                    uuid = UUID.randomUUID().toString(),
-                                                    accountType = selectedAccountType,
-                                                    isActive = true
-                                                )
-                                                val updated = accounts.map { it.copy(isActive = false) } + added
-                                                onAccountsChange(updated)
-                                                newAccountName = ""
-                                            }
-                                        }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(Icons.Default.PersonAdd, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(15.dp))
-                                            Text("Save Profile", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SkyBlueDarkText)
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (selectedAccountType == AccountType.MICROSOFT) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = SubRailCapsuleActive,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .animatedPressScale {
-                                            runCatching {
-                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.microsoft.com/link")))
-                                            }
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(17.dp))
-                                        Text(
-                                            text = "Open Microsoft Device Link (microsoft.com/link) to authorize Xbox Live Gamertag",
-                                            fontSize = 12.sp,
-                                            color = Color.White
-                                        )
-                                    }
-                                }
-                            }
-
                             accounts.forEach { acc ->
                                 val accSkinBmp = remember(acc.id, acc.skinPath, acc.slimSkinModel) {
                                     HorizonNativeBridge.loadOrGenerateAccountSkinBitmap(context, acc)
                                 }
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (acc.isActive) SubRailCapsuleActive else CardRowBg,
+                                val activate = {
+                                    onAccountsChange(accounts.map { it.copy(isActive = it.id == acc.id) })
+                                }
+                                Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .animatedPressScale {
-                                            val updated = accounts.map { it.copy(isActive = it.id == acc.id) }
-                                            onAccountsChange(updated)
+                                        .animatedPressScale(pressedScale = 0.99f) { activate() }
+                                        .drawBehind {
+                                            if (acc.isActive) {
+                                                drawRect(HzColor.PanelHi)
+                                                drawRoundRect(
+                                                    SkyBlueAccent, Offset(0f, size.height * 0.25f),
+                                                    androidx.compose.ui.geometry.Size(2.5.dp.toPx(), size.height * 0.5f),
+                                                    androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
+                                                )
+                                            }
+                                            drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
                                         }
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            MinecraftSkinHeadAvatar(
-                                                skinBitmap = accSkinBmp,
-                                                size = 38.dp,
-                                                cornerRadius = 9.dp
+                                    MinecraftSkinHeadAvatar(skinBitmap = accSkinBmp, size = 32.dp, cornerRadius = 6.dp)
+                                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text(
+                                                text = acc.username,
+                                                fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    Text(
-                                                        text = acc.username,
-                                                        fontSize = 14.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color.White,
-                                                        maxLines = 1
-                                                    )
-                                                    LavenderTagBadge(text = acc.accountType.badge)
-                                                    if (acc.isActive) {
-                                                        LavenderTagBadge(text = "Active")
-                                                    }
-                                                }
-                                                Text(
-                                                    text = "Skin: ${acc.skinSourceLabel}",
-                                                    fontSize = 11.sp,
-                                                    color = MutedSubtitleText,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
+                                            Text(
+                                                text = acc.accountType.badge,
+                                                fontFamily = HzFont.Mono, fontSize = 8.5.sp, color = MutedSubtitleText, maxLines = 1,
+                                                modifier = Modifier
+                                                    .border(1.dp, HzColor.Hairline, HzShape.Chip)
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                            if (acc.isActive) {
+                                                Text("ACTIVE", fontFamily = HzFont.Mono, fontSize = 8.5.sp, color = SkyBlueAccent, maxLines = 1)
                                             }
                                         }
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Surface(
-                                                shape = RoundedCornerShape(6.dp),
-                                                color = CardSlateBg,
-                                                border = BorderStroke(1.dp, VoltGrayStroke),
-                                                modifier = Modifier.animatedPressScale {
-                                                    val updated = accounts.map { it.copy(isActive = it.id == acc.id) }
-                                                    onAccountsChange(updated)
-                                                    selectedSubTab = AccountSubCategory.WARDROBE
-                                                }
-                                            ) {
-                                                Text(
-                                                    text = "Edit Skin",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = SkyBlueAccent,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                                )
-                                            }
-
-                                            if (accounts.size > 1) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Delete,
-                                                    contentDescription = "Delete Account",
-                                                    tint = Color(0xFFFF8A80),
-                                                    modifier = Modifier
-                                                        .size(20.dp)
-                                                        .animatedPressScale {
-                                                            val remaining = accounts.filterNot { it.id == acc.id }
-                                                            val fixed = if (remaining.none { it.isActive }) {
-                                                                remaining.mapIndexed { idx, item -> item.copy(isActive = idx == 0) }
-                                                            } else remaining
-                                                            onAccountsChange(fixed)
-                                                        }
-                                                )
-                                            }
+                                        Text(
+                                            text = "Skin: ${acc.skinSourceLabel}",
+                                            fontSize = 10.sp, color = MutedSubtitleText,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    HzToolbarButton(label = "Edit skin", icon = Icons.Default.Checkroom, accent = SkyBlueAccent) {
+                                        activate()
+                                        selectedSubTab = AccountSubCategory.WARDROBE
+                                    }
+                                    if (accounts.size > 1) {
+                                        HzIconButton(icon = Icons.Outlined.Delete, contentDescription = "Delete Account", tint = HzColor.Danger) {
+                                            val remaining = accounts.filterNot { it.id == acc.id }
+                                            val fixed = if (remaining.none { it.isActive }) {
+                                                remaining.mapIndexed { idx, item -> item.copy(isActive = idx == 0) }
+                                            } else remaining
+                                            onAccountsChange(fixed)
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .width(232.dp)
+                                .fillMaxHeight()
+                                .drawBehind {
+                                    drawLine(HzColor.Hairline, Offset(-7.dp.toPx(), 0f), Offset(-7.dp.toPx(), size.height), 1f)
+                                }
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "ADD ACCOUNT",
+                                fontFamily = HzFont.Mono, fontSize = 10.sp, letterSpacing = 1.sp,
+                                color = MutedSubtitleText,
+                                modifier = Modifier.padding(start = 2.dp)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(32.dp)
+                                    .clip(HzShape.Control)
+                                    .background(HzColor.PanelHi)
+                                    .border(1.dp, HzColor.Hairline, HzShape.Control)
+                                    .padding(horizontal = 10.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (newAccountName.isEmpty()) {
+                                    Text("Player name / Gamertag", fontSize = 11.sp, color = MutedSubtitleText)
+                                }
+                                BasicTextField(
+                                    value = newAccountName,
+                                    onValueChange = { newAccountName = it },
+                                    singleLine = true,
+                                    textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
+                                    cursorBrush = SolidColor(SkyBlueAccent),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            HzSegmented(
+                                options = AccountType.entries.map { it.badge },
+                                selected = AccountType.entries.indexOf(selectedAccountType),
+                                accent = SkyBlueAccent,
+                                onSelect = { selectedAccountType = AccountType.entries[it] },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(32.dp)
+                                    .animatedPressScale(pressedScale = 0.97f) {
+                                        if (newAccountName.isNotBlank()) {
+                                            val added = LauncherAccount(
+                                                id = UUID.randomUUID().toString(),
+                                                username = newAccountName.trim(),
+                                                uuid = UUID.randomUUID().toString(),
+                                                accountType = selectedAccountType,
+                                                isActive = true
+                                            )
+                                            onAccountsChange(accounts.map { it.copy(isActive = false) } + added)
+                                            newAccountName = ""
+                                        }
+                                    }
+                                    .clip(HzShape.Control)
+                                    .background(SkyBlueAccent),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(5.dp))
+                                Text("Save profile", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = SkyBlueDarkText)
+                            }
+                            if (selectedAccountType == AccountType.MICROSOFT) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .animatedPressScale(pressedScale = 0.98f) {
+                                            runCatching {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.microsoft.com/link")))
+                                            }
+                                        }
+                                        .clip(HzShape.Control)
+                                        .background(HzColor.PanelHi)
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(15.dp))
+                                    Text(
+                                        text = "Open microsoft.com/link to authorize your Xbox Live gamertag",
+                                        fontSize = 10.5.sp, lineHeight = 14.sp, color = Color.White
+                                    )
                                 }
                             }
                         }
