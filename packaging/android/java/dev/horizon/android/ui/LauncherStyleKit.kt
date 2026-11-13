@@ -899,3 +899,49 @@ internal fun <T> HzCategoryList(
         }
     }
 }
+
+/** 28 dp square icon button on a flat fill. The one icon-button style for toolbars. */
+@Composable
+internal fun HzIconButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    tint: Color = Color(0xFFD5DEE5),
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(28.dp)
+            .animatedPressScale(pressedScale = 0.94f, onClick = onClick)
+            .clip(HzShape.Control)
+            .background(HzColor.PanelHi)
+    ) {
+        Icon(imageVector = icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(15.dp))
+    }
+}
+
+/** Text + icon toolbar button, 28 dp tall. [filled] uses the accent colour. */
+@Composable
+internal fun HzToolbarButton(
+    label: String,
+    icon: ImageVector,
+    accent: Color,
+    filled: Boolean = false,
+    onClick: () -> Unit
+) {
+    val onAccent = if (accent.luminance() > 0.45f) Color(0xFF0B0F0D) else Color.White
+    Row(
+        modifier = Modifier
+            .height(28.dp)
+            .animatedPressScale(pressedScale = 0.96f, onClick = onClick)
+            .clip(HzShape.Control)
+            .background(if (filled) accent else HzColor.PanelHi)
+            .padding(horizontal = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = if (filled) onAccent else accent, modifier = Modifier.size(14.dp))
+        Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (filled) onAccent else VoltTextMain, maxLines = 1)
+    }
+}
