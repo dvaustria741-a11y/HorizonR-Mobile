@@ -9,6 +9,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.composed
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -103,6 +107,20 @@ private val ZTeal = HzAccent
 private val ZMuted = HzMuted
 private val ZLine = HzCapsule
 private val ZScrim = Color(0x99000000)
+
+private val PANEL_W = 240.dp
+private val ZRadius = 7.dp
+private val PILL_W = 84.dp
+private val PILL_H = 30.dp
+
+private fun Modifier.animatedPressScale(pressedScale: Float, onClick: () -> Unit): Modifier = composed {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val s by animateFloatAsState(if (pressed) pressedScale else 1f, tween(HzMotion.Fast, easing = HzMotion.Standard), label = "press")
+    this
+        .graphicsLayer { scaleX = s; scaleY = s }
+        .clickable(interactionSource = source, indication = null, onClick = onClick)
+}
 
 private enum class Mode { HOLD, TAP, TOGGLE }
 
