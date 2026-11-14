@@ -55,4 +55,23 @@
     <string name="notification_title">JVM probe is running</string>
     <string name="start_failed">could not start the JVM service: %1$s (if the message says process is bad, force-stop this app in Settings and try again)</string>
     <string name="last_stage_label">Last stage reached before the death</string>
+    <string name="button_server">Run Fabric 26.3 server (Clumps)</string>
+    <string name="mode_server">Fabric server jar on JLI_Launch</string>
+    <string name="status_server_stopped">finished: the probe stopped the server (SIGTERM) after it was ready</string>
+    <string name="eula_title">Minecraft EULA</string>
+    <string name="eula_message">This run writes eula.txt with eula=true on this phone, which is your acceptance of the Minecraft EULA (%1$s). It downloads the Fabric server launcher and one mod; the launcher then downloads Mojang\'s server files into this app\'s private storage. Keep the app open and the screen on while it runs.</string>
+    <string name="eula_accept">Accept and run</string>
+    <string name="eula_cancel">Cancel</string>
+    <string name="server_header">Server run</string>
+    <string name="server_result_pass">PASS: \"Done\" reached, no problem lines</string>
+    <string name="server_result_fail">FAIL or not finished</string>
+    <string name="server_done">Done (from the server log): %1$s s</string>
+    <string name="server_not_done">Done: not reached yet</string>
+    <string name="server_loading_none">no \"Loading N mods\" line in the log yet</string>
+    <string name="server_mixin_lines">Log lines that mention Mixin: %1$s</string>
+    <string name="server_problems_header">Problem lines (first %1$s)</string>
+    <string name="server_prep_header">Setup</string>
+    <string name="server_gc_header">GC log (init lines)</string>
+    <string name="server_live_header">Server log (last lines)</string>
+    <string name="server_tail_header">Server log (last lines, not a pass)</string>
 </resources>

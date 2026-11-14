@@ -295,6 +295,29 @@ pub fn launcher_argv(args: &LauncherArgs) -> Result<Vec<String>, ConfigError> {
     Ok(argv)
 }
 
+/// What the Fabric server launcher needs: `java <jvm options> -jar <jar> nogui`, run with the server directory as
+/// the working directory (the caller changes it; Fabric writes `world`, `libraries` and `logs` there).
+#[derive(Clone, Debug)]
+pub struct ServerArgs {
+    pub heap_mib: u32,
+    pub jar: PathBuf,
+    /// Extra `-X…`/`-D…` options, validated like `jvm_options`.
+    pub options: Vec<String>,
+}
+
+/// `argv` for `JLI_Launch` running a server jar: program name, heap, options, `-jar <jar>`, `nogui`. Pure.
+pub fn server_argv(args: &ServerArgs) -> Result<Vec<String>, ConfigError> {
+    let mut argv = vec!["java".to_string()];
+    argv.extend(jvm_options(args.heap_mib, &args.options)?);
+    let jar = args
+        .jar
+        .to_str()
+        .filter(|s| !s.is_empty() && !s.contains('\0'))
+        .ok_or_else(|| ConfigError::BadOption(format!("server jar {:?}", args.jar)))?;
+    argv.extend(["-jar".to_string(), jar.to_string(), "nogui".to_string()]);
+    Ok(argv)
+}
+
 /// Prototype of `JLI_Launch` as I remember OpenJDK's `src/java.base/share/native/libjli/java.h`.
 /// Not checked against the 25.0.5 build in the Zalith tarball: a wrong prototype would crash at the call.
 type JliLaunch = unsafe extern "C" fn(
@@ -422,6 +445,42 @@ mod tests {
         let mut a = launcher_args();
         a.class_path = PathBuf::new();
         assert!(matches!(launcher_argv(&a), Err(ConfigError::BadOption(_))));
+    }
+
+    #[test]
+    fn server_argv_order() {
+        let args = ServerArgs {
+            heap_mib: 1024,
+            jar: "/data/server/fabric-server.jar".into(),
+            options: vec!["-Djava.io.tmpdir=/data/server/tmp".into(), "-Xlog:gc=info:file=/data/gc.txt".into()],
+        };
+        assert_eq!(
+            server_argv(&args).unwrap(),
+            [
+                "java",
+                "-Xmx1024m",
+                "-Djava.io.tmpdir=/data/server/tmp",
+                "-Xlog:gc=info:file=/data/gc.txt",
+                "-jar",
+                "/data/server/fabric-server.jar",
+                "nogui"
+            ]
+        );
+    }
+
+    #[test]
+    fn server_argv_rejects_bad_input() {
+        let ok = ServerArgs { heap_mib: 512, jar: "/s/a.jar".into(), options: vec![] };
+        assert!(server_argv(&ok).is_ok());
+        let mut a = ok.clone();
+        a.jar = PathBuf::new();
+        assert!(matches!(server_argv(&a), Err(ConfigError::BadOption(_))));
+        let mut a = ok.clone();
+        a.heap_mib = 1;
+        assert!(matches!(server_argv(&a), Err(ConfigError::HeapTooSmall(1))));
+        let mut a = ok.clone();
+        a.options = vec!["-jar".into()];
+        assert!(matches!(server_argv(&a), Err(ConfigError::BadOption(_))));
     }
 
     #[test]

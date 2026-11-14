@@ -1,6 +1,7 @@
 package dev.horizonr.jvmprobe
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
@@ -18,6 +19,10 @@ import java.io.File
 
 /** The one screen: two buttons and a text block meant to be screenshotted whole. */
 class MainActivity : Activity() {
+
+    private companion object {
+        const val MAX_PROBLEMS = 6
+    }
 
     private enum class State { IDLE, RUNNING, DONE, ERROR, DIED }
 
@@ -47,6 +52,10 @@ class MainActivity : Activity() {
             setText(R.string.button_jli)
             setOnClickListener { start(NativeBoot.MODE_JLI, false) }
         })
+        column.addView(Button(this).apply {
+            setText(R.string.button_server)
+            setOnClickListener { confirmServer() }
+        })
         output = TextView(this).apply {
             typeface = Typeface.MONOSPACE
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
@@ -69,6 +78,24 @@ class MainActivity : Activity() {
         handler.removeCallbacksAndMessages(null)
     }
 
+    /** The server run writes `eula.txt`, so it asks once; the answer is kept in this app's private preferences. */
+    private fun confirmServer() {
+        val prefs = getSharedPreferences("probe", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("eula_accepted", false)) {
+            start(NativeBoot.MODE_SERVER, true)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.eula_title)
+            .setMessage(getString(R.string.eula_message, ServerConfig.EULA_URL))
+            .setPositiveButton(R.string.eula_accept) { _, _ ->
+                prefs.edit().putBoolean("eula_accepted", true).apply()
+                start(NativeBoot.MODE_SERVER, true)
+            }
+            .setNegativeButton(R.string.eula_cancel, null)
+            .show()
+    }
+
     private fun start(mode: Int, foreground: Boolean) {
         val dir = ProbeFiles.dir(this)
         File(filesDir, ProbeFiles.LAST_CRASH).delete()
@@ -79,8 +106,10 @@ class MainActivity : Activity() {
         deadPolls = 0
         val intent = Intent(this, JvmService::class.java)
             .putExtra(ProbeFiles.EXTRA_MODE, mode)
-            .putExtra(ProbeFiles.EXTRA_HEAP_MIB, ProbeFiles.DEFAULT_HEAP_MIB)
+            .putExtra(ProbeFiles.EXTRA_HEAP_MIB, if (mode == NativeBoot.MODE_SERVER) ServerConfig.HEAP_MIB else ProbeFiles.DEFAULT_HEAP_MIB)
             .putExtra(ProbeFiles.EXTRA_FOREGROUND, foreground)
+            // Only reached after the dialog above (or an earlier acceptance); the service refuses a server run without it.
+            .putExtra(ProbeFiles.EXTRA_EULA, mode == NativeBoot.MODE_SERVER)
         try {
             if (foreground) startForegroundService(intent) else startService(intent)
         } catch (e: RuntimeException) {
@@ -120,6 +149,8 @@ class MainActivity : Activity() {
         return when {
             name == "done" -> State.DONE
             name == "error" -> State.ERROR
+            // The monitor sent SIGTERM and HotSpot exited the process, so "done" was never written: that is the normal end.
+            name == "server_stopping" && !ProbeFiles.isJvmProcess(pid) -> State.DONE
             // The service has not written its pid yet: give it a few seconds before calling the process dead.
             // startedAtMs is 0 in a freshly launched UI process, so a stage left at "starting" there means the old run is gone.
             pid == 0 -> if (startedAtMs != 0L && System.currentTimeMillis() - startedAtMs < 5000) State.RUNNING else State.DIED
@@ -165,11 +196,12 @@ class MainActivity : Activity() {
         val install = ProbeFiles.readKeyValues(File(dir, ProbeFiles.INSTALL))
         // The JLI path reports boot time, RSS and properties from inside the JVM (Probe); the JNI path from Rust.
         val merged = LinkedHashMap<String, String>().apply { putAll(native); putAll(probe) }
+        val isServer = (stage["mode"] ?: merged["mode"]) == NativeBoot.MODE_SERVER.toString()
 
         out.append('\n')
         val status = when (state) {
-            State.RUNNING -> getString(R.string.status_running, stage["stage"] ?: unknown)
-            State.DONE -> getString(R.string.status_done, stage["detail"] ?: unknown)
+            State.RUNNING -> getString(R.string.status_running, (stage["stage"] ?: unknown) + (stage["detail"]?.let { " - $it" } ?: ""))
+            State.DONE -> if (stage["stage"] == "server_stopping") getString(R.string.status_server_stopped) else getString(R.string.status_done, stage["detail"] ?: unknown)
             State.ERROR -> getString(R.string.status_error, stage["detail"] ?: unknown)
             else -> getString(R.string.status_died)
         }
@@ -177,7 +209,12 @@ class MainActivity : Activity() {
         if (state == State.DIED) {
             out.append(line(R.string.last_stage_label, (stage["stage"] ?: unknown) + (stage["detail"]?.let { " ($it)" } ?: "")))
         }
-        out.append(line(R.string.mode_label, getString(if (stage["mode"] == NativeBoot.MODE_JLI.toString() || merged["mode"] == NativeBoot.MODE_JLI.toString()) R.string.mode_jli else R.string.mode_jni)))
+        val modeText = when {
+            isServer -> R.string.mode_server
+            stage["mode"] == NativeBoot.MODE_JLI.toString() || merged["mode"] == NativeBoot.MODE_JLI.toString() -> R.string.mode_jli
+            else -> R.string.mode_jni
+        }
+        out.append(line(R.string.mode_label, getString(modeText)))
         out.append(line(R.string.heap_label, getString(R.string.heap_value, (merged["heap_mib"] ?: ProbeFiles.DEFAULT_HEAP_MIB.toString()))))
         if (install.isNotEmpty()) {
             val text = if (install["cached"] == "true") getString(R.string.install_cached) else getString(
@@ -196,19 +233,23 @@ class MainActivity : Activity() {
             val alive = if (start != null && wall != null) "${wall - start} ms at ${clock.format(java.util.Date(wall))}" else unknown
             out.append(line(R.string.beat_label, getString(R.string.beat_value, alive, kibText(beat["vmrss_kib"]), kibText(beat["vmsize_kib"]), beat["threads"] ?: unknown, beat["oom_score_adj"] ?: unknown, beat["fg"] ?: unknown)))
         }
-        out.append(line(R.string.boot_label, merged["boot_ms"]?.let { getString(R.string.boot_value, it) } ?: unknown))
-        out.append(line(R.string.boot_def_label, merged["boot_ms_def"] ?: unknown))
-        out.append(line(R.string.rss_before_label, kibText(merged["rss_kib_before"])))
-        out.append(line(R.string.rss_after_label, kibText(merged["rss_kib_after"])))
-        out.append(line(R.string.java_version_label, merged["java.version"] ?: unknown))
-        out.append(line(R.string.vm_label, merged["java.vm.name"] ?: unknown))
-        out.append(line(R.string.home_label, merged["java.home"] ?: unknown))
+        if (isServer) {
+            appendServer(out, dir, state, beat)
+        } else {
+            out.append(line(R.string.boot_label, merged["boot_ms"]?.let { getString(R.string.boot_value, it) } ?: unknown))
+            out.append(line(R.string.boot_def_label, merged["boot_ms_def"] ?: unknown))
+            out.append(line(R.string.rss_before_label, kibText(merged["rss_kib_before"])))
+            out.append(line(R.string.rss_after_label, kibText(merged["rss_kib_after"])))
+            out.append(line(R.string.java_version_label, merged["java.version"] ?: unknown))
+            out.append(line(R.string.vm_label, merged["java.vm.name"] ?: unknown))
+            out.append(line(R.string.home_label, merged["java.home"] ?: unknown))
+        }
 
         if (merged.isNotEmpty()) {
             out.append('\n').append(getString(R.string.raw_header)).append('\n')
             merged.forEach { (key, value) -> out.append(key).append('=').append(value).append('\n') }
         }
-        if (state == State.DIED || state == State.ERROR || merged["error"] != null) {
+        if (state == State.DIED || state == State.ERROR || merged["error"] != null || (isServer && state == State.DONE)) {
             val stdio = ProbeFiles.tail(File(dir, ProbeFiles.STDIO), 15)
             if (stdio.isNotEmpty()) out.append('\n').append(getString(R.string.stdio_header)).append('\n').append(stdio).append('\n')
             val exits = ProbeFiles.exitInfoTail(this, 8)
@@ -221,6 +262,44 @@ class MainActivity : Activity() {
             if (logcat.isNotEmpty()) out.append('\n').append(getString(R.string.logcat_header)).append('\n').append(logcat).append('\n')
         }
         return out.toString()
+    }
+
+    /** The server run's section: the log read the way spikes/jvm-server-smoke/summarize.py reads it, plus what the monitor measured. */
+    private fun appendServer(out: StringBuilder, dir: File, state: State, beat: Map<String, String>) {
+        val unknown = getString(R.string.unknown)
+        out.append('\n').append(getString(R.string.server_header)).append('\n')
+        val prep = ProbeFiles.readKeyValues(File(dir, ProbeFiles.PREP))
+        if (prep.isNotEmpty()) {
+            out.append(getString(R.string.server_prep_header)).append('\n')
+            prep.forEach { (key, value) -> out.append("  ").append(key).append(": ").append(value).append('\n') }
+        }
+        val log = File(dir, ProbeFiles.STDIO)
+        val lines = if (log.isFile) runCatching { log.readText().take(2 * 1024 * 1024).lines() }.getOrDefault(emptyList()) else emptyList()
+        val summary = ServerLog.summarize(lines)
+        out.append(getString(if (summary.passed) R.string.server_result_pass else R.string.server_result_fail)).append('\n')
+        out.append(summary.doneSeconds?.let { getString(R.string.server_done, it) } ?: getString(R.string.server_not_done)).append('\n')
+        val results = ProbeFiles.readKeyValues(File(dir, ProbeFiles.SERVER))
+        results["done_ms"]?.let { out.append("Done seen by the probe after ").append(it).append(" ms (from the service start, polled every 500 ms)\n") }
+        results["rss_kib_settled"]?.let { out.append("RSS ").append(results["settle_s"] ?: unknown).append(" s after Done: ").append(kibText(it)).append('\n') }
+        results["rss_peak_kib"]?.let { out.append("Peak RSS (VmHWM): ").append(kibText(it)).append('\n') }
+        results["threads"]?.let { out.append("Threads: ").append(it).append('\n') }
+        results["done"]?.let { out.append("Done: ").append(it).append('\n') }
+        results["stop"]?.let { out.append("Stop: ").append(it).append('\n') }
+        if (results["rss_peak_kib"] == null) beat["vmhwm_kib"]?.let { out.append("Peak RSS so far (VmHWM): ").append(kibText(it)).append('\n') }
+        out.append(summary.loading ?: getString(R.string.server_loading_none)).append('\n')
+        summary.mods.forEach { out.append("  ").append(it).append('\n') }
+        out.append(getString(R.string.server_mixin_lines, summary.mixinLines.toString())).append('\n')
+        if (summary.problems.isNotEmpty()) {
+            out.append(getString(R.string.server_problems_header, MAX_PROBLEMS.toString())).append('\n')
+            summary.problems.take(MAX_PROBLEMS).forEach { out.append("  ").append(it.take(200)).append('\n') }
+        }
+        val gc = ProbeFiles.tail(File(dir, ProbeFiles.GC_LOG), 400).lines().filter { it.contains("[gc,init]") }.take(12)
+        if (gc.isNotEmpty()) out.append(getString(R.string.server_gc_header)).append('\n').append(gc.joinToString("\n")).append('\n')
+        if (state == State.RUNNING) {
+            out.append(getString(R.string.server_live_header)).append('\n').append(lines.takeLast(8).joinToString("\n")).append('\n')
+        } else if (!summary.passed) {
+            out.append(getString(R.string.server_tail_header)).append('\n').append(lines.takeLast(25).joinToString("\n")).append('\n')
+        }
     }
 
     /** "unknown" stays "unknown"; a number becomes MiB with the KiB value beside it. */

@@ -21,14 +21,16 @@ use jni::{
 };
 
 use crate::{
-    current_rss_kib, epoch_ms, jli_launch, launcher_argv, preload, BootError, Jvm, JvmConfig, LauncherArgs,
-    LIBJLI_REL, LIBJVM_REL, PRELOAD_LIBS,
+    current_rss_kib, epoch_ms, jli_launch, launcher_argv, preload, server_argv, BootError, Jvm, JvmConfig,
+    LauncherArgs, ServerArgs, LIBJLI_REL, LIBJVM_REL, PRELOAD_LIBS,
 };
 
 /// `JNI_CreateJavaVM` on `lib/server/libjvm.so` (what `spikes/jvm-boot` does on desktop).
 pub const MODE_JNI: i32 = 0;
 /// `JLI_Launch` on `lib/libjli.so` running `dev.horizonr.jvmprobe.Probe` (how ZalithLauncher2 starts its JVM).
 pub const MODE_JLI: i32 = 1;
+/// `JLI_Launch` running the Fabric server jar (`run_server`); not a mode of `run`.
+pub const MODE_SERVER: i32 = 2;
 
 pub const EXIT_OK: i32 = 0;
 pub const EXIT_BOOT_FAILED: i32 = 1;
@@ -161,7 +163,12 @@ fn boot_via_jli(report: &Report, jre_home: &Path, probe_jar: &Path, work_dir: &P
     report.line("jli_argv", argv.join(" "));
     report.line("jli_call", "entering JLI_Launch");
     let started = Instant::now();
-    match jli_launch(&jre_home.join(LIBJLI_REL), &argv) {
+    report_jli_result(report, started, jli_launch(&jre_home.join(LIBJLI_REL), &argv))
+}
+
+/// Logs what `JLI_Launch` returned (if it returned) and maps it to an `EXIT_*` code.
+fn report_jli_result(report: &Report, started: Instant, result: Result<i32, BootError>) -> i32 {
+    match result {
         Ok(code) => {
             report.line("jli_return_ms", started.elapsed().as_millis());
             report.line("jli_exit_code", code);
@@ -182,13 +189,52 @@ fn boot_via_jli(report: &Report, jre_home: &Path, probe_jar: &Path, work_dir: &P
     }
 }
 
-/// Boots a JVM in this process in the way `mode` names and logs to `<work_dir>/native.txt`.
-/// A process can create one JVM only; the caller is expected to end the process afterwards.
-pub fn run(mode: i32, heap_mib: i32, jre_home: &Path, probe_jar: &Path, work_dir: &Path) -> i32 {
+/// The report file plus stdout/stderr redirected next to it. Every entry point starts with this.
+fn open_report(work_dir: &Path) -> Report {
     let report = Report { path: work_dir.join("native.txt") };
     if let Err(e) = redirect_stdio(&work_dir.join("jvm_stdio.log")) {
         report.line("stdio_redirect", format!("failed: {e}"));
     }
+    report
+}
+
+/// Runs the Fabric server jar through `JLI_Launch` with `server_dir` as the working directory. It returns only when
+/// the server's JVM exits on its own; a SIGTERM or a kill ends the process instead. The server's console output
+/// goes to `<work_dir>/jvm_stdio.log`. `options` are extra `-X…`/`-D…` options, already validated by the caller's
+/// contract and again by `server_argv`.
+pub fn run_server(heap_mib: i32, jre_home: &Path, work_dir: &Path, server_dir: &Path, jar: &Path, options: Vec<String>) -> i32 {
+    let report = open_report(work_dir);
+    report.line("mode", MODE_SERVER);
+    report.line("heap_mib", heap_mib);
+    report.line("jre_home", jre_home.display());
+    report.line("server_dir", server_dir.display());
+    let Ok(heap_mib) = u32::try_from(heap_mib) else {
+        report.line("error", format!("negative heap {heap_mib}"));
+        return EXIT_BAD_ARGUMENTS;
+    };
+    report.optional("rss_kib_before", current_rss_kib());
+    preload_runtime_libs(&report, jre_home);
+    if let Err(e) = std::env::set_current_dir(server_dir) {
+        report.line("error", format!("chdir {}: {e}", server_dir.display()));
+        return EXIT_BOOT_FAILED;
+    }
+    let argv = match server_argv(&ServerArgs { heap_mib, jar: jar.to_path_buf(), options }) {
+        Ok(argv) => argv,
+        Err(e) => {
+            report.line("error", format!("argv: {e}"));
+            return EXIT_BAD_ARGUMENTS;
+        }
+    };
+    report.line("jli_argv", argv.join(" "));
+    report.line("jli_call", "entering JLI_Launch (server)");
+    let started = Instant::now();
+    report_jli_result(&report, started, jli_launch(&jre_home.join(LIBJLI_REL), &argv))
+}
+
+/// Boots a JVM in this process in the way `mode` names and logs to `<work_dir>/native.txt`.
+/// A process can create one JVM only; the caller is expected to end the process afterwards.
+pub fn run(mode: i32, heap_mib: i32, jre_home: &Path, probe_jar: &Path, work_dir: &Path) -> i32 {
+    let report = open_report(work_dir);
     report.line("mode", mode);
     report.line("heap_mib", heap_mib);
     report.line("jre_home", jre_home.display());
@@ -231,4 +277,49 @@ pub extern "system" fn Java_dev_horizonr_jvmprobe_NativeBoot_run<'local>(
     };
     catch_unwind(AssertUnwindSafe(|| run(mode, heap_mib, Path::new(&home), Path::new(&jar), Path::new(&dir))))
         .unwrap_or(-3)
+}
+
+/// `NativeBoot.runServer(heapMib, jreHome, workDir, serverDir, serverJar, options): Int` (static). `options` is one
+/// string with one JVM option per line. Returns an `EXIT_*` code, -2 for unreadable arguments, -3 for a Rust panic.
+#[no_mangle]
+pub extern "system" fn Java_dev_horizonr_jvmprobe_NativeBoot_runServer<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JObject<'local>,
+    heap_mib: jint,
+    jre_home: JString<'local>,
+    work_dir: JString<'local>,
+    server_dir: JString<'local>,
+    server_jar: JString<'local>,
+    options: JString<'local>,
+) -> jint {
+    let (Some(home), Some(dir), Some(server), Some(jar), Some(options)) = (
+        text(&mut env, &jre_home),
+        text(&mut env, &work_dir),
+        text(&mut env, &server_dir),
+        text(&mut env, &server_jar),
+        text(&mut env, &options),
+    ) else {
+        return -2;
+    };
+    let options = split_options(&options);
+    catch_unwind(AssertUnwindSafe(|| {
+        run_server(heap_mib, Path::new(&home), Path::new(&dir), Path::new(&server), Path::new(&jar), options)
+    }))
+    .unwrap_or(-3)
+}
+
+/// One option per line; blank lines are dropped. Pure.
+pub fn split_options(text: &str) -> Vec<String> {
+    text.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_owned).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_options_drops_blank_lines_and_trims() {
+        assert_eq!(split_options("-Da=1\n\n  -Xlog:gc=info:file=/x  \n"), ["-Da=1", "-Xlog:gc=info:file=/x"]);
+        assert!(split_options("").is_empty());
+    }
 }

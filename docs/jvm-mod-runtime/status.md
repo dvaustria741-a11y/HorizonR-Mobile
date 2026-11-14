@@ -8,6 +8,12 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
 - Step 0: repo read, notes in `step0.md`.
 - Step 1 (partial): `spikes/jvm-boot` boots a libjvm.so over JNI. Desktop only: Linux x86_64, OpenJDK 25,
   1.4 s boot, 36 MiB RSS at -Xmx128m. Not built for Android, never run on the phone.
+- Step 1 on the phone (user-reported, Redmi Note 11 Pro 5G, Android 13, builds 7 to 9; not rerun by me): HotSpot 25.0.5
+  boots next to ART in a `:jvm` process through both paths. JNI_CreateJavaVM: 402 ms for the call alone, RSS 79.0 to 96.6 MiB
+  at -Xmx128m. JLI_Launch with `probe.jar`: 489 ms to `Probe.main`, RSS 70.8 to 101.9 MiB, 3 available processors. The
+  runtime's libraries need preloading by absolute path (libjvm, libjava, libnet, libnio) because Android's linker does not
+  search the loading library's directory. The foreground-service button and how long Android keeps a busy `:jvm` alive are
+  untested. These numbers are a floor: no Fabric, Mixin or Minecraft class had loaded.
 - Step 2 (partial): `.github/workflows/jvm-server-smoke.yml` + `spikes/jvm-server-smoke`. Run #1 (commit 64a26c7,
   config `clumps`) passed: annotation said PASS, Done in 2.380 s, "Loading 5 mods" with clumps 26.3.2 and
   fabricloader 0.20.1 named (the other three were not captured). That is a GitHub Linux runner, not Android,

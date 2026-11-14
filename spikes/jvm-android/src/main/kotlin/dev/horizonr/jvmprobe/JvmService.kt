@@ -7,6 +7,8 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.os.Process
+import android.system.Os
+import android.system.OsConstants
 import java.io.File
 
 /**
@@ -25,9 +27,11 @@ class JvmService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val mode = intent?.getIntExtra(ProbeFiles.EXTRA_MODE, -1) ?: -1
+        currentMode = mode
         val heap = intent?.getIntExtra(ProbeFiles.EXTRA_HEAP_MIB, ProbeFiles.DEFAULT_HEAP_MIB) ?: ProbeFiles.DEFAULT_HEAP_MIB
         val dir = ProbeFiles.dir(this)
         val foreground = intent?.getBooleanExtra(ProbeFiles.EXTRA_FOREGROUND, false) ?: false
+        val eula = intent?.getBooleanExtra(ProbeFiles.EXTRA_EULA, false) ?: false
         // startForegroundService() obliges a startForeground() call within seconds, so it comes first.
         if (foreground) promoteToForeground()
         if (used) {
@@ -39,7 +43,7 @@ class JvmService : Service() {
         used = true
         ProbeFiles.startHeartbeat(dir, foreground)
         // 8 MiB stack: the JVM's creating thread; an untuned guess, the default app thread would also be a candidate.
-        Thread(null, { boot(dir, mode, heap) }, "jvmprobe-boot", 8L * 1024 * 1024).start()
+        Thread(null, { boot(dir, mode, heap, eula) }, "jvmprobe-boot", 8L * 1024 * 1024).start()
         return START_NOT_STICKY
     }
 
@@ -59,6 +63,7 @@ class JvmService : Service() {
         val values = LinkedHashMap<String, String>()
         values["pid"] = Process.myPid().toString()
         values["stage"] = stage
+        values["mode"] = currentMode.toString()
         if (detail != null) values["detail"] = detail.replace('\n', ' ')
         ProbeFiles.writeKeyValues(File(dir, ProbeFiles.STAGE), values)
     }
@@ -69,7 +74,7 @@ class JvmService : Service() {
         Process.killProcess(Process.myPid())
     }
 
-    private fun boot(dir: File, mode: Int, heapMib: Int) {
+    private fun boot(dir: File, mode: Int, heapMib: Int, eula: Boolean) {
         stage(dir, "installing")
         val home = ProbeFiles.runtimeHome(this)
         try {
@@ -94,10 +99,85 @@ class JvmService : Service() {
             finish(dir, "error", "loading lib${NativeBoot.LIBRARY}.so: ${e.message}")
             return
         }
+        if (mode == NativeBoot.MODE_SERVER) {
+            runServer(dir, home, heapMib, eula)
+            return
+        }
         stage(dir, "booting")
         val code = NativeBoot.run(mode, heapMib, home.path, File(dir, ProbeFiles.PROBE_JAR).path, dir.path)
         finish(dir, "done", code.toString())
     }
+
+    /**
+     * Downloads what the server needs, starts the monitor and runs the Fabric server jar in this process. The call
+     * blocks until the JVM exits by itself; the monitor ends it with SIGTERM once the server is ready.
+     */
+    private fun runServer(dir: File, home: File, heapMib: Int, eula: Boolean) {
+        val startMs = System.currentTimeMillis()
+        val prepared = try {
+            ServerSetup.prepare(this, home, eula) { detail -> stage(dir, "preparing", detail) }
+        } catch (e: Exception) {
+            finish(dir, "error", "server setup: $e")
+            return
+        }
+        ProbeFiles.writeKeyValues(File(dir, ProbeFiles.PREP), prepared.facts)
+        // Diagnostics only: a HotSpot crash report and the GC's init lines (which collector the JVM chose).
+        val options = prepared.options + listOf(
+            "-XX:ErrorFile=${File(dir, "hs_err_%p.log").path}",
+            "-Xlog:gc+init=info,gc=info:file=${File(dir, ProbeFiles.GC_LOG).path}",
+        )
+        startServerMonitor(dir, startMs)
+        stage(dir, "booting", "server")
+        val code = NativeBoot.runServer(heapMib, home.path, dir.path, prepared.dir.path, prepared.jar.path, options.joinToString("\n"))
+        finish(dir, "done", code.toString())
+    }
+
+    /**
+     * Watches the server's console log (`jvm_stdio.log`). When vanilla's "Done" line appears it waits
+     * [ServerConfig.SETTLE_SECONDS], records RSS and peak RSS, and sends SIGTERM to this process, which HotSpot answers by
+     * running shutdown hooks (Minecraft's saves the world). Whether HotSpot handles SIGTERM next to ART is unverified;
+     * after [ServerConfig.STOP_TIMEOUT_SECONDS] the process is killed instead and `stop=killed` is recorded.
+     */
+    private fun startServerMonitor(dir: File, startMs: Long) {
+        Thread({
+            val log = File(dir, ProbeFiles.STDIO)
+            val results = LinkedHashMap<String, String>()
+            results["start_ms"] = startMs.toString()
+            val deadline = startMs + ServerConfig.START_TIMEOUT_SECONDS * 1000L
+            var reached = false
+            while (!reached) {
+                Thread.sleep(500)
+                reached = ServerLog.summarize(readLog(log)).doneSeconds != null
+                if (!reached && System.currentTimeMillis() > deadline) {
+                    results["done"] = "not reached in ${ServerConfig.START_TIMEOUT_SECONDS} s"
+                    results["stop"] = "killed"
+                    ProbeFiles.writeKeyValues(File(dir, ProbeFiles.SERVER), results)
+                    stage(dir, "error", "server did not print Done within ${ServerConfig.START_TIMEOUT_SECONDS} s")
+                    Thread.sleep(300)
+                    Process.killProcess(Process.myPid())
+                }
+            }
+            results["done_ms"] = (System.currentTimeMillis() - startMs).toString()
+            Thread.sleep(ServerConfig.SETTLE_SECONDS * 1000L)
+            val status = runCatching { File("/proc/self/status").readText() }.getOrDefault("")
+            results["rss_kib_settled"] = ProbeFiles.parseStatusNumber(status, "VmRSS")?.toString() ?: "unknown"
+            results["rss_peak_kib"] = ProbeFiles.parseStatusNumber(status, "VmHWM")?.toString() ?: "unknown"
+            results["threads"] = ProbeFiles.parseStatusNumber(status, "Threads")?.toString() ?: "unknown"
+            results["settle_s"] = ServerConfig.SETTLE_SECONDS.toString()
+            results["stop"] = "SIGTERM sent"
+            ProbeFiles.writeKeyValues(File(dir, ProbeFiles.SERVER), results)
+            stage(dir, "server_stopping", "SIGTERM sent, waiting up to ${ServerConfig.STOP_TIMEOUT_SECONDS} s")
+            runCatching { Os.kill(Process.myPid(), OsConstants.SIGTERM) }
+            Thread.sleep(ServerConfig.STOP_TIMEOUT_SECONDS * 1000L)
+            results["stop"] = "killed: the JVM did not exit within ${ServerConfig.STOP_TIMEOUT_SECONDS} s of SIGTERM"
+            ProbeFiles.writeKeyValues(File(dir, ProbeFiles.SERVER), results)
+            Process.killProcess(Process.myPid())
+        }, "jvmprobe-server-monitor").apply { isDaemon = true }.start()
+    }
+
+    /** The whole log up to 2 MiB; empty when unreadable. */
+    private fun readLog(file: File): List<String> =
+        if (!file.isFile) emptyList() else runCatching { file.readText().take(2 * 1024 * 1024).lines() }.getOrDefault(emptyList())
 
     private companion object {
         const val CHANNEL_ID = "jvmprobe"
@@ -105,5 +185,9 @@ class JvmService : Service() {
 
         @Volatile
         var used = false
+
+        /** The mode of this process's run, written into every stage file so the screen can name the run. */
+        @Volatile
+        var currentMode = -1
     }
 }

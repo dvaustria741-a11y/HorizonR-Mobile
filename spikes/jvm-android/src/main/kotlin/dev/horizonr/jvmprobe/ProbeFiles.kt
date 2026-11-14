@@ -28,6 +28,12 @@ object ProbeFiles {
     const val EXTRA_MODE = "mode"
     const val EXTRA_HEAP_MIB = "heap_mib"
     const val EXTRA_FOREGROUND = "foreground"
+    const val EXTRA_EULA = "eula"
+
+    /** Results the `:jvm` process writes while a server run is going (see JvmService). */
+    const val SERVER = "server.txt"
+    const val PREP = "server_prep.txt"
+    const val GC_LOG = "gc.txt"
 
     /** The desktop spike's value, so the numbers compare. Not tuned for the phone. */
     const val DEFAULT_HEAP_MIB = 128
@@ -84,6 +90,7 @@ object ProbeFiles {
                 values["wall_ms"] = System.currentTimeMillis().toString()
                 values["tick"] = (tick++).toString()
                 values["vmrss_kib"] = parseStatusNumber(status, "VmRSS")?.toString() ?: "unknown"
+                values["vmhwm_kib"] = parseStatusNumber(status, "VmHWM")?.toString() ?: "unknown"
                 values["vmsize_kib"] = parseStatusNumber(status, "VmSize")?.toString() ?: "unknown"
                 values["threads"] = parseStatusNumber(status, "Threads")?.toString() ?: "unknown"
                 values["oom_score_adj"] = runCatching { File("/proc/self/oom_score_adj").readText().trim() }.getOrDefault("unknown")
