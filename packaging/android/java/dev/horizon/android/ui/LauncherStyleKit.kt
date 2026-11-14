@@ -281,7 +281,7 @@ private fun HzNavIcon(name: String, fallback: ImageVector, description: String, 
 
 /** Mono tag, e.g. a version number: hairline outline, no fill. */
 @Composable
-private fun HzTag(text: String) {
+private fun HzTag(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         fontFamily = HzFont.Mono,
@@ -289,7 +289,7 @@ private fun HzTag(text: String) {
         lineHeight = 11.sp,
         color = VoltMutedText,
         maxLines = 1,
-        modifier = Modifier
+        modifier = modifier
             .border(1.dp, HzColor.Hairline, HzShape.Chip)
             .padding(horizontal = 5.dp, vertical = 2.dp)
     )
@@ -463,6 +463,8 @@ internal fun VoltHomeLayer(
             .windowInsetsPadding(hzContentInsets())
             .padding(horizontal = 18.dp, vertical = 12.dp)
     ) {
+        HzTag("NATIVE RUST", modifier = Modifier.align(Alignment.TopStart))
+
         var boostOn by remember { mutableStateOf(Boost.isOn(context)) }
         HzChip(
             label = if (boostOn) "Boost on" else "Boost",
