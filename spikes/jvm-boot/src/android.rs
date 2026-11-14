@@ -97,7 +97,10 @@ fn diagnostic_options(work_dir: &Path) -> Vec<String> {
 /// dependencies resolve on Android. A failure is logged and the boot goes on: the JNI path booted without this.
 fn preload_runtime_libs(report: &Report, jre_home: &Path) {
     let started = Instant::now();
-    for (name, result) in preload(&jre_home.join("lib"), PRELOAD_LIBS) {
+    // libjava.so names libjvm.so as a dependency, and libjvm.so lives in lib/server (build 8 report).
+    let dirs = [jre_home.join("lib"), jre_home.join("lib/server")];
+    let dir_refs: Vec<&Path> = dirs.iter().map(PathBuf::as_path).collect();
+    for (name, result) in preload(&dir_refs, PRELOAD_LIBS) {
         match result {
             Ok(trail) => report.line(&format!("preload_{name}"), format!("ok, loaded in order: {}", trail.join(" "))),
             Err(e) => report.line(&format!("preload_{name}"), format!("failed: {e}")),

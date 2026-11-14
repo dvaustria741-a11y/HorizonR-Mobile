@@ -122,16 +122,16 @@ pub fn missing_library(message: &str) -> Option<&str> {
     (found_missing && !name.is_empty() && !name.contains('/')).then_some(name)
 }
 
-/// `dlopen` of `<lib_dir>/<name>` with RTLD_GLOBAL, so later libraries that name it as a dependency resolve to the
-/// copy already loaded. When the linker reports a missing dependency that exists in `lib_dir`, that one is
-/// loaded first (bounded depth). `trail` collects the names loaded, dependencies first.
-fn load_global(lib_dir: &Path, name: &str, depth: usize, trail: &mut Vec<String>) -> Result<(), String> {
+/// `dlopen` of `name` from the first of `dirs` that holds it, with RTLD_GLOBAL, so later libraries that name it as a
+/// dependency resolve to the copy already loaded. When the linker reports a missing dependency that exists in
+/// `dirs`, that one is loaded first (bounded depth). `trail` collects the names loaded, dependencies first.
+fn load_global(dirs: &[&Path], name: &str, depth: usize, trail: &mut Vec<String>) -> Result<(), String> {
     use libloading::os::unix::{Library, RTLD_GLOBAL, RTLD_NOW};
 
-    let path = lib_dir.join(name);
-    if !path.is_file() {
-        return Err(format!("{name} is not in {}", lib_dir.display()));
-    }
+    let Some(path) = dirs.iter().map(|dir| dir.join(name)).find(|candidate| candidate.is_file()) else {
+        let searched: Vec<String> = dirs.iter().map(|dir| dir.display().to_string()).collect();
+        return Err(format!("{name} is not in {}", searched.join(" or ")));
+    };
     let mut attempts = 0;
     loop {
         // SAFETY: loading a runtime library runs its initialisers; the caller chose the directory.
@@ -147,7 +147,7 @@ fn load_global(lib_dir: &Path, name: &str, depth: usize, trail: &mut Vec<String>
                 attempts += 1;
                 match missing_library(&message).map(str::to_owned) {
                     Some(dependency) if dependency != name && depth < PRELOAD_DEPTH && attempts <= PRELOAD_DEPTH => {
-                        load_global(lib_dir, &dependency, depth + 1, trail)
+                        load_global(dirs, &dependency, depth + 1, trail)
                             .map_err(|inner| format!("{message}; dependency {dependency}: {inner}"))?;
                     }
                     _ => return Err(message),
@@ -157,14 +157,14 @@ fn load_global(lib_dir: &Path, name: &str, depth: usize, trail: &mut Vec<String>
     }
 }
 
-/// Loads each of `names` from `lib_dir` (see `load_global`). One entry per name: the libraries loaded for it in
+/// Loads each of `names` from `dirs` (see `load_global`). One entry per name: the libraries loaded for it in
 /// order, or the linker's error text. A failure does not stop the others.
-pub fn preload(lib_dir: &Path, names: &[&str]) -> Vec<(String, Result<Vec<String>, String>)> {
+pub fn preload(dirs: &[&Path], names: &[&str]) -> Vec<(String, Result<Vec<String>, String>)> {
     names
         .iter()
         .map(|name| {
             let mut trail = Vec::new();
-            let result = load_global(lib_dir, name, 0, &mut trail).map(|()| trail);
+            let result = load_global(dirs, name, 0, &mut trail).map(|()| trail);
             (name.to_string(), result)
         })
         .collect()
@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn preload_reports_a_missing_file_per_name() {
-        let out = preload(Path::new("/nonexistent/lib"), &["libnet.so", "libnio.so"]);
+        let out = preload(&[Path::new("/nonexistent/lib"), Path::new("/nonexistent/lib/server")], &["libnet.so", "libnio.so"]);
         assert_eq!(out.len(), 2);
         assert!(out.iter().all(|(_, r)| r.as_ref().is_err_and(|e| e.contains("is not in"))));
     }
