@@ -258,14 +258,6 @@ enum class HorizonBackgroundMode(val serdeKey: String, val label: String) {
     YOUTUBE_TRAILER("youtube-trailer", "Auto-Play Minecraft YouTube Trailer")
 }
 
-data class MinecraftTrailerVideo(
-    val videoId: String,
-    val title: String,
-    val publishedDate: String,
-    val watchUrl: String = "https://www.youtube.com/watch?v=$videoId",
-    val directMp4Url: String = ""
-)
-
 data class SavedCustomSkinItem(
     val id: String,
     val fileName: String,

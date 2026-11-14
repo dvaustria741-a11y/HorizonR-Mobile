@@ -7,17 +7,12 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.annotation.SuppressLint
 import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.activity.ComponentActivity
@@ -1746,408 +1741,6 @@ private fun HorizonTopNav(
  * - 18 Authentic HD 16:9 Minecraft Wallpapers cycling every 5 seconds with smooth crossfade.
  * - Zero duplicate navigation buttons on top-right (only a single clean `Wallpaper` button).
  */
-private class HorizonZVideoJsBridge(
-    private val mainHandler: android.os.Handler,
-    private val onVideoEndedCallback: () -> Unit
-) {
-    private val triggered = java.util.concurrent.atomic.AtomicBoolean(false)
-
-    fun resetTrigger() {
-        triggered.set(false)
-    }
-
-    @JavascriptInterface
-    fun onEnded() {
-        if (triggered.compareAndSet(false, true)) {
-            mainHandler.post { onVideoEndedCallback() }
-        }
-    }
-
-    @JavascriptInterface
-    fun onError() {
-        if (triggered.compareAndSet(false, true)) {
-            mainHandler.post { onVideoEndedCallback() }
-        }
-    }
-}
-
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-private fun MinecraftTrailerVideoWallpaperPlayer(
-    videoId: String,
-    directStreamUrl: String,
-    trailerTitle: String,
-    isMuted: Boolean,
-    isPaused: Boolean,
-    onVideoEndedOrError: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    val currentOnEnded by rememberUpdatedState(onVideoEndedOrError)
-    val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
-    val jsBridge = remember {
-        HorizonZVideoJsBridge(mainHandler) { currentOnEnded() }
-    }
-
-    val buildUnifiedPlayerHtml = remember {
-        { vid: String, initialStreamUrl: String, muted: Boolean ->
-            val mBool = if (muted) "true" else "false"
-            val safeStream = initialStreamUrl.replace("'", "\'")
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-            <meta name="referrer" content="origin">
-            <style>
-              * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-              html, body { width: 100vw; height: 100vh; background: #000; overflow: hidden; }
-              #stage { position: fixed; inset: 0; width: 100vw; height: 100vh; background: #000; overflow: hidden; }
-              #ytframe {
-                position: absolute;
-                top: -12%;
-                left: -12%;
-                width: 124vw;
-                height: 124vh;
-                border: 0;
-                background: #000;
-                pointer-events: none;
-                z-index: 1;
-              }
-              #directVid {
-                position: absolute;
-                top: -4%;
-                left: -4%;
-                width: 108vw;
-                height: 108vh;
-                object-fit: cover;
-                background: #000;
-                pointer-events: none;
-                z-index: 2;
-                display: none;
-              }
-            </style>
-            </head>
-            <body>
-              <div id="stage">
-                <iframe
-                  id="ytframe"
-                  src="https://www.youtube-nocookie.com/embed/$vid?enablejsapi=1&autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&cc_load_policy=0&cc_lang_pref=none&fs=0&playsinline=1&vq=hd720&origin=https://www.minecraft.net"
-                  allow="autoplay; encrypted-media; picture-in-picture"
-                  referrerpolicy="origin">
-                </iframe>
-                <video id="directVid" playsinline webkit-playsinline autoplay muted preload="auto"></video>
-              </div>
-              <script>
-                window.__hzMuted = $mBool;
-                window.__hzPaused = false;
-                window.__hzDirectActive = false;
-                window.__hzEndedSent = false;
-
-                function notifyEnded() {
-                  if (window.__hzEndedSent) return;
-                  window.__hzEndedSent = true;
-                  try {
-                    if (window.HorizonZBridge && window.HorizonZBridge.onEnded) {
-                      window.HorizonZBridge.onEnded();
-                      return;
-                    }
-                  } catch (e) {}
-                  window.location.href = 'https://www.minecraft.net/__hz_ended';
-                }
-
-                function ytCmd(func, args) {
-                  try {
-                    var f = document.getElementById('ytframe');
-                    if (f && f.contentWindow) {
-                      f.contentWindow.postMessage(JSON.stringify({
-                        event: 'command',
-                        func: func,
-                        args: args || []
-                      }), '*');
-                    }
-                  } catch (e) {}
-                }
-
-                function syncAudioState() {
-                  var dv = document.getElementById('directVid');
-                  if (window.__hzDirectActive && dv) {
-                    dv.muted = !!window.__hzMuted;
-                    if (!window.__hzMuted) dv.volume = 1.0;
-                    ytCmd('mute', []);
-                    ytCmd('pauseVideo', []);
-                  } else {
-                    if (window.__hzMuted) {
-                      ytCmd('mute', []);
-                    } else {
-                      ytCmd('unMute', []);
-                      ytCmd('setVolume', [100]);
-                    }
-                  }
-                }
-
-                window.__hzSetMuted = function(m) {
-                  window.__hzMuted = !!m;
-                  syncAudioState();
-                };
-
-                window.__hzSetPaused = function(p) {
-                  window.__hzPaused = !!p;
-                  var dv = document.getElementById('directVid');
-                  if (window.__hzPaused) {
-                    if (dv && !dv.paused) dv.pause();
-                    ytCmd('pauseVideo', []);
-                  } else {
-                    if (window.__hzDirectActive && dv) {
-                      dv.play().catch(function(){});
-                    } else {
-                      ytCmd('playVideo', []);
-                      syncAudioState();
-                    }
-                  }
-                };
-
-                window.__hzAttachDirectStream = function(streamUrl) {
-                  if (!streamUrl || streamUrl.indexOf('http') !== 0 || window.__hzDirectActive) return;
-                  var dv = document.getElementById('directVid');
-                  if (!dv) return;
-                  dv.src = streamUrl;
-                  dv.muted = true;
-                  dv.onplaying = function() {
-                    window.__hzDirectActive = true;
-                    dv.style.display = 'block';
-                    dv.muted = !!window.__hzMuted;
-                    if (!window.__hzMuted) dv.volume = 1.0;
-                    ytCmd('pauseVideo', []);
-                  };
-                  dv.ontimeupdate = function() {
-                    if (dv.currentTime >= 298) {
-                      notifyEnded();
-                    }
-                  };
-                  dv.onended = function() {
-                    notifyEnded();
-                  };
-                  dv.onerror = function() {
-                    window.__hzDirectActive = false;
-                    dv.style.display = 'none';
-                    ytCmd('playVideo', []);
-                    syncAudioState();
-                  };
-                  var p = dv.play();
-                  if (p && p.catch) {
-                    p.catch(function() {
-                      dv.muted = true;
-                      dv.play().catch(function() {
-                        window.__hzDirectActive = false;
-                        dv.style.display = 'none';
-                      });
-                    });
-                  }
-                };
-
-                window.addEventListener('message', function(ev) {
-                  try {
-                    var data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
-                    if (!data) return;
-                    if (data.event === 'onReady') {
-                      ytCmd('unloadModule', ['captions']);
-                      ytCmd('unloadModule', ['cc']);
-                      ytCmd('setPlaybackQualityRange', ['hd720', 'hd720']);
-                      if (!window.__hzPaused && !window.__hzDirectActive) {
-                        ytCmd('playVideo', []);
-                        syncAudioState();
-                      }
-                    } else if (data.event === 'infoDelivery' && data.info) {
-                      if (data.info.playerState === 1) {
-                        ytCmd('unloadModule', ['captions']);
-                        ytCmd('unloadModule', ['cc']);
-                        ytCmd('setPlaybackQualityRange', ['hd720', 'hd720']);
-                        syncAudioState();
-                      } else if (data.info.playerState === 0) {
-                        notifyEnded();
-                      }
-                      if (typeof data.info.currentTime === 'number' && data.info.currentTime >= 298) {
-                        notifyEnded();
-                      }
-                    } else if (data.event === 'onError') {
-                      if (!window.__hzDirectActive) {
-                        notifyEnded();
-                      }
-                    }
-                  } catch (e) {}
-                });
-
-                var f = document.getElementById('ytframe');
-                f.addEventListener('load', function() {
-                  try {
-                    f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
-                  } catch (e) {}
-                  setTimeout(function() {
-                    ytCmd('unloadModule', ['captions']);
-                    ytCmd('unloadModule', ['cc']);
-                    ytCmd('setPlaybackQualityRange', ['hd720', 'hd720']);
-                    if (!window.__hzDirectActive && !window.__hzPaused) {
-                      ytCmd('playVideo', []);
-                      syncAudioState();
-                    }
-                  }, 350);
-                });
-
-                setInterval(function() {
-                  try {
-                    if (f && f.contentWindow) {
-                      f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
-                    }
-                    if (!window.__hzDirectActive && !window.__hzPaused) {
-                      ytCmd('unloadModule', ['captions']);
-                      ytCmd('unloadModule', ['cc']);
-                      syncAudioState();
-                    }
-                  } catch (e) {}
-                }, 1200);
-
-                if ('$safeStream'.indexOf('http') === 0) {
-                  window.__hzAttachDirectStream('$safeStream');
-                }
-              </script>
-            </body>
-            </html>
-            """.trimIndent()
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            webViewRef?.let { wv ->
-                runCatching {
-                    wv.stopLoading()
-                    wv.loadUrl("about:blank")
-                    wv.onPause()
-                    wv.pauseTimers()
-                    wv.removeAllViews()
-                    wv.destroy()
-                }
-            }
-            webViewRef = null
-        }
-    }
-
-    LaunchedEffect(directStreamUrl, webViewRef) {
-        if (directStreamUrl.startsWith("http")) {
-            val safe = directStreamUrl.replace("'", "\'")
-            webViewRef?.evaluateJavascript(
-                "if (window.__hzAttachDirectStream) window.__hzAttachDirectStream('$safe');",
-                null
-            )
-        }
-    }
-
-    LaunchedEffect(isMuted, webViewRef) {
-        val mStr = if (isMuted) "true" else "false"
-        webViewRef?.evaluateJavascript(
-            "if (window.__hzSetMuted) window.__hzSetMuted($mStr);",
-            null
-        )
-    }
-
-    LaunchedEffect(isPaused, webViewRef) {
-        webViewRef?.let { wv ->
-            if (isPaused) {
-                wv.evaluateJavascript("if (window.__hzSetPaused) window.__hzSetPaused(true);", null)
-                wv.onPause()
-                wv.pauseTimers()
-            } else {
-                wv.onResume()
-                wv.resumeTimers()
-                wv.evaluateJavascript("if (window.__hzSetPaused) window.__hzSetPaused(false);", null)
-            }
-        }
-    }
-
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            WebView(ctx).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                setBackgroundColor(android.graphics.Color.BLACK)
-                isClickable = false
-                isFocusable = false
-                runCatching {
-                    CookieManager.getInstance().setAcceptCookie(true)
-                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                }
-                settings.apply {
-                    javaScriptEnabled = true
-                    mediaPlaybackRequiresUserGesture = false
-                    domStorageEnabled = true
-                    databaseEnabled = true
-                    allowFileAccess = true
-                    loadsImagesAutomatically = true
-                    useWideViewPort = true
-                    loadWithOverviewMode = true
-                    cacheMode = WebSettings.LOAD_DEFAULT
-                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36"
-                }
-                addJavascriptInterface(jsBridge, "HorizonZBridge")
-                webChromeClient = WebChromeClient()
-                webViewClient = object : WebViewClient() {
-                    private fun handleInterceptUrl(url: String?): Boolean {
-                        if (url == null) return false
-                        if (url.contains("__hz_ended") || url.startsWith("horizonz://")) {
-                            jsBridge.onEnded()
-                            return true
-                        }
-                        return false
-                    }
-
-                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        val reqUrl = request?.url?.toString()
-                        if (handleInterceptUrl(reqUrl)) return true
-                        if (request != null && request.isForMainFrame && reqUrl != null && !reqUrl.startsWith("https://www.minecraft.net")) {
-                            return true
-                        }
-                        return false
-                    }
-
-                    @Deprecated("Deprecated in Java")
-                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                        return handleInterceptUrl(url)
-                    }
-                }
-                jsBridge.resetTrigger()
-                tag = videoId
-                loadDataWithBaseURL(
-                    "https://www.minecraft.net/",
-                    buildUnifiedPlayerHtml(videoId, directStreamUrl, isMuted),
-                    "text/html",
-                    "utf-8",
-                    null
-                )
-                webViewRef = this
-            }
-        },
-        update = { wv ->
-            if (wv.tag != videoId) {
-                wv.tag = videoId
-                jsBridge.resetTrigger()
-                wv.loadDataWithBaseURL(
-                    "https://www.minecraft.net/",
-                    buildUnifiedPlayerHtml(videoId, directStreamUrl, isMuted),
-                    "text/html",
-                    "utf-8",
-                    null
-                )
-            }
-        }
-    )
-}
-
 @Composable
 private fun CleanHomeViewport(
     config: HorizonConfigState,
@@ -2172,54 +1765,6 @@ private fun CleanHomeViewport(
     var quoteIndex by remember { mutableIntStateOf((MINECRAFT_SPLASH_QUOTES.indices).random()) }
     var wallpaperIndex by remember { mutableIntStateOf((0 until totalCount.coerceAtLeast(1)).random()) }
 
-    val isVideoMode = config.useYoutubeTrailerWallpaper || config.backgroundMode == HorizonBackgroundMode.YOUTUBE_TRAILER
-    var trailerList by remember {
-        mutableStateOf(HorizonNativeBridge.OFFICIAL_MINECRAFT_TRAILERS_FALLBACK.shuffled())
-    }
-    var currentTrailerIndex by remember {
-        mutableIntStateOf((HorizonNativeBridge.OFFICIAL_MINECRAFT_TRAILERS_FALLBACK.indices).random())
-    }
-    var activeDirectStreamUrl by remember { mutableStateOf("") }
-
-    val pickRandomNextTrailer = remember {
-        { curIdx: Int, size: Int ->
-            if (size <= 1) 0
-            else {
-                var candidate = (0 until size).random()
-                if (candidate == curIdx) {
-                    candidate = (curIdx + 1) % size
-                }
-                candidate
-            }
-        }
-    }
-
-    LaunchedEffect(isVideoMode) {
-        if (isVideoMode) {
-            val fetched = withContext(Dispatchers.IO) {
-                HorizonNativeBridge.fetchLatestMinecraftYoutubeTrailers()
-            }
-            if (fetched.isNotEmpty()) {
-                trailerList = fetched.shuffled()
-                currentTrailerIndex = (fetched.indices).random()
-            }
-        }
-    }
-
-    val activeTrailer = trailerList.getOrElse(currentTrailerIndex % trailerList.size.coerceAtLeast(1)) {
-        HorizonNativeBridge.OFFICIAL_MINECRAFT_TRAILERS_FALLBACK.first()
-    }
-
-    LaunchedEffect(isVideoMode, activeTrailer.videoId) {
-        if (isVideoMode) {
-            activeDirectStreamUrl = ""
-            val resolved = withContext(Dispatchers.IO) {
-                HorizonNativeBridge.resolveDirectTrailerStreamUrl(activeTrailer.videoId)
-            }
-            activeDirectStreamUrl = resolved
-        }
-    }
-
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             HorizonNativeBridge.importUriToDestination(
@@ -2231,29 +1776,26 @@ private fun CleanHomeViewport(
             )
             customWallpapers = HorizonNativeBridge.getCustomWallpapers(context)
             wallpaperIndex = DASHBOARD_WALLPAPERS.size
-            if (isVideoMode) {
-                onConfigChange(config.copy(backgroundMode = HorizonBackgroundMode.WALLPAPER, useYoutubeTrailerWallpaper = false))
-            }
         }
     }
 
     // Decode the next wallpaper off the main thread before it fades in, so the carousel never hitches.
     LaunchedEffect(wallpaperIndex, totalCount, customWallpapers) {
-        if (!isHibernated && !isVideoMode && totalCount > 1) {
+        if (!isHibernated && totalCount > 1) {
             val next = (wallpaperIndex + 1) % totalCount
             withContext(Dispatchers.IO) { loadWallpaper(context, next, customWallpapers) }
         }
     }
 
-    LaunchedEffect(totalCount, isHibernated, isVideoMode) {
-        while (!isHibernated && !isVideoMode) {
+    LaunchedEffect(totalCount, isHibernated) {
+        while (!isHibernated) {
             delay(9000L)
             wallpaperIndex = (wallpaperIndex + 1) % totalCount.coerceAtLeast(1)
         }
     }
 
-    LaunchedEffect(isHibernated, isVideoMode) {
-        while (!isHibernated && !isVideoMode) {
+    LaunchedEffect(isHibernated) {
+        while (!isHibernated) {
             delay(9000L)
             var next = (MINECRAFT_SPLASH_QUOTES.indices).random()
             if (next == quoteIndex) {
@@ -2263,67 +1805,33 @@ private fun CleanHomeViewport(
         }
     }
 
-    val titleScale by animateFloatAsState(
-        targetValue = if (isVideoMode) 0.84f else 1.0f,
-        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
-        label = "MinecraftTitleScaleAnim"
-    )
-    val titleOffsetY by animateDpAsState(
-        targetValue = if (isVideoMode) 12.dp else 0.dp,
-        animationSpec = tween(durationMillis = 480, easing = FastOutSlowInEasing),
-        label = "MinecraftTitleOffsetAnim"
-    )
-
     Surface(
         shape = RoundedCornerShape(0.dp),
         color = CardSlateBg.copy(alpha = 0.90f),
         modifier = Modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            if (!isHibernated) {
             AnimatedContent(
-                targetState = isVideoMode,
+                targetState = wallpaperIndex % totalCount.coerceAtLeast(1),
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(520, easing = FastOutSlowInEasing))
-                        .togetherWith(fadeOut(animationSpec = tween(420)))
-                        .using(sizeTransform = null)
+                    fadeIn(animationSpec = tween(700)).togetherWith(fadeOut(animationSpec = tween(700))).using(sizeTransform = null)
                 },
                 modifier = Modifier.fillMaxSize(),
-                label = "WallpaperVsVideoModeTransition"
-            ) { videoActive ->
-                if (videoActive && !isHibernated) {
-                    MinecraftTrailerVideoWallpaperPlayer(
-                        videoId = activeTrailer.videoId,
-                        directStreamUrl = activeDirectStreamUrl,
-                        trailerTitle = activeTrailer.title,
-                        isMuted = config.muteTrailerVideo,
-                        isPaused = isHibernated,
-                        onVideoEndedOrError = {
-                            currentTrailerIndex = pickRandomNextTrailer(currentTrailerIndex, trailerList.size.coerceAtLeast(1))
-                        },
+                label = "MinecraftWallpaperCarousel"
+            ) { idx ->
+                val wall = rememberWallpaper(context, idx, customWallpapers)
+                if (wall != null) {
+                    Image(
+                        bitmap = wall,
+                        contentDescription = "Minecraft Wallpaper",
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                } else if (!isHibernated) {
-                    AnimatedContent(
-                        targetState = wallpaperIndex % totalCount.coerceAtLeast(1),
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(700)).togetherWith(fadeOut(animationSpec = tween(700))).using(sizeTransform = null)
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        label = "MinecraftWallpaperCarousel"
-                    ) { idx ->
-                        val wall = rememberWallpaper(context, idx, customWallpapers)
-                        if (wall != null) {
-                            Image(
-                                bitmap = wall,
-                                contentDescription = "Minecraft Wallpaper",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Box(modifier = Modifier.fillMaxSize().background(VoltGrayRoot))
-                        }
-                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxSize().background(VoltGrayRoot))
                 }
+            }
             }
 
             Box(
@@ -2332,8 +1840,8 @@ private fun CleanHomeViewport(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = if (isVideoMode) 0.04f else 0.08f),
-                                Color.Black.copy(alpha = if (isVideoMode) 0.56f else 0.68f)
+                                Color.Black.copy(alpha = 0.08f),
+                                Color.Black.copy(alpha = 0.68f)
                             )
                         )
                     )
@@ -2349,7 +1857,7 @@ private fun CleanHomeViewport(
                     )
             )
 
-            // Top-Right Controls: Switch between Wallpaper & 720p YouTube Trailer + Mute/Silent Toggle + Next Trailer / Import Wallpaper
+            // Top controls: import a custom wallpaper
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -2370,7 +1878,7 @@ private fun CleanHomeViewport(
                 activeAccount = activeAccount,
                 activeSkinBitmap = activeSkinBitmap,
                 installStatus = installStatus,
-                quote = if (isVideoMode) null else MINECRAFT_SPLASH_QUOTES[quoteIndex],
+                quote = MINECRAFT_SPLASH_QUOTES[quoteIndex],
                 onQuoteTap = {
                     quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size
                     wallpaperIndex = (wallpaperIndex + 1) % totalCount.coerceAtLeast(1)
