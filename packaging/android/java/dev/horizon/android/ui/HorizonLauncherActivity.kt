@@ -2055,7 +2055,11 @@ private fun CleanAccountsAndSkinsViewport(
                     skinReloadCounter = skinReloadCounter,
                     onPickSkinFile = onLaunchSkinPicker,
                     onSkinUpdated = onSkinUpdated,
-                    onAccountsChange = onAccountsChange
+                    onAccountsChange = onAccountsChange,
+                    accent = SkyBlueAccent,
+                    onAccent = SkyBlueDarkText,
+                    cardColor = CardSlateBg,
+                    rowColor = CardRowBg
                 )
 
                 AccountSubCategory.SKIN_STUDIO -> {
@@ -2064,11 +2068,11 @@ private fun CleanAccountsAndSkinsViewport(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(14.dp),
                             color = CardSlateBg.copy(alpha = 0.90f),
                             border = horizonGlassBorder(),
                             modifier = Modifier
-                                .width(206.dp)
+                                .width(250.dp)
                                 .fillMaxHeight()
                         ) {
                             Column(
@@ -2090,8 +2094,8 @@ private fun CleanAccountsAndSkinsViewport(
                                     ) {
                                         MinecraftSkinHeadAvatar(
                                             skinBitmap = activeSkinBitmap,
-                                            size = 26.dp,
-                                            cornerRadius = 6.dp
+                                            size = 34.dp,
+                                            cornerRadius = 8.dp
                                         )
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
@@ -2104,7 +2108,7 @@ private fun CleanAccountsAndSkinsViewport(
                                             )
                                             Text(
                                                 text = if (activeAccount.slimSkinModel) "Slim (3px)" else "Wide (4px)",
-                                                fontSize = 10.sp,
+                                                fontSize = 12.sp,
                                                 color = SkyBlueAccent,
                                                 maxLines = 1
                                             )
@@ -2112,16 +2116,16 @@ private fun CleanAccountsAndSkinsViewport(
                                     }
 
                                     Surface(
-                                        shape = RoundedCornerShape(50),
+                                        shape = RoundedCornerShape(10.dp),
                                         color = SkyBlueAccent,
                                         modifier = Modifier.animatedPressScale { is3DPreview = !is3DPreview }
                                     ) {
                                         Text(
                                             text = if (is3DPreview) "3D Preview" else "2D View",
-                                            fontSize = 10.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = SkyBlueDarkText,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
                                         )
                                     }
                                 }
@@ -2131,12 +2135,8 @@ private fun CleanAccountsAndSkinsViewport(
                                         .weight(1f)
                                         .fillMaxWidth()
                                         .padding(vertical = 6.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            Brush.verticalGradient(
-                                                listOf(Color(0xFF171E24), Color(0xFF101519))
-                                            )
-                                        ),
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(CardRowBg),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     AnimatedContent(
@@ -2178,49 +2178,49 @@ private fun CleanAccountsAndSkinsViewport(
                                 ) {
                                     if (is3DPreview) {
                                         Surface(
-                                            shape = RoundedCornerShape(50),
+                                            shape = RoundedCornerShape(10.dp),
                                             color = if (autoRotate3D) SubRailCapsuleActive else CardRowBg,
                                             modifier = Modifier.animatedPressScale { autoRotate3D = !autoRotate3D }
                                         ) {
                                             Text(
                                                 text = if (autoRotate3D) "Spin: ON" else "Spin: OFF",
-                                                fontSize = 9.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = if (autoRotate3D) SkyBlueAccent else MutedSubtitleText,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
                                             )
                                         }
                                         Surface(
-                                            shape = RoundedCornerShape(50),
+                                            shape = RoundedCornerShape(10.dp),
                                             color = if (walkAnim3D) SubRailCapsuleActive else CardRowBg,
                                             modifier = Modifier.animatedPressScale { walkAnim3D = !walkAnim3D }
                                         ) {
                                             Text(
                                                 text = if (walkAnim3D) "Walk: ON" else "Walk: OFF",
-                                                fontSize = 9.sp,
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = if (walkAnim3D) SkyBlueAccent else MutedSubtitleText,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
                                             )
                                         }
                                     } else {
                                         Surface(
-                                            shape = RoundedCornerShape(50),
+                                            shape = RoundedCornerShape(10.dp),
                                             color = SubRailCapsuleActive,
                                             modifier = Modifier.animatedPressScale { showBackView2D = !showBackView2D }
                                         ) {
                                             Text(
-                                                text = if (showBackView2D) "Tampak Belakang" else "Tampak Depan",
-                                                fontSize = 9.sp,
+                                                text = if (showBackView2D) "Back view" else "Front view",
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = SkyBlueAccent,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
                                             )
                                         }
                                     }
                                     Text(
                                         text = activeAccount.skinSourceLabel,
-                                        fontSize = 9.sp,
+                                        fontSize = 11.sp,
                                         color = MutedSubtitleText,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -2237,7 +2237,7 @@ private fun CleanAccountsAndSkinsViewport(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 color = CardSlateBg,
                                 border = BorderStroke(1.dp, VoltGrayStroke),
                                 modifier = Modifier.fillMaxWidth()
@@ -2262,7 +2262,7 @@ private fun CleanAccountsAndSkinsViewport(
                                             )
                                             Text(
                                                 text = "Import a skin file (PNG/JPG, 64×64 / 64×32) or a gallery photo to use in-game.",
-                                                fontSize = 11.sp,
+                                                fontSize = 12.sp,
                                                 color = MutedSubtitleText,
                                                 maxLines = 2
                                             )
@@ -2271,12 +2271,12 @@ private fun CleanAccountsAndSkinsViewport(
                                         Spacer(Modifier.width(10.dp))
 
                                         Surface(
-                                            shape = RoundedCornerShape(8.dp),
+                                            shape = RoundedCornerShape(14.dp),
                                             color = SkyBlueAccent,
                                             modifier = Modifier.animatedPressScale(onClick = onLaunchSkinPicker)
                                         ) {
                                             Row(
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(5.dp)
                                             ) {
@@ -2298,12 +2298,12 @@ private fun CleanAccountsAndSkinsViewport(
                                     }
 
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = Color(0xFF1A2024),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = CardRowBg,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(38.dp)
-                                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                                            .height(46.dp)
+                                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
                                     ) {
                                         Row(
                                             modifier = Modifier
@@ -2394,7 +2394,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         listOf(false to "Wide (4px Steve)", true to "Slim (3px Alex)").forEach { (isSlim, label) ->
                                             val selected = activeAccount.slimSkinModel == isSlim
                                             Surface(
-                                                shape = RoundedCornerShape(50),
+                                                shape = RoundedCornerShape(10.dp),
                                                 color = if (selected) SkyBlueAccent else CardRowBg,
                                                 modifier = Modifier.animatedPressScale {
                                                     val updatedList = accounts.map { acc ->
@@ -2419,7 +2419,7 @@ private fun CleanAccountsAndSkinsViewport(
                             }
 
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 color = CardSlateBg,
                                 border = BorderStroke(1.dp, VoltGrayStroke),
                                 modifier = Modifier.fillMaxWidth()
@@ -2494,7 +2494,7 @@ private fun CleanAccountsAndSkinsViewport(
                                                             )
                                                             Text(
                                                                 text = "${savedItem.sourceLabel} • ${if (savedItem.slimModel) "Slim (3px)" else "Wide (4px)"}",
-                                                                fontSize = 10.sp,
+                                                                fontSize = 12.sp,
                                                                 color = SkyBlueAccent,
                                                                 maxLines = 1,
                                                                 overflow = TextOverflow.Ellipsis
@@ -2595,7 +2595,7 @@ private fun CleanAccountsAndSkinsViewport(
                                                         )
                                                         Text(
                                                             text = preset.subtitle,
-                                                            fontSize = 10.sp,
+                                                            fontSize = 12.sp,
                                                             color = MutedSubtitleText,
                                                             maxLines = 1,
                                                             overflow = TextOverflow.Ellipsis
@@ -4313,7 +4313,7 @@ private fun CleanStoreViewport(
                                     ) {
                                         Text(
                                             text = if (selectedSource == StoreSource.HORIZON) "HORIZON REGISTRY" else "${selectedSource.label.uppercase()} SOURCE",
-                                            fontSize = 9.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = SkyBlueAccent,
                                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
@@ -4409,7 +4409,7 @@ private fun CleanStoreViewport(
                                             )
                                             Text(
                                                 text = if (storeProgress.speedText.isBlank()) storeProgress.statusText else "${storeProgress.speedText} • ${storeProgress.statusText}",
-                                                fontSize = 10.sp,
+                                                fontSize = 12.sp,
                                                 color = MutedSubtitleText,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
@@ -4544,7 +4544,7 @@ private fun CleanStoreViewport(
                                                 Text(
                                                     text = item.versionBadge,
                                                     fontFamily = HzFont.Mono,
-                                                    fontSize = 9.sp,
+                                                    fontSize = 11.sp,
                                                     color = SkyBlueAccent,
                                                     maxLines = 1
                                                 )
@@ -4641,7 +4641,7 @@ private fun CleanStoreViewport(
                     // 3. Right Filter & Registry Actions Sidebar (`208.dp`, tailored to playhorizon.dev/mods!)
                     Column(
                         modifier = Modifier
-                            .width(208.dp)
+                            .width(232.dp)
                             .fillMaxHeight()
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -4860,7 +4860,7 @@ private fun CleanStoreViewport(
                                 )
                                 Text(
                                     text = "Reviewed mods, native mods, modpacks, resource packs & WGSL shaders for Horizon 26.3.",
-                                    fontSize = 10.sp,
+                                    fontSize = 12.sp,
                                     color = MutedSubtitleText,
                                     lineHeight = 13.sp
                                 )
@@ -4881,7 +4881,7 @@ private fun CleanStoreViewport(
                                     ) {
                                         Text(
                                             text = "Submit yours",
-                                            fontSize = 10.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
                                             textAlign = TextAlign.Center,
@@ -4902,7 +4902,7 @@ private fun CleanStoreViewport(
                                     ) {
                                         Text(
                                             text = "Make a mod",
-                                            fontSize = 10.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
                                             textAlign = TextAlign.Center,
@@ -5171,7 +5171,7 @@ private fun CleanStoreViewport(
                                                                                 )
                                                                                 Text(
                                                                                     text = "↗ ${rel.formattedDownloads}   •   ${rel.datePublished}   •   ${if (rel.signed) "Signed & Reviewed" else "Reviewed"}",
-                                                                                    fontSize = 10.sp,
+                                                                                    fontSize = 12.sp,
                                                                                     color = MutedSubtitleText,
                                                                                     maxLines = 1
                                                                                 )
@@ -5192,7 +5192,7 @@ private fun CleanStoreViewport(
                                                                                     installedVerForProj != null -> "↑ Update"
                                                                                     else -> "Install"
                                                                                 },
-                                                                                fontSize = 10.sp,
+                                                                                fontSize = 12.sp,
                                                                                 fontWeight = FontWeight.Bold,
                                                                                 color = when {
                                                                                     isThisExactVerInstalled -> Color(0xFF81C784)
@@ -5223,7 +5223,7 @@ private fun CleanStoreViewport(
                         color = CardSlateBg,
                         border = BorderStroke(1.dp, VoltGrayStroke),
                         modifier = Modifier
-                            .width(236.dp)
+                            .width(268.dp)
                             .fillMaxHeight()
                     ) {
                         Column(
@@ -5265,7 +5265,7 @@ private fun CleanStoreViewport(
                                         )
                                         Text(
                                             text = if (isFav) "Favorited" else "Favorite",
-                                            fontSize = 10.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = if (isFav) Color(0xFFFFB4B4) else Color.White,
                                             maxLines = 1,
@@ -5297,7 +5297,7 @@ private fun CleanStoreViewport(
                                     "By ${detailProj.author}",
                                     detailProj.license
                                 ).joinToString(" · "),
-                                fontSize = 10.sp,
+                                fontSize = 12.sp,
                                 color = SkyBlueAccent,
                                 textAlign = TextAlign.Center
                             )

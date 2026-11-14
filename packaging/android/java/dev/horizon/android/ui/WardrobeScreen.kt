@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -66,8 +67,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import dev.horizon.android.bridge.HorizonNativeBridge
 
-private val WGreen = Color(0xFF79E59C)
-private val WOnGreen = Color(0xFF0B2616)
+private val LocalWAccent = androidx.compose.runtime.compositionLocalOf { Color(0xFFFFB454) }
+private val LocalWOnAccent = androidx.compose.runtime.compositionLocalOf { Color(0xFF2A1700) }
+private val LocalWCard = androidx.compose.runtime.compositionLocalOf { Color(0xFF161B2E) }
+private val LocalWRow = androidx.compose.runtime.compositionLocalOf { Color(0xFF1E2438) }
+
+// Colours come from the launcher theme, so the wardrobe follows whichever palette is selected.
+private val WGreen: Color @Composable get() = LocalWAccent.current
+private val WOnGreen: Color @Composable get() = LocalWOnAccent.current
+private val WCardBg: Color @Composable get() = LocalWCard.current
+private val WRowBg: Color @Composable get() = LocalWRow.current
 private val WDanger = Color(0xFFFF8A80)
 
 private class FetchOutcome(val account: LauncherAccount, val message: String, val ok: Boolean)
@@ -77,6 +86,28 @@ private class FetchOutcome(val account: LauncherAccount, val message: String, va
  */
 @Composable
 internal fun VoltWardrobe(
+    accounts: List<LauncherAccount>,
+    activeAccount: LauncherAccount,
+    activeSkinBitmap: Bitmap,
+    config: HorizonConfigState,
+    skinReloadCounter: Int,
+    onPickSkinFile: () -> Unit,
+    onSkinUpdated: () -> Unit,
+    onAccountsChange: (List<LauncherAccount>) -> Unit,
+    accent: Color = Color(0xFFFFB454),
+    onAccent: Color = Color(0xFF2A1700),
+    cardColor: Color = Color(0xFF161B2E),
+    rowColor: Color = Color(0xFF1E2438)
+) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalWAccent provides accent, LocalWOnAccent provides onAccent, LocalWCard provides cardColor, LocalWRow provides rowColor
+    ) {
+    VoltWardrobeBody(accounts, activeAccount, activeSkinBitmap, config, skinReloadCounter, onPickSkinFile, onSkinUpdated, onAccountsChange)
+    }
+}
+
+@Composable
+private fun VoltWardrobeBody(
     accounts: List<LauncherAccount>,
     activeAccount: LauncherAccount,
     activeSkinBitmap: Bitmap,
@@ -173,8 +204,8 @@ internal fun VoltWardrobe(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .height(210.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(VoltGrayRoot)
             ) {
                 MinecraftSkin3DPreviewCanvas(
@@ -186,16 +217,16 @@ internal fun VoltWardrobe(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 30.dp, cornerRadius = 7.dp)
+                MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 38.dp, cornerRadius = 9.dp)
                 Column(Modifier.weight(1f)) {
-                    Text(activeAccount.username, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(activeAccount.accountType.badge, fontSize = 10.sp, color = VoltMutedText)
+                    Text(activeAccount.username, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(activeAccount.accountType.badge, fontSize = 12.sp, color = VoltMutedText)
                 }
             }
-            Text("Skin: ${activeAccount.skinSourceLabel}", fontSize = 10.sp, color = VoltMutedText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Skin: ${activeAccount.skinSourceLabel}", fontSize = 12.sp, color = VoltMutedText, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 if (activeAccount.capePath.isBlank()) "Cape: none" else "Cape: equipped",
-                fontSize = 10.sp, color = VoltMutedText
+                fontSize = 12.sp, color = VoltMutedText
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 WChip("Wide", !activeAccount.slimSkinModel, Modifier.weight(1f)) {
@@ -277,10 +308,10 @@ internal fun VoltWardrobe(
             WButton("Import cape image", Icons.Default.Folder, modifier = Modifier.fillMaxWidth()) { capePicker.launch("image/*") }
 
             val s = busy ?: status
-            if (s != null) Text(s, fontSize = 10.sp, color = if (busy != null) WGreen else VoltMutedText)
+            if (s != null) Text(s, fontSize = 12.sp, color = if (busy != null) WGreen else VoltMutedText)
             Text(
                 "Capes show in-game for your own player. Ely.by/Mojang are looked up by name (no password needed).",
-                fontSize = 9.sp, color = VoltMutedText
+                fontSize = 11.sp, lineHeight = 15.sp, color = VoltMutedText
             )
         }
 
@@ -294,7 +325,7 @@ internal fun VoltWardrobe(
                 }
             }
             if (newType == AccountType.MICROSOFT) {
-                Text("Microsoft sign-in isn't built yet – this saves a Microsoft-labelled profile (offline play).", fontSize = 9.sp, color = VoltMutedText)
+                Text("Microsoft sign-in isn't built yet – this saves a Microsoft-labelled profile (offline play).", fontSize = 11.sp, color = VoltMutedText)
             }
             WButton("Add account", Icons.Default.PersonAdd, primary = true, modifier = Modifier.fillMaxWidth()) {
                 val n = newName.trim()
@@ -321,8 +352,8 @@ internal fun VoltWardrobe(
                     HorizonNativeBridge.loadOrGenerateAccountSkinBitmap(context, acc)
                 }
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (acc.isActive) VoltGrayRow else VoltGrayCard,
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (acc.isActive) WRowBg else WCardBg,
                     border = BorderStroke(1.dp, if (acc.isActive) WGreen.copy(alpha = 0.55f) else VoltGrayStroke),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -331,20 +362,20 @@ internal fun VoltWardrobe(
                         }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        MinecraftSkinHeadAvatar(skinBitmap = bmp, size = 28.dp, cornerRadius = 6.dp)
+                        MinecraftSkinHeadAvatar(skinBitmap = bmp, size = 36.dp, cornerRadius = 8.dp)
                         Column(Modifier.weight(1f)) {
-                            Text(acc.username, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(acc.accountType.badge + if (acc.isActive) " · Active" else "", fontSize = 9.sp, color = if (acc.isActive) WGreen else VoltMutedText)
+                            Text(acc.username, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(acc.accountType.badge + if (acc.isActive) " · Active" else "", fontSize = 11.sp, color = if (acc.isActive) WGreen else VoltMutedText)
                         }
                         if (accounts.size > 1) {
                             Icon(
                                 Icons.Default.Delete, contentDescription = "Delete account", tint = WDanger,
                                 modifier = Modifier
-                                    .size(18.dp)
+                                    .size(24.dp)
                                     .animatedPressScale {
                                         SkinTools.deleteCape(acc)
                                         val rest = accountsNow.filterNot { it.id == acc.id }
@@ -364,8 +395,8 @@ internal fun VoltWardrobe(
 @Composable
 private fun WCard(modifier: Modifier, content: @Composable () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = VoltGrayCard,
+        shape = RoundedCornerShape(14.dp),
+        color = WCardBg,
         border = BorderStroke(1.dp, VoltGrayStroke),
         modifier = modifier.fillMaxHeight()
     ) {
@@ -373,28 +404,28 @@ private fun WCard(modifier: Modifier, content: @Composable () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) { content() }
     }
 }
 
 @Composable
-private fun WTitle(text: String) = Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+private fun WTitle(text: String) = Text(text, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
 
 @Composable
-private fun WLabel(text: String) = Text(text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = VoltMutedText)
+private fun WLabel(text: String) = Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = VoltMutedText)
 
 @Composable
 private fun WChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(50),
-        color = if (selected) WGreen.copy(alpha = 0.18f) else VoltGrayRow,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) WGreen.copy(alpha = 0.18f) else WRowBg,
         border = BorderStroke(1.dp, if (selected) WGreen.copy(alpha = 0.6f) else VoltGrayStroke),
         modifier = modifier.animatedPressScale { onClick() }
     ) {
-        Box(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
-            Text(text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = if (selected) WGreen else Color.White, maxLines = 1)
+        Box(Modifier.heightIn(min = 36.dp).padding(horizontal = 14.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+            Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (selected) WGreen else Color.White, maxLines = 1)
         }
     }
 }
@@ -408,18 +439,18 @@ private fun WButton(
     onClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(9.dp),
-        color = if (primary) WGreen else VoltGrayRow,
+        shape = RoundedCornerShape(12.dp),
+        color = if (primary) WGreen else WRowBg,
         border = if (primary) null else BorderStroke(1.dp, VoltGrayStroke),
         modifier = modifier.animatedPressScale { onClick() }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+            modifier = Modifier.heightIn(min = 40.dp).padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = if (primary) WOnGreen else Color.White, modifier = Modifier.size(14.dp))
-            Text(text, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (primary) WOnGreen else Color.White, maxLines = 1)
+            Icon(icon, contentDescription = null, tint = if (primary) WOnGreen else Color.White, modifier = Modifier.size(18.dp))
+            Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (primary) WOnGreen else Color.White, maxLines = 1)
         }
     }
 }
@@ -427,18 +458,18 @@ private fun WButton(
 @Composable
 private fun WField(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier) {
     Surface(
-        shape = RoundedCornerShape(9.dp),
+        shape = RoundedCornerShape(12.dp),
         color = VoltGrayRoot,
         border = BorderStroke(1.dp, VoltGrayStroke),
-        modifier = modifier.height(32.dp)
+        modifier = modifier.height(42.dp)
     ) {
         Box(Modifier.fillMaxSize().padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
-            if (value.isEmpty()) Text(hint, fontSize = 11.sp, color = VoltMutedText, maxLines = 1)
+            if (value.isEmpty()) Text(hint, fontSize = 13.sp, color = VoltMutedText, maxLines = 1)
             BasicTextField(
                 value = value,
                 onValueChange = onChange,
                 singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 11.sp),
+                textStyle = TextStyle(color = Color.White, fontSize = 13.sp),
                 cursorBrush = SolidColor(WGreen),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -451,7 +482,7 @@ private fun CapeThumb(cape: Bitmap?, selected: Boolean, label: String, onClick: 
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Box(
             modifier = Modifier
-                .size(width = 28.dp, height = 44.dp)
+                .size(width = 38.dp, height = 58.dp)
                 .clip(RoundedCornerShape(5.dp))
                 .background(VoltGrayRoot)
                 .border(1.dp, if (selected) WGreen else VoltGrayStroke, RoundedCornerShape(5.dp))
@@ -473,6 +504,6 @@ private fun CapeThumb(cape: Bitmap?, selected: Boolean, label: String, onClick: 
                 }
             }
         }
-        Text(label, fontSize = 8.sp, color = VoltMutedText, maxLines = 1)
+        Text(label, fontSize = 10.sp, color = VoltMutedText, maxLines = 1)
     }
 }
