@@ -48,4 +48,9 @@
     <string name="xlog_header">JVM log (last lines)</string>
     <string name="crash_header">Last Java crash (this app)</string>
     <string name="exit_header">Why Android says the processes ended (newest first)</string>
+    <string name="button_jni_fg">Boot JVM: JNI_CreateJavaVM + foreground service</string>
+    <string name="beat_label">Last heartbeat of the JVM process</string>
+    <string name="beat_value">alive %1$s | RSS %2$s | VmSize %3$s | threads %4$s | oom_score_adj %5$s | foreground service %6$s</string>
+    <string name="channel_name">JVM probe</string>
+    <string name="notification_title">JVM probe is running</string>
 </resources>

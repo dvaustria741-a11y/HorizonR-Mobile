@@ -17,6 +17,7 @@ import java.util.Locale
  * inside the JVM and a file still holds what it wrote before.
  */
 object ProbeFiles {
+    const val BEAT = "beat.txt"
     const val LAST_CRASH = "last_crash.txt"
     const val STAGE = "stage.txt"
     const val NATIVE = "native.txt"
@@ -26,6 +27,7 @@ object ProbeFiles {
     const val PROBE_JAR = "probe.jar"
     const val EXTRA_MODE = "mode"
     const val EXTRA_HEAP_MIB = "heap_mib"
+    const val EXTRA_FOREGROUND = "foreground"
 
     /** The desktop spike's value, so the numbers compare. Not tuned for the phone. */
     const val DEFAULT_HEAP_MIB = 128
@@ -59,6 +61,41 @@ object ProbeFiles {
         val parts = line.removePrefix("VmRSS:").trim().split(Regex("\\s+"))
         if (parts.size != 2 || parts[1] != "kB") return null
         return parts[0].toLongOrNull()
+    }
+
+    /** First number after `key:` in the text of /proc/<pid>/status (`VmSize:`, `Threads:`); null when absent. */
+    fun parseStatusNumber(status: String, key: String): Long? {
+        val line = status.lineSequence().firstOrNull { it.startsWith("$key:") } ?: return null
+        return line.removePrefix("$key:").trim().split(Regex("\\s+")).firstOrNull()?.toLongOrNull()
+    }
+
+    /**
+     * Writes `beat.txt` every 50 ms from the `:jvm` process, atomically: the last file left after a kill says how long
+     * the process lived and what it looked like. Runs on a daemon thread; the JVM in the same process does not stop it.
+     */
+    fun startHeartbeat(dir: File, foreground: Boolean) {
+        val startMs = System.currentTimeMillis()
+        Thread({
+            var tick = 0L
+            while (true) {
+                val status = runCatching { File("/proc/self/status").readText() }.getOrDefault("")
+                val values = LinkedHashMap<String, String>()
+                values["start_ms"] = startMs.toString()
+                values["wall_ms"] = System.currentTimeMillis().toString()
+                values["tick"] = (tick++).toString()
+                values["vmrss_kib"] = parseStatusNumber(status, "VmRSS")?.toString() ?: "unknown"
+                values["vmsize_kib"] = parseStatusNumber(status, "VmSize")?.toString() ?: "unknown"
+                values["threads"] = parseStatusNumber(status, "Threads")?.toString() ?: "unknown"
+                values["oom_score_adj"] = runCatching { File("/proc/self/oom_score_adj").readText().trim() }.getOrDefault("unknown")
+                values["fg"] = foreground.toString()
+                runCatching { writeKeyValues(File(dir, BEAT), values) }
+                try {
+                    Thread.sleep(50)
+                } catch (e: InterruptedException) {
+                    return@Thread
+                }
+            }
+        }, "jvmprobe-beat").apply { isDaemon = true }.start()
     }
 
     fun ownRssKib(): Long? = runCatching { parseVmRssKib(File("/proc/self/status").readText()) }.getOrNull()

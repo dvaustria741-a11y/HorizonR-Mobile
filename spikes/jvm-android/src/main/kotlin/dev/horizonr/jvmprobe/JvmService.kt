@@ -1,5 +1,8 @@
 package dev.horizonr.jvmprobe
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
@@ -24,6 +27,9 @@ class JvmService : Service() {
         val mode = intent?.getIntExtra(ProbeFiles.EXTRA_MODE, -1) ?: -1
         val heap = intent?.getIntExtra(ProbeFiles.EXTRA_HEAP_MIB, ProbeFiles.DEFAULT_HEAP_MIB) ?: ProbeFiles.DEFAULT_HEAP_MIB
         val dir = ProbeFiles.dir(this)
+        val foreground = intent?.getBooleanExtra(ProbeFiles.EXTRA_FOREGROUND, false) ?: false
+        // startForegroundService() obliges a startForeground() call within seconds, so it comes first.
+        if (foreground) promoteToForeground()
         if (used) {
             // A second boot in this process cannot work. Say so and leave; the app starts a fresh process next time.
             stage(dir, "error", "process already booted a JVM")
@@ -31,9 +37,22 @@ class JvmService : Service() {
             return START_NOT_STICKY
         }
         used = true
+        ProbeFiles.startHeartbeat(dir, foreground)
         // 8 MiB stack: the JVM's creating thread; an untuned guess, the default app thread would also be a candidate.
         Thread(null, { boot(dir, mode, heap) }, "jvmprobe-boot", 8L * 1024 * 1024).start()
         return START_NOT_STICKY
+    }
+
+    private fun promoteToForeground() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, getString(R.string.channel_name), NotificationManager.IMPORTANCE_LOW),
+        )
+        val notification = Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle(getString(R.string.notification_title))
+            .build()
+        startForeground(NOTIFICATION_ID, notification)
     }
 
     private fun stage(dir: File, stage: String, detail: String? = null) {
@@ -81,6 +100,9 @@ class JvmService : Service() {
     }
 
     private companion object {
+        const val CHANNEL_ID = "jvmprobe"
+        const val NOTIFICATION_ID = 1
+
         @Volatile
         var used = false
     }

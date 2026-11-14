@@ -36,11 +36,15 @@ class MainActivity : Activity() {
         }
         column.addView(Button(this).apply {
             setText(R.string.button_jni)
-            setOnClickListener { start(NativeBoot.MODE_JNI) }
+            setOnClickListener { start(NativeBoot.MODE_JNI, false) }
+        })
+        column.addView(Button(this).apply {
+            setText(R.string.button_jni_fg)
+            setOnClickListener { start(NativeBoot.MODE_JNI, true) }
         })
         column.addView(Button(this).apply {
             setText(R.string.button_jli)
-            setOnClickListener { start(NativeBoot.MODE_JLI) }
+            setOnClickListener { start(NativeBoot.MODE_JLI, false) }
         })
         output = TextView(this).apply {
             typeface = Typeface.MONOSPACE
@@ -64,18 +68,18 @@ class MainActivity : Activity() {
         handler.removeCallbacksAndMessages(null)
     }
 
-    private fun start(mode: Int) {
+    private fun start(mode: Int, foreground: Boolean) {
         val dir = ProbeFiles.dir(this)
         File(filesDir, ProbeFiles.LAST_CRASH).delete()
         ProbeFiles.killStaleJvm(dir)
         ProbeFiles.reset(dir)
         ProbeFiles.writeKeyValues(File(dir, ProbeFiles.STAGE), mapOf("pid" to "0", "stage" to "starting", "mode" to mode.toString()))
         startedAtMs = System.currentTimeMillis()
-        startService(
-            Intent(this, JvmService::class.java)
-                .putExtra(ProbeFiles.EXTRA_MODE, mode)
-                .putExtra(ProbeFiles.EXTRA_HEAP_MIB, ProbeFiles.DEFAULT_HEAP_MIB),
-        )
+        val intent = Intent(this, JvmService::class.java)
+            .putExtra(ProbeFiles.EXTRA_MODE, mode)
+            .putExtra(ProbeFiles.EXTRA_HEAP_MIB, ProbeFiles.DEFAULT_HEAP_MIB)
+            .putExtra(ProbeFiles.EXTRA_FOREGROUND, foreground)
+        if (foreground) startForegroundService(intent) else startService(intent)
         render()
         poll()
     }
@@ -162,6 +166,14 @@ class MainActivity : Activity() {
                 install["install_ms"] ?: unknown,
             )
             out.append(line(R.string.install_label, text))
+        }
+        val beat = ProbeFiles.readKeyValues(File(dir, ProbeFiles.BEAT))
+        if (beat.isNotEmpty()) {
+            val start = beat["start_ms"]?.toLongOrNull()
+            val wall = beat["wall_ms"]?.toLongOrNull()
+            val clock = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.ROOT)
+            val alive = if (start != null && wall != null) "${wall - start} ms at ${clock.format(java.util.Date(wall))}" else unknown
+            out.append(line(R.string.beat_label, getString(R.string.beat_value, alive, kibText(beat["vmrss_kib"]), kibText(beat["vmsize_kib"]), beat["threads"] ?: unknown, beat["oom_score_adj"] ?: unknown, beat["fg"] ?: unknown)))
         }
         out.append(line(R.string.boot_label, merged["boot_ms"]?.let { getString(R.string.boot_value, it) } ?: unknown))
         out.append(line(R.string.boot_def_label, merged["boot_ms_def"] ?: unknown))
