@@ -76,6 +76,13 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
   written in the jar (26.3 uses Hud, GuiGraphicsExtractor, extract* methods). Lower bounds; the JVM-side loader (a Fabric
   GameProvider for Horizon) and every facade class are unwritten. Whether AppleSkin works without its server half
   against a vanilla multiplayer server is unknown.
+- Direction (user, 22:40): a general Mods API, not one mod. Measured demand of six jars (AppleSkin, Clumps, Xaero,
+  Placeholder API, ModMenu, Fabric API 0.166.2): union 1,277 Mojang classes, 2,672 methods, 684 fields; 464 classes are
+  client tier, 813 common. 809 of the 813 common classes exist in the real 26.3 server jar and its libraries (the other 4
+  are Realms client classes). Details in `api-demand.md`. Proposed architecture (my call, unbuilt): one JVM running Fabric
+  Loader with a Horizon game provider over (real server classes downloaded on the device) + (our clean-room client
+  facade, generated as stubs from the mods' contracts and filled in by priority) bridged to the Rust client over JNI;
+  singleplayer with Java mods on = local JVM server (proven: joined 8.5 min), mods off = Rust integrated server as today.
 - Step 3 (sample): `spikes/mod-api-scan`. AppleSkin 3.0.10 55 classes/68 methods/19 fields, Clumps 26.3.2
   13/21/2, Xaero's Minimap 26.6.2 353/566/155 (+ nested xaerolib 137/250/31). Union of the three: 385 classes,
   634 methods, 169 fields. Mixin shapes seen: Inject, ModifyVariable, ModifyArg, ModifyReturnValue, Accessor, Shadow.
