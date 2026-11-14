@@ -635,9 +635,9 @@ fun MinecraftPixelRustBadge() {
     val accentColor = SkyBlueAccent
 
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = HzShape.Panel,
         color = Color(0xFF161D22).copy(alpha = 0.86f),
-        modifier = Modifier.border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+        modifier = Modifier.border(1.dp, accentColor.copy(alpha = 0.45f), HzShape.Panel)
     ) {
         Canvas(
             modifier = Modifier
@@ -1206,7 +1206,7 @@ fun <T> LauncherSubCategoryRail(
 @Composable
 fun LavenderTagBadge(text: String) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = HzShape.Panel,
         color = LavenderBadgeBg
     ) {
         Text(
@@ -1229,9 +1229,9 @@ private fun InAppUpdateBannerCard(
     onLaterClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = HzShape.Panel,
         color = CardSlateBg,
-        border = BorderStroke(1.dp, VoltGrayStroke),
+        border = BorderStroke(1.dp, HzColor.Hairline),
         tonalElevation = 8.dp,
         shadowElevation = 12.dp,
         modifier = Modifier.widthIn(max = 520.dp)
@@ -1299,7 +1299,7 @@ private fun InAppUpdateBannerCard(
                 }
                 Button(
                     onClick = onUpdateClick,
-                    shape = RoundedCornerShape(6.dp),
+                    shape = HzShape.Control,
                     colors = ButtonDefaults.buttonColors(containerColor = SkyBlueAccent),
                     modifier = Modifier.height(34.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
@@ -1566,7 +1566,7 @@ private data class HorizonNavItem(val tab: LauncherNavTab, val icon: ImageVector
 
 /** Soft accent-tinted gradient outline shared by all the glass cards. */
 @Composable
-private fun horizonGlassBorder(): BorderStroke = BorderStroke(1.dp, VoltGrayStroke)
+private fun horizonGlassBorder(): BorderStroke = BorderStroke(1.dp, HzColor.Hairline)
 
 /** One faint accent wash in the top-left corner. Static, so it is drawn once and costs nothing per frame. */
 @Composable
@@ -2070,7 +2070,7 @@ private fun CleanAccountsAndSkinsViewport(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = HzShape.Panel,
                             color = CardSlateBg.copy(alpha = 0.90f),
                             border = horizonGlassBorder(),
                             modifier = Modifier
@@ -2137,7 +2137,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         .weight(1f)
                                         .fillMaxWidth()
                                         .padding(vertical = 6.dp)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(HzShape.Panel)
                                         .background(
                                             Brush.verticalGradient(
                                                 listOf(Color(0xFF171E24), Color(0xFF101519))
@@ -2243,9 +2243,9 @@ private fun CleanAccountsAndSkinsViewport(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = HzShape.Panel,
                                 color = CardSlateBg,
-                                border = BorderStroke(1.dp, VoltGrayStroke),
+                                border = BorderStroke(1.dp, HzColor.Hairline),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
@@ -2277,7 +2277,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         Spacer(Modifier.width(10.dp))
 
                                         Surface(
-                                            shape = RoundedCornerShape(8.dp),
+                                            shape = HzShape.Panel,
                                             color = SkyBlueAccent,
                                             modifier = Modifier.animatedPressScale(onClick = onLaunchSkinPicker)
                                         ) {
@@ -2304,12 +2304,12 @@ private fun CleanAccountsAndSkinsViewport(
                                     }
 
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = HzShape.Panel,
                                         color = Color(0xFF1A2024),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(38.dp)
-                                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                                            .border(1.dp, Color.White.copy(alpha = 0.08f), HzShape.Panel)
                                     ) {
                                         Row(
                                             modifier = Modifier
@@ -2361,7 +2361,7 @@ private fun CleanAccountsAndSkinsViewport(
 
                                     detectionBanner?.let { bannerMsg ->
                                         Surface(
-                                            shape = RoundedCornerShape(6.dp),
+                                            shape = HzShape.Control,
                                             color = SubRailCapsuleActive,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
@@ -2425,9 +2425,9 @@ private fun CleanAccountsAndSkinsViewport(
                             }
 
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = HzShape.Panel,
                                 color = CardSlateBg,
-                                border = BorderStroke(1.dp, VoltGrayStroke),
+                                border = BorderStroke(1.dp, HzColor.Hairline),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
@@ -2457,7 +2457,7 @@ private fun CleanAccountsAndSkinsViewport(
                                             val isCurrent = activeAccount.skinPath == savedItem.filePath ||
                                                 activeAccount.skinSourceLabel == savedItem.fileName
                                             Surface(
-                                                shape = RoundedCornerShape(6.dp),
+                                                shape = HzShape.Control,
                                                 color = if (isCurrent) SubRailCapsuleActive else CardRowBg,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -2515,7 +2515,7 @@ private fun CleanAccountsAndSkinsViewport(
                                                         Icon(
                                                             imageVector = Icons.Default.Edit,
                                                             contentDescription = "Rename Skin",
-                                                            tint = Color(0xFFD5DEE5),
+                                                            tint = VoltIconMuted,
                                                             modifier = Modifier
                                                                 .size(17.dp)
                                                                 .clickable {
@@ -2557,7 +2557,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         val presetBmp = remember(preset) { HorizonNativeBridge.generatePresetSkinBitmap(preset, context) }
                                         val isCurrent = activeAccount.skinSourceLabel == "Preset: ${preset.title}"
                                         Surface(
-                                            shape = RoundedCornerShape(6.dp),
+                                            shape = HzShape.Control,
                                             color = if (isCurrent) SubRailCapsuleActive else CardRowBg,
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -2887,8 +2887,8 @@ private fun CleanServersViewport(
             onDismissRequest = { pendingDelete = null },
             containerColor = Color(0xFF1F262B),
             title = { Text("Remove server", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
-            text = { Text("Remove ${target.name.ifBlank { target.address }} from your list?", fontSize = 13.sp, color = Color(0xFFD5DEE5)) },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel", color = Color(0xFFD5DEE5)) } },
+            text = { Text("Remove ${target.name.ifBlank { target.address }} from your list?", fontSize = 13.sp, color = VoltIconMuted) },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel", color = VoltIconMuted) } },
             confirmButton = {
                 TextButton(onClick = {
                     servers.remove(target)
@@ -2942,9 +2942,9 @@ private fun CleanServersViewport(
                     var showMenu by remember { mutableStateOf(false) }
                     val online = known && status != null && status.online
                     val dot = when {
-                        !known || status == null -> Color(0xFFFFD54F)
-                        status.online -> Color(0xFF66BB6A)
-                        else -> Color(0xFFEF5350)
+                        !known || status == null -> HzColor.Warning
+                        status.online -> HzColor.Success
+                        else -> HzColor.Danger
                     }
                     val mono = HzFont.Mono
                     Row(
@@ -2983,11 +2983,11 @@ private fun CleanServersViewport(
                         }
                         Text(
                             if (online) "${status!!.playersOnline}/${status.playersMax}" else "-",
-                            fontFamily = mono, fontSize = 11.sp, color = Color(0xFFD5DEE5), maxLines = 1, modifier = Modifier.width(62.dp)
+                            fontFamily = mono, fontSize = 11.sp, color = VoltIconMuted, maxLines = 1, modifier = Modifier.width(62.dp)
                         )
                         Text(
                             if (online && status!!.pingMs >= 0) "${status.pingMs} ms" else "-",
-                            fontFamily = mono, fontSize = 11.sp, color = Color(0xFFD5DEE5), maxLines = 1, modifier = Modifier.width(48.dp)
+                            fontFamily = mono, fontSize = 11.sp, color = VoltIconMuted, maxLines = 1, modifier = Modifier.width(48.dp)
                         )
                         Text(
                             if (online && status!!.version.isNotBlank()) status.version else "-",
@@ -3015,7 +3015,7 @@ private fun CleanServersViewport(
                                     .animatedPressScale(pressedScale = 0.94f) { showMenu = true }
                                     .clip(HzShape.Control)
                                     .background(HzColor.PanelHi)
-                            ) { Icon(Icons.Default.MoreHoriz, contentDescription = "More options", tint = Color(0xFFD5DEE5), modifier = Modifier.size(15.dp)) }
+                            ) { Icon(Icons.Default.MoreHoriz, contentDescription = "More options", tint = VoltIconMuted, modifier = Modifier.size(15.dp)) }
                             DropdownMenu(
                                 expanded = showMenu,
                                 onDismissRequest = { showMenu = false },
@@ -3051,7 +3051,7 @@ private fun ServerIcon(bytes: ByteArray?, label: String, online: Boolean) {
             .size(36.dp)
             .clip(HzShape.Control)
             .background(Color(0xFF14161D))
-            .border(1.dp, if (online) SkyBlueAccent.copy(alpha = 0.7f) else VoltGrayStroke, HzShape.Control),
+            .border(1.dp, if (online) SkyBlueAccent.copy(alpha = 0.7f) else HzColor.Hairline, HzShape.Control),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
@@ -3110,7 +3110,7 @@ private fun ServerEditorDialog(
                 )
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFFD5DEE5)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = VoltIconMuted) } },
         confirmButton = {
             TextButton(
                 enabled = address.isNotBlank(),
@@ -3220,7 +3220,7 @@ private fun CleanLogsViewport(
                     }
                     .clip(HzShape.Control)
                     .background(HzColor.PanelHi)
-            ) { Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Color(0xFFD5DEE5), modifier = Modifier.size(14.dp)) }
+            ) { Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = VoltIconMuted, modifier = Modifier.size(14.dp)) }
 
             Box(
                 contentAlignment = Alignment.Center,
@@ -3355,7 +3355,7 @@ private fun CleanVersionsViewport(
                 Text(
                     "The system will check the completeness of engine files, 26.3 worldgen tables, audio, and 60 touch control icons.\n\nDamaged or missing files will be restored automatically without deleting your world data (Saves) or Mods.",
                     fontSize = 13.sp,
-                    color = Color(0xFFD5DEE5),
+                    color = VoltIconMuted,
                     lineHeight = 18.sp
                 )
             },
@@ -3393,7 +3393,7 @@ private fun CleanVersionsViewport(
                 Text(
                     text = msg,
                     fontSize = 13.sp,
-                    color = Color(0xFFD5DEE5),
+                    color = VoltIconMuted,
                     lineHeight = 18.sp
                 )
             },
@@ -3418,7 +3418,7 @@ private fun CleanVersionsViewport(
                 Text(
                     "All Minecraft 26.3 asset files (.local/horizon-client/26.3) will be completely deleted from device storage ($installedSizeText).\n\nYou will need to re-download the assets to enter the game again. Saves & Mods data stays safe.",
                     fontSize = 13.sp,
-                    color = Color(0xFFD5DEE5),
+                    color = VoltIconMuted,
                     lineHeight = 18.sp
                 )
             },
@@ -3455,7 +3455,7 @@ private fun CleanVersionsViewport(
                 Text(
                     text = msg,
                     fontSize = 13.sp,
-                    color = Color(0xFFD5DEE5),
+                    color = VoltIconMuted,
                     lineHeight = 18.sp
                 )
             },
@@ -3593,7 +3593,7 @@ private fun CleanVersionsViewport(
 
                     if (installStatus.error.isNotEmpty()) {
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = HzShape.Control,
                             color = Color(0xFFFF5252).copy(alpha = 0.14f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -3686,7 +3686,7 @@ private fun CleanVersionsViewport(
                                         text = "Asset Activity Log Details",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFFD5DEE5)
+                                        color = VoltIconMuted
                                     )
                                 }
 
@@ -4156,7 +4156,7 @@ private fun CleanStoreViewport(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Surface(
-                                        shape = RoundedCornerShape(6.dp),
+                                        shape = HzShape.Control,
                                         color = SubRailCapsuleActive
                                     ) {
                                         Text(
@@ -4266,7 +4266,7 @@ private fun CleanStoreViewport(
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             if (!storeProgress.translating) {
                                                 Surface(
-                                                    shape = RoundedCornerShape(8.dp),
+                                                    shape = HzShape.Panel,
                                                     color = SkyBlueAccent,
                                                     modifier = Modifier.animatedPressScale {
                                                         val nextPaused = !HorizonNativeBridge.storeDownloadPaused.get()
@@ -4283,7 +4283,7 @@ private fun CleanStoreViewport(
                                                 }
                                             }
                                             Surface(
-                                                shape = RoundedCornerShape(8.dp),
+                                                shape = HzShape.Panel,
                                                 color = HzColor.DangerFill,
                                                 modifier = Modifier.animatedPressScale { showCancelStoreDialog = true }
                                             ) {
@@ -4324,7 +4324,7 @@ private fun CleanStoreViewport(
                         } else if (catalogItems.isEmpty()) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = HzShape.Control,
                                     color = CardSlateBg
                                 ) {
                                     Text(
@@ -5393,8 +5393,8 @@ private fun StoreAsyncProjectIcon(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(size)
-                .clip(RoundedCornerShape(6.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(6.dp))
+                .clip(HzShape.Control)
+                .border(1.dp, Color.White.copy(alpha = 0.14f), HzShape.Control)
         )
     } else {
         StoreOrFileItemIconBadge(
@@ -5423,9 +5423,9 @@ private fun StoreOrFileItemIconBadge(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(size)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(HzShape.Control)
             .background(bgBrush)
-            .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(6.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.14f), HzShape.Control)
     ) {
         if (isWorld) {
             MinecraftGrassCubeIcon(size = size * 0.76f)
@@ -5757,7 +5757,7 @@ private fun CleanFilesViewport(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(HzShape.Panel)
                                 .clickable { importTranslator = option }
                                 .padding(horizontal = 6.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -5921,7 +5921,7 @@ private fun CleanFilesViewport(
                         HzIconButton(
                             icon = Icons.Default.FilterAlt,
                             contentDescription = "Filter Enabled Mods",
-                            tint = if (filterEnabledOnly) SkyBlueAccent else Color(0xFFD5DEE5)
+                            tint = if (filterEnabledOnly) SkyBlueAccent else VoltIconMuted
                         ) { filterEnabledOnly = !filterEnabledOnly }
                     }
 
@@ -6061,7 +6061,7 @@ private fun CleanFilesViewport(
                         }
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = HzShape.Panel,
                                 color = CardRowBg
                             ) {
                                 HzEmptyState("hz_empty_chest", emptyLabel, SkyBlueAccent)
@@ -6163,8 +6163,8 @@ private fun FileManagerRowCard(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(44.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(6.dp))
+                            .clip(HzShape.Control)
+                            .border(1.dp, Color.White.copy(alpha = 0.14f), HzShape.Control)
                     )
                 } else {
                     StoreOrFileItemIconBadge(
@@ -6199,7 +6199,7 @@ private fun FileManagerRowCard(
                                 LavenderTagBadge(text = "26.3")
                                 if (rowItem.hasStoreUpdate && rowItem.storeCatalogMatch != null) {
                                     Surface(
-                                        shape = RoundedCornerShape(6.dp),
+                                        shape = HzShape.Control,
                                         color = HzColor.Warning,
                                         modifier = Modifier.clickable {
                                             val targetItem = rowItem.storeCatalogMatch
@@ -6280,7 +6280,7 @@ private fun FileManagerRowCard(
                         Icon(
                             imageVector = Icons.Outlined.Info,
                             contentDescription = "Info",
-                            tint = Color(0xFFD5DEE5),
+                            tint = VoltIconMuted,
                             modifier = Modifier
                                 .size(20.dp)
                                 .clickable { showInfoPopover = true }
@@ -6301,10 +6301,10 @@ private fun FileManagerRowCard(
                                     if (saveDetail != null) {
                                         Text("Save Info", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         Spacer(Modifier.height(2.dp))
-                                        Text("File Name: ${saveDetail.folderName}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                        Text("Game Mode: ${saveDetail.gameMode}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                        Text("Difficulty: ${saveDetail.difficulty}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                        Text("Play Time: ${saveDetail.playTimeFormatted}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("File Name: ${saveDetail.folderName}", fontSize = 12.sp, color = VoltTextMain)
+                                        Text("Game Mode: ${saveDetail.gameMode}", fontSize = 12.sp, color = VoltTextMain)
+                                        Text("Difficulty: ${saveDetail.difficulty}", fontSize = 12.sp, color = VoltTextMain)
+                                        Text("Play Time: ${saveDetail.playTimeFormatted}", fontSize = 12.sp, color = VoltTextMain)
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -6312,7 +6312,7 @@ private fun FileManagerRowCard(
                                             Text(
                                                 text = "World Seed: ${saveDetail.worldSeed}",
                                                 fontSize = 12.sp,
-                                                color = Color(0xFFE0E6EB),
+                                                color = VoltTextMain,
                                                 modifier = Modifier.weight(1f, fill = false)
                                             )
                                             Icon(
@@ -6334,17 +6334,17 @@ private fun FileManagerRowCard(
                                             color = Color.White
                                         )
                                         Spacer(Modifier.height(2.dp))
-                                        Text("Pack Type: ${packDetail.packType}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                        Text("File Name: ${packDetail.fileName}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                        Text("File Size: ${packDetail.fileSizeFormatted}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                        Text("Format Version: ${packDetail.formatVersion}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("Pack Type: ${packDetail.packType}", fontSize = 12.sp, color = VoltTextMain)
+                                        Text("File Name: ${packDetail.fileName}", fontSize = 12.sp, color = VoltTextMain)
+                                        Text("File Size: ${packDetail.fileSizeFormatted}", fontSize = 12.sp, color = VoltTextMain)
+                                        Text("Format Version: ${packDetail.formatVersion}", fontSize = 12.sp, color = VoltTextMain)
                                     } else if (modDetail != null) {
                                         Text("Horizon Mod Manifest (horizon-mod.toml)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         Spacer(Modifier.height(2.dp))
                                         Text("Mod ID: ${modDetail.modId}", fontSize = 12.sp, color = SkyBlueAccent)
-                                        Text("Version: ${modDetail.version} (API ${modDetail.apiLine})", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                        Text("Author: ${modDetail.author}", fontSize = 12.sp, color = Color(0xFFE0E6EB))
-                                        Text("File: ${modDetail.fileName} (${modDetail.fileSizeFormatted})", fontSize = 12.sp, color = Color(0xFFE0E6EB))
+                                        Text("Version: ${modDetail.version} (API ${modDetail.apiLine})", fontSize = 12.sp, color = VoltTextMain)
+                                        Text("Author: ${modDetail.author}", fontSize = 12.sp, color = VoltTextMain)
+                                        Text("File: ${modDetail.fileName} (${modDetail.fileSizeFormatted})", fontSize = 12.sp, color = VoltTextMain)
                                         Text(
                                             text = "Capabilities: ${modDetail.capabilities.joinToString(", ").ifEmpty { "registries" }}",
                                             fontSize = 12.sp,
@@ -6387,7 +6387,7 @@ private fun FileManagerRowCard(
                             Icon(
                                 imageVector = Icons.Default.MoreHoriz,
                                 contentDescription = "More Options",
-                                tint = Color(0xFFD5DEE5),
+                                tint = VoltIconMuted,
                                 modifier = Modifier
                                     .size(20.dp)
                                     .clickable { showMoreMenu = true }
@@ -6494,7 +6494,7 @@ private fun FileManagerRowCard(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (isToggleable) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = HzShape.Panel,
                                 color = if (isEnabled) Color(0xFF1E3E29) else SkyBlueAccent,
                                 modifier = Modifier.clickable {
                                     onToggleEnabled()
@@ -6510,7 +6510,7 @@ private fun FileManagerRowCard(
                             }
                         }
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = HzShape.Panel,
                             color = HzColor.DangerFill,
                             modifier = Modifier.clickable { onRequestDelete(file, displayTitle) }
                         ) {
@@ -6877,7 +6877,7 @@ private fun CleanSettingsViewport(
                                     Text(
                                         text = testResultDialogText.orEmpty(),
                                         fontSize = 13.sp,
-                                        color = Color(0xFFD5DEE5),
+                                        color = VoltIconMuted,
                                         lineHeight = 18.sp
                                     )
                                 },
@@ -6910,9 +6910,9 @@ private fun CleanSettingsViewport(
 
                         // Local-Only Google AI Studio API Key Card
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = HzShape.Panel,
                             color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
+                            border = BorderStroke(1.dp, HzColor.Hairline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -7062,9 +7062,9 @@ private fun CleanSettingsViewport(
                         )
 
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = HzShape.Panel,
                             color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
+                            border = BorderStroke(1.dp, HzColor.Hairline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -7107,9 +7107,9 @@ private fun CleanSettingsViewport(
                         )
 
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = HzShape.Panel,
                             color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
+                            border = BorderStroke(1.dp, HzColor.Hairline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -7235,9 +7235,9 @@ private fun CleanSettingsViewport(
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = HzShape.Panel,
                             color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
+                            border = BorderStroke(1.dp, HzColor.Hairline),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .animatedPressScale { HorizonNativeBridge.resetTouchKeypadLayout(context, config) }
@@ -7498,9 +7498,9 @@ private fun CleanSettingsViewport(
                         )
 
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = HzShape.Panel,
                             color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
+                            border = BorderStroke(1.dp, HzColor.Hairline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -7689,7 +7689,7 @@ private fun LauncherLaunchDock(
             // Account chip (left)
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(HzShape.Panel)
                     .background(CardRowBg.copy(alpha = 0.75f))
                     .animatedPressScale(onClick = onOpenAccountScreen)
                     .padding(start = 6.dp, end = 16.dp)
@@ -7726,7 +7726,7 @@ private fun LauncherLaunchDock(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(HzShape.Panel)
                     .background(CardRowBg.copy(alpha = 0.75f))
                     .animatedPressScale(onClick = onOpenVersions)
                     .padding(horizontal = 16.dp),
@@ -7776,7 +7776,7 @@ private fun LauncherLaunchDock(
                             )
                         }
                     }
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(HzShape.Panel)
                     .background(
                         if (installStatus.running) {
                             Brush.horizontalGradient(listOf(SubRailCapsuleActive, SubRailCapsuleActive))
