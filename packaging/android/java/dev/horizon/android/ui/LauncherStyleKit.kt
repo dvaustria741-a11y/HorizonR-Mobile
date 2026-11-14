@@ -78,6 +78,7 @@ import dev.horizon.android.ui.theme.HzFont
 import dev.horizon.android.ui.theme.HzMotion
 import dev.horizon.android.ui.theme.HzShape
 import dev.horizon.android.ui.theme.HzSpace
+import dev.horizon.android.ui.theme.HzText
 import kotlinx.coroutines.delay
 
 /** Neutral dark surfaces shared by every launcher page: dark gray cards, a hairline stroke. */
@@ -312,15 +313,17 @@ internal fun HzTag(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         fontFamily = HzFont.Mono,
-        fontSize = 9.sp,
-        lineHeight = 11.sp,
+        fontSize = HzText.Micro.sp,
+        lineHeight = 12.sp,
         color = VoltMutedText,
         maxLines = 1,
         modifier = modifier
             .border(1.dp, HzColor.Hairline, HzShape.Chip)
-            .padding(horizontal = 5.dp, vertical = 2.dp)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
     )
 }
+
+private val HOME_CHIP_HEIGHT = 36.dp
 
 @Composable
 private fun HzChip(label: String, icon: ImageVector, active: Boolean, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
@@ -331,17 +334,17 @@ private fun HzChip(label: String, icon: ImageVector, active: Boolean, accent: Co
     )
     Row(
         modifier = modifier
-            .height(32.dp)
+            .height(HOME_CHIP_HEIGHT)
             .animatedPressScale(pressedScale = 0.96f, onClick = onClick)
             .clip(HzShape.Control)
-            .background(HzColor.Glass)
+            .background(if (active) accent.copy(alpha = 0.14f) else HzColor.Glass)
             .border(1.dp, if (active) accent.copy(alpha = 0.55f) else HzColor.Hairline, HzShape.Control)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = HzSpace.M),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+        horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
-        Text(text = label, fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium, color = VoltTextMain, maxLines = 1)
+        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        Text(text = label, fontSize = HzText.Body.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = VoltTextMain, maxLines = 1)
     }
 }
 
@@ -356,7 +359,7 @@ private fun HzShortcut(label: String, hint: String?, iconName: String, fallback:
     Row(
         modifier = Modifier
             .width(212.dp)
-            .height(46.dp)
+            .height(44.dp)
             .graphicsLayer {
                 alpha = enter.value
                 translationX = (1f - enter.value) * 14.dp.toPx()
@@ -365,14 +368,14 @@ private fun HzShortcut(label: String, hint: String?, iconName: String, fallback:
             .clip(HzShape.Panel)
             .background(HzColor.Glass)
             .border(1.dp, HzColor.Hairline, HzShape.Panel)
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = HzSpace.M),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
     ) {
-        VoltIcon(name = iconName, fallback = fallback, size = 19.dp, tint = VoltIconMuted)
+        VoltIcon(name = iconName, fallback = fallback, size = 20.dp, tint = VoltIconMuted)
         Text(
             text = label,
-            fontSize = 14.sp,
+            fontSize = HzText.Section.sp,
             lineHeight = 18.sp,
             fontWeight = FontWeight.SemiBold,
             color = VoltTextMain,
@@ -383,7 +386,7 @@ private fun HzShortcut(label: String, hint: String?, iconName: String, fallback:
             Text(
                 text = hint,
                 fontFamily = HzFont.Mono,
-                fontSize = 11.sp,
+                fontSize = HzText.Caption.sp,
                 color = VoltMutedText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -488,7 +491,7 @@ internal fun VoltHomeLayer(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(hzContentInsets())
-            .padding(horizontal = 18.dp, vertical = 12.dp)
+            .padding(horizontal = HzSpace.L, vertical = HzSpace.M)
     ) {
         HzTag("NATIVE RUST", modifier = Modifier.align(Alignment.TopStart))
 
@@ -512,9 +515,9 @@ internal fun VoltHomeLayer(
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 36.dp),
+                .padding(top = HOME_CHIP_HEIGHT + HzSpace.S),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(HzSpace.XS)
         ) {
             HzShortcut("Mods", null, "ic_ui_mods", Icons.Default.Extension, 0) { onNavigate(LauncherNavTab.FILES) }
             HzShortcut("Shaders", null, "ic_ui_shaders", Icons.Default.WbSunny, 1) { onNavigate(LauncherNavTab.STORE) }
@@ -530,16 +533,16 @@ internal fun VoltHomeLayer(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .widthIn(max = 340.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(HzSpace.XS)
         ) {
             Crossfade(targetState = quote, animationSpec = tween(HzMotion.Medium), label = "HomeQuote") { q ->
                 if (q != null) {
                     Text(
                         text = "\u201C$q\u201D",
-                        fontSize = 10.sp,
-                        lineHeight = 12.sp,
+                        fontSize = HzText.Caption.sp,
+                        lineHeight = 14.sp,
                         fontStyle = FontStyle.Italic,
-                        color = Color.White.copy(alpha = 0.62f),
+                        color = Color.White.copy(alpha = 0.66f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.animatedPressScale(onClick = onQuoteTap)
@@ -549,8 +552,8 @@ internal fun VoltHomeLayer(
             Text(
                 text = "SELECTED VERSION",
                 fontFamily = HzFont.Mono,
-                fontSize = 11.sp,
-                lineHeight = 13.sp,
+                fontSize = HzText.Caption.sp,
+                lineHeight = 14.sp,
                 letterSpacing = 1.sp,
                 color = VoltMutedText,
                 maxLines = 1
@@ -563,18 +566,18 @@ internal fun VoltHomeLayer(
                 color = Color.White,
                 maxLines = 1
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
                 val dot = when {
-                    installStatus.ready -> Color(0xFF5FD068)
-                    installStatus.paused -> Color(0xFFFFB74D)
+                    installStatus.ready -> HzColor.Success
+                    installStatus.paused -> HzColor.Warning
                     installStatus.running -> accent
                     else -> VoltMutedText
                 }
                 Box(modifier = Modifier.size(6.dp).clip(HzShape.Chip).background(dot))
                 Text(
                     text = hzStatusLine(installStatus, playTime),
-                    fontSize = 13.sp,
-                    lineHeight = 17.sp,
+                    fontSize = HzText.Section.sp,
+                    lineHeight = 18.sp,
                     color = Color.White.copy(alpha = 0.86f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -586,17 +589,10 @@ internal fun VoltHomeLayer(
                     animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
                     label = "HomeBar"
                 )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .clip(HzShape.Chip)
-                        .background(Color.White.copy(alpha = 0.14f))
-                        .drawBehind { drawRect(color = accent, size = Size(size.width * bar, size.height)) }
-                )
+                HzProgressBar(progress = bar, color = accent)
             }
-            Spacer(Modifier.height(2.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(HzSpace.S))
+            Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
                 HzPlayButton(installStatus = installStatus, accent = accent, onLaunch = onLaunch)
                 HzGhostButton("Game files", "ic_ui_folder", Icons.Default.Folder) { onNavigate(LauncherNavTab.VERSIONS) }
             }
