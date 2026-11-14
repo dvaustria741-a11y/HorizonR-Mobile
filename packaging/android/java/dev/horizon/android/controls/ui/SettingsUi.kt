@@ -38,6 +38,8 @@ import dev.horizon.android.R
 import dev.horizon.android.controls.ControlLayouts
 import dev.horizon.android.controls.ControlSettings
 import java.io.File
+import dev.horizon.android.ui.theme.HzShape
+import dev.horizon.android.ui.theme.HzSpace
 
 enum class Change { LAYOUT, CONTROLS, MOUSE, RESOLUTION }
 
@@ -84,10 +86,10 @@ fun MouseSettings(settings: ControlSettings, onChange: (Change) -> Unit) {
             if (image.isEmpty()) stringResource(R.string.mouse_cursor_none)
             else stringResource(R.string.mouse_cursor_current, File(image).name)
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { picker.launch(arrayOf("image/*")) }) { Text(stringResource(R.string.mouse_cursor_choose)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+            Button(shape = HzShape.Control, onClick = { picker.launch(arrayOf("image/*")) }) { Text(stringResource(R.string.mouse_cursor_choose)) }
             if (image.isNotEmpty()) {
-                OutlinedButton(onClick = {
+                OutlinedButton(shape = HzShape.Control, onClick = {
                     settings.cursorImage = ""
                     image = ""
                     onChange(Change.MOUSE)
@@ -159,14 +161,14 @@ fun ResolutionSettings(settings: ControlSettings, onChange: (Change) -> Unit) {
     ControlsCard {
         CardTitle(stringResource(R.string.graphics_resolution))
         Hint(stringResource(R.string.graphics_screen, screenW, screenH))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !fixed, onClick = {
+        Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+            FilterChip(selected = !fixed, shape = HzShape.Control, onClick = {
                 fixed = false
                 settings.fixedResolution = false
                 version++
                 onChange(Change.RESOLUTION)
             }, label = { Text(stringResource(R.string.graphics_mode_percent)) })
-            FilterChip(selected = fixed, onClick = {
+            FilterChip(selected = fixed, shape = HzShape.Control, onClick = {
                 fixed = true
                 settings.fixedResolution = true
                 version++
@@ -175,7 +177,7 @@ fun ResolutionSettings(settings: ControlSettings, onChange: (Change) -> Unit) {
         }
         if (!fixed) {
             SettingSlider(stringResource(R.string.graphics_mode_percent), percent.toFloat(), 10f..100f, 1f, { "${it.toInt()}%" }) { applyPercent(it.toInt()) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
                 OutlinedTextField(
                     value = percentText,
                     onValueChange = { percentText = it.filter(Char::isDigit).take(3) },
@@ -185,10 +187,10 @@ fun ResolutionSettings(settings: ControlSettings, onChange: (Change) -> Unit) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { percentText.toIntOrNull()?.let(::applyPercent) })
                 )
-                Button(onClick = { percentText.toIntOrNull()?.let(::applyPercent) }) { Text(stringResource(R.string.graphics_apply)) }
+                Button(shape = HzShape.Control, onClick = { percentText.toIntOrNull()?.let(::applyPercent) }) { Text(stringResource(R.string.graphics_apply)) }
             }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
                 OutlinedTextField(
                     value = widthText,
                     onValueChange = { widthText = it.filter(Char::isDigit).take(4) },
@@ -207,7 +209,7 @@ fun ResolutionSettings(settings: ControlSettings, onChange: (Change) -> Unit) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { applyFixed() })
                 )
-                Button(onClick = { applyFixed() }) { Text(stringResource(R.string.graphics_apply)) }
+                Button(shape = HzShape.Control, onClick = { applyFixed() }) { Text(stringResource(R.string.graphics_apply)) }
             }
             Hint(stringResource(R.string.graphics_stretch))
         }

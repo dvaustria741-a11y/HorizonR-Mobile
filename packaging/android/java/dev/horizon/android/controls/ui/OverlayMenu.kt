@@ -53,6 +53,7 @@ import dev.horizon.android.ui.theme.HzColor
 import dev.horizon.android.ui.theme.HzMotion
 import dev.horizon.android.ui.theme.HzShape
 import kotlinx.coroutines.delay
+import dev.horizon.android.ui.theme.HzText
 
 /** The panel the menu handle opens in game: pause, edit the layout, switch layouts, quick sliders. */
 @Composable
@@ -198,7 +199,7 @@ private fun MenuRow(glyph: Glyph, label: String, index: Int, chevron: Boolean = 
             GlyphIcon(glyph, HzAccent, Modifier.size(15.dp))
         }
         Spacer(Modifier.width(10.dp))
-        Text(label, modifier = Modifier.weight(1f), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, modifier = Modifier.weight(1f), color = Color.White, fontSize = HzText.Section.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (chevron) GlyphIcon(Glyph.CHEVRON, HzMuted, Modifier.size(14.dp))
     }
 }
@@ -226,7 +227,7 @@ private fun LayoutRow(name: String, active: Boolean, index: Int, onClick: () -> 
             .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(name, modifier = Modifier.weight(1f), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(name, modifier = Modifier.weight(1f), color = Color.White, fontSize = HzText.Section.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (active) GlyphIcon(Glyph.CHECK, HzAccent, Modifier.size(15.dp))
     }
 }
@@ -245,6 +246,6 @@ private fun BackRow(onClick: () -> Unit) {
     ) {
         GlyphIcon(Glyph.BACK, HzAccent, Modifier.size(15.dp))
         Spacer(Modifier.width(4.dp))
-        Text(stringResource(R.string.menu_back), color = HzAccent, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(stringResource(R.string.menu_back), color = HzAccent, fontSize = HzText.Body.sp, fontWeight = FontWeight.Medium)
     }
 }
