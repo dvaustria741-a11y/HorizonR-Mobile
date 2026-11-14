@@ -9,7 +9,7 @@ import sys
 import zipfile
 
 ASSET_ROOT = "assets/jre25/"
-EXTRA = ("assets/probe.jar", "lib/arm64-v8a/libjvm_boot_spike.so", "assets/jre25/manifest.txt")
+EXTRA = ("assets/probe.jar", "lib/arm64-v8a/libjvm_boot_spike.so", "lib/arm64-v8a/libc++_shared.so", "assets/jre25/manifest.txt")
 
 
 def parse_manifest(text):
