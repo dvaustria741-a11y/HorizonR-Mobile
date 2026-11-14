@@ -6138,15 +6138,15 @@ private fun FileManagerRowCard(
     var expandedDetails by remember { mutableStateOf(false) }
 
     val isToggleable = folder in listOf("mods", "shaderpacks", "resourcepacks")
-    val borderColor = if (isToggleable && isEnabled) SkyBlueAccent.copy(alpha = 0.38f) else Color.Transparent
-    val cardColor = if (expandedDetails) SubRailCapsuleActive.copy(alpha = 0.55f) else CardRowBg
+    val borderColor = if (isToggleable && isEnabled) SkyBlueAccent.copy(alpha = 0.38f) else HzColor.Hairline
+    val cardColor = if (expandedDetails) HzColor.PanelHi else HzColor.Panel
 
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = HzShape.Panel,
         color = cardColor,
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+            .border(1.dp, borderColor, HzShape.Panel)
             .clickable { expandedDetails = !expandedDetails }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -6202,7 +6202,7 @@ private fun FileManagerRowCard(
                                         color = HzColor.Warning,
                                         modifier = Modifier.clickable {
                                             val targetItem = rowItem.storeCatalogMatch
-                                            Toast.makeText(context, "Mengupdate ${targetItem.title} ke v${targetItem.version}...", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Updating ${targetItem.title} to v${targetItem.version}...", Toast.LENGTH_SHORT).show()
                                             HorizonNativeBridge.downloadAndInstallStoreItem(
                                                 context = context,
                                                 item = targetItem,
@@ -6227,18 +6227,10 @@ private fun FileManagerRowCard(
                                         )
                                     }
                                 }
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = if (isEnabled) Color(0xFF1E3E29) else HzColor.DangerFill
-                                ) {
-                                    Text(
-                                        text = if (isEnabled) "ON" else "OFF",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = if (isEnabled) HzColor.Success else HzColor.Danger,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
+                                HzStatusPill(
+                                    text = if (isEnabled) "ON" else "OFF",
+                                    color = if (isEnabled) HzColor.Success else HzColor.Danger
+                                )
                             }
                             "saves" -> {
                                 LavenderTagBadge(text = "26.3")
@@ -6247,18 +6239,7 @@ private fun FileManagerRowCard(
                             "resourcepacks", "shaderpacks" -> {
                                 LavenderTagBadge(text = "26.3")
                                 if (isEnabled) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = Color(0xFF1E3E29)
-                                    ) {
-                                        Text(
-                                            text = "ACTIVE",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = HzColor.Success,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
+                                    HzStatusPill(text = "ACTIVE", color = HzColor.Success)
                                 }
                             }
                         }
