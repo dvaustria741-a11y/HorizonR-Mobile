@@ -13,9 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: cloudflare/wrangler-action@v3
+      - uses: actions/setup-node@v4
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: cloud/worker
-          command: deploy
+          node-version: 22
+      - name: Deploy with wrangler
+        working-directory: cloud/worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +e
+          npx --yes wrangler@4 deploy 2>&1 | tee /tmp/wrangler.out
+          code=${PIPESTATUS[0]}
+          # Show the result in the run's annotations (also readable without the raw log).
+          summary=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/wrangler.out | grep -v '^$' | tail -15 | tr '\n' '|' | cut -c1-900)
+          if [ "$code" -ne 0 ]; then echo "::error title=wrangler failed::$summary"; else echo "::notice title=wrangler ok::$summary"; fi
+          exit "$code"
