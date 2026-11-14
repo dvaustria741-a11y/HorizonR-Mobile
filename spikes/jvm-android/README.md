@@ -41,7 +41,7 @@ Start a build by bumping the number in `run.json` and pushing to `jvm-mod-runtim
   Each is a possible failure on the first tap; the screen then shows the error, the JVM's stdout/stderr and logcat lines
   (whether logcat is readable by a normal app on this phone is also unverified).
 - Heap 128 MiB, an 8 MiB creating thread and default GC flags are untuned choices.
-- `targetSdk 28` was chosen to avoid the exec restrictions of newer targets; Zalith's own target is not checked.
+- `targetSdk` was 28 in builds 7 to 13, chosen to avoid the exec restrictions of newer targets; build 14 targets 35 (like the launcher) to see whether the JVM still boots from filesDir. Zalith's own target is not checked.
 
 ## Not verified for the server run (written after builds 7 to 9 were run on the phone)
 

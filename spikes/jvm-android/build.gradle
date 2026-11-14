@@ -12,10 +12,10 @@ android {
     defaultConfig {
         applicationId 'dev.horizonr.jvmprobe'
         minSdk 28
-        // 28 on purpose: Android 10+ blocks executing files from the app's data directory for apps that target 29
-        // or higher. I do not know whether that also affects dlopen of libjvm.so from there, so this removes the
-        // question for the measurement. Android 14 refuses to install apps that target below 23 only.
-        targetSdk 28
+        // Build 14 targets 35, like packaging/android (the launcher): Android 10+ blocks executing files from the app's
+        // data directory for apps that target 29 or higher, and whether that stops dlopen of libjvm.so from filesDir is
+        // the open question. Builds 7 to 13 targeted 28 and booted the JVM; this build shows what 35 does on the phone.
+        targetSdk 35
         versionCode 1
         versionName '0.0.1-probe'
         ndk {

@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Required once the app targets 34 or higher; the JVM service is a long-running diagnostic task. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- The server run downloads the Fabric launcher and one mod; the Fabric launcher downloads Mojang's server files. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Export logs: this app targets 28, so this permission is the runtime prompt for a folder on the phone's storage. -->
@@ -25,6 +27,11 @@
         <service
             android:name=".JvmService"
             android:exported="false"
-            android:process=":jvm" />
+            android:foregroundServiceType="specialUse"
+            android:process=":jvm">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Runs a JVM measurement and a local Minecraft server for testing" />
+        </service>
     </application>
 </manifest>
