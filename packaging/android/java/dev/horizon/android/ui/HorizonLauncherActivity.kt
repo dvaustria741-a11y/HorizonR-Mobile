@@ -96,6 +96,7 @@ import dev.horizon.android.ui.theme.HzFont
 import dev.horizon.android.ui.theme.HzMotion
 import dev.horizon.android.ui.theme.HzShape
 import dev.horizon.android.ui.theme.HzSpace
+import dev.horizon.android.ui.theme.HzText
 import dev.horizon.android.HorizonActivity
 import dev.horizon.android.bridge.*
 import dev.horizon.android.model.*
@@ -3763,9 +3764,9 @@ private fun StoreTranslatorSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = CardSlateBg,
-        border = BorderStroke(1.dp, VoltGrayStroke),
+        shape = HzShape.Panel,
+        color = HzColor.Panel,
+        border = BorderStroke(1.dp, HzColor.Hairline),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -3773,12 +3774,12 @@ private fun StoreTranslatorSelector(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = HzSpace.M, vertical = HzSpace.M),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Translator", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text("Translator", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                     LavenderTagBadge(text = selected.label)
                 }
                 Icon(
@@ -3790,19 +3791,19 @@ private fun StoreTranslatorSelector(
             }
             AnimatedVisibility(visible = expanded) {
                 Column(
-                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                    modifier = Modifier.padding(start = HzSpace.S, end = HzSpace.S, bottom = HzSpace.S),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     ShaderTranslator.entries.forEach { option ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(HzShape.Control)
                                 .clickable {
                                     onSelect(option)
                                     expanded = false
                                 }
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                                .padding(horizontal = HzSpace.S, vertical = HzSpace.XS),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
@@ -3816,8 +3817,8 @@ private fun StoreTranslatorSelector(
                             )
                             Spacer(Modifier.width(6.dp))
                             Column {
-                                Text(option.label, fontSize = 11.sp, color = Color.White)
-                                Text(option.summary, fontSize = 9.sp, color = Color.White.copy(alpha = 0.6f))
+                                Text(option.label, fontSize = HzText.Body.sp, color = Color.White)
+                                Text(option.summary, fontSize = HzText.Micro.sp, color = Color.White.copy(alpha = 0.66f))
                             }
                         }
                     }
@@ -3834,9 +3835,9 @@ private fun StoreSourceSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = CardSlateBg,
-        border = BorderStroke(1.dp, VoltGrayStroke),
+        shape = HzShape.Panel,
+        color = HzColor.Panel,
+        border = BorderStroke(1.dp, HzColor.Hairline),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -3844,12 +3845,12 @@ private fun StoreSourceSelector(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = HzSpace.M, vertical = HzSpace.M),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Source", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text("Source", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                     LavenderTagBadge(text = selected.label)
                 }
                 Icon(
@@ -3861,19 +3862,19 @@ private fun StoreSourceSelector(
             }
             AnimatedVisibility(visible = expanded) {
                 Column(
-                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                    modifier = Modifier.padding(start = HzSpace.S, end = HzSpace.S, bottom = HzSpace.S),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     StoreSource.entries.forEach { src ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(HzShape.Control)
                                 .clickable {
                                     onSelect(src)
                                     expanded = false
                                 }
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                                .padding(horizontal = HzSpace.S, vertical = HzSpace.XS),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
@@ -3886,7 +3887,7 @@ private fun StoreSourceSelector(
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text(src.label, fontSize = 11.sp, color = Color.White)
+                            Text(src.label, fontSize = HzText.Body.sp, color = Color.White)
                         }
                     }
                 }
@@ -4491,7 +4492,7 @@ private fun CleanStoreViewport(
                             .width(232.dp)
                             .fillMaxHeight()
                             .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(HzSpace.S)
                     ) {
                         StoreSourceSelector(
                             selected = selectedSource,
@@ -4539,9 +4540,9 @@ private fun CleanStoreViewport(
 
                         if (selectedCategory == StoreCategory.MODPACK) {
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = CardSlateBg,
-                                border = BorderStroke(1.dp, VoltGrayStroke),
+                                shape = HzShape.Control,
+                                color = HzColor.Panel,
+                                border = BorderStroke(1.dp, HzColor.Hairline),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .animatedPressScale { modpackImportPicker.launch("*/*") }
@@ -4549,22 +4550,22 @@ private fun CleanStoreViewport(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 10.dp, horizontal = 12.dp),
+                                        .padding(vertical = HzSpace.M, horizontal = HzSpace.M),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(16.dp))
                                     Spacer(Modifier.width(5.dp))
-                                    Text("Import .hpack Modpack", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    Text("Import .hpack Modpack", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                                 }
                             }
                         }
 
                         // Sort By Accordion (`Most downloaded`, `Best rated`, `Recently updated`, `Name (A-Z)` — matching 429816.jpg!)
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
+                            shape = HzShape.Panel,
+                            color = HzColor.Panel,
+                            border = BorderStroke(1.dp, HzColor.Hairline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.fillMaxWidth()) {
@@ -4572,12 +4573,12 @@ private fun CleanStoreViewport(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { expandSortBy = !expandSortBy }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        .padding(horizontal = HzSpace.M, vertical = HzSpace.M),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text("Sort By", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                        Text("Sort By", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                                         LavenderTagBadge(text = sortOption.label)
                                     }
                                     Icon(
@@ -4589,20 +4590,20 @@ private fun CleanStoreViewport(
                                 }
                                 AnimatedVisibility(visible = expandSortBy) {
                                     Column(
-                                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                                        modifier = Modifier.padding(start = HzSpace.S, end = HzSpace.S, bottom = HzSpace.S),
                                         verticalArrangement = Arrangement.spacedBy(2.dp)
                                     ) {
                                         StoreSortOption.entries.forEach { opt ->
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clip(HzShape.Control)
                                                     .clickable {
                                                         sortOption = opt
                                                         currentPage = 1
                                                         expandSortBy = false
                                                     }
-                                                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                                                    .padding(horizontal = HzSpace.S, vertical = HzSpace.XS),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 RadioButton(
@@ -4616,7 +4617,7 @@ private fun CleanStoreViewport(
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                                 Spacer(Modifier.width(6.dp))
-                                                Text(opt.label, fontSize = 11.sp, color = Color.White)
+                                                Text(opt.label, fontSize = HzText.Body.sp, color = Color.White)
                                             }
                                         }
                                     }
@@ -4626,9 +4627,9 @@ private fun CleanStoreViewport(
 
                         // Status Filter Accordion (`All Projects`, `Installed Only`, `Updates Available`, `Official & Signed`)
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
+                            shape = HzShape.Panel,
+                            color = HzColor.Panel,
+                            border = BorderStroke(1.dp, HzColor.Hairline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.fillMaxWidth()) {
@@ -4636,12 +4637,12 @@ private fun CleanStoreViewport(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { expandStatus = !expandStatus }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        .padding(horizontal = HzSpace.M, vertical = HzSpace.M),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text("Filter Status", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                        Text("Filter Status", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                                         LavenderTagBadge(text = statusFilter.label)
                                     }
                                     Icon(
@@ -4653,20 +4654,20 @@ private fun CleanStoreViewport(
                                 }
                                 AnimatedVisibility(visible = expandStatus) {
                                     Column(
-                                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                                        modifier = Modifier.padding(start = HzSpace.S, end = HzSpace.S, bottom = HzSpace.S),
                                         verticalArrangement = Arrangement.spacedBy(2.dp)
                                     ) {
                                         StoreStatusFilter.entries.forEach { st ->
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clip(HzShape.Control)
                                                     .clickable {
                                                         statusFilter = st
                                                         currentPage = 1
                                                         expandStatus = false
                                                     }
-                                                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                                                    .padding(horizontal = HzSpace.S, vertical = HzSpace.XS),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 RadioButton(
@@ -4680,7 +4681,7 @@ private fun CleanStoreViewport(
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                                 Spacer(Modifier.width(6.dp))
-                                                Text(st.label, fontSize = 11.sp, color = Color.White)
+                                                Text(st.label, fontSize = HzText.Body.sp, color = Color.White)
                                             }
                                         }
                                     }
@@ -4690,33 +4691,33 @@ private fun CleanStoreViewport(
 
                         // Official playhorizon.dev/mods Portal Actions (`Submit yours` & `Make a mod` from 429816.jpg!)
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
+                            shape = HzShape.Panel,
+                            color = HzColor.Panel,
+                            border = BorderStroke(1.dp, HzColor.Hairline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(7.dp)
+                                modifier = Modifier.padding(HzSpace.M),
+                                verticalArrangement = Arrangement.spacedBy(HzSpace.S)
                             ) {
                                 Text(
                                     text = "Horizon Mods Portal",
-                                    fontSize = 12.sp,
+                                    fontSize = HzText.Section.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
                                 Text(
                                     text = "Reviewed mods, native mods, modpacks, resource packs & WGSL shaders for Horizon 26.3.",
-                                    fontSize = 12.sp,
+                                    fontSize = HzText.Body.sp,
                                     color = MutedSubtitleText,
-                                    lineHeight = 13.sp
+                                    lineHeight = 16.sp
                                 )
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = HzShape.Control,
                                         color = Color(0xFF5E5CE6),
                                         modifier = Modifier
                                             .weight(1f)
@@ -4728,16 +4729,16 @@ private fun CleanStoreViewport(
                                     ) {
                                         Text(
                                             text = "Submit yours",
-                                            fontSize = 12.sp,
+                                            fontSize = HzText.Body.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
                                             textAlign = TextAlign.Center,
                                             maxLines = 1,
-                                            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp)
+                                            modifier = Modifier.padding(vertical = HzSpace.M, horizontal = HzSpace.XS)
                                         )
                                     }
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = HzShape.Control,
                                         color = CardRowBg,
                                         modifier = Modifier
                                             .weight(1f)
@@ -4749,12 +4750,12 @@ private fun CleanStoreViewport(
                                     ) {
                                         Text(
                                             text = "Make a mod",
-                                            fontSize = 12.sp,
+                                            fontSize = HzText.Body.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
                                             textAlign = TextAlign.Center,
                                             maxLines = 1,
-                                            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp)
+                                            modifier = Modifier.padding(vertical = HzSpace.M, horizontal = HzSpace.XS)
                                         )
                                     }
                                 }
@@ -4769,12 +4770,12 @@ private fun CleanStoreViewport(
                 val detailInstallState = HorizonNativeBridge.getStoreItemInstallState(detailProj, installedMap)
                 Row(
                     modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(HzSpace.M)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = CardSlateBg,
-                        border = BorderStroke(1.dp, VoltGrayStroke),
+                        shape = HzShape.Panel,
+                        color = HzColor.Panel,
+                        border = BorderStroke(1.dp, HzColor.Hairline),
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -4782,8 +4783,8 @@ private fun CleanStoreViewport(
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                .padding(HzSpace.M),
+                            verticalArrangement = Arrangement.spacedBy(HzSpace.M)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -4791,12 +4792,12 @@ private fun CleanStoreViewport(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = HzShape.Control,
                                     color = CardRowBg,
                                     modifier = Modifier.animatedPressScale { selectedProject = null }
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                        modifier = Modifier.padding(horizontal = HzSpace.M, vertical = HzSpace.S),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
@@ -4806,12 +4807,12 @@ private fun CleanStoreViewport(
                                 }
 
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = HzShape.Control,
                                     color = if (showOnlyMcReleases) SubRailCapsuleActive else CardRowBg,
                                     modifier = Modifier.animatedPressScale { showOnlyMcReleases = !showOnlyMcReleases }
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                        modifier = Modifier.padding(horizontal = HzSpace.M, vertical = HzSpace.S),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                                     ) {
@@ -4831,7 +4832,7 @@ private fun CleanStoreViewport(
                                 }
 
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = HzShape.Control,
                                     color = CardRowBg,
                                     modifier = Modifier
                                         .weight(1f)
@@ -4892,7 +4893,7 @@ private fun CleanStoreViewport(
                                             val isExpanded = mcVer in expandedMcVerGroups
                                             val isRecommended = mcVer.contains("26.3")
                                             Surface(
-                                                shape = RoundedCornerShape(6.dp),
+                                                shape = HzShape.Control,
                                                 color = CardRowBg,
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
@@ -4904,7 +4905,7 @@ private fun CleanStoreViewport(
                                                                 expandedMcVerGroups = if (isExpanded) expandedMcVerGroups - mcVer
                                                                 else expandedMcVerGroups + mcVer
                                                             }
-                                                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                                                            .padding(horizontal = HzSpace.L, vertical = HzSpace.M),
                                                         horizontalArrangement = Arrangement.SpaceBetween,
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
@@ -4952,8 +4953,8 @@ private fun CleanStoreViewport(
                                                                     ?: installedMap[HorizonNativeBridge.sanitizeModId(detailProj.id)]
                                                                 val isThisExactVerInstalled = installedVerForProj != null && installedVerForProj == rel.versionNumber
                                                                 Surface(
-                                                                    shape = RoundedCornerShape(8.dp),
-                                                                    color = Color(0xFF1B2125),
+                                                                    shape = HzShape.Control,
+                                                                    color = HzColor.PanelLow,
                                                                     modifier = Modifier
                                                                         .fillMaxWidth()
                                                                         .animatedPressScale(enabled = !isDownloadingThis) {
@@ -4997,13 +4998,13 @@ private fun CleanStoreViewport(
                                                                                 modifier = Modifier
                                                                                     .size(28.dp)
                                                                                     .clip(CircleShape)
-                                                                                    .background(Color(0xFF1E4628))
+                                                                                    .background(HzColor.Success.copy(alpha = 0.18f))
                                                                             ) {
                                                                                 Text(
                                                                                     text = "R",
                                                                                     fontSize = 12.sp,
                                                                                     fontWeight = FontWeight.ExtraBold,
-                                                                                    color = Color(0xFF4CAF50)
+                                                                                    color = HzColor.Success
                                                                                 )
                                                                             }
 
@@ -5026,10 +5027,10 @@ private fun CleanStoreViewport(
                                                                         }
 
                                                                         Surface(
-                                                                            shape = RoundedCornerShape(8.dp),
+                                                                            shape = HzShape.Control,
                                                                             color = when {
-                                                                                isThisExactVerInstalled -> Color(0xFF1E3E29)
-                                                                                installedVerForProj != null -> Color(0xFF3E3117)
+                                                                                isThisExactVerInstalled -> HzColor.Success.copy(alpha = 0.18f)
+                                                                                installedVerForProj != null -> HzColor.Warning.copy(alpha = 0.18f)
                                                                                 else -> SkyBlueAccent
                                                                             }
                                                                         ) {
@@ -5043,10 +5044,10 @@ private fun CleanStoreViewport(
                                                                                 fontWeight = FontWeight.Bold,
                                                                                 color = when {
                                                                                     isThisExactVerInstalled -> HzColor.Success
-                                                                                    installedVerForProj != null -> Color(0xFFFFD54F)
+                                                                                    installedVerForProj != null -> HzColor.Warning
                                                                                     else -> SkyBlueDarkText
                                                                                 },
-                                                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                                                                modifier = Modifier.padding(horizontal = HzSpace.M, vertical = HzSpace.S)
                                                                             )
                                                                         }
                                                                     }
@@ -5066,9 +5067,9 @@ private fun CleanStoreViewport(
                     // Right Project Summary Card (fixed layout so Favorite pill never wraps vertically!)
                     val isFav = detailProj.id in favoriteIds
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = CardSlateBg,
-                        border = BorderStroke(1.dp, VoltGrayStroke),
+                        shape = HzShape.Panel,
+                        color = HzColor.Panel,
+                        border = BorderStroke(1.dp, HzColor.Hairline),
                         modifier = Modifier
                             .width(268.dp)
                             .fillMaxHeight()
@@ -5076,10 +5077,10 @@ private fun CleanStoreViewport(
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(14.dp)
+                                .padding(HzSpace.L)
                                 .verticalScroll(rememberScrollState()),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(9.dp)
+                            verticalArrangement = Arrangement.spacedBy(HzSpace.M)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -5094,27 +5095,27 @@ private fun CleanStoreViewport(
 
                                 Surface(
                                     shape = RoundedCornerShape(50),
-                                    color = if (isFav) Color(0xFF3A2329) else CardRowBg,
+                                    color = if (isFav) HzColor.DangerFill else CardRowBg,
                                     modifier = Modifier.animatedPressScale {
                                         favoriteIds = HorizonNativeBridge.toggleProjectFavorite(context, detailProj.id)
                                     }
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        modifier = Modifier.padding(horizontal = HzSpace.M, vertical = HzSpace.S),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Icon(
                                             imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                             contentDescription = "Favorite",
-                                            tint = if (isFav) Color(0xFFFF6E6E) else Color.White,
+                                            tint = if (isFav) HzColor.Danger else Color.White,
                                             modifier = Modifier.size(13.dp)
                                         )
                                         Text(
                                             text = if (isFav) "Favorited" else "Favorite",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = if (isFav) Color(0xFFFFB4B4) else Color.White,
+                                            color = if (isFav) HzColor.Danger else Color.White,
                                             maxLines = 1,
                                             softWrap = false
                                         )
@@ -5151,15 +5152,15 @@ private fun CleanStoreViewport(
 
                             Text(
                                 text = detailProj.summary,
-                                fontSize = 11.sp,
-                                color = Color(0xFFD0D8DE),
-                                lineHeight = 15.sp
+                                fontSize = HzText.Body.sp,
+                                color = VoltIconMuted,
+                                lineHeight = 17.sp
                             )
 
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = HzShape.Control,
                                 color = when (detailInstallState) {
-                                    StoreInstallState.INSTALLED -> Color(0xFF1E3E29)
+                                    StoreInstallState.INSTALLED -> HzColor.Success.copy(alpha = 0.18f)
                                     StoreInstallState.UPDATE_AVAILABLE -> HzColor.Warning
                                     StoreInstallState.NOT_INSTALLED -> SkyBlueAccent
                                 },
@@ -5182,7 +5183,7 @@ private fun CleanStoreViewport(
                                     }
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    modifier = Modifier.padding(vertical = HzSpace.M),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -5220,7 +5221,7 @@ private fun CleanStoreViewport(
 
                             if (detailInstallState == StoreInstallState.INSTALLED || detailInstallState == StoreInstallState.UPDATE_AVAILABLE) {
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = HzShape.Control,
                                     color = HzColor.DangerFill,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -5230,7 +5231,7 @@ private fun CleanStoreViewport(
                                         }
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(vertical = 8.dp),
+                                        modifier = Modifier.padding(vertical = HzSpace.M),
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -5247,7 +5248,7 @@ private fun CleanStoreViewport(
                             ) {
                                 Text(
                                     text = "Related Links",
-                                    fontSize = 12.sp,
+                                    fontSize = HzText.Section.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
@@ -5265,8 +5266,8 @@ private fun CleanStoreViewport(
                                             }
                                             .padding(vertical = 2.dp)
                                     ) {
-                                        Icon(Icons.Default.Language, contentDescription = null, tint = Color(0xFFD5DEE5), modifier = Modifier.size(15.dp))
-                                        Text("playhorizon.dev Page", fontSize = 11.sp, color = Color(0xFFD5DEE5))
+                                        Icon(Icons.Default.Language, contentDescription = null, tint = VoltIconMuted, modifier = Modifier.size(15.dp))
+                                        Text("playhorizon.dev Page", fontSize = HzText.Body.sp, color = VoltIconMuted)
                                     }
                                 }
 
@@ -5283,8 +5284,8 @@ private fun CleanStoreViewport(
                                             }
                                             .padding(vertical = 2.dp)
                                     ) {
-                                        Icon(Icons.Default.Code, contentDescription = null, tint = Color(0xFFD5DEE5), modifier = Modifier.size(15.dp))
-                                        Text("View Source Code", fontSize = 11.sp, color = Color(0xFFD5DEE5))
+                                        Icon(Icons.Default.Code, contentDescription = null, tint = VoltIconMuted, modifier = Modifier.size(15.dp))
+                                        Text("View Source Code", fontSize = HzText.Body.sp, color = VoltIconMuted)
                                     }
                                 }
                             }
