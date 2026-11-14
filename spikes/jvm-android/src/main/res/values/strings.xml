@@ -46,4 +46,6 @@
     <string name="logcat_header">Logcat (last matching lines)</string>
     <string name="hserr_header">HotSpot crash report (head)</string>
     <string name="xlog_header">JVM log (last lines)</string>
+    <string name="crash_header">Last Java crash (this app)</string>
+    <string name="exit_header">Why Android says the processes ended (newest first)</string>
 </resources>

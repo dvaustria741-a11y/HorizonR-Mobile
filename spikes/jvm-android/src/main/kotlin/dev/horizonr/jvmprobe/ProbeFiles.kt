@@ -1,14 +1,23 @@
 package dev.horizonr.jvmprobe
 
+import android.app.ActivityManager
+import android.app.Application
+import android.app.ApplicationExitInfo
 import android.content.Context
+import android.os.Build
 import android.os.Process
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The two processes of this app talk through plain files in one directory, because the `:jvm` process can die
  * inside the JVM and a file still holds what it wrote before.
  */
 object ProbeFiles {
+    const val LAST_CRASH = "last_crash.txt"
     const val STAGE = "stage.txt"
     const val NATIVE = "native.txt"
     const val PROBE_OUT = "probe_out.txt"
@@ -77,6 +86,77 @@ object ProbeFiles {
         return runCatching { file.name + "\n" + file.readLines().take(lines).joinToString("\n") }.getOrDefault("")
     }
 
+    /** Writes the stack of an uncaught Java exception to `filesDir/last_crash.txt` (either process), then lets Android continue. */
+    fun installCrashRecorder(context: Context) {
+        val file = File(context.filesDir, LAST_CRASH)
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                file.writeText("process=${Application.getProcessName()} thread=${thread.name}\n" + error.stackTraceToString().take(4000))
+            }
+            previous?.uncaughtException(thread, error)
+        }
+    }
+
+    private fun reasonName(reason: Int): String = when (reason) {
+        ApplicationExitInfo.REASON_ANR -> "ANR"
+        ApplicationExitInfo.REASON_CRASH -> "CRASH"
+        ApplicationExitInfo.REASON_CRASH_NATIVE -> "CRASH_NATIVE"
+        ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "DEPENDENCY_DIED"
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "EXCESSIVE_RESOURCE_USAGE"
+        ApplicationExitInfo.REASON_EXIT_SELF -> "EXIT_SELF"
+        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "INITIALIZATION_FAILURE"
+        ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+        ApplicationExitInfo.REASON_OTHER -> "OTHER"
+        ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "PERMISSION_CHANGE"
+        ApplicationExitInfo.REASON_SIGNALED -> "SIGNALED"
+        ApplicationExitInfo.REASON_UNKNOWN -> "UNKNOWN"
+        ApplicationExitInfo.REASON_USER_REQUESTED -> "USER_REQUESTED"
+        else -> "reason_$reason"
+    }
+
+    /** Readable runs of the native-crash trace (a tombstone); empty when the system kept none. */
+    private fun nativeTraceStrings(info: ApplicationExitInfo): String = runCatching {
+        val out = ByteArrayOutputStream()
+        info.traceInputStream?.use { stream ->
+            val buffer = ByteArray(8192)
+            while (out.size() < 262144) {
+                val n = stream.read(buffer)
+                if (n < 0) break
+                out.write(buffer, 0, n)
+            }
+        }
+        val runs = ArrayList<String>()
+        val current = StringBuilder()
+        for (b in out.toByteArray()) {
+            if (b in 0x20..0x7e) {
+                current.append(b.toInt().toChar())
+            } else {
+                if (current.length >= 6) runs.add(current.toString())
+                current.setLength(0)
+            }
+        }
+        if (current.length >= 6) runs.add(current.toString())
+        val wanted = Regex("lib|SIG|sig|abort|Java|jvm|hs_err|\\.so")
+        runs.filter { wanted.containsMatchIn(it) }.distinct().take(25).joinToString("\n") { "  " + it.take(120) }
+    }.getOrDefault("")
+
+    /** Why Android says this app's recent processes ended (API 30+); the `:jvm` process shows up here even when it left no file. */
+    fun exitInfoTail(context: Context, count: Int): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return ""
+        return runCatching {
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val clock = SimpleDateFormat("HH:mm:ss", Locale.ROOT)
+            manager.getHistoricalProcessExitReasons(context.packageName, 0, count).joinToString("\n") { info ->
+                val head = "${clock.format(Date(info.timestamp))} pid=${info.pid} ${info.processName} " +
+                    "reason=${reasonName(info.reason)}(${info.reason}) status=${info.status} " +
+                    "importance=${info.importance} rssKiB=${info.rss} desc=${info.description ?: "none"}"
+                val trace = if (info.reason == ApplicationExitInfo.REASON_CRASH_NATIVE) nativeTraceStrings(info) else ""
+                if (trace.isEmpty()) head else head + "\n" + trace
+            }
+        }.getOrDefault("")
+    }
+
     fun reset(dir: File) {
         dir.listFiles()?.forEach { it.delete() }
     }
@@ -86,7 +166,7 @@ object ProbeFiles {
 
     /** Own-app log lines about a crash. Whether a normal app may read them on this device is unverified. */
     fun logcatTail(lines: Int): String = runCatching {
-        val process = ProcessBuilder("logcat", "-d", "-t", "400").redirectErrorStream(true).start()
+        val process = ProcessBuilder("logcat", "-d", "-t", "1500").redirectErrorStream(true).start()
         val keep = Regex("(?i)fatal|signal|abort|sigsegv|dlopen|linker|libjvm|libjli|jvmprobe|dev\\.horizonr|DEBUG|tombstone|backtrace|hs_err|\\*\\*\\*|libc ")
         val text = process.inputStream.bufferedReader().readLines().filter { keep.containsMatchIn(it) }
         process.destroy()

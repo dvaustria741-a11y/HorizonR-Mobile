@@ -13,6 +13,11 @@ import java.io.File
  */
 class JvmService : Service() {
 
+    override fun onCreate() {
+        super.onCreate()
+        ProbeFiles.installCrashRecorder(applicationContext)
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

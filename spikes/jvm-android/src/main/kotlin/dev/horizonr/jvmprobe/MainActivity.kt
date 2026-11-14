@@ -28,6 +28,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ProbeFiles.installCrashRecorder(applicationContext)
         val pad = (16 * resources.displayMetrics.density).toInt()
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -65,6 +66,7 @@ class MainActivity : Activity() {
 
     private fun start(mode: Int) {
         val dir = ProbeFiles.dir(this)
+        File(filesDir, ProbeFiles.LAST_CRASH).delete()
         ProbeFiles.killStaleJvm(dir)
         ProbeFiles.reset(dir)
         ProbeFiles.writeKeyValues(File(dir, ProbeFiles.STAGE), mapOf("pid" to "0", "stage" to "starting", "mode" to mode.toString()))
@@ -97,7 +99,8 @@ class MainActivity : Activity() {
             name == "done" -> State.DONE
             name == "error" -> State.ERROR
             // The service has not written its pid yet: give it a few seconds before calling the process dead.
-            pid == 0 -> if (System.currentTimeMillis() - startedAtMs < 5000 || startedAtMs == 0L) State.RUNNING else State.DIED
+            // startedAtMs is 0 in a freshly launched UI process, so a stage left at "starting" there means the old run is gone.
+            pid == 0 -> if (startedAtMs != 0L && System.currentTimeMillis() - startedAtMs < 5000) State.RUNNING else State.DIED
             ProbeFiles.isJvmProcess(pid) -> State.RUNNING
             else -> State.DIED
         }
@@ -107,7 +110,8 @@ class MainActivity : Activity() {
         val dir = ProbeFiles.dir(this)
         val stage = ProbeFiles.readKeyValues(File(dir, ProbeFiles.STAGE))
         val state = state(stage)
-        output.text = buildReport(dir, stage, state)
+        output.text = runCatching { buildReport(dir, stage, state) }
+            .getOrElse { "report failed: " + it.stackTraceToString().take(1500) }
         return state
     }
 
@@ -125,6 +129,9 @@ class MainActivity : Activity() {
         out.append(line(R.string.ram_label, getString(R.string.ram_value, ProbeFiles.mib(memory.totalMem), ProbeFiles.mib(memory.availMem))))
         val uiRss = ProbeFiles.ownRssKib()
         out.append(line(R.string.ui_rss_label, uiRss?.let { getString(R.string.mib_value, ProbeFiles.mibFromKib(it)) } ?: unknown))
+
+        val crash = runCatching { File(filesDir, ProbeFiles.LAST_CRASH).takeIf { it.isFile }?.readLines()?.take(25)?.joinToString("\n") }.getOrNull()
+        if (crash != null) out.append('\n').append(getString(R.string.crash_header)).append('\n').append(crash).append('\n')
 
         if (state == State.IDLE) {
             out.append('\n').append(getString(R.string.hint_idle)).append('\n')
@@ -171,6 +178,8 @@ class MainActivity : Activity() {
         if (state == State.DIED || state == State.ERROR || merged["error"] != null) {
             val stdio = ProbeFiles.tail(File(dir, ProbeFiles.STDIO), 15)
             if (stdio.isNotEmpty()) out.append('\n').append(getString(R.string.stdio_header)).append('\n').append(stdio).append('\n')
+            val exits = ProbeFiles.exitInfoTail(this, 4)
+            if (exits.isNotEmpty()) out.append('\n').append(getString(R.string.exit_header)).append('\n').append(exits).append('\n')
             val hsErr = ProbeFiles.hsErrHead(dir, 30)
             if (hsErr.isNotEmpty()) out.append('\n').append(getString(R.string.hserr_header)).append('\n').append(hsErr).append('\n')
             val xlog = ProbeFiles.tail(File(dir, "jvm_xlog.txt"), 12)
