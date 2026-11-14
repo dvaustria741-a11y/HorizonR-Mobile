@@ -28,6 +28,14 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
   (`libc.so.6` not found); non-fatal, the server still reaches Done. SIGTERM ends the JVM with status 143, but no
   "Stopping server" line appears in `latest.log`: a clean stop is not shown yet (build 13 sends `stop` on stdin instead).
   Not done: a Horizon client joining this server; how long Android keeps a busy `:jvm` alive in the background.
+- Step 2 on the phone, build 14 run (user-uploaded probe files, 2026-11-14 21:25 device time; I read them, did not run
+  them): APK 63.0 MiB (66,045,221 bytes); runtime copy 291 files, 158.8 MiB in 840 ms; device RAM 7432.1 MiB total,
+  3081.5 MiB available; UI process RSS 49.0 MiB. Server `Done` 14.709 s in the log, 79.7 s from service start. RSS 10 s
+  after Done 657.3 MiB, peak 663.4 MiB, 58 threads, G1, -Xmx1024m, 5 CPUs available. Status ping 901 ms: version 26.3,
+  protocol 777. Mod list in the log: clumps 26.3.2, fabricloader 0.20.1 (mixinextras 0.5.5), java 25, minecraft 26.3.
+  The `stop` console command now ends cleanly: "Stopping server" and the saves are in the log, JLI_Launch returned
+  exit code 0 after 89.1 s. The app's verdict line printed "FAIL or not finished" even though Done was reached; I infer
+  it is the ERROR line from the JNA failure above (the app source was not checked). Same JNA/`libc.so.6` error as before.
 - Step 3 (sample): `spikes/mod-api-scan`. AppleSkin 3.0.10 55 classes/68 methods/19 fields, Clumps 26.3.2
   13/21/2, Xaero's Minimap 26.6.2 353/566/155 (+ nested xaerolib 137/250/31). Union of the three: 385 classes,
   634 methods, 169 fields. Mixin shapes seen: Inject, ModifyVariable, ModifyArg, ModifyReturnValue, Accessor, Shadow.
@@ -49,13 +57,14 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
 - The Fabric launcher URL in `spikes/jvm-server-smoke/run_smoke.sh` is right (it worked in run #1).
 
 ## Missing
-- Any on-device number: APK size with a runtime, RAM, JVM start time.
-- Which Android Java 25 build Horizon should ship (own build vs download). Licence of the final choice.
-- A facade design; whether it is realistic is the decision after Steps 1 to 3.
+- A Horizon client joining the phone's server (Multiplayer screen or the `connect` agent command, per docs/agent-control.md).
+  Memory with the game running next to a ~660 MiB server on a 7.4 GiB phone (about 3 GiB available) is unmeasured.
+- Whether any Clumps mixin applied (the log does not say), and mods that use JNA or other glibc natives.
+- How long Android keeps a busy `:jvm` process alive in the background.
+- Which Android Java 25 build Horizon should ship (own build vs download) and its licence. The probe still uses
+  Zalith's tarballs downloaded at build time.
+- A facade design for client-side mods. Server-side Fabric mods need none: the real Mojang server runs on the JVM.
 
-## Next step (decided)
-Step 1 on the phone. Written, not built and not run: `.github/workflows/jvm-android-probe.yml` builds the test APK in
-`spikes/jvm-android` (details and the unverified list in its README). It bundles `spikes/jvm-boot` (cdylib, aarch64) and
-Zalith's arm64 jre-25 tarballs downloaded at build time (never committed). Two boot paths, `JNI_CreateJavaVM` and
-`JLI_Launch`, each in a fresh `:jvm` process. The screen shows boot time, RSS before/after, java.version and APK size.
-To report back: the numbers or the error text on screen.
+## Next step
+Join test: start the server in the probe app, open Horizon on the same phone, add 127.0.0.1:25565 in Multiplayer, join,
+and report what happens (success, kick text, crash). That closes the protocol-777 question of Step 2.
