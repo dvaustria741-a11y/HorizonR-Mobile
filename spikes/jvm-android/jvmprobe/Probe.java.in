@@ -1,0 +1,57 @@
+// Runs inside the JVM that the Android test app starts through JLI_Launch (libjli.so).
+// Stored as .java.in because tools/check_public_tree.py rejects tracked .java files; CI copies it to
+// dev/horizonr/jvmprobe/Probe.java, compiles it with the runner's JDK 17 (--release 17) and packs probe.jar.
+package dev.horizonr.jvmprobe;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+public final class Probe {
+    private Probe() {}
+
+    /** VmRSS in KiB from /proc/self/status, or -1 when unreadable. */
+    static long rssKib() {
+        try {
+            List<String> lines = Files.readAllLines(Path.of("/proc/self/status"), StandardCharsets.UTF_8);
+            for (String line : lines) {
+                if (line.startsWith("VmRSS:")) {
+                    String[] parts = line.substring("VmRSS:".length()).trim().split("\\s+");
+                    if (parts.length == 2 && parts[1].equals("kB")) {
+                        return Long.parseLong(parts[0]);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // reported as unknown below
+        }
+        return -1;
+    }
+
+    static void line(StringBuilder out, String key, String value) {
+        out.append(key).append('=').append(value == null ? "unset" : value).append('\n');
+    }
+
+    public static void main(String[] args) throws Exception {
+        long mainEnteredMs = System.currentTimeMillis();
+        String outPath = System.getProperty("probe.out");
+        String startMs = System.getProperty("probe.start_ms");
+        if (outPath == null || startMs == null) {
+            System.err.println("Probe: -Dprobe.out and -Dprobe.start_ms are required");
+            System.exit(2);
+        }
+        long rss = rssKib();
+        Runtime runtime = Runtime.getRuntime();
+        StringBuilder out = new StringBuilder();
+        line(out, "boot_ms", Long.toString(mainEnteredMs - Long.parseLong(startMs)));
+        line(out, "rss_kib_after", rss < 0 ? "unknown" : Long.toString(rss));
+        for (String key : new String[] {"java.version", "java.vm.name", "java.vm.version", "java.home", "os.arch"}) {
+            line(out, key, System.getProperty(key));
+        }
+        line(out, "heap_max_mib", Long.toString(runtime.maxMemory() / (1024 * 1024)));
+        line(out, "heap_total_mib", Long.toString(runtime.totalMemory() / (1024 * 1024)));
+        line(out, "available_processors", Integer.toString(runtime.availableProcessors()));
+        Files.writeString(Path.of(outPath), out.toString(), StandardCharsets.UTF_8);
+    }
+}

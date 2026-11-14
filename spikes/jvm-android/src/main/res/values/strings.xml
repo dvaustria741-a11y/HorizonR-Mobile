@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Horizon JVM probe</string>
+    <string name="button_jni">Boot JVM: JNI_CreateJavaVM</string>
+    <string name="button_jli">Boot JVM: JLI_Launch</string>
+    <string name="hint_idle">Tap one button. Each tap boots a fresh JVM process; the first tap also copies the runtime out of the APK.</string>
+
+    <string name="status_label">Status</string>
+    <string name="status_idle">idle</string>
+    <string name="status_running">running (%1$s)</string>
+    <string name="status_done">finished, exit code %1$s</string>
+    <string name="status_error">failed: %1$s</string>
+    <string name="status_died">the JVM process died without a result (see the tails below)</string>
+
+    <string name="mode_label">Mode</string>
+    <string name="mode_jni">JNI_CreateJavaVM on libjvm.so</string>
+    <string name="mode_jli">JLI_Launch on libjli.so</string>
+    <string name="heap_label">Heap (-Xmx)</string>
+    <string name="heap_value">%1$s MiB (not tuned)</string>
+
+    <string name="apk_label">APK size</string>
+    <string name="apk_value">%1$s MiB (%2$s bytes)</string>
+    <string name="device_label">Device</string>
+    <string name="device_value">%1$s, Android API %2$s, %3$s</string>
+    <string name="ram_label">RAM total / available</string>
+    <string name="ram_value">%1$s MiB / %2$s MiB</string>
+    <string name="ui_rss_label">App UI process RSS</string>
+    <string name="mib_value">%1$s MiB</string>
+
+    <string name="install_label">Runtime copy</string>
+    <string name="install_cached">already copied, reused</string>
+    <string name="install_fresh">%1$s files, %2$s MiB, %3$s ms</string>
+
+    <string name="boot_label">Boot time</string>
+    <string name="boot_value">%1$s ms</string>
+    <string name="boot_def_label">Boot time measures</string>
+    <string name="rss_before_label">JVM process RSS before boot</string>
+    <string name="rss_after_label">JVM process RSS after boot</string>
+    <string name="java_version_label">java.version</string>
+    <string name="vm_label">java.vm.name</string>
+    <string name="home_label">java.home</string>
+    <string name="unknown">unknown</string>
+
+    <string name="raw_header">Raw values</string>
+    <string name="stdio_header">JVM stdout/stderr (last lines)</string>
+    <string name="logcat_header">Logcat (last matching lines)</string>
+</resources>

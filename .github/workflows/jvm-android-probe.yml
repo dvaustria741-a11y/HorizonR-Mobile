@@ -1,0 +1,156 @@
+name: JVM Android probe
+
+# Step 1 of the JVM mod runtime (docs/jvm-mod-runtime/status.md): builds a private test APK that boots a Java 25
+# runtime on the phone and shows boot time, RSS, java.version and APK size on screen.
+# The runtime tarballs are downloaded from ZalithLauncher2 (GPL-3.0) at build time for measurement only. They are
+# never committed, and nothing from Zalith's source is copied into this repo.
+# Trigger: the Run workflow button (GitHub offers it only for workflows on the default branch), or a push to
+# jvm-mod-runtime that changes spikes/jvm-android/run.json (bump the number to run again).
+on:
+  push:
+    branches: [ "jvm-mod-runtime" ]
+    paths: [ "spikes/jvm-android/run.json" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ZALITH_REPO: https://github.com/ZalithLauncher/ZalithLauncher2
+  # The commit the spike notes (spikes/jvm-boot/README.md) were written against.
+  ZALITH_COMMIT: 6dee5eb156916a218cb8fd292aad70c363f9bccd
+  NDK_VERSION: "28.2.13676358"
+  # The repo's rust-toolchain.toml pins 1.95.0 for the game; this standalone spike builds with stable.
+  RUSTUP_TOOLCHAIN: stable
+
+jobs:
+  probe-apk:
+    name: Build the JVM probe APK (arm64-v8a)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Unit tests of the staging scripts
+        run: python3 -m unittest discover -s spikes/jvm-android/ci/tests -v
+
+      - name: Android SDK and NDK
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "sdk.dir=$ANDROID_HOME" > spikes/jvm-android/local.properties
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME" -name sdkmanager -type f 2>/dev/null | head -n 1)"
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35" "build-tools;35.0.0" "ndk;$NDK_VERSION"
+          test -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Host check and tests of spikes/jvm-boot (reported, does not stop the APK)
+        id: host_tests
+        continue-on-error: true
+        working-directory: spikes/jvm-boot
+        run: cargo test --release
+
+      - name: Report host test result
+        if: always()
+        env:
+          OUTCOME: ${{ steps.host_tests.outcome }}
+        run: |
+          if [ "$OUTCOME" = "success" ]; then
+            echo "::notice title=jvm-boot host tests::passed"
+          else
+            echo "::warning title=jvm-boot host tests::$OUTCOME (the APK build continues)"
+          fi
+
+      - name: Download the Zalith runtime tarballs
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/zalith"
+          cd "$RUNNER_TEMP/zalith"
+          git init -q
+          git remote add origin "$ZALITH_REPO"
+          git fetch --depth 1 origin "$ZALITH_COMMIT"
+          git checkout -q FETCH_HEAD
+          echo "head: $(git rev-parse HEAD)"
+          (find . -path ./.git -prune -o -path '*/runtimes/*' -type f -print | head -n 40) || true
+          UNIVERSAL="$(find . -path '*/runtimes/jre-25/universal.tar.xz' -type f)"
+          ARM64="$(find . -path '*/runtimes/jre-25/bin-arm64.tar.xz' -type f)"
+          for f in "$UNIVERSAL" "$ARM64"; do
+            if [ -z "$f" ] || [ "$(printf '%s\n' "$f" | wc -l)" != 1 ]; then
+              echo "::error title=Zalith runtime::universal.tar.xz or bin-arm64.tar.xz not found exactly once under runtimes/jre-25 at $ZALITH_COMMIT"
+              exit 1
+            fi
+            # A Git LFS pointer is a ~130 byte text file.
+            if [ "$(stat -c %s "$f")" -lt 1000000 ]; then
+              echo "::error title=Zalith runtime::$f is under 1 MB; it may be a Git LFS pointer"
+              exit 1
+            fi
+          done
+          echo "UNIVERSAL_TAR=$RUNNER_TEMP/zalith/${UNIVERSAL#./}" >> "$GITHUB_ENV"
+          echo "ARM64_TAR=$RUNNER_TEMP/zalith/${ARM64#./}" >> "$GITHUB_ENV"
+
+      - name: Stage the runtime as APK assets
+        run: |
+          python3 spikes/jvm-android/ci/stage_runtime.py "$UNIVERSAL_TAR" "$ARM64_TAR" spikes/jvm-android/src/main/assets/jre25
+
+      - name: Build probe.jar (runs inside the JVM)
+        run: |
+          set -euo pipefail
+          SRC="$RUNNER_TEMP/probe-src/dev/horizonr/jvmprobe"
+          mkdir -p "$SRC" "$RUNNER_TEMP/probe-classes"
+          cp spikes/jvm-android/jvmprobe/Probe.java.in "$SRC/Probe.java"
+          javac --release 17 -d "$RUNNER_TEMP/probe-classes" "$SRC/Probe.java"
+          jar --create --file spikes/jvm-android/src/main/assets/probe.jar -C "$RUNNER_TEMP/probe-classes" .
+
+      - name: Cross-build libjvm_boot_spike.so (aarch64-linux-android)
+        run: |
+          set -euo pipefail
+          TOOLCHAIN_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CC_aarch64_linux_android="$TOOLCHAIN_BIN/aarch64-linux-android28-clang"
+          export AR_aarch64_linux_android="$TOOLCHAIN_BIN/llvm-ar"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN_BIN/aarch64-linux-android28-clang"
+          cargo build --release --target aarch64-linux-android --manifest-path spikes/jvm-boot/Cargo.toml
+          mkdir -p spikes/jvm-android/src/main/jniLibs/arm64-v8a
+          cp spikes/jvm-boot/target/aarch64-linux-android/release/libjvm_boot_spike.so spikes/jvm-android/src/main/jniLibs/arm64-v8a/
+          ls -l spikes/jvm-android/src/main/jniLibs/arm64-v8a/
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build the APK
+        working-directory: spikes/jvm-android
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Check the APK and report its size
+        run: |
+          set -euo pipefail
+          APK="$(find spikes/jvm-android/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          python3 spikes/jvm-android/ci/verify_apk.py "$APK" spikes/jvm-android/src/main/assets/jre25/manifest.txt
+          cp "$APK" "$RUNNER_TEMP/jvm-probe.apk"
+          echo "::notice title=APK size::$(stat -c %s "$RUNNER_TEMP/jvm-probe.apk") bytes ($(du -h "$RUNNER_TEMP/jvm-probe.apk" | cut -f1)), commit $GITHUB_SHA"
+          echo "APK_PATH=$RUNNER_TEMP/jvm-probe.apk" >> "$GITHUB_ENV"
+
+      # A private measurement build that contains a third-party runtime. In a public repository an Actions artifact
+      # can be downloaded by any signed-in GitHub user while it exists: keep the retention at the minimum and
+      # delete the run after downloading.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jvm-android-probe-apk
+          path: ${{ env.APK_PATH }}
+          retention-days: 1
+          if-no-files-found: error

@@ -20,3 +20,9 @@ Not built for Android and not run on a device. Open items:
   Android. Do not copy Zalith code into this MIT repo; its licence is GPL-3.0.
 - A process can create one JVM only; there is no teardown.
 - Not measured: APK size with the runtime bundled, RAM on the device, JVM start time on the device.
+
+## Android entry (added, not built here)
+
+`src/android.rs` exports `Java_dev_horizonr_jvmprobe_NativeBoot_run` and the crate is also a cdylib, so the test app in
+`spikes/jvm-android` can load it. `jli_launch` runs `JLI_Launch` from `libjli.so` as the second boot path; its prototype
+is recalled from OpenJDK's `java.h` and not checked against the 25.0.5 build. `cargo test` covers the pure parts only.

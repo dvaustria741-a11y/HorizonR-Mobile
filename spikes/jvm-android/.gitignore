@@ -1,0 +1,6 @@
+# Everything CI stages for the test APK. None of it is ever committed: the runtime comes from ZalithLauncher2.
+/build/
+/.gradle/
+/local.properties
+/src/main/assets/
+/src/main/jniLibs/

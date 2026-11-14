@@ -3,10 +3,14 @@
 //! Nothing here knows where a JVM lives on any device: the library path is an input, and "not given"
 //! is a distinct state (`JvmConfig::libjvm == None`), never an empty path.
 use std::{
-    ffi::{c_char, c_void, CString},
+    ffi::{c_char, c_int, c_void, CString},
     fmt,
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(unix)]
+pub mod android;
 
 use jni::{
     objects::{JObject, JString, JValue},
@@ -30,6 +34,7 @@ pub struct JvmConfig {
 pub enum ConfigError {
     LibJvmUnset,
     LibJvmMissing(PathBuf),
+    LibJliMissing(PathBuf),
     HeapTooSmall(u32),
     BadOption(String),
 }
@@ -39,6 +44,7 @@ impl fmt::Display for ConfigError {
         match self {
             Self::LibJvmUnset => write!(f, "no libjvm path given"),
             Self::LibJvmMissing(p) => write!(f, "libjvm not found: {}", p.display()),
+            Self::LibJliMissing(p) => write!(f, "libjli not found: {}", p.display()),
             Self::HeapTooSmall(n) => write!(f, "heap {n} MiB is below the minimum of {MIN_HEAP_MIB} MiB"),
             Self::BadOption(o) => write!(f, "unusable JVM option: {o:?}"),
         }
@@ -180,6 +186,112 @@ impl Jvm {
     }
 }
 
+/// Where the JRE tarballs of ZalithLauncher2 keep the two libraries, relative to the runtime home
+/// (derived from the notes in README.md; a different runtime layout is unknown here).
+pub const LIBJVM_REL: &str = "lib/server/libjvm.so";
+pub const LIBJLI_REL: &str = "lib/libjli.so";
+
+/// Milliseconds since the Unix epoch; `None` if the clock is before 1970.
+pub fn epoch_ms() -> Option<u128> {
+    SystemTime::now().duration_since(UNIX_EPOCH).ok().map(|d| d.as_millis())
+}
+
+/// What the `java` launcher would receive on its command line, minus the JDK's own option parsing.
+#[derive(Clone, Debug)]
+pub struct LauncherArgs {
+    pub heap_mib: u32,
+    pub class_path: PathBuf,
+    pub main_class: String,
+    /// `-Dkey=value` pairs, in order.
+    pub properties: Vec<(String, String)>,
+}
+
+/// `argv` for `JLI_Launch`: program name, heap, properties, class path, main class. Pure.
+pub fn launcher_argv(args: &LauncherArgs) -> Result<Vec<String>, ConfigError> {
+    let mut argv = vec!["java".to_string()];
+    argv.extend(jvm_options(args.heap_mib, &[])?);
+    for (key, value) in &args.properties {
+        if key.is_empty() || key.contains(|c: char| c == '=' || c == '\0') || value.contains('\0') {
+            return Err(ConfigError::BadOption(format!("{key}={value}")));
+        }
+        argv.push(format!("-D{key}={value}"));
+    }
+    let class_path = args
+        .class_path
+        .to_str()
+        .filter(|s| !s.is_empty() && !s.contains('\0'))
+        .ok_or_else(|| ConfigError::BadOption(format!("class path {:?}", args.class_path)))?;
+    if args.main_class.is_empty() || args.main_class.contains(|c: char| c == '\0' || c.is_whitespace()) {
+        return Err(ConfigError::BadOption(format!("main class {:?}", args.main_class)));
+    }
+    argv.extend(["-cp".to_string(), class_path.to_string(), args.main_class.clone()]);
+    Ok(argv)
+}
+
+/// Prototype of `JLI_Launch` as I remember OpenJDK's `src/java.base/share/native/libjli/java.h`.
+/// Not checked against the 25.0.5 build in the Zalith tarball: a wrong prototype would crash at the call.
+type JliLaunch = unsafe extern "C" fn(
+    argc: c_int,
+    argv: *mut *mut c_char,
+    jargc: c_int,
+    jargv: *const *const c_char,
+    appclassc: c_int,
+    appclassv: *const *const c_char,
+    fullversion: *const c_char,
+    dotversion: *const c_char,
+    pname: *const c_char,
+    lname: *const c_char,
+    javaargs: sys::jboolean,
+    cpwildcard: sys::jboolean,
+    javaw: sys::jboolean,
+    ergo: sys::jint,
+) -> c_int;
+
+/// Runs the JDK launcher (`libjli.so`) in this process: it creates the JVM, runs `main`, destroys the JVM and
+/// returns the exit code. The launcher may call `exit()` itself on errors, so run it in a process you can lose.
+/// `fullversion`/`dotversion` are only shown by `-version`; "25" is my choice, not read from the runtime.
+pub fn jli_launch(libjli: &Path, argv: &[String]) -> Result<i32, BootError> {
+    if !libjli.is_file() {
+        return Err(ConfigError::LibJliMissing(libjli.to_path_buf()).into());
+    }
+    if argv.is_empty() || argv.iter().any(|a| a.is_empty() || a.contains('\0')) {
+        return Err(ConfigError::BadOption(format!("launcher argv {argv:?}")).into());
+    }
+    // SAFETY: loading a JDK library runs its initialisers; the caller chose the library.
+    let library = unsafe { libloading::Library::new(libjli) }.map_err(BootError::Load)?;
+    // SAFETY: the symbol has the prototype above (unverified for this build, see `JliLaunch`).
+    let symbol = unsafe { library.get::<JliLaunch>(b"JLI_Launch\0") }.map_err(BootError::Load)?;
+    let launch: JliLaunch = *symbol;
+    std::mem::forget(library);
+
+    let owned: Vec<CString> = argv.iter().map(|a| CString::new(a.as_str()).expect("validated: no NUL")).collect();
+    let mut pointers: Vec<*mut c_char> = owned.iter().map(|s| s.as_ptr() as *mut c_char).collect();
+    pointers.push(std::ptr::null_mut());
+    let version = CString::new("25").expect("literal");
+    let program = CString::new("java").expect("literal");
+    let launcher = CString::new("openjdk").expect("literal");
+    // SAFETY: every pointer outlives the call; argv is NULL-terminated and argc excludes the terminator.
+    let code = unsafe {
+        launch(
+            argv.len() as c_int,
+            pointers.as_mut_ptr(),
+            0,
+            std::ptr::null(),
+            0,
+            std::ptr::null(),
+            version.as_ptr(),
+            version.as_ptr(),
+            program.as_ptr(),
+            launcher.as_ptr(),
+            sys::JNI_FALSE,
+            sys::JNI_TRUE,
+            sys::JNI_FALSE,
+            0,
+        )
+    };
+    Ok(code)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,5 +322,46 @@ mod tests {
         assert!(matches!(validate(&JvmConfig { heap_mib: 64, ..Default::default() }), Err(ConfigError::LibJvmUnset)));
         let missing = JvmConfig { libjvm: Some("/nonexistent/libjvm.so".into()), heap_mib: 64, extra_options: vec![] };
         assert!(matches!(validate(&missing), Err(ConfigError::LibJvmMissing(_))));
+    }
+
+    fn launcher_args() -> LauncherArgs {
+        LauncherArgs {
+            heap_mib: 128,
+            class_path: "/data/probe.jar".into(),
+            main_class: "dev.horizonr.jvmprobe.Probe".into(),
+            properties: vec![("probe.out".into(), "/data/out.txt".into())],
+        }
+    }
+
+    #[test]
+    fn launcher_argv_order() {
+        assert_eq!(
+            launcher_argv(&launcher_args()).unwrap(),
+            ["java", "-Xmx128m", "-Dprobe.out=/data/out.txt", "-cp", "/data/probe.jar", "dev.horizonr.jvmprobe.Probe"]
+        );
+    }
+
+    #[test]
+    fn launcher_argv_rejects_bad_input() {
+        let mut a = launcher_args();
+        a.main_class = "two words".into();
+        assert!(matches!(launcher_argv(&a), Err(ConfigError::BadOption(_))));
+        let mut a = launcher_args();
+        a.properties = vec![("k=v".into(), "x".into())];
+        assert!(matches!(launcher_argv(&a), Err(ConfigError::BadOption(_))));
+        let mut a = launcher_args();
+        a.heap_mib = 1;
+        assert!(matches!(launcher_argv(&a), Err(ConfigError::HeapTooSmall(1))));
+        let mut a = launcher_args();
+        a.class_path = PathBuf::new();
+        assert!(matches!(launcher_argv(&a), Err(ConfigError::BadOption(_))));
+    }
+
+    #[test]
+    fn missing_libjli_is_an_error() {
+        assert!(matches!(
+            jli_launch(Path::new("/nonexistent/libjli.so"), &["java".to_string()]),
+            Err(BootError::Config(ConfigError::LibJliMissing(_)))
+        ));
     }
 }

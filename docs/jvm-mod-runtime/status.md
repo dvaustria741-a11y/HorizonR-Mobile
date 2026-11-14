@@ -38,6 +38,8 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
 - A facade design; whether it is realistic is the decision after Steps 1 to 3.
 
 ## Next step (decided)
-Step 1 on the phone: a test APK built in CI that bundles the spike (NDK build) and Zalith's arm64 jre-25 tarballs
-downloaded at build time for measurement only (never committed, APK not published). Run in a separate Android
-process. Report boot time, RSS and APK size from the device.
+Step 1 on the phone. Written, not built and not run: `.github/workflows/jvm-android-probe.yml` builds the test APK in
+`spikes/jvm-android` (details and the unverified list in its README). It bundles `spikes/jvm-boot` (cdylib, aarch64) and
+Zalith's arm64 jre-25 tarballs downloaded at build time (never committed). Two boot paths, `JNI_CreateJavaVM` and
+`JLI_Launch`, each in a fresh `:jvm` process. The screen shows boot time, RSS before/after, java.version and APK size.
+To report back: the numbers or the error text on screen.

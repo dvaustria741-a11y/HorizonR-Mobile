@@ -1,0 +1,54 @@
+// Private measurement app for Step 1 of the JVM mod runtime (docs/jvm-mod-runtime/status.md).
+// Versions match packaging/android, which already builds in this repo's CI.
+plugins {
+    id 'com.android.application' version '8.7.3'
+    id 'org.jetbrains.kotlin.android' version '2.0.21'
+}
+
+android {
+    namespace 'dev.horizonr.jvmprobe'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'dev.horizonr.jvmprobe'
+        minSdk 28
+        // 28 on purpose: Android 10+ blocks executing files from the app's data directory for apps that target 29
+        // or higher. I do not know whether that also affects dlopen of libjvm.so from there, so this removes the
+        // question for the measurement. Android 14 refuses to install apps that target below 23 only.
+        targetSdk 28
+        versionCode 1
+        versionName '0.0.1-probe'
+        ndk {
+            abiFilters.add('arm64-v8a')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            // The auto-generated debug keystore is enough for a private APK installed from the phone's file manager.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}

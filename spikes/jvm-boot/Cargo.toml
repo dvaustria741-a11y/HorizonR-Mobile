@@ -8,9 +8,16 @@ description = "Step 1 spike: load a libjvm.so and call one Java method over JNI.
 # Standalone on purpose: the spike must not touch the workspace's Cargo.lock or CI.
 [workspace]
 
+# rlib for main.rs and the tests; cdylib so the Android test app (spikes/jvm-android) can load it with System.loadLibrary.
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 jni = "0.21"
 libloading = "0.8"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [profile.release]
 opt-level = "s"
