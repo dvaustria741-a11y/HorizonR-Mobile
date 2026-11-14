@@ -7577,6 +7577,13 @@ private fun CleanSettingsViewport(
                         }
 
                         LauncherSettingToggleCard(
+                            title = "Cloud Performance Profile",
+                            description = "Picks FPS settings for your phone's memory class (and chip, when the profile names it) from a small JSON fetched in the background and cached, so tuning can change without a new APK. It cannot render frames for you: the phone still draws everything. Never delays launch, and the remote file can only set a fixed list of graphics keys within safe ranges. Your own toggles above win. Starting values are uncalibrated guesses, so check the log tagged CloudPerfProfile (applies on the next game launch)",
+                            checked = config.cloudPerfProfile,
+                            onCheckedChange = { onConfigChange(config.copy(cloudPerfProfile = it)) }
+                        )
+
+                        LauncherSettingToggleCard(
                             title = "Trust shader packs (skip safety checks)",
                             description = "Compile shader pack programs without bounds and loop checks: the same picture for a well-written pack, with less GPU time. A broken pack may glitch or freeze the game instead of being stopped (applies on the next game launch)",
                             checked = config.trustShaderPacks,

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "calibrated": false,
+  "note": "Starting guesses, not measured. Tiers come from total RAM (low <= 4.5 GB, mid <= 8.5 GB, high above). 'socs' maps Build.SOC_MODEL (Android 12+) to a tier and overrides RAM. Only keys the launcher whitelists are applied, each clamped to a safe range.",
+  "tiers": {
+    "low": { "resolutionScale": 80, "dynamicResolution": true, "dynamicResolutionMin": 60, "adaptiveDistance": true, "adaptiveDistanceMin": 6, "animatedTextures": false },
+    "mid": { "dynamicResolution": true, "dynamicResolutionMin": 75, "adaptiveDistance": true, "adaptiveDistanceMin": 8 },
+    "high": { "adaptiveDistance": true, "adaptiveDistanceMin": 10 }
+  },
+  "socs": {}
+}

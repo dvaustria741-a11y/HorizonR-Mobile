@@ -106,3 +106,4 @@ screen is open so Escape closes it) and `native_mods`.
 
 - `punchy`: the `hand_geometry` target is now `horizon_client::game::frame_geometry::Game<'_>::hand_geometry` (the method moved to `game/frame_geometry.rs`).
 - `sodium_horizon`: the `section_visibility` injection, its helper `visibility.rs` and the `visibility_runtime` module (`runtime.rs`) are removed. 2.58 dropped `mesher::visibility_reusing` and has its own bit-row `visibility_rows`, so the replacement is no longer needed.
+- `punchy`: `render.rs` returns `ControlFlow<(Vec<Vertex>, Vec<(u32, i32)>)>` to match `hand_geometry`'s `(vertices, item runs)` result (CI error `E_INVALID_HELPER`). It reports one run at vertex 0 with item id 0 (unverified against shader-pack item ids).

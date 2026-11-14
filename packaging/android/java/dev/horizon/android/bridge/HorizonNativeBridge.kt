@@ -1361,6 +1361,7 @@ object HorizonNativeBridge {
                     aggressiveFpsTricks = obj.optBoolean("aggressiveFpsTricks", false),
                     adaptiveRenderDistance = obj.optBoolean("adaptiveRenderDistance", false),
                     adaptiveRenderDistanceMin = obj.optInt("adaptiveRenderDistanceMin", 6).coerceIn(4, 32),
+                    cloudPerfProfile = obj.optBoolean("cloudPerfProfile", false),
                     mcGuiScale = obj.optInt("mcGuiScale", 0).coerceIn(0, 4),
                     mcFov = obj.optInt("mcFov", 70).coerceIn(30, 110),
                     mcVsync = obj.optBoolean("mcVsync", true),
@@ -1506,6 +1507,7 @@ object HorizonNativeBridge {
             put("aggressiveFpsTricks", config.aggressiveFpsTricks)
             put("adaptiveRenderDistance", config.adaptiveRenderDistance)
             put("adaptiveRenderDistanceMin", config.adaptiveRenderDistanceMin)
+            put("cloudPerfProfile", config.cloudPerfProfile)
         }
         synchronized(configIoLock) {
             runCatching {
@@ -1636,13 +1638,13 @@ object HorizonNativeBridge {
             updateOptionsTxtNonDestructively(File(dir, "options.txt"), config)
             updateKeyValTxtNonDestructively(
                 File(dir, "horizon-graphics.txt"),
-                experimentalGraphicsUpdates(config)
+                experimentalGraphicsUpdates(config, home)
             )
         }
     }
 
     /** Experimental Stuff's profiles for horizon-graphics.txt: the chunk upload budget (KiB), cave culling and frame generation. */
-    private fun experimentalGraphicsUpdates(config: HorizonConfigState): Map<String, String> {
+    private fun experimentalGraphicsUpdates(config: HorizonConfigState, home: File): Map<String, String> {
         val updates = linkedMapOf<String, String>()
         if (config.superPerfMode) updates["uploadBudgetKiB"] = "1536"
         if (config.fastChunkUpload) updates["uploadBudgetKiB"] = "4096"
@@ -1683,6 +1685,20 @@ object HorizonNativeBridge {
         // the render scale is only written while it is on, so an Off launcher leaves the player's own scale.
         updates["frameGeneration"] = if (config.frameGeneration) "fsr3.1" else "off"
         if (config.frameGeneration) updates["resolutionScale"] = config.frameGenRenderScale.coerceIn(50, 100).toString()
+        // Experimental Stuff > Cloud Performance Profile: tuning picked for this device class from a cached remote
+        // JSON (built-in values when there is none). It goes in first-come order below the switches above, so the
+        // player's explicit toggles win: a key another toggle already set is not overwritten. Only written while on.
+        if (config.cloudPerfProfile) {
+            val applied = CloudPerfProfile.resolve(home)
+            for ((key, value) in applied) {
+                // The Adaptive Render Distance switch is always written above (On or Off); while the player has it
+                // Off, the profile may turn it on and set its floor.
+                val adaptiveKey = key == "adaptiveDistance" || key == "adaptiveDistanceMin"
+                if (adaptiveKey && !config.adaptiveRenderDistance) updates[key] = value else updates.putIfAbsent(key, value)
+            }
+            Log.i("CloudPerfProfile", CloudPerfProfile.describe(applied))
+            CloudPerfProfile.refreshAsync(home)
+        }
         return updates
     }
 

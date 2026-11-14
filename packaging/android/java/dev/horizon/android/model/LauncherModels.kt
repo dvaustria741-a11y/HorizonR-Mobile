@@ -517,7 +517,8 @@ data class HorizonConfigState(
     val fpsBoostPack: Boolean = false,
     val aggressiveFpsTricks: Boolean = false,
     val adaptiveRenderDistance: Boolean = false,
-    val adaptiveRenderDistanceMin: Int = 6
+    val adaptiveRenderDistanceMin: Int = 6,
+    val cloudPerfProfile: Boolean = false
 )
 
 val MINECRAFT_SPLASH_QUOTES = listOf(
