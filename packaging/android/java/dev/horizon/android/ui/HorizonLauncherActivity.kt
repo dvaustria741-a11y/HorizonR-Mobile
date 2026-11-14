@@ -1972,7 +1972,8 @@ private fun CleanAccountsAndSkinsViewport(
     renameSkinTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { renameSkinTarget = null },
-            containerColor = Color(0xFF1F262B),
+            containerColor = HzColor.PanelHi,
+            shape = HzShape.Panel,
             title = {
                 Text("Rename Skin", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
             },
@@ -2885,7 +2886,8 @@ private fun CleanServersViewport(
     pendingDelete?.let { target ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            containerColor = Color(0xFF1F262B),
+            containerColor = HzColor.PanelHi,
+            shape = HzShape.Panel,
             title = { Text("Remove server", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
             text = { Text("Remove ${target.name.ifBlank { target.address }} from your list?", fontSize = 13.sp, color = VoltIconMuted) },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel", color = VoltIconMuted) } },
@@ -3083,7 +3085,8 @@ private fun ServerEditorDialog(
     var address by remember(initial) { mutableStateOf(initial?.address.orEmpty()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1F262B),
+        containerColor = HzColor.PanelHi,
+        shape = HzShape.Panel,
         title = {
             Text(
                 if (initial == null) "Add Server" else "Edit Server",
@@ -3213,7 +3216,7 @@ private fun CleanLogsViewport(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .animatedPressScale(pressedScale = 0.94f) {
                         val raw = filteredEntries.joinToString("\n") { "[${it.timestamp}] [${it.sourceTag}/${it.severity.label}] ${it.message}" }
                         HorizonNativeBridge.copyToClipboard(context, "HorizonR Logs", raw)
@@ -3225,7 +3228,7 @@ private fun CleanLogsViewport(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .animatedPressScale(pressedScale = 0.94f) {
                         HorizonNativeBridge.clearLogs(context)
                         refreshTick += 1
@@ -3241,23 +3244,23 @@ private fun CleanLogsViewport(
                 .weight(1f)
                 .fillMaxWidth()
                 .clip(HzShape.Panel)
-                .background(Color(0xFF0A0D12))
+                .background(HzColor.PanelLow)
                 .border(1.dp, HzColor.Hairline, HzShape.Panel),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = HzSpace.M, vertical = HzSpace.S),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             items(filteredEntries, key = { it.id }) { entry ->
                 val sevColor = when (entry.severity) {
-                    LogSeverityFilter.ERR -> Color(0xFFFF6B6B)
+                    LogSeverityFilter.ERR -> HzColor.Danger
                     LogSeverityFilter.WARN -> HzColor.Warning
-                    LogSeverityFilter.DL -> Color(0xFF66BB6A)
+                    LogSeverityFilter.DL -> HzColor.Success
                     else -> SkyBlueAccent
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S), verticalAlignment = Alignment.Top) {
                     Text(
                         text = entry.timestamp,
                         fontFamily = HzFont.Mono, fontSize = 10.sp, lineHeight = 14.sp,
-                        color = Color(0xFF5E6672), maxLines = 1
+                        color = VoltMutedText.copy(alpha = 0.7f), maxLines = 1
                     )
                     Text(
                         text = entry.severity.label,
@@ -3266,8 +3269,8 @@ private fun CleanLogsViewport(
                     )
                     Text(
                         text = "${entry.sourceTag}  ${entry.message}",
-                        fontFamily = HzFont.Mono, fontSize = 10.5.sp, lineHeight = 14.sp,
-                        color = if (entry.severity == LogSeverityFilter.ERR) Color(0xFFFFC9C9) else Color(0xFFC9D1DA),
+                        fontFamily = HzFont.Mono, fontSize = HzText.Caption.sp, lineHeight = 15.sp,
+                        color = if (entry.severity == LogSeverityFilter.ERR) HzColor.Danger else VoltIconMuted,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -3316,7 +3319,8 @@ private fun CleanVersionsViewport(
     if (showCancelConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showCancelConfirmDialog = false },
-            containerColor = Color(0xFF1F262B),
+            containerColor = HzColor.PanelHi,
+            shape = HzShape.Panel,
             icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = HzColor.Warning) },
             title = { Text("Cancel Download?", style = MaterialTheme.typography.titleMedium) },
             text = {
@@ -3332,9 +3336,10 @@ private fun CleanVersionsViewport(
                         onCancelDownload()
                         sizeRefreshTick += 1
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                    shape = HzShape.Control,
+                    colors = ButtonDefaults.buttonColors(containerColor = HzColor.DangerFill)
                 ) {
-                    Text("Yes, Cancel & Delete", color = Color.White, fontSize = 12.sp)
+                    Text("Yes, Cancel & Delete", color = HzColor.Danger, fontSize = 12.sp)
                 }
             },
             dismissButton = {
@@ -3348,7 +3353,8 @@ private fun CleanVersionsViewport(
     if (showRepairConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showRepairConfirmDialog = false },
-            containerColor = Color(0xFF1F262B),
+            containerColor = HzColor.PanelHi,
+            shape = HzShape.Panel,
             icon = { Icon(Icons.Default.Build, contentDescription = null, tint = SkyBlueAccent) },
             title = { Text("Smart Repair Minecraft 26.3 Assets", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
@@ -3386,7 +3392,8 @@ private fun CleanVersionsViewport(
     repairResultPopupMessage?.let { msg ->
         AlertDialog(
             onDismissRequest = { repairResultPopupMessage = null },
-            containerColor = Color(0xFF1F262B),
+            containerColor = HzColor.PanelHi,
+            shape = HzShape.Panel,
             icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = HzColor.Success) },
             title = { Text("Smart Repair Results", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
@@ -3411,7 +3418,8 @@ private fun CleanVersionsViewport(
     if (showDeleteAllConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteAllConfirmDialog = false },
-            containerColor = Color(0xFF1F262B),
+            containerColor = HzColor.PanelHi,
+            shape = HzShape.Panel,
             icon = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = HzColor.Danger) },
             title = { Text("Delete All Minecraft Assets?", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
@@ -3430,11 +3438,12 @@ private fun CleanVersionsViewport(
                         sizeRefreshTick += 1
                         deleteResultPopupMessage = "All Minecraft 26.3 assets were fully removed from the device. Asset status is now reset to 0 MB (Not Installed)."
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                    shape = HzShape.Control,
+                    colors = ButtonDefaults.buttonColors(containerColor = HzColor.DangerFill)
                 ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                    Icon(Icons.Outlined.Delete, contentDescription = null, tint = HzColor.Danger, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(5.dp))
-                    Text("Yes, Delete Everything", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Yes, Delete Everything", color = HzColor.Danger, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             },
             dismissButton = {
@@ -3448,7 +3457,8 @@ private fun CleanVersionsViewport(
     deleteResultPopupMessage?.let { msg ->
         AlertDialog(
             onDismissRequest = { deleteResultPopupMessage = null },
-            containerColor = Color(0xFF1F262B),
+            containerColor = HzColor.PanelHi,
+            shape = HzShape.Panel,
             icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SkyBlueAccent) },
             title = { Text("Assets Completely Deleted", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
@@ -3594,7 +3604,7 @@ private fun CleanVersionsViewport(
                     if (installStatus.error.isNotEmpty()) {
                         Surface(
                             shape = HzShape.Control,
-                            color = Color(0xFFFF5252).copy(alpha = 0.14f),
+                            color = HzColor.Danger.copy(alpha = 0.14f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
@@ -3745,7 +3755,7 @@ private fun CleanVersionsViewport(
                                         text = logContent,
                                         fontFamily = HzFont.Mono,
                                         fontSize = 10.sp,
-                                        color = Color(0xFFA5D6A7)
+                                        color = HzColor.Success
                                     )
                                 }
                             }
@@ -4049,7 +4059,7 @@ private fun CleanStoreViewport(
     if (showCancelStoreDialog) {
         AlertDialog(
             onDismissRequest = { showCancelStoreDialog = false },
-            icon = { Icon(Icons.Default.Cancel, contentDescription = null, tint = Color(0xFFFF6E6E)) },
+            icon = { Icon(Icons.Default.Cancel, contentDescription = null, tint = HzColor.Danger) },
             title = { Text("Cancel Store Download?", style = MaterialTheme.typography.titleMedium) },
             text = {
                 Text(
@@ -4065,9 +4075,10 @@ private fun CleanStoreViewport(
                         HorizonNativeBridge.storeDownloadPaused.set(false)
                         if (storeProgress.translating) HorizonNativeBridge.cancelShaderTranslation()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                    shape = HzShape.Control,
+                    colors = ButtonDefaults.buttonColors(containerColor = HzColor.DangerFill)
                 ) {
-                    Text("Yes, Cancel & Delete", color = Color.White, fontSize = 12.sp)
+                    Text("Yes, Cancel & Delete", color = HzColor.Danger, fontSize = 12.sp)
                 }
             },
             dismissButton = {
@@ -5871,11 +5882,12 @@ private fun CleanFilesViewport(
                             Toast.LENGTH_SHORT
                         ).show()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                    shape = HzShape.Control,
+                    colors = ButtonDefaults.buttonColors(containerColor = HzColor.DangerFill)
                 ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                    Icon(Icons.Outlined.Delete, contentDescription = null, tint = HzColor.Danger, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(5.dp))
-                    Text("Yes, Delete Permanently", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Yes, Delete Permanently", color = HzColor.Danger, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             },
             dismissButton = {
