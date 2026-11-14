@@ -84,9 +84,23 @@ fn properties_to_report(report: &Report, jvm: &Jvm) -> bool {
     ok
 }
 
-fn boot_via_jni(report: &Report, jre_home: &Path, heap_mib: u32) -> i32 {
+/// Diagnostic-only options: where HotSpot writes a crash report (it defaults to the working directory, which an
+/// app process cannot write) and a unified log. They change no tuning. The paths come from the app's own files dir.
+fn diagnostic_options(work_dir: &Path) -> Vec<String> {
+    vec![
+        format!("-XX:ErrorFile={}", work_dir.join("hs_err_%p.log").display()),
+        format!("-Xlog:all=info:file={}", work_dir.join("jvm_xlog.txt").display()),
+    ]
+}
+
+fn boot_via_jni(report: &Report, jre_home: &Path, work_dir: &Path, heap_mib: u32) -> i32 {
     report.line("boot_ms_def", "JNI_CreateJavaVM call only, no Java class loaded by us");
-    let config = JvmConfig { libjvm: Some(jre_home.join(LIBJVM_REL)), heap_mib, extra_options: vec![] };
+    let config = JvmConfig {
+        libjvm: Some(jre_home.join(LIBJVM_REL)),
+        heap_mib,
+        extra_options: diagnostic_options(work_dir),
+    };
+    report.line("jni_call", "entering JNI_CreateJavaVM");
     let started = Instant::now();
     let jvm = match Jvm::boot(&config) {
         Ok(jvm) => jvm,
@@ -96,6 +110,7 @@ fn boot_via_jni(report: &Report, jre_home: &Path, heap_mib: u32) -> i32 {
         }
     };
     report.line("boot_ms", started.elapsed().as_millis());
+    report.line("jni_call", "returned");
     report.optional("rss_kib_after", current_rss_kib());
     if properties_to_report(report, &jvm) {
         EXIT_OK
@@ -166,7 +181,7 @@ pub fn run(mode: i32, heap_mib: i32, jre_home: &Path, probe_jar: &Path, work_dir
     };
     report.optional("rss_kib_before", current_rss_kib());
     match mode {
-        MODE_JNI => boot_via_jni(&report, jre_home, heap_mib),
+        MODE_JNI => boot_via_jni(&report, jre_home, work_dir, heap_mib),
         MODE_JLI => boot_via_jli(&report, jre_home, probe_jar, work_dir, heap_mib),
         other => {
             report.line("error", format!("unknown mode {other}"));

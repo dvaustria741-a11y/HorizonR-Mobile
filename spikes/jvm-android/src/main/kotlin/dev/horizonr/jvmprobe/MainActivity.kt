@@ -171,7 +171,11 @@ class MainActivity : Activity() {
         if (state == State.DIED || state == State.ERROR || merged["error"] != null) {
             val stdio = ProbeFiles.tail(File(dir, ProbeFiles.STDIO), 15)
             if (stdio.isNotEmpty()) out.append('\n').append(getString(R.string.stdio_header)).append('\n').append(stdio).append('\n')
-            val logcat = ProbeFiles.logcatTail(15)
+            val hsErr = ProbeFiles.hsErrHead(dir, 30)
+            if (hsErr.isNotEmpty()) out.append('\n').append(getString(R.string.hserr_header)).append('\n').append(hsErr).append('\n')
+            val xlog = ProbeFiles.tail(File(dir, "jvm_xlog.txt"), 12)
+            if (xlog.isNotEmpty()) out.append('\n').append(getString(R.string.xlog_header)).append('\n').append(xlog).append('\n')
+            val logcat = ProbeFiles.logcatTail(40)
             if (logcat.isNotEmpty()) out.append('\n').append(getString(R.string.logcat_header)).append('\n').append(logcat).append('\n')
         }
         return out.toString()

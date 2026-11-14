@@ -44,4 +44,6 @@
     <string name="raw_header">Raw values</string>
     <string name="stdio_header">JVM stdout/stderr (last lines)</string>
     <string name="logcat_header">Logcat (last matching lines)</string>
+    <string name="hserr_header">HotSpot crash report (head)</string>
+    <string name="xlog_header">JVM log (last lines)</string>
 </resources>

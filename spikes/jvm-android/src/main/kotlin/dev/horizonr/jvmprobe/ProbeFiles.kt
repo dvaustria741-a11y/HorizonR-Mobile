@@ -71,6 +71,12 @@ object ProbeFiles {
         if (isJvmProcess(pid)) Process.killProcess(pid)
     }
 
+    /** First lines of the newest HotSpot crash report in `dir`, or empty when there is none. */
+    fun hsErrHead(dir: File, lines: Int): String {
+        val file = dir.listFiles { f -> f.name.startsWith("hs_err_") }?.maxByOrNull { it.lastModified() } ?: return ""
+        return runCatching { file.name + "\n" + file.readLines().take(lines).joinToString("\n") }.getOrDefault("")
+    }
+
     fun reset(dir: File) {
         dir.listFiles()?.forEach { it.delete() }
     }
@@ -81,7 +87,7 @@ object ProbeFiles {
     /** Own-app log lines about a crash. Whether a normal app may read them on this device is unverified. */
     fun logcatTail(lines: Int): String = runCatching {
         val process = ProcessBuilder("logcat", "-d", "-t", "400").redirectErrorStream(true).start()
-        val keep = Regex("(?i)fatal|signal|abort|sigsegv|dlopen|linker|libjvm|libjli|jvmprobe|dev\\.horizonr")
+        val keep = Regex("(?i)fatal|signal|abort|sigsegv|dlopen|linker|libjvm|libjli|jvmprobe|dev\\.horizonr|DEBUG|tombstone|backtrace|hs_err|\\*\\*\\*|libc ")
         val text = process.inputStream.bufferedReader().readLines().filter { keep.containsMatchIn(it) }
         process.destroy()
         text.takeLast(lines).joinToString("\n")
