@@ -360,7 +360,7 @@ input part of Starling's `crates/horizon-client-render/src/android_runtime.rs` a
 
 ## Fonts bundled in the Android launcher
 
-- **Inter**, copyright 2020 The Inter Project Authors (https://github.com/rsms/inter), SIL Open Font License 1.1.
+- **Manrope**, copyright 2018 The Manrope Project Authors (https://github.com/sharanda/manrope), SIL Open Font License 1.1.
 - **JetBrains Mono**, copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono), SIL Open Font License 1.1.
 
 Both are used unmodified (`packaging/android/res/font/`). The license text is at https://scripts.sil.org/OFL.

@@ -12,15 +12,15 @@ import dev.horizon.android.R
 
 /**
  * Typefaces bundled in res/font (both SIL Open Font License, see THIRD_PARTY_NOTICES.md).
- * Inter for everything you read, JetBrains Mono for numbers, versions, logs and field values.
+ * Manrope for everything you read, JetBrains Mono for numbers, versions, logs and field values.
  */
 object HzFont {
     val Sans = FontFamily(
-        Font(R.font.inter_regular, FontWeight.Normal),
-        Font(R.font.inter_medium, FontWeight.Medium),
-        Font(R.font.inter_semibold, FontWeight.SemiBold),
-        Font(R.font.inter_bold, FontWeight.Bold),
-        Font(R.font.inter_bold, FontWeight.ExtraBold)
+        Font(R.font.manrope_regular, FontWeight.Normal),
+        Font(R.font.manrope_medium, FontWeight.Medium),
+        Font(R.font.manrope_semibold, FontWeight.SemiBold),
+        Font(R.font.manrope_bold, FontWeight.Bold),
+        Font(R.font.manrope_extrabold, FontWeight.ExtraBold)
     )
     val Mono = FontFamily(
         Font(R.font.jbmono_regular, FontWeight.Normal),

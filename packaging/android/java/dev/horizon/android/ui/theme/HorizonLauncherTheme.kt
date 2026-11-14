@@ -72,6 +72,9 @@ fun HorizonLauncherTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = LauncherTypography,
-        content = content
+        content = {
+            // Text drawn outside a Surface would otherwise fall back to the system font.
+            androidx.compose.material3.ProvideTextStyle(LauncherTypography.bodyMedium, content)
+        }
     )
 }

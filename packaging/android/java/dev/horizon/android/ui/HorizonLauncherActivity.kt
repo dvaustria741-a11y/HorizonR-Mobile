@@ -1384,11 +1384,12 @@ fun CleanLauncherScreen(
             if (!isHibernated) {
                 HorizonAuroraBackground()
             }
-            Row(modifier = Modifier.fillMaxSize()) {
-              HzSideRail(
+            Column(modifier = Modifier.fillMaxSize()) {
+              HzTopBar(
                   selectedTab = selectedTab,
                   installStatus = installStatus,
                   accent = SkyBlueAccent,
+                  surface = CardSlateBg.copy(alpha = 0.97f),
                   onSelectTab = { selectedTab = it },
                   onOpenFolder = { HorizonNativeBridge.openSystemFilesApp(context) }
               )
@@ -1420,9 +1421,9 @@ fun CleanLauncherScreen(
                         },
                         label = "MainTabMorphTransition"
                     ) { tab ->
-                        // Every page but Home is drawn at 76% size: the dense, desktop-like scale.
+                        // Every page but Home is drawn at 90% size: a little denser than phone UI, still easy to tap.
                         val baseDensity = LocalDensity.current
-                        val compactDensity = remember(baseDensity) { Density(baseDensity.density * 0.76f, baseDensity.fontScale) }
+                        val compactDensity = remember(baseDensity) { Density(baseDensity.density * 0.9f, baseDensity.fontScale) }
                         CompositionLocalProvider(LocalDensity provides if (tab == LauncherNavTab.HOME) baseDensity else compactDensity) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             when (tab) {

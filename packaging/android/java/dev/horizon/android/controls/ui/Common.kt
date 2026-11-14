@@ -85,7 +85,9 @@ fun ControlsTheme(style: ControlsCardStyle? = null, content: @Composable () -> U
         onSurfaceVariant = used.muted,
     )
     CompositionLocalProvider(LocalControlsCardStyle provides used) {
-        MaterialTheme(colorScheme = scheme, typography = ControlsTypography, content = content)
+        MaterialTheme(colorScheme = scheme, typography = ControlsTypography) {
+            androidx.compose.material3.ProvideTextStyle(ControlsTypography.bodyMedium, content)
+        }
     }
 }
 

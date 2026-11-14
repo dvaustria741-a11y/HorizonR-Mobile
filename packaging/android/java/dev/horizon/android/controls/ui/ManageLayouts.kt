@@ -200,12 +200,12 @@ private fun HzWindowDialog(title: String, onDismiss: () -> Unit, trailing: (@Com
     val style = LocalControlsCardStyle.current
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            modifier = Modifier.fillMaxWidth(0.5f).widthIn(max = 340.dp).heightIn(max = 320.dp)
-                .clip(RoundedCornerShape(8.dp)).background(dev.horizon.android.ui.theme.HzColor.Panel)
-                .border(1.dp, dev.horizon.android.ui.theme.HzColor.Hairline, RoundedCornerShape(8.dp)).padding(14.dp)
+            modifier = Modifier.fillMaxWidth(0.62f).widthIn(max = 460.dp).heightIn(max = 360.dp)
+                .clip(RoundedCornerShape(14.dp)).background(style.card)
+                .border(1.dp, dev.horizon.android.ui.theme.HzColor.Hairline, RoundedCornerShape(14.dp)).padding(18.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 trailing?.invoke()
             }
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), content = content)
@@ -298,13 +298,13 @@ private fun PanelButtons(confirmLabel: String, onCancel: () -> Unit, onConfirm: 
 @Composable
 private fun OpItem(icon: ImageVector, label: String, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Row(
-        modifier = modifier.alpha(if (enabled) 1f else 0.4f).clip(RoundedCornerShape(6.dp))
-            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 8.dp, vertical = 7.dp),
+        modifier = modifier.alpha(if (enabled) 1f else 0.4f).clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = LocalControlsCardStyle.current.accent, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Icon(icon, contentDescription = null, tint = LocalControlsCardStyle.current.accent, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -482,7 +482,7 @@ fun ManageLayoutsPanel(
     operate?.let { info ->
         val file = info.removable
         HzWindowDialog(stringResource(R.string.layouts_operate), { operate = null }) {
-            Text(stringResource(R.string.layouts_operate_desc), color = LocalControlsCardStyle.current.muted, fontSize = 10.5.sp, lineHeight = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+            Text(stringResource(R.string.layouts_operate_desc), color = LocalControlsCardStyle.current.muted, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(bottom = 10.dp))
             Row(Modifier.fillMaxWidth()) {
                 OpItem(Icons.Filled.ContentCopy, stringResource(R.string.layouts_copy), true, Modifier.weight(1f)) {
                     runCatching { ControlLayouts.copy(context, info.id, defaultName, copySuffix) }
