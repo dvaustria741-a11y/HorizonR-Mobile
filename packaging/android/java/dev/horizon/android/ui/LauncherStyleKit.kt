@@ -245,6 +245,23 @@ internal fun HzHeroIsland(modifier: Modifier = Modifier) {
     }
 }
 
+/** Empty list: a tinted illustration (white art, coloured by the theme accent) with a plain-words message. */
+@Composable
+internal fun HzEmptyState(art: String, message: String, accent: Color, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val resId = remember(art) { context.resources.getIdentifier(art, "drawable", context.packageName) }
+    Column(
+        modifier = modifier.padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (resId != 0) {
+            Icon(painter = painterResource(id = resId), contentDescription = null, tint = accent.copy(alpha = 0.9f), modifier = Modifier.size(84.dp))
+        }
+        Text(text = message, fontSize = 13.sp, lineHeight = 18.sp, color = VoltMutedText, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
 /** The launcher's logo: the grass cube art when it is bundled, the drawn cube otherwise. */
 @Composable
 internal fun HzBrandCube(size: Dp) {

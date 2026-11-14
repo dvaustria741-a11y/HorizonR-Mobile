@@ -175,15 +175,15 @@ private val DASHBOARD_WALLPAPERS = listOf(
 )
 
 data class HorizonDynamicPalette(
-    val rootBg: Color = Color(0xFF0D0F16),
-    val cardSlateBg: Color = Color(0xFF1A1D25),
-    val cardRowBg: Color = Color(0xFF232731),
-    val subRailCapsuleActive: Color = Color(0xFF2C313D),
-    val skyBlueAccent: Color = Color(0xFF79E59C),
-    val skyBlueDarkText: Color = Color(0xFF0B2616),
-    val lavenderBadgeBg: Color = Color(0xFF2C313D),
-    val lavenderBadgeText: Color = Color(0xFFC6CCC9),
-    val mutedSubtitleText: Color = Color(0xFF9097A6)
+    val rootBg: Color = Color(0xFF0E1220),
+    val cardSlateBg: Color = Color(0xFF161B2E),
+    val cardRowBg: Color = Color(0xFF1E2438),
+    val subRailCapsuleActive: Color = Color(0xFF3A2F2A),
+    val skyBlueAccent: Color = Color(0xFFFFB454),
+    val skyBlueDarkText: Color = Color(0xFF2A1700),
+    val lavenderBadgeBg: Color = Color(0xFF2A3150),
+    val lavenderBadgeText: Color = Color(0xFFFFD9A0),
+    val mutedSubtitleText: Color = Color(0xFF9AA3BF)
 )
 
 private var activeUiPalette by mutableStateOf(HorizonDynamicPalette())
@@ -219,7 +219,20 @@ private fun SyncDynamicLauncherPalette(palette: LauncherThemePalette, useDynamic
             )
         } else {
             when (palette) {
-                LauncherThemePalette.MATERIAL_YOU -> HorizonDynamicPalette()
+                LauncherThemePalette.HORIZON_DUSK -> HorizonDynamicPalette(
+                    rootBg = Color(0xFF0E1220),
+                    cardSlateBg = Color(0xFF161B2E),
+                    cardRowBg = Color(0xFF1E2438),
+                    subRailCapsuleActive = Color(0xFF3A2F2A),
+                    skyBlueAccent = Color(0xFFFFB454),
+                    skyBlueDarkText = Color(0xFF2A1700),
+                    lavenderBadgeBg = Color(0xFF2A3150),
+                    lavenderBadgeText = Color(0xFFFFD9A0),
+                    mutedSubtitleText = Color(0xFF9AA3BF)
+                )
+                LauncherThemePalette.MATERIAL_YOU -> HorizonDynamicPalette(
+                    skyBlueAccent = Color(0xFF79E59C)
+                )
                 LauncherThemePalette.EMBERMIRE -> HorizonDynamicPalette(
                     rootBg = Color(0xFF0D0F16),
                     cardSlateBg = Color(0xFF171A23),
@@ -2913,7 +2926,7 @@ private fun CleanServersViewport(
 
         if (servers.isEmpty()) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text("No servers yet. Add one to see its status here.", fontSize = 12.sp, color = MutedSubtitleText)
+                HzEmptyState("hz_empty_server", "No servers yet. Tap Add server to save one and see if it is online.", SkyBlueAccent)
             }
         } else {
             // Column headers
@@ -6203,18 +6216,7 @@ private fun CleanFilesViewport(
                                 shape = RoundedCornerShape(8.dp),
                                 color = CardRowBg
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Icon(Icons.Default.FolderOpen, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(18.dp))
-                                    Text(
-                                        text = emptyLabel,
-                                        fontSize = 12.sp,
-                                        color = Color(0xFFD5DEE5)
-                                    )
-                                }
+                                HzEmptyState("hz_empty_chest", emptyLabel, SkyBlueAccent)
                             }
                         }
                     } else {

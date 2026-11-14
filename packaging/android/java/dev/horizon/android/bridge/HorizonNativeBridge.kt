@@ -1307,8 +1307,10 @@ object HorizonNativeBridge {
                 val shaderSrcKey = obj.optString("shader_source", HorizonContentOrigin.HORIZON.serdeKey)
                 val shaderSource = HorizonContentOrigin.entries.firstOrNull { it.serdeKey == shaderSrcKey }
                     ?: HorizonContentOrigin.HORIZON
-                val paletteName = obj.optString("themePalette", LauncherThemePalette.MATERIAL_YOU.name)
-                val palette = runCatching { LauncherThemePalette.valueOf(paletteName) }.getOrDefault(LauncherThemePalette.MATERIAL_YOU)
+                val paletteName = obj.optString("themePalette", LauncherThemePalette.HORIZON_DUSK.name)
+                val storedPalette = runCatching { LauncherThemePalette.valueOf(paletteName) }.getOrDefault(LauncherThemePalette.HORIZON_DUSK)
+                // Configs saved before the Horizon Dusk theme existed still say "Volt": move them over once.
+                val palette = if (!obj.optBoolean("paletteV2", false) && storedPalette == LauncherThemePalette.MATERIAL_YOU) LauncherThemePalette.HORIZON_DUSK else storedPalette
 
                 state = HorizonConfigState(
                     profile = obj.optInt("profile", 0).coerceIn(0, 3),
@@ -1364,7 +1366,7 @@ object HorizonNativeBridge {
                     mcVsync = obj.optBoolean("mcVsync", true),
                     mcFullscreen = obj.optBoolean("mcFullscreen", true),
                     themePalette = palette,
-                    useDynamicColor = obj.optBoolean("useDynamicColor", true),
+                    useDynamicColor = obj.optBoolean("useDynamicColor", false) && obj.optBoolean("paletteV2", false),
                     enableSystemLog = obj.optBoolean("enableSystemLog", true),
                     disableAudioSafeMode = obj.optBoolean("disableAudioSafeMode", false),
                     discordRichPresence = obj.optBoolean("discordRichPresence", true),
@@ -1477,6 +1479,7 @@ object HorizonNativeBridge {
             put("mcVsync", config.mcVsync)
             put("mcFullscreen", config.mcFullscreen)
             put("themePalette", config.themePalette.name)
+            put("paletteV2", true)
             put("useDynamicColor", config.useDynamicColor)
             put("enableSystemLog", config.enableSystemLog)
             put("disableAudioSafeMode", config.disableAudioSafeMode)
