@@ -73,7 +73,7 @@ class JvmService : Service() {
         stage(dir, "installing")
         val home = ProbeFiles.runtimeHome(this)
         try {
-            val install = RuntimeInstaller.ensure(this, home)
+            val install = RuntimeInstaller.ensure(this, home) { done, total -> stage(dir, "installing", "copied $done of $total files") }
             ProbeFiles.writeKeyValues(
                 File(dir, ProbeFiles.INSTALL),
                 mapOf(

@@ -54,4 +54,5 @@
     <string name="channel_name">JVM probe</string>
     <string name="notification_title">JVM probe is running</string>
     <string name="start_failed">could not start the JVM service: %1$s (if the message says process is bad, force-stop this app in Settings and try again)</string>
+    <string name="last_stage_label">Last stage reached before the death</string>
 </resources>

@@ -32,7 +32,7 @@ object RuntimeInstaller {
         return out
     }
 
-    fun ensure(context: Context, home: File): Result {
+    fun ensure(context: Context, home: File, progress: (done: Int, total: Int) -> Unit = { _, _ -> }): Result {
         val started = System.nanoTime()
         val stamp = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime.toString()
         val entries = context.assets.open("$ASSET_ROOT/manifest.txt").bufferedReader().use { parseManifest(it.readLines()) }
@@ -43,7 +43,8 @@ object RuntimeInstaller {
             return Result(true, entries.size, total, 0)
         }
         home.deleteRecursively()
-        for (entry in entries) {
+        for ((index, entry) in entries.withIndex()) {
+            if (index % 10 == 0) progress(index, entries.size)
             val target = File(home, entry.path)
             target.parentFile?.mkdirs()
             val copied = context.assets.open("$ASSET_ROOT/${entry.path}").use { input ->

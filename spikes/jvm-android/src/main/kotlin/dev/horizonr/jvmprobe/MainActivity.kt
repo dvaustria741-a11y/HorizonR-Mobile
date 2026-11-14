@@ -25,6 +25,7 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private var polling = false
     private var startedAtMs = 0L
+    private var deadPolls = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +76,7 @@ class MainActivity : Activity() {
         ProbeFiles.reset(dir)
         ProbeFiles.writeKeyValues(File(dir, ProbeFiles.STAGE), mapOf("pid" to "0", "stage" to "starting", "mode" to mode.toString()))
         startedAtMs = System.currentTimeMillis()
+        deadPolls = 0
         val intent = Intent(this, JvmService::class.java)
             .putExtra(ProbeFiles.EXTRA_MODE, mode)
             .putExtra(ProbeFiles.EXTRA_HEAP_MIB, ProbeFiles.DEFAULT_HEAP_MIB)
@@ -99,7 +101,15 @@ class MainActivity : Activity() {
             override fun run() {
                 if (!polling) return
                 val state = render()
-                if (state == State.RUNNING) handler.postDelayed(this, 500) else polling = false
+                if (state == State.RUNNING) {
+                    deadPolls = 0
+                    handler.postDelayed(this, 500)
+                } else if (state == State.DIED && deadPolls++ < 8) {
+                    // Android records the exit reason a moment after the death; keep rendering so it shows up.
+                    handler.postDelayed(this, 1000)
+                } else {
+                    polling = false
+                }
             }
         })
     }
@@ -164,6 +174,9 @@ class MainActivity : Activity() {
             else -> getString(R.string.status_died)
         }
         out.append(line(R.string.status_label, status))
+        if (state == State.DIED) {
+            out.append(line(R.string.last_stage_label, (stage["stage"] ?: unknown) + (stage["detail"]?.let { " ($it)" } ?: "")))
+        }
         out.append(line(R.string.mode_label, getString(if (stage["mode"] == NativeBoot.MODE_JLI.toString() || merged["mode"] == NativeBoot.MODE_JLI.toString()) R.string.mode_jli else R.string.mode_jni)))
         out.append(line(R.string.heap_label, getString(R.string.heap_value, (merged["heap_mib"] ?: ProbeFiles.DEFAULT_HEAP_MIB.toString()))))
         if (install.isNotEmpty()) {
