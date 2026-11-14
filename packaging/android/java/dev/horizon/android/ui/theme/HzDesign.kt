@@ -54,6 +54,40 @@ object HzColor {
     val Hairline = Color(0x1FFFFFFF)
     val Glass = Color(0xD0111419)
     val Danger = Color(0xFFFF8A80)
+
+    /** Recessed wells: log boxes, text fields, anything that sits inside a Panel. */
+    val PanelLow = Color(0xFF0F131A)
+
+    /** Hairline for focused or selected outlines and for dividers on bright surfaces. */
+    val HairlineStrong = Color(0x38FFFFFF)
+
+    /** Fill behind destructive buttons and error banners. */
+    val DangerFill = Color(0xFF3A2326)
+
+    /** State colours: one green, one amber, used for ready / paused everywhere. */
+    val Success = Color(0xFF81C784)
+    val Warning = Color(0xFFFFB74D)
+}
+
+/** One 4dp spacing grid for gaps and paddings: 4, 8, 12, 16, 24. */
+object HzSpace {
+    val XS = 4.dp
+    val S = 8.dp
+    val M = 12.dp
+    val L = 16.dp
+    val XL = 24.dp
+}
+
+/**
+ * Text sizes used by launcher pages (sp). Titles 16, section labels 13, body 12, captions 11,
+ * mono micro labels 10. Pages pick from here instead of inventing a size.
+ */
+object HzText {
+    const val PageTitle = 16f
+    const val Section = 13f
+    const val Body = 12f
+    const val Caption = 11f
+    const val Micro = 10f
 }
 
 /** Small radii on purpose: a desktop launcher, not a toy. */

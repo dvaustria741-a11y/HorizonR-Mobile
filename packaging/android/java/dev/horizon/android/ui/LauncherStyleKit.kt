@@ -77,6 +77,7 @@ import dev.horizon.android.ui.theme.HzColor
 import dev.horizon.android.ui.theme.HzFont
 import dev.horizon.android.ui.theme.HzMotion
 import dev.horizon.android.ui.theme.HzShape
+import dev.horizon.android.ui.theme.HzSpace
 import kotlinx.coroutines.delay
 
 /** Neutral dark surfaces shared by every launcher page: dark gray cards, a hairline stroke. */
@@ -176,6 +177,9 @@ internal fun HzTopBar(
                 WindowInsets.safeDrawing.union(WindowInsets.displayCutout).only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
             )
             .height(50.dp)
+            .drawBehind {
+                drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
+            }
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -254,6 +258,12 @@ private fun HzNavTab(entry: HzNavEntry, selected: Boolean, label: String, accent
             .animatedPressScale(pressedScale = 0.97f, onClick = onClick)
             .drawBehind {
                 if (bar > 0.01f) {
+                    drawRoundRect(
+                        color = accent.copy(alpha = 0.10f * bar),
+                        topLeft = Offset(4.dp.toPx(), 7.dp.toPx()),
+                        size = Size(size.width - 8.dp.toPx(), size.height - 14.dp.toPx()),
+                        cornerRadius = CornerRadius(6.dp.toPx())
+                    )
                     val w = size.width * 0.6f * bar
                     drawRoundRect(
                         color = accent,
@@ -298,7 +308,7 @@ private fun HzNavIcon(name: String, fallback: ImageVector, description: String, 
 
 /** Mono tag, e.g. a version number: hairline outline, no fill. */
 @Composable
-private fun HzTag(text: String, modifier: Modifier = Modifier) {
+internal fun HzTag(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         fontFamily = HzFont.Mono,
@@ -398,8 +408,8 @@ private fun HzPlayButton(installStatus: AssetInstallStatus, accent: Color, onLau
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .width(168.dp)
-            .height(46.dp)
+            .width(176.dp)
+            .height(48.dp)
             .animatedPressScale(onClick = onLaunch)
             .clip(HzShape.Control)
             .background(if (busy) HzColor.PanelHi else accent)
@@ -434,7 +444,7 @@ private fun HzPlayButton(installStatus: AssetInstallStatus, accent: Color, onLau
 private fun HzGhostButton(label: String, iconName: String, fallback: ImageVector, onClick: () -> Unit) {
     Row(
         modifier = Modifier
-            .height(46.dp)
+            .height(48.dp)
             .animatedPressScale(onClick = onClick)
             .clip(HzShape.Control)
             .background(HzColor.Glass)
@@ -961,5 +971,178 @@ internal fun HzToolbarButton(
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = if (filled) onAccent else accent, modifier = Modifier.size(14.dp))
         Text(text = label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (filled) onAccent else VoltTextMain, maxLines = 1)
+    }
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// Shared page components. Every launcher page builds from these so spacing, radii, text sizes and
+// button styles stay identical from page to page.
+// ---------------------------------------------------------------------------------------------
+
+internal enum class HzButtonKind { Primary, Secondary, Danger }
+
+/** The one button: icon and label, 40dp tall. Primary is the accent, Secondary a raised panel, Danger a red one. */
+@Composable
+internal fun HzButton(
+    label: String,
+    icon: ImageVector,
+    kind: HzButtonKind,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val onAccent = if (accent.luminance() > 0.45f) Color(0xFF0B0F0D) else Color.White
+    val fill = when (kind) {
+        HzButtonKind.Primary -> accent
+        HzButtonKind.Secondary -> HzColor.PanelHi
+        HzButtonKind.Danger -> HzColor.DangerFill
+    }
+    val text = when (kind) {
+        HzButtonKind.Primary -> onAccent
+        HzButtonKind.Secondary -> VoltTextMain
+        HzButtonKind.Danger -> HzColor.Danger
+    }
+    val glyph = when (kind) {
+        HzButtonKind.Primary -> onAccent
+        HzButtonKind.Secondary -> accent
+        HzButtonKind.Danger -> HzColor.Danger
+    }
+    val outline = when (kind) {
+        HzButtonKind.Primary -> Color.Transparent
+        HzButtonKind.Secondary -> HzColor.Hairline
+        HzButtonKind.Danger -> HzColor.Danger.copy(alpha = 0.22f)
+    }
+    Row(
+        modifier = modifier
+            .height(40.dp)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
+            .animatedPressScale(enabled = enabled, pressedScale = 0.97f, onClick = onClick)
+            .clip(HzShape.Control)
+            .background(fill)
+            .border(1.dp, outline, HzShape.Control)
+            .padding(horizontal = HzSpace.M),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = glyph, modifier = Modifier.size(16.dp))
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** A raised panel with a hairline outline and 12dp of padding; children are 12dp apart. */
+@Composable
+internal fun HzCard(
+    modifier: Modifier = Modifier,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(HzShape.Panel)
+            .background(HzColor.Panel)
+            .border(1.dp, HzColor.Hairline, HzShape.Panel)
+            .padding(HzSpace.M),
+        verticalArrangement = Arrangement.spacedBy(HzSpace.M),
+        content = content
+    )
+}
+
+/** Page title with an optional one-line subtitle; [trailing] is pinned to the right edge. */
+@Composable
+internal fun HzPageHeader(
+    title: String,
+    subtitle: String?,
+    modifier: Modifier = Modifier,
+    trailing: @Composable () -> Unit = {}
+) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = VoltTextMain,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = VoltMutedText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        trailing()
+    }
+}
+
+/** Small pill with a status dot, e.g. Ready, Paused, Offline. */
+@Composable
+internal fun HzStatusPill(text: String, color: Color, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.14f))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Box(modifier = Modifier.size(6.dp).clip(RoundedCornerShape(50)).background(color))
+        Text(text = text, fontSize = 10.5.sp, lineHeight = 13.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1)
+    }
+}
+
+/** Thin progress bar; [progress] is 0..1 and should already be animated by the caller. */
+@Composable
+internal fun HzProgressBar(progress: Float, color: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(4.dp)
+            .clip(RoundedCornerShape(50))
+            .background(HzColor.PanelHi)
+            .drawBehind {
+                drawRect(color = color, size = Size(size.width * progress.coerceIn(0f, 1f), size.height))
+            }
+    )
+}
+
+/** Label on the left, mono value on the right, hairline underneath: one line of a spec table. */
+@Composable
+internal fun HzSpecRow(label: String, value: String, valueColor: Color = VoltTextMain) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
+            }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, fontSize = 11.5.sp, lineHeight = 15.sp, color = VoltMutedText, modifier = Modifier.weight(1f))
+        Text(
+            text = value,
+            fontFamily = HzFont.Mono,
+            fontSize = 11.5.sp,
+            lineHeight = 15.sp,
+            color = valueColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

@@ -95,6 +95,7 @@ import dev.horizon.android.ui.theme.HzColor
 import dev.horizon.android.ui.theme.HzFont
 import dev.horizon.android.ui.theme.HzMotion
 import dev.horizon.android.ui.theme.HzShape
+import dev.horizon.android.ui.theme.HzSpace
 import dev.horizon.android.HorizonActivity
 import dev.horizon.android.bridge.*
 import dev.horizon.android.model.*
@@ -2898,33 +2899,15 @@ private fun CleanServersViewport(
     }
 
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Toolbar: title and count on the left, actions on the right.
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Servers", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Spacer(Modifier.width(8.dp))
-            Text("${servers.size}", fontFamily = HzFont.Mono, fontSize = 11.sp, color = MutedSubtitleText)
-            Spacer(Modifier.weight(1f))
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(28.dp)
-                    .animatedPressScale(pressedScale = 0.94f) { refreshTick++ }
-                    .clip(HzShape.Control)
-                    .background(HzColor.PanelHi)
-            ) { Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color(0xFFD5DEE5), modifier = Modifier.size(15.dp)) }
-            Spacer(Modifier.width(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier
-                    .height(28.dp)
-                    .animatedPressScale(pressedScale = 0.96f) { editing = null; showEditor = true }
-                    .clip(HzShape.Control)
-                    .background(SkyBlueAccent)
-                    .padding(horizontal = 10.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(14.dp))
-                Text("Add server", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = SkyBlueDarkText)
+        HzPageHeader(
+            title = "Servers",
+            subtitle = if (servers.size == 1) "1 saved server" else "${servers.size} saved servers"
+        ) {
+            HzIconButton(icon = Icons.Default.Refresh, contentDescription = "Refresh") { refreshTick++ }
+            Spacer(Modifier.width(HzSpace.S))
+            HzToolbarButton(label = "Add server", icon = Icons.Default.Add, accent = SkyBlueAccent, filled = true) {
+                editing = null
+                showEditor = true
             }
         }
 
@@ -3497,23 +3480,10 @@ private fun CleanVersionsViewport(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Header Row: Simple Title & Subtitle (Status pill removed per user request!)
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = "Game & assets",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = "Install, repair or remove the Minecraft asset pack",
-                    fontSize = 10.5.sp,
-                    color = MutedSubtitleText
-                )
-            }
+            HzPageHeader(
+                title = "Game & assets",
+                subtitle = "Install, repair or remove the Minecraft asset pack"
+            )
 
             // Main Clean Version & Assets Card
             Surface(
@@ -3573,26 +3543,13 @@ private fun CleanVersionsViewport(
 
                     // Spec table: label left, mono value right, hairlines between.
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        val specs = listOf(
-                            Triple("Asset status", if (installStatus.ready) "Complete" else "${installStatus.percent}% downloaded",
-                                if (installStatus.ready) Color(0xFF81C784) else Color.White),
-                            Triple("Components", "Worldgen + 60 touch icons", SkyBlueAccent),
-                            Triple("Disk size", installedSizeText, Color.White)
+                        HzSpecRow(
+                            "Asset status",
+                            if (installStatus.ready) "Complete" else "${installStatus.percent}% downloaded",
+                            if (installStatus.ready) HzColor.Success else VoltTextMain
                         )
-                        specs.forEach { (k, v, c) ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .drawBehind {
-                                        drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
-                                    }
-                                    .padding(vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(k, fontSize = 11.sp, color = MutedSubtitleText, modifier = Modifier.weight(1f))
-                                Text(v, fontFamily = HzFont.Mono, fontSize = 11.sp, color = c, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
+                        HzSpecRow("Components", "Worldgen + 60 touch icons", SkyBlueAccent)
+                        HzSpecRow("Disk size", installedSizeText, VoltTextMain)
                     }
 
                     // Row 3: Progress Bar (shown cleanly when downloading or when progress > 0)
@@ -3604,7 +3561,7 @@ private fun CleanVersionsViewport(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (isRepairRunning) "Memverifikasi & Memperbaiki File..." else installStatus.stage,
+                                    text = if (isRepairRunning) "Verifying and repairing files..." else installStatus.stage,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (installStatus.paused) Color(0xFFFFB74D) else SkyBlueAccent,
@@ -3626,14 +3583,9 @@ private fun CleanVersionsViewport(
                                     color = Color.White
                                 )
                             }
-                            LinearProgressIndicator(
-                                progress = { if (isRepairRunning) 1f else animatedProgress },
-                                color = if (installStatus.ready) Color(0xFF81C784) else SkyBlueAccent,
-                                trackColor = Color(0xFF33424B),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(50))
+                            HzProgressBar(
+                                progress = if (isRepairRunning) 1f else animatedProgress,
+                                color = if (installStatus.ready) HzColor.Success else SkyBlueAccent
                             )
                         }
                     }
@@ -3653,170 +3605,61 @@ private fun CleanVersionsViewport(
                         }
                     }
 
-                    // Row 4: Clean Action Buttons Bar (Download/Pause, Repair Pop-Up, Hapus Total Pop-Up)
+                    // Actions: running downloads get Pause/Cancel, otherwise Verify/Repair/Delete.
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (installStatus.running) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = SkyBlueAccent,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .animatedPressScale {
-                                        if (installStatus.paused) onResumeDownload() else onPauseDownload()
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (installStatus.paused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                                        contentDescription = null,
-                                        tint = SkyBlueDarkText,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = if (installStatus.paused) "Resume Download" else "Pause",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SkyBlueDarkText,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF3A2326),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .animatedPressScale { showCancelConfirmDialog = true }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.Cancel, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = "Cancel Download",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFFF8A80),
-                                        maxLines = 1
-                                    )
-                                }
-                            }
+                            HzButton(
+                                label = if (installStatus.paused) "Resume download" else "Pause",
+                                icon = if (installStatus.paused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                kind = HzButtonKind.Primary,
+                                accent = SkyBlueAccent,
+                                modifier = Modifier.weight(1f),
+                                onClick = { if (installStatus.paused) onResumeDownload() else onPauseDownload() }
+                            )
+                            HzButton(
+                                label = "Cancel download",
+                                icon = Icons.Default.Cancel,
+                                kind = HzButtonKind.Danger,
+                                accent = SkyBlueAccent,
+                                modifier = Modifier.weight(1f),
+                                onClick = { showCancelConfirmDialog = true }
+                            )
                         } else {
-                            // 1. Download / Re-Download Button
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = SkyBlueAccent,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .animatedPressScale {
-                                        if (installStatus.ready) {
-                                            showRepairConfirmDialog = true
-                                        } else {
-                                            onStartDownload()
-                                        }
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (installStatus.ready) Icons.Default.Verified else Icons.Default.Download,
-                                        contentDescription = null,
-                                        tint = SkyBlueDarkText,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = if (installStatus.ready) "Verify Assets" else "Download Assets",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SkyBlueDarkText,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-
-                            // 2. Smart Repair Button (Opens Repair Confirmation & Result Pop-Up!)
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = SubRailCapsuleActive,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .animatedPressScale { showRepairConfirmDialog = true }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Build,
-                                        contentDescription = null,
-                                        tint = SkyBlueAccent,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = "Repair Assets",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-
-                            // 3. Hapus Total Semua Aset Button (Opens Delete All Confirmation Pop-Up!)
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF3A2326),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .animatedPressScale { showDeleteAllConfirmDialog = true }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Delete,
-                                        contentDescription = null,
-                                        tint = Color(0xFFFF8A80),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = "Delete All Assets",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFFF8A80),
-                                        maxLines = 1
-                                    )
-                                }
-                            }
+                            HzButton(
+                                label = if (installStatus.ready) "Verify Assets" else "Download Assets",
+                                icon = if (installStatus.ready) Icons.Default.Verified else Icons.Default.Download,
+                                kind = HzButtonKind.Primary,
+                                accent = SkyBlueAccent,
+                                modifier = Modifier.weight(1f),
+                                onClick = { if (installStatus.ready) showRepairConfirmDialog = true else onStartDownload() }
+                            )
+                            HzButton(
+                                label = "Repair Assets",
+                                icon = Icons.Default.Build,
+                                kind = HzButtonKind.Secondary,
+                                accent = SkyBlueAccent,
+                                modifier = Modifier.weight(1f),
+                                onClick = { showRepairConfirmDialog = true }
+                            )
+                            HzButton(
+                                label = "Delete All Assets",
+                                icon = Icons.Outlined.Delete,
+                                kind = HzButtonKind.Danger,
+                                accent = SkyBlueAccent,
+                                modifier = Modifier.weight(1f),
+                                onClick = { showDeleteAllConfirmDialog = true }
+                            )
                         }
                     }
 
-                    // Row 5: Compact Collapsible Download & Repair Log
+                    // Collapsible download and repair log
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF181E22),
+                        shape = HzShape.Control,
+                        color = HzColor.PanelLow,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
@@ -3892,8 +3735,8 @@ private fun CleanVersionsViewport(
                                         .fillMaxWidth()
                                         .heightIn(min = 60.dp, max = 130.dp)
                                         .padding(start = 10.dp, end = 10.dp, bottom = 10.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF0E1215))
+                                        .clip(HzShape.Control)
+                                        .background(HzColor.Rail)
                                         .padding(8.dp)
                                         .verticalScroll(rememberScrollState())
                                 ) {
