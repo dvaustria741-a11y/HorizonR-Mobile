@@ -39,6 +39,9 @@ object ServerConfig {
         "server-port=$SERVER_PORT",
         "view-distance=2",
         "simulation-distance=2",
+        // The 21:52 join was refused with "not white-listed" although nothing here asked for a whitelist: state it off.
+        "white-list=false",
+        "enforce-whitelist=false",
     )
 
     /** Status ping after "Done": tries, pause between tries and per-try timeout. Guesses. */

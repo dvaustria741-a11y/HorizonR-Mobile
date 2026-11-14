@@ -42,6 +42,14 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
   read "Offline or unreachable" and a join was impossible. Android also killed the probe's UI process for low memory at
   21:32:58 (exit reason LOW_MEMORY, importance 400) while HorizonR was in use; the foreground `:jvm` process was not
   killed by it. Build 15 adds "Run server and keep it running (join test)" and a "Stop the server" button; unbuilt.
+- Join attempt (user, 21:52 and 21:53 device time, build 15, exports 21:56): HorizonR's Multiplayer entry "probe"
+  (127.0.0.1:25565) reached our Fabric 26.3 server. The server log shows player ZensoQP1 from 127.0.0.1 disconnected
+  with "You are not white-listed on this server!" twice (and a "handleDisconnection() called twice" warning). So the
+  client's handshake and login hello on protocol 777 worked up to the whitelist check; the cause of the whitelist is
+  unknown (the probe writes no whitelist setting; build 16 sets `white-list=false` and `enforce-whitelist=false`).
+  Also in that run: the JVM process's last heartbeat showed RSS 82 MiB (from about 600 MiB) and the report says it died
+  without a result; Android's exit record for it was not in the export yet, so the cause is unconfirmed. Earlier exit
+  records: probe UI process LOW_MEMORY at 21:52:10, an earlier `:jvm` SIGKILL at 21:50:10.
 - Step 3 (sample): `spikes/mod-api-scan`. AppleSkin 3.0.10 55 classes/68 methods/19 fields, Clumps 26.3.2
   13/21/2, Xaero's Minimap 26.6.2 353/566/155 (+ nested xaerolib 137/250/31). Union of the three: 385 classes,
   634 methods, 169 fields. Mixin shapes seen: Inject, ModifyVariable, ModifyArg, ModifyReturnValue, Accessor, Shadow.
