@@ -8173,68 +8173,20 @@ private fun CleanSettingsViewport(
                             }
                         )
 
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animatedPressScale { onCheckForUpdatesManual() }
+                        HzSettingRow(
+                            title = "Check for launcher updates",
+                            description = "HorizonR v${HorizonNativeBridge.launcherVersionName(context)}  ·  github.com/${HorizonNativeBridge.GITHUB_FORK_REPO_SLUG}/releases",
+                            onClick = { onCheckForUpdatesManual() }
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 18.dp, vertical = 14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Text(
-                                        text = "Check for Launcher Updates (HorizonR v${HorizonNativeBridge.launcherVersionName(context)})",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = "Connected to official fork: github.com/${HorizonNativeBridge.GITHUB_FORK_REPO_SLUG}/releases",
-                                        fontSize = 12.sp,
-                                        color = SkyBlueAccent
-                                    )
-                                }
-                                Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = SkyBlueAccent)
-                            }
+                            HzToolbarButton(label = "Check", icon = Icons.Default.SystemUpdate, accent = SkyBlueAccent) { onCheckForUpdatesManual() }
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = CardSlateBg,
-                            border = BorderStroke(1.dp, VoltGrayStroke),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animatedPressScale { showLauncherVersions = true }
+                        HzSettingRow(
+                            title = "Launcher versions",
+                            description = "Update to or go back to any released version",
+                            onClick = { showLauncherVersions = true }
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 18.dp, vertical = 14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Text(
-                                        text = "Launcher Versions",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = "Update to or go back to any released version",
-                                        fontSize = 12.sp,
-                                        color = SkyBlueAccent
-                                    )
-                                }
-                                Icon(Icons.Default.History, contentDescription = null, tint = SkyBlueAccent)
-                            }
+                            HzToolbarButton(label = "Browse", icon = Icons.Default.History, accent = SkyBlueAccent) { showLauncherVersions = true }
                         }
 
                         LauncherSettingDropdownCard(
