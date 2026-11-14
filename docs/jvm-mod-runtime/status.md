@@ -36,6 +36,12 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
   The `stop` console command now ends cleanly: "Stopping server" and the saves are in the log, JLI_Launch returned
   exit code 0 after 89.1 s. The app's verdict line printed "FAIL or not finished" even though Done was reached; I infer
   it is the ERROR line from the JNA failure above (the app source was not checked). Same JNA/`libc.so.6` error as before.
+- Second build 14 run (user-uploaded report, 21:37 device time): Done 14.947 s in the log, 59.6 s from service start
+  with the launcher and mod cached; RSS 10 s after Done 600.2 MiB, peak 606.6 MiB, 59 threads; ping 50 ms, protocol 777.
+  The probe stops the server 10 s after Done (`SETTLE_SECONDS`, by design for measuring), so the HorizonR entry "probe"
+  read "Offline or unreachable" and a join was impossible. Android also killed the probe's UI process for low memory at
+  21:32:58 (exit reason LOW_MEMORY, importance 400) while HorizonR was in use; the foreground `:jvm` process was not
+  killed by it. Build 15 adds "Run server and keep it running (join test)" and a "Stop the server" button; unbuilt.
 - Step 3 (sample): `spikes/mod-api-scan`. AppleSkin 3.0.10 55 classes/68 methods/19 fields, Clumps 26.3.2
   13/21/2, Xaero's Minimap 26.6.2 353/566/155 (+ nested xaerolib 137/250/31). Union of the three: 385 classes,
   634 methods, 169 fields. Mixin shapes seen: Inject, ModifyVariable, ModifyArg, ModifyReturnValue, Accessor, Shadow.
@@ -66,5 +72,5 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
 - A facade design for client-side mods. Server-side Fabric mods need none: the real Mojang server runs on the JVM.
 
 ## Next step
-Join test: start the server in the probe app, open Horizon on the same phone, add 127.0.0.1:25565 in Multiplayer, join,
+Join test (needs build 15): start the server with the keep-running button, open Horizon on the same phone, add 127.0.0.1:25565 in Multiplayer, join,
 and report what happens (success, kick text, crash). That closes the protocol-777 question of Step 2.

@@ -29,6 +29,12 @@ class JvmService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.getBooleanExtra(ProbeFiles.EXTRA_STOP, false) == true) {
+            // A stop request is not a boot. In a process that never started a server there is nothing to stop.
+            if (used) stopRequested = true else Process.killProcess(Process.myPid())
+            return START_NOT_STICKY
+        }
+        keepRunning = intent?.getBooleanExtra(ProbeFiles.EXTRA_KEEP_RUNNING, false) ?: false
         val mode = intent?.getIntExtra(ProbeFiles.EXTRA_MODE, -1) ?: -1
         currentMode = mode
         val heap = intent?.getIntExtra(ProbeFiles.EXTRA_HEAP_MIB, ProbeFiles.DEFAULT_HEAP_MIB) ?: ProbeFiles.DEFAULT_HEAP_MIB
@@ -172,6 +178,13 @@ class JvmService : Service() {
             results["rss_peak_kib"] = ProbeFiles.parseStatusNumber(status, "VmHWM")?.toString() ?: "unknown"
             results["threads"] = ProbeFiles.parseStatusNumber(status, "Threads")?.toString() ?: "unknown"
             results["settle_s"] = ServerConfig.SETTLE_SECONDS.toString()
+            if (keepRunning) {
+                // Join-test mode: the measurements are taken, now leave the server up until the Stop button.
+                results["stop"] = "kept running until a stop request"
+                ProbeFiles.writeKeyValues(File(dir, ProbeFiles.SERVER), results)
+                stage(dir, "server_running", "join 127.0.0.1:${ServerConfig.SERVER_PORT}, then tap Stop")
+                while (!stopRequested) Thread.sleep(500)
+            }
             val viaConsole = console != null && sendConsoleStop(console)
             results["stop"] = if (viaConsole) "console command '${ServerConfig.STOP_COMMAND}' sent" else "SIGTERM sent (no console)"
             ProbeFiles.writeKeyValues(File(dir, ProbeFiles.SERVER), results)
@@ -232,6 +245,14 @@ class JvmService : Service() {
 
         @Volatile
         var used = false
+
+        /** Set from the intent of a server run: keep the server up after the measurements. */
+        @Volatile
+        var keepRunning = false
+
+        /** Set by a stop intent; the server monitor then sends the console `stop`. */
+        @Volatile
+        var stopRequested = false
 
         /** The mode of this process's run, written into every stage file so the screen can name the run. */
         @Volatile

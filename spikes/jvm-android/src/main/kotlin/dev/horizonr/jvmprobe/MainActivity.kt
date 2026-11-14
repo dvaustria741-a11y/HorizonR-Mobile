@@ -61,6 +61,14 @@ class MainActivity : Activity() {
             setOnClickListener { confirmServer() }
         })
         column.addView(Button(this).apply {
+            setText(R.string.button_server_keep)
+            setOnClickListener { confirmServer(true) }
+        })
+        column.addView(Button(this).apply {
+            setText(R.string.button_stop_server)
+            setOnClickListener { stopServer() }
+        })
+        column.addView(Button(this).apply {
             setText(R.string.button_export)
             setOnClickListener { confirmExport() }
         })
@@ -87,10 +95,10 @@ class MainActivity : Activity() {
     }
 
     /** The server run writes `eula.txt`, so it asks once; the answer is kept in this app's private preferences. */
-    private fun confirmServer() {
+    private fun confirmServer(keepRunning: Boolean = false) {
         val prefs = getSharedPreferences("probe", Context.MODE_PRIVATE)
         if (prefs.getBoolean("eula_accepted", false)) {
-            start(NativeBoot.MODE_SERVER, true)
+            start(NativeBoot.MODE_SERVER, true, keepRunning)
             return
         }
         AlertDialog.Builder(this)
@@ -98,7 +106,7 @@ class MainActivity : Activity() {
             .setMessage(getString(R.string.eula_message, ServerConfig.EULA_URL))
             .setPositiveButton(R.string.eula_accept) { _, _ ->
                 prefs.edit().putBoolean("eula_accepted", true).apply()
-                start(NativeBoot.MODE_SERVER, true)
+                start(NativeBoot.MODE_SERVER, true, keepRunning)
             }
             .setNegativeButton(R.string.eula_cancel, null)
             .show()
@@ -146,7 +154,17 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun start(mode: Int, foreground: Boolean) {
+    /** Asks the running `:jvm` process to stop its server with the console command. Harmless when none is running. */
+    private fun stopServer() {
+        try {
+            startService(Intent(this, JvmService::class.java).putExtra(ProbeFiles.EXTRA_STOP, true))
+        } catch (e: RuntimeException) {
+            AlertDialog.Builder(this).setMessage(getString(R.string.start_failed, e.message ?: e.javaClass.simpleName)).setPositiveButton(android.R.string.ok, null).show()
+        }
+        poll()
+    }
+
+    private fun start(mode: Int, foreground: Boolean, keepRunning: Boolean = false) {
         val dir = ProbeFiles.dir(this)
         File(filesDir, ProbeFiles.LAST_CRASH).delete()
         ProbeFiles.killStaleJvm(dir)
@@ -160,6 +178,7 @@ class MainActivity : Activity() {
             .putExtra(ProbeFiles.EXTRA_FOREGROUND, foreground)
             // Only reached after the dialog above (or an earlier acceptance); the service refuses a server run without it.
             .putExtra(ProbeFiles.EXTRA_EULA, mode == NativeBoot.MODE_SERVER)
+            .putExtra(ProbeFiles.EXTRA_KEEP_RUNNING, keepRunning)
         try {
             if (foreground) startForegroundService(intent) else startService(intent)
         } catch (e: RuntimeException) {

@@ -29,6 +29,10 @@ object ProbeFiles {
     const val EXTRA_HEAP_MIB = "heap_mib"
     const val EXTRA_FOREGROUND = "foreground"
     const val EXTRA_EULA = "eula"
+    /** Server run only: keep the server up after the measurements until a stop request arrives. */
+    const val EXTRA_KEEP_RUNNING = "keep_running"
+    /** An intent carrying only this extra asks the running `:jvm` process to stop its server. */
+    const val EXTRA_STOP = "stop_request"
 
     /** Results the `:jvm` process writes while a server run is going (see JvmService). */
     const val SERVER = "server.txt"

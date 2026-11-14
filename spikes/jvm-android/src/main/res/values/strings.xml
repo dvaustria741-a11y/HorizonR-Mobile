@@ -56,6 +56,8 @@
     <string name="start_failed">could not start the JVM service: %1$s (if the message says process is bad, force-stop this app in Settings and try again)</string>
     <string name="last_stage_label">Last stage reached before the death</string>
     <string name="button_server">Run Fabric 26.3 server (Clumps)</string>
+    <string name="button_server_keep">Run server and keep it running (join test)</string>
+    <string name="button_stop_server">Stop the server</string>
     <string name="mode_server">Fabric server jar on JLI_Launch</string>
     <string name="status_server_stopped">finished: the probe stopped the server (SIGTERM) after it was ready</string>
     <string name="eula_title">Minecraft EULA</string>
