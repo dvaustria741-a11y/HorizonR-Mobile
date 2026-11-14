@@ -74,4 +74,11 @@
     <string name="server_gc_header">GC log (init lines)</string>
     <string name="server_live_header">Server log (last lines)</string>
     <string name="server_tail_header">Server log (last lines, not a pass)</string>
+    <string name="button_export">Export logs to phone storage</string>
+    <string name="export_title">Export logs</string>
+    <string name="export_message">Copies this report and the probe and server logs into a folder named %1$s on your phone, so you can open or share them from a file manager. Android asks for storage access first; if you refuse, they go to the Downloads folder instead.</string>
+    <string name="export_ok">Export</string>
+    <string name="export_done">Saved %1$s files to %2$s.</string>
+    <string name="export_not_saved">Not saved: %1$s</string>
+    <string name="export_failed">Export failed: %1$s</string>
 </resources>

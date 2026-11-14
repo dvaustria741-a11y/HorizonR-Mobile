@@ -1,10 +1,12 @@
 package dev.horizonr.jvmprobe
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -22,6 +24,8 @@ class MainActivity : Activity() {
 
     private companion object {
         const val MAX_PROBLEMS = 6
+        const val MAX_PROBLEM_CHARS = 600
+        const val REQUEST_EXPORT = 7
     }
 
     private enum class State { IDLE, RUNNING, DONE, ERROR, DIED }
@@ -55,6 +59,10 @@ class MainActivity : Activity() {
         column.addView(Button(this).apply {
             setText(R.string.button_server)
             setOnClickListener { confirmServer() }
+        })
+        column.addView(Button(this).apply {
+            setText(R.string.button_export)
+            setOnClickListener { confirmExport() }
         })
         output = TextView(this).apply {
             typeface = Typeface.MONOSPACE
@@ -94,6 +102,48 @@ class MainActivity : Activity() {
             }
             .setNegativeButton(R.string.eula_cancel, null)
             .show()
+    }
+
+    /** Asks before copying anything out of the app's private storage; the system's storage prompt follows if access is missing. */
+    private fun confirmExport() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.export_title)
+            .setMessage(getString(R.string.export_message, LogExport.FOLDER))
+            .setPositiveButton(R.string.export_ok) { _, _ -> requestExport() }
+            .setNegativeButton(R.string.eula_cancel, null)
+            .show()
+    }
+
+    private fun requestExport() {
+        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            runExport(true)
+        } else {
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_EXPORT)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_EXPORT) runExport(grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+    }
+
+    private fun runExport(sharedStorageAllowed: Boolean) {
+        val report = output.text.toString()
+        val context = applicationContext
+        Thread {
+            val message = try {
+                val result = LogExport.export(context, report, sharedStorageAllowed)
+                if (result.copied == 0 && result.failed.isNotEmpty()) {
+                    getString(R.string.export_failed, result.failed.joinToString("; "))
+                } else {
+                    getString(R.string.export_done, result.copied.toString(), result.location) +
+                        if (result.failed.isEmpty()) "" else "\n" + getString(R.string.export_not_saved, result.failed.joinToString("; "))
+                }
+            } catch (e: Exception) {
+                getString(R.string.export_failed, e.toString())
+            }
+            runOnUiThread { AlertDialog.Builder(this).setTitle(R.string.export_title).setMessage(message).setPositiveButton(android.R.string.ok, null).show() }
+        }.start()
     }
 
     private fun start(mode: Int, foreground: Boolean) {
@@ -291,7 +341,7 @@ class MainActivity : Activity() {
         out.append(getString(R.string.server_mixin_lines, summary.mixinLines.toString())).append('\n')
         if (summary.problems.isNotEmpty()) {
             out.append(getString(R.string.server_problems_header, MAX_PROBLEMS.toString())).append('\n')
-            summary.problems.take(MAX_PROBLEMS).forEach { out.append("  ").append(it.take(200)).append('\n') }
+            summary.problems.take(MAX_PROBLEMS).forEach { out.append("  ").append(it.take(MAX_PROBLEM_CHARS)).append('\n') }
         }
         val gc = ProbeFiles.tail(File(dir, ProbeFiles.GC_LOG), 400).lines().filter { it.contains("[gc,init]") }.take(12)
         if (gc.isNotEmpty()) out.append(getString(R.string.server_gc_header)).append('\n').append(gc.joinToString("\n")).append('\n')

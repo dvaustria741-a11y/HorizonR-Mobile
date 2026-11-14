@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- The server run downloads the Fabric launcher and one mod; the Fabric launcher downloads Mojang's server files. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Export logs: this app targets 28, so this permission is the runtime prompt for a folder on the phone's storage. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <application
         android:allowBackup="false"
