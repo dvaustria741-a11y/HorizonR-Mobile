@@ -60,6 +60,8 @@ import dev.horizon.android.bridge.SkinTools
 import dev.horizon.android.model.AccountType
 import dev.horizon.android.model.HorizonConfigState
 import dev.horizon.android.model.LauncherAccount
+import dev.horizon.android.ui.theme.HzColor
+import dev.horizon.android.ui.theme.HzShape
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -204,7 +206,7 @@ private fun VoltWardrobeBody(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(150.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(HzShape.Panel)
                     .background(VoltGrayRoot)
             ) {
                 MinecraftSkin3DPreviewCanvas(
@@ -219,13 +221,13 @@ private fun VoltWardrobeBody(
                 MinecraftSkinHeadAvatar(skinBitmap = activeSkinBitmap, size = 30.dp, cornerRadius = 7.dp)
                 Column(Modifier.weight(1f)) {
                     Text(activeAccount.username, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(activeAccount.accountType.badge, fontSize = 10.sp, color = VoltMutedText)
+                    Text(activeAccount.accountType.badge, fontSize = 11.sp, color = VoltMutedText)
                 }
             }
-            Text("Skin: ${activeAccount.skinSourceLabel}", fontSize = 10.sp, color = VoltMutedText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Skin: ${activeAccount.skinSourceLabel}", fontSize = 11.sp, color = VoltMutedText, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 if (activeAccount.capePath.isBlank()) "Cape: none" else "Cape: equipped",
-                fontSize = 10.sp, color = VoltMutedText
+                fontSize = 11.sp, color = VoltMutedText
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 WChip("Wide", !activeAccount.slimSkinModel, Modifier.weight(1f)) {
@@ -307,10 +309,10 @@ private fun VoltWardrobeBody(
             WButton("Import cape image", Icons.Default.Folder, modifier = Modifier.fillMaxWidth()) { capePicker.launch("image/*") }
 
             val s = busy ?: status
-            if (s != null) Text(s, fontSize = 10.sp, color = if (busy != null) WGreen else VoltMutedText)
+            if (s != null) Text(s, fontSize = 11.sp, color = if (busy != null) WGreen else VoltMutedText)
             Text(
                 "Capes show in-game for your own player. Ely.by/Mojang are looked up by name (no password needed).",
-                fontSize = 9.sp, color = VoltMutedText
+                fontSize = 10.5.sp, color = VoltMutedText
             )
         }
 
@@ -324,7 +326,7 @@ private fun VoltWardrobeBody(
                 }
             }
             if (newType == AccountType.MICROSOFT) {
-                Text("Microsoft sign-in isn't built yet – this saves a Microsoft-labelled profile (offline play).", fontSize = 9.sp, color = VoltMutedText)
+                Text("Microsoft sign-in isn't built yet – this saves a Microsoft-labelled profile (offline play).", fontSize = 10.5.sp, color = VoltMutedText)
             }
             WButton("Add account", Icons.Default.PersonAdd, primary = true, modifier = Modifier.fillMaxWidth()) {
                 val n = newName.trim()
@@ -351,9 +353,9 @@ private fun VoltWardrobeBody(
                     HorizonNativeBridge.loadOrGenerateAccountSkinBitmap(context, acc)
                 }
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = HzShape.Panel,
                     color = if (acc.isActive) WRowBg else WCardBg,
-                    border = BorderStroke(1.dp, if (acc.isActive) WGreen.copy(alpha = 0.55f) else VoltGrayStroke),
+                    border = BorderStroke(1.dp, if (acc.isActive) WGreen.copy(alpha = 0.55f) else HzColor.Hairline),
                     modifier = Modifier
                         .fillMaxWidth()
                         .animatedPressScale {
@@ -367,20 +369,22 @@ private fun VoltWardrobeBody(
                     ) {
                         MinecraftSkinHeadAvatar(skinBitmap = bmp, size = 28.dp, cornerRadius = 6.dp)
                         Column(Modifier.weight(1f)) {
-                            Text(acc.username, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(acc.accountType.badge + if (acc.isActive) " · Active" else "", fontSize = 9.sp, color = if (acc.isActive) WGreen else VoltMutedText)
+                            Text(acc.username, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(acc.accountType.badge + if (acc.isActive) " · Active" else "", fontSize = 10.5.sp, color = if (acc.isActive) WGreen else VoltMutedText)
                         }
                         if (accounts.size > 1) {
-                            Icon(
-                                Icons.Default.Delete, contentDescription = "Delete account", tint = WDanger,
+                            Box(
+                                contentAlignment = Alignment.Center,
                                 modifier = Modifier
-                                    .size(18.dp)
+                                    .size(36.dp)
                                     .animatedPressScale {
                                         SkinTools.deleteCape(acc)
                                         val rest = accountsNow.filterNot { it.id == acc.id }
                                         onAccountsChange(if (rest.none { it.isActive }) rest.mapIndexed { i, a -> a.copy(isActive = i == 0) } else rest)
                                     }
-                            )
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete account", tint = WDanger, modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }
@@ -394,37 +398,37 @@ private fun VoltWardrobeBody(
 @Composable
 private fun WCard(modifier: Modifier, content: @Composable () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = HzShape.Panel,
         color = WCardBg,
-        border = BorderStroke(1.dp, VoltGrayStroke),
+        border = BorderStroke(1.dp, HzColor.Hairline),
         modifier = modifier.fillMaxHeight()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) { content() }
     }
 }
 
 @Composable
-private fun WTitle(text: String) = Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+private fun WTitle(text: String) = Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
 
 @Composable
-private fun WLabel(text: String) = Text(text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = VoltMutedText)
+private fun WLabel(text: String) = Text(text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = VoltMutedText)
 
 @Composable
 private fun WChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(50),
+        shape = HzShape.Control,
         color = if (selected) WGreen.copy(alpha = 0.18f) else WRowBg,
-        border = BorderStroke(1.dp, if (selected) WGreen.copy(alpha = 0.6f) else VoltGrayStroke),
+        border = BorderStroke(1.dp, if (selected) WGreen.copy(alpha = 0.6f) else HzColor.Hairline),
         modifier = modifier.animatedPressScale { onClick() }
     ) {
-        Box(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
-            Text(text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = if (selected) WGreen else Color.White, maxLines = 1)
+        Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+            Text(text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (selected) WGreen else Color.White, maxLines = 1)
         }
     }
 }
@@ -438,18 +442,18 @@ private fun WButton(
     onClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(9.dp),
+        shape = HzShape.Control,
         color = if (primary) WGreen else WRowBg,
-        border = if (primary) null else BorderStroke(1.dp, VoltGrayStroke),
+        border = if (primary) null else BorderStroke(1.dp, HzColor.Hairline),
         modifier = modifier.animatedPressScale { onClick() }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = if (primary) WOnGreen else Color.White, modifier = Modifier.size(14.dp))
-            Text(text, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (primary) WOnGreen else Color.White, maxLines = 1)
+            Icon(icon, contentDescription = null, tint = if (primary) WOnGreen else Color.White, modifier = Modifier.size(16.dp))
+            Text(text, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (primary) WOnGreen else Color.White, maxLines = 1)
         }
     }
 }
@@ -457,18 +461,18 @@ private fun WButton(
 @Composable
 private fun WField(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier) {
     Surface(
-        shape = RoundedCornerShape(9.dp),
+        shape = HzShape.Control,
         color = VoltGrayRoot,
-        border = BorderStroke(1.dp, VoltGrayStroke),
-        modifier = modifier.height(32.dp)
+        border = BorderStroke(1.dp, HzColor.Hairline),
+        modifier = modifier.height(38.dp)
     ) {
         Box(Modifier.fillMaxSize().padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
-            if (value.isEmpty()) Text(hint, fontSize = 11.sp, color = VoltMutedText, maxLines = 1)
+            if (value.isEmpty()) Text(hint, fontSize = 12.sp, color = VoltMutedText, maxLines = 1)
             BasicTextField(
                 value = value,
                 onValueChange = onChange,
                 singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 11.sp),
+                textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
                 cursorBrush = SolidColor(WGreen),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -484,7 +488,7 @@ private fun CapeThumb(cape: Bitmap?, selected: Boolean, label: String, onClick: 
                 .size(width = 28.dp, height = 44.dp)
                 .clip(RoundedCornerShape(5.dp))
                 .background(VoltGrayRoot)
-                .border(1.dp, if (selected) WGreen else VoltGrayStroke, RoundedCornerShape(5.dp))
+                .border(1.dp, if (selected) WGreen else HzColor.Hairline, RoundedCornerShape(5.dp))
                 .animatedPressScale { onClick() },
             contentAlignment = Alignment.Center
         ) {
@@ -503,6 +507,6 @@ private fun CapeThumb(cape: Bitmap?, selected: Boolean, label: String, onClick: 
                 }
             }
         }
-        Text(label, fontSize = 8.sp, color = VoltMutedText, maxLines = 1)
+        Text(label, fontSize = 9.5.sp, color = VoltMutedText, maxLines = 1)
     }
 }
