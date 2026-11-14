@@ -8,3 +8,8 @@ Reads Fabric mod jars and counts the Mojang (`net/minecraft`) API they reference
 Counts come from the constant pool, so they are a lower bound: Mixin targets given as strings and method
 signatures resolved only at runtime are not followed. `mod_scan.py` does not descend into nested jars (scan those
 separately). Jars are inputs and are never committed.
+
+    python3 mod_contract.py mod.jar > contract.md   # exact Mojang/Fabric surface: Mixin targets, injectors, @At, members
+
+`mod_contract.py` reads only the mod jar. Its output (see docs/jvm-mod-runtime/contracts) lists what a replacement
+class set must provide and which injection points it must contain.

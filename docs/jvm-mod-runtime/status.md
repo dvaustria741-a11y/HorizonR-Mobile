@@ -64,6 +64,18 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
   4256 and 4655) choosing Modrinth/CurseForge forces the category to Resource Packs, and picking Mods or Native Mods
   resets the source to Horizon. That is why the options do not work in Mods and Native Mods. CurseForge needs the
   `CURSEFORGE_API_KEY` build secret (`BuildConfig.CURSEFORGE_API_KEY`); whether it is set is unknown. Nothing changed yet.
+- User goal restated (22:25): install a mod such as AppleSkin from the Store and have it work in singleplayer or
+  multiplayer. That is the facade route. First measured contract: `contracts/appleskin-3.0.10.md` (from the jar only).
+  AppleSkin 3.0.10: 55 Mojang classes, 68 methods, 19 fields referenced; 9 Fabric API classes (client/server
+  networking v1, Event, EventFactory, ServerTickEvents); 7 Mixin classes (6 into Minecraft, 1 optional JEI with
+  require=0), 10 `@Inject` all at HEAD, RETURN or TAIL (no INVOKE targets, redirects or modifiers), 1 `@Shadow`
+  (FoodData.exhaustionLevel). Hooks: client Minecraft.tick, Hud.extractFood and extractHearts, ItemStack.getTooltipLines,
+  ClientTooltipComponent.create (two overloads); server-side PlayerList.placeNewPlayer and ServerPlayer.tick. So even
+  this client HUD mod hooks the logical server: in singleplayer the Rust integrated server would have to expose those
+  Java-visible classes. Drawing surface: GuiGraphicsExtractor.blit, blitSprite (two overloads), pose, text. Names are as
+  written in the jar (26.3 uses Hud, GuiGraphicsExtractor, extract* methods). Lower bounds; the JVM-side loader (a Fabric
+  GameProvider for Horizon) and every facade class are unwritten. Whether AppleSkin works without its server half
+  against a vanilla multiplayer server is unknown.
 - Step 3 (sample): `spikes/mod-api-scan`. AppleSkin 3.0.10 55 classes/68 methods/19 fields, Clumps 26.3.2
   13/21/2, Xaero's Minimap 26.6.2 353/566/155 (+ nested xaerolib 137/250/31). Union of the three: 385 classes,
   634 methods, 169 fields. Mixin shapes seen: Inject, ModifyVariable, ModifyArg, ModifyReturnValue, Accessor, Shadow.
