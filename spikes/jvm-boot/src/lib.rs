@@ -103,6 +103,73 @@ pub fn current_rss_kib() -> Option<u64> {
     parse_vm_rss_kib(&std::fs::read_to_string("/proc/self/status").ok()?)
 }
 
+/// Runtime libraries to load by absolute path before the JVM needs them. Android's linker does not look in the
+/// directory of the library that names a dependency, so `libnio.so` failed with `library "libnet.so" not found`
+/// (build 7, JLI path, user's report). Both names come from that error text. Add a name when an error names one.
+pub const PRELOAD_LIBS: &[&str] = &["libnet.so", "libnio.so"];
+
+/// How many nested dependencies `preload` follows for one library before it gives up.
+const PRELOAD_DEPTH: usize = 8;
+
+/// The library name in an Android `dlopen` error such as
+/// `dlopen failed: library "libnet.so" not found: needed by /x/lib/libnio.so in namespace clns-4`.
+/// `None` for any other message, or when the name is empty or a path.
+pub fn missing_library(message: &str) -> Option<&str> {
+    const OPEN: &str = "library \"";
+    let rest = &message[message.find(OPEN)? + OPEN.len()..];
+    let name = &rest[..rest.find('"')?];
+    let found_missing = rest[name.len()..].starts_with("\" not found");
+    (found_missing && !name.is_empty() && !name.contains('/')).then_some(name)
+}
+
+/// `dlopen` of `<lib_dir>/<name>` with RTLD_GLOBAL, so later libraries that name it as a dependency resolve to the
+/// copy already loaded. When the linker reports a missing dependency that exists in `lib_dir`, that one is
+/// loaded first (bounded depth). `trail` collects the names loaded, dependencies first.
+fn load_global(lib_dir: &Path, name: &str, depth: usize, trail: &mut Vec<String>) -> Result<(), String> {
+    use libloading::os::unix::{Library, RTLD_GLOBAL, RTLD_NOW};
+
+    let path = lib_dir.join(name);
+    if !path.is_file() {
+        return Err(format!("{name} is not in {}", lib_dir.display()));
+    }
+    let mut attempts = 0;
+    loop {
+        // SAFETY: loading a runtime library runs its initialisers; the caller chose the directory.
+        match unsafe { Library::open(Some(&path), RTLD_NOW | RTLD_GLOBAL) } {
+            Ok(library) => {
+                // Stays mapped for the life of the process, like the JVM itself.
+                std::mem::forget(library);
+                trail.push(name.to_string());
+                return Ok(());
+            }
+            Err(e) => {
+                let message = e.to_string();
+                attempts += 1;
+                match missing_library(&message).map(str::to_owned) {
+                    Some(dependency) if dependency != name && depth < PRELOAD_DEPTH && attempts <= PRELOAD_DEPTH => {
+                        load_global(lib_dir, &dependency, depth + 1, trail)
+                            .map_err(|inner| format!("{message}; dependency {dependency}: {inner}"))?;
+                    }
+                    _ => return Err(message),
+                }
+            }
+        }
+    }
+}
+
+/// Loads each of `names` from `lib_dir` (see `load_global`). One entry per name: the libraries loaded for it in
+/// order, or the linker's error text. A failure does not stop the others.
+pub fn preload(lib_dir: &Path, names: &[&str]) -> Vec<(String, Result<Vec<String>, String>)> {
+    names
+        .iter()
+        .map(|name| {
+            let mut trail = Vec::new();
+            let result = load_global(lib_dir, name, 0, &mut trail).map(|()| trail);
+            (name.to_string(), result)
+        })
+        .collect()
+}
+
 pub fn validate(config: &JvmConfig) -> Result<(&Path, Vec<String>), ConfigError> {
     let path = config.libjvm.as_deref().ok_or(ConfigError::LibJvmUnset)?;
     if !path.is_file() {
@@ -355,6 +422,35 @@ mod tests {
         let mut a = launcher_args();
         a.class_path = PathBuf::new();
         assert!(matches!(launcher_argv(&a), Err(ConfigError::BadOption(_))));
+    }
+
+    #[test]
+    fn missing_library_parses_the_android_message() {
+        let real = "/data/user/0/dev.horizonr.jvmprobe/files/jre25/lib/libnio.so: dlopen failed: library \"libnet.so\" \
+                    not found: needed by /data/user/0/dev.horizonr.jvmprobe/files/jre25/lib/libnio.so in namespace clns-4";
+        assert_eq!(missing_library(real), Some("libnet.so"));
+        assert_eq!(missing_library("dlopen failed: library \"libnet.so\" not found"), Some("libnet.so"));
+    }
+
+    #[test]
+    fn missing_library_rejects_other_messages() {
+        for other in [
+            "",
+            "dlopen failed: cannot locate symbol \"foo\" referenced by \"/x/libnio.so\"",
+            "dlopen failed: library \"\" not found",
+            "dlopen failed: library \"/abs/libnet.so\" not found",
+            "dlopen failed: library \"libnet.so\" has bad ELF magic",
+            "library \"unterminated",
+        ] {
+            assert_eq!(missing_library(other), None, "{other:?}");
+        }
+    }
+
+    #[test]
+    fn preload_reports_a_missing_file_per_name() {
+        let out = preload(Path::new("/nonexistent/lib"), &["libnet.so", "libnio.so"]);
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|(_, r)| r.as_ref().is_err_and(|e| e.contains("is not in"))));
     }
 
     #[test]

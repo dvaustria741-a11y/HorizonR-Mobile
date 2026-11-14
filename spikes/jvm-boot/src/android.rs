@@ -21,8 +21,8 @@ use jni::{
 };
 
 use crate::{
-    current_rss_kib, epoch_ms, jli_launch, launcher_argv, BootError, Jvm, JvmConfig, LauncherArgs, LIBJLI_REL,
-    LIBJVM_REL,
+    current_rss_kib, epoch_ms, jli_launch, launcher_argv, preload, BootError, Jvm, JvmConfig, LauncherArgs,
+    LIBJLI_REL, LIBJVM_REL, PRELOAD_LIBS,
 };
 
 /// `JNI_CreateJavaVM` on `lib/server/libjvm.so` (what `spikes/jvm-boot` does on desktop).
@@ -91,6 +91,20 @@ fn diagnostic_options(work_dir: &Path) -> Vec<String> {
         format!("-XX:ErrorFile={}", work_dir.join("hs_err_%p.log").display()),
         format!("-Xlog:all=info:file={}", work_dir.join("jvm_xlog.txt").display()),
     ]
+}
+
+/// Loads `PRELOAD_LIBS` by absolute path before either boot path, so runtime libraries that name each other as
+/// dependencies resolve on Android. A failure is logged and the boot goes on: the JNI path booted without this.
+fn preload_runtime_libs(report: &Report, jre_home: &Path) {
+    let started = Instant::now();
+    for (name, result) in preload(&jre_home.join("lib"), PRELOAD_LIBS) {
+        match result {
+            Ok(trail) => report.line(&format!("preload_{name}"), format!("ok, loaded in order: {}", trail.join(" "))),
+            Err(e) => report.line(&format!("preload_{name}"), format!("failed: {e}")),
+        }
+    }
+    report.line("preload_ms", started.elapsed().as_millis());
+    report.optional("rss_kib_after_preload", current_rss_kib());
 }
 
 fn boot_via_jni(report: &Report, jre_home: &Path, work_dir: &Path, heap_mib: u32) -> i32 {
@@ -180,6 +194,7 @@ pub fn run(mode: i32, heap_mib: i32, jre_home: &Path, probe_jar: &Path, work_dir
         return EXIT_BAD_ARGUMENTS;
     };
     report.optional("rss_kib_before", current_rss_kib());
+    preload_runtime_libs(&report, jre_home);
     match mode {
         MODE_JNI => boot_via_jni(&report, jre_home, work_dir, heap_mib),
         MODE_JLI => boot_via_jli(&report, jre_home, probe_jar, work_dir, heap_mib),
