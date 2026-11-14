@@ -50,6 +50,20 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
   Also in that run: the JVM process's last heartbeat showed RSS 82 MiB (from about 600 MiB) and the report says it died
   without a result; Android's exit record for it was not in the export yet, so the cause is unconfirmed. Earlier exit
   records: probe UI process LOW_MEMORY at 21:52:10, an earlier `:jvm` SIGKILL at 21:50:10.
+- Join on the phone (user, build 16, exports 22:15 device time): with `white-list=false` HorizonR joined the Fabric 26.3
+  server with Clumps on the same phone. Server log: player ZensoQP1 logged in with entity id 31 at (-232.5, 67.0, 207.5)
+  at 22:06 and left at 22:15 (about 8.5 minutes connected). The `:jvm` process's last heartbeat was alive at 22:15:44,
+  RSS 696.1 MiB (peak 745.7 MiB), 68 threads; 2242 MiB RAM available at export. The report still printed "the JVM
+  process died without a result"; cause unknown (it conflicts with that heartbeat). Not yet known: whether any Clumps
+  mixin applied, and how the game behaved (fps, memory) while the server ran.
+- User clarification (22:20): the goal is mods in their own singleplayer world, not on a server. The join test shows a
+  local JVM server is reachable, but Horizon's singleplayer world runs on the Rust engine, so a mod running on this JVM
+  server does not affect singleplayer unless singleplayer is moved onto it. Open design question.
+- Store (HorizonR Kotlin launcher, `packaging/android/java/dev/horizon/android`): `ContentSources.kt` implements
+  Modrinth and CurseForge for resource packs and shader packs only. In `ui/HorizonLauncherActivity.kt` (around lines
+  4256 and 4655) choosing Modrinth/CurseForge forces the category to Resource Packs, and picking Mods or Native Mods
+  resets the source to Horizon. That is why the options do not work in Mods and Native Mods. CurseForge needs the
+  `CURSEFORGE_API_KEY` build secret (`BuildConfig.CURSEFORGE_API_KEY`); whether it is set is unknown. Nothing changed yet.
 - Step 3 (sample): `spikes/mod-api-scan`. AppleSkin 3.0.10 55 classes/68 methods/19 fields, Clumps 26.3.2
   13/21/2, Xaero's Minimap 26.6.2 353/566/155 (+ nested xaerolib 137/250/31). Union of the three: 385 classes,
   634 methods, 169 fields. Mixin shapes seen: Inject, ModifyVariable, ModifyArg, ModifyReturnValue, Accessor, Shadow.
