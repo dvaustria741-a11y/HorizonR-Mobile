@@ -4355,16 +4355,16 @@ private fun CleanStoreViewport(
                                             .drawBehind {
                                                 drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
                                             }
-                                            .padding(vertical = 8.dp),
+                                            .padding(vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
                                         StoreAsyncProjectIcon(
                                             iconUrl = item.iconUrl,
                                             title = item.title,
                                             isMod = item.category == StoreCategory.MOD || item.category == StoreCategory.NATIVE_MOD,
                                             isWorld = item.category == StoreCategory.MODPACK,
-                                            size = 38.dp
+                                            size = 40.dp
                                         )
 
                                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -4381,12 +4381,12 @@ private fun CleanStoreViewport(
                                                 Text(
                                                     text = item.kindBadge,
                                                     fontFamily = HzFont.Mono,
-                                                    fontSize = 8.5.sp,
+                                                    fontSize = 9.5.sp,
                                                     color = MutedSubtitleText,
                                                     maxLines = 1,
                                                     modifier = Modifier
                                                         .border(1.dp, HzColor.Hairline, HzShape.Chip)
-                                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                        .padding(horizontal = 5.dp, vertical = 1.dp)
                                                 )
                                                 Text(
                                                     text = item.versionBadge,
@@ -4398,7 +4398,7 @@ private fun CleanStoreViewport(
                                             }
                                             Text(
                                                 text = item.summary,
-                                                fontSize = 10.5.sp,
+                                                fontSize = 11.5.sp,
                                                 color = Color(0xFFB8C1C9),
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
@@ -4407,7 +4407,7 @@ private fun CleanStoreViewport(
                                                 text = "\u2605 ${String.format(Locale.US, "%.1f", item.ratingScore)} (${item.ratingCount})  \u00B7  ${item.formattedDownloads}" +
                                                     listOf(item.version, item.author).filter { it.isNotBlank() }.joinToString("  \u00B7  ", prefix = "  \u00B7  "),
                                                 fontFamily = HzFont.Mono,
-                                                fontSize = 9.5.sp,
+                                                fontSize = 10.5.sp,
                                                 color = MutedSubtitleText,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
@@ -5308,17 +5308,17 @@ private fun StoreActionButton(
 ) {
     Row(
         modifier = Modifier
-            .height(26.dp)
+            .height(32.dp)
             .graphicsLayer { alpha = if (enabled) 1f else 0.5f }
             .animatedPressScale(enabled = enabled, pressedScale = 0.96f, onClick = onClick)
             .clip(HzShape.Control)
             .background(bg)
-            .padding(horizontal = 9.dp),
+            .padding(horizontal = HzSpace.M),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Icon(imageVector = icon, contentDescription = label, tint = fg, modifier = Modifier.size(13.dp))
-        Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1)
+        Icon(imageVector = icon, contentDescription = label, tint = fg, modifier = Modifier.size(14.dp))
+        Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1)
     }
 }
 
@@ -5329,12 +5329,12 @@ private fun StoreRightSearchPill(
     onValueChange: (String) -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(50),
-        color = CardRowBg,
+        shape = HzShape.Control,
+        color = HzColor.PanelHi,
         modifier = Modifier
             .fillMaxWidth()
             .height(36.dp)
-            .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(50))
+            .border(1.dp, HzColor.Hairline, HzShape.Control)
     ) {
         Row(
             modifier = Modifier
@@ -5348,13 +5348,13 @@ private fun StoreRightSearchPill(
                 contentAlignment = Alignment.CenterStart
             ) {
                 if (value.isEmpty()) {
-                    Text(placeholder, fontSize = 11.sp, color = MutedSubtitleText, maxLines = 1)
+                    Text(placeholder, fontSize = 12.sp, color = MutedSubtitleText, maxLines = 1)
                 }
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
                     singleLine = true,
-                    textStyle = TextStyle(color = Color.White, fontSize = 11.sp),
+                    textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
                     cursorBrush = SolidColor(SkyBlueAccent),
                     modifier = Modifier.fillMaxWidth()
                 )
