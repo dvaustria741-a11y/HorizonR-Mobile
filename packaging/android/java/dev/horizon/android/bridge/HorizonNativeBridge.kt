@@ -1677,10 +1677,9 @@ object HorizonNativeBridge {
                     enableSystemLog = obj.optBoolean("enableSystemLog", true),
                     disableAudioSafeMode = obj.optBoolean("disableAudioSafeMode", false),
                     discordRichPresence = obj.optBoolean("discordRichPresence", true),
-                    backgroundMode = HorizonBackgroundMode.entries.firstOrNull {
-                        it.serdeKey == obj.optString("backgroundMode", "wallpaper")
-                    } ?: if (obj.optBoolean("useYoutubeTrailerWallpaper", false)) HorizonBackgroundMode.YOUTUBE_TRAILER else HorizonBackgroundMode.WALLPAPER,
-                    useYoutubeTrailerWallpaper = obj.optBoolean("useYoutubeTrailerWallpaper", false),
+                    // The YouTube trailer background was removed: the dashboard always shows the wallpaper.
+                    backgroundMode = HorizonBackgroundMode.WALLPAPER,
+                    useYoutubeTrailerWallpaper = false,
                     muteTrailerVideo = obj.optBoolean("muteTrailerVideo", false),
                     ramAllocationMb = obj.optInt("ram_allocation_mb", 0).coerceAtLeast(0),
                     aiAgentEnabled = obj.optBoolean("aiAgentEnabled", false),

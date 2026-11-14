@@ -2358,48 +2358,10 @@ private fun CleanHomeViewport(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isVideoMode) {
-                    DashboardQuickIconPill(
-                        icon = if (config.muteTrailerVideo) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                        label = if (config.muteTrailerVideo) "Silent" else "720p Audio",
-                        onClick = {
-                            onConfigChange(config.copy(muteTrailerVideo = !config.muteTrailerVideo))
-                        }
-                    )
-                    DashboardQuickIconPill(
-                        icon = Icons.Default.SkipNext,
-                        label = "Next Trailer",
-                        onClick = {
-                            currentTrailerIndex = (currentTrailerIndex + 1) % trailerList.size.coerceAtLeast(1)
-                        }
-                    )
-                    DashboardQuickIconPill(
-                        icon = Icons.Default.Shuffle,
-                        label = "Random Trailer",
-                        onClick = {
-                            currentTrailerIndex = pickRandomNextTrailer(currentTrailerIndex, trailerList.size.coerceAtLeast(1))
-                        }
-                    )
-                } else {
-                    DashboardQuickIconPill(
-                        icon = Icons.Default.Wallpaper,
-                        label = "Wallpaper",
-                        onClick = { wallpaperPicker.launch("image/*") }
-                    )
-                }
-
                 DashboardQuickIconPill(
-                    icon = if (isVideoMode) Icons.Default.Image else Icons.Default.PlayCircleFilled,
-                    label = if (isVideoMode) "Use Wallpaper" else "Play Trailer (720p)",
-                    onClick = {
-                        val nextVideo = !isVideoMode
-                        onConfigChange(
-                            config.copy(
-                                backgroundMode = if (nextVideo) HorizonBackgroundMode.YOUTUBE_TRAILER else HorizonBackgroundMode.WALLPAPER,
-                                useYoutubeTrailerWallpaper = nextVideo
-                            )
-                        )
-                    }
+                    icon = Icons.Default.Wallpaper,
+                    label = "Change wallpaper",
+                    onClick = { wallpaperPicker.launch("image/*") }
                 )
             }
 
@@ -8135,45 +8097,6 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.LAUNCHER -> {
-                        LauncherSettingDropdownCard(
-                            title = "Dashboard Background Mode (Wallpaper vs. Video Trailer)",
-                            description = "Choose between static 16:9 HD Minecraft wallpapers or auto-playing official Minecraft YouTube Trailers (720p)",
-                            selectedItem = config.backgroundMode,
-                            options = HorizonBackgroundMode.entries,
-                            itemLabel = { it.label },
-                            onSelect = { mode ->
-                                onConfigChange(
-                                    config.copy(
-                                        backgroundMode = mode,
-                                        useYoutubeTrailerWallpaper = (mode == HorizonBackgroundMode.YOUTUBE_TRAILER)
-                                    )
-                                )
-                            }
-                        )
-
-                        LauncherSettingToggleCard(
-                            title = "Auto-Play Minecraft YouTube 'Trailer' Video",
-                            description = "Automatically play the latest official @Minecraft YouTube videos containing 'Trailer' on the dashboard and turn off static wallpaper while playing",
-                            checked = config.useYoutubeTrailerWallpaper || config.backgroundMode == HorizonBackgroundMode.YOUTUBE_TRAILER,
-                            onCheckedChange = { enabled ->
-                                onConfigChange(
-                                    config.copy(
-                                        useYoutubeTrailerWallpaper = enabled,
-                                        backgroundMode = if (enabled) HorizonBackgroundMode.YOUTUBE_TRAILER else HorizonBackgroundMode.WALLPAPER
-                                    )
-                                )
-                            }
-                        )
-
-                        LauncherSettingToggleCard(
-                            title = "Silent / Mute Trailer Video Audio",
-                            description = "Mute audio while playing the 720p Minecraft Trailer video on the dashboard (disable to hear full trailer audio)",
-                            checked = config.muteTrailerVideo,
-                            onCheckedChange = { muted ->
-                                onConfigChange(config.copy(muteTrailerVideo = muted))
-                            }
-                        )
-
                         HzSettingRow(
                             title = "Check for launcher updates",
                             description = "HorizonR v${HorizonNativeBridge.launcherVersionName(context)}  ·  github.com/${HorizonNativeBridge.GITHUB_FORK_REPO_SLUG}/releases",
