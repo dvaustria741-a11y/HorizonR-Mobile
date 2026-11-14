@@ -326,5 +326,5 @@ jobs:
           files: |
             release-apks/*.apk
             release-apks/SHA256SUMS.txt
-          prerelease: false
-          make_latest: true
+          prerelease: ${{ github.ref_name == 'jvm-mod-runtime' }}
+          make_latest: ${{ github.ref_name != 'jvm-mod-runtime' }}
