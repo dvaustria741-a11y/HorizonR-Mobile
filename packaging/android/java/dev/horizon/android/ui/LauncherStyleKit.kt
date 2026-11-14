@@ -172,93 +172,34 @@ internal fun HzTopBar(
         modifier = modifier
             .fillMaxWidth()
             .background(surface)
-            .drawBehind {
-                drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
-            }
             .windowInsetsPadding(
                 WindowInsets.safeDrawing.union(WindowInsets.displayCutout).only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
             )
-            .height(52.dp)
-            .padding(horizontal = 12.dp),
+            .height(50.dp)
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HzBrandCube(size = 30.dp)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            HzBrandCube(size = 28.dp)
             Text(text = "HorizonR", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
         }
-        Spacer(Modifier.width(16.dp))
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Spacer(Modifier.width(10.dp))
+        // All seven pages share the width equally, so nothing has to be scrolled to be found.
+        Row(modifier = Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
             entries.forEach { e ->
                 HzNavTab(
                     entry = e,
                     selected = e.tab == selectedTab,
                     label = if (e.tab == LauncherNavTab.VERSIONS && installStatus.running) "${installStatus.percent}%" else e.label,
                     accent = accent,
+                    modifier = Modifier.weight(1f),
                     onClick = { onSelectTab(e.tab) }
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(4.dp))
         HzNavIcon("ic_ui_logs", Icons.Default.Terminal, "Logs", selectedTab == LauncherNavTab.LOGS, accent) { onSelectTab(LauncherNavTab.LOGS) }
         HzNavIcon("ic_ui_folder", Icons.Default.Folder, "Open files", false, accent, onOpenFolder)
-    }
-}
-
-/**
- * Layered Home art: a soft ground shadow under a floating island that bobs a few dp.
- * Only graphicsLayer translation changes per frame, so nothing is recomposed or re-laid out.
- */
-@Composable
-internal fun HzHeroIsland(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val resId = remember { context.resources.getIdentifier("hz_hero_island", "drawable", context.packageName) }
-    if (resId == 0) return
-    val t = rememberInfiniteTransition(label = "IslandFloat")
-    val bob by t.animateFloat(
-        initialValue = -1f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(3800, easing = androidx.compose.animation.core.FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "IslandBob"
-    )
-    Box(modifier = modifier.size(width = 250.dp, height = 270.dp), contentAlignment = Alignment.TopCenter) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .size(width = 150.dp, height = 14.dp)
-                .graphicsLayer { scaleX = 1f - bob * 0.06f; alpha = 0.5f + bob * 0.08f }
-                .drawBehind {
-                    drawOval(Color.Black.copy(alpha = 0.55f))
-                }
-        )
-        androidx.compose.foundation.Image(
-            painter = painterResource(id = resId),
-            contentDescription = null,
-            modifier = Modifier
-                .size(240.dp)
-                .graphicsLayer { translationY = bob * 6.dp.toPx() }
-        )
-    }
-}
-
-/** Empty list: a tinted illustration (white art, coloured by the theme accent) with a plain-words message. */
-@Composable
-internal fun HzEmptyState(art: String, message: String, accent: Color, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val resId = remember(art) { context.resources.getIdentifier(art, "drawable", context.packageName) }
-    Column(
-        modifier = modifier.padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (resId != 0) {
-            Icon(painter = painterResource(id = resId), contentDescription = null, tint = accent.copy(alpha = 0.9f), modifier = Modifier.size(84.dp))
-        }
-        Text(text = message, fontSize = 13.sp, lineHeight = 18.sp, color = VoltMutedText, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -279,34 +220,43 @@ internal fun HzBrandCube(size: Dp) {
 }
 
 @Composable
-private fun HzNavTab(entry: HzNavEntry, selected: Boolean, label: String, accent: Color, onClick: () -> Unit) {
+private fun HzNavTab(entry: HzNavEntry, selected: Boolean, label: String, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val tint by animateColorAsState(
         targetValue = if (selected) accent else VoltMutedText,
         animationSpec = tween(HzMotion.Short),
         label = "NavTint"
     )
-    val fill by animateColorAsState(
-        targetValue = if (selected) accent.copy(alpha = 0.16f) else Color.Transparent,
-        animationSpec = tween(HzMotion.Short),
-        label = "NavFill"
+    val bar by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = tween(HzMotion.Short, easing = HzMotion.Ease),
+        label = "NavBar"
     )
     Row(
-        modifier = Modifier
-            .height(40.dp)
-            .animatedPressScale(pressedScale = 0.96f, onClick = onClick)
-            .clip(RoundedCornerShape(10.dp))
-            .background(fill)
-            .padding(horizontal = 12.dp),
+        modifier = modifier
+            .fillMaxHeight()
+            .animatedPressScale(pressedScale = 0.97f, onClick = onClick)
+            .drawBehind {
+                if (bar > 0.01f) {
+                    val w = size.width * 0.6f * bar
+                    drawRoundRect(
+                        color = accent,
+                        topLeft = Offset((size.width - w) / 2f, size.height - 3.dp.toPx()),
+                        size = Size(w, 3.dp.toPx()),
+                        cornerRadius = CornerRadius(2.dp.toPx())
+                    )
+                }
+            },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
     ) {
-        VoltIcon(name = entry.icon, fallback = entry.fallback, size = 19.dp, tint = tint)
+        VoltIcon(name = entry.icon, fallback = entry.fallback, size = 18.dp, tint = tint)
         Text(
             text = label,
-            fontSize = 13.sp,
+            fontSize = 12.5.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
             color = if (selected) Color.White else VoltMutedText,
-            maxLines = 1
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
@@ -324,7 +274,6 @@ private fun HzNavIcon(name: String, fallback: ImageVector, description: String, 
             .size(40.dp)
             .animatedPressScale(pressedScale = 0.94f, onClick = onClick)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) accent.copy(alpha = 0.16f) else Color.Transparent)
     ) {
         VoltIcon(name = name, fallback = fallback, size = 20.dp, tint = tint)
     }
@@ -514,16 +463,6 @@ internal fun VoltHomeLayer(
             .windowInsetsPadding(hzContentInsets())
             .padding(horizontal = 18.dp, vertical = 12.dp)
     ) {
-        HzHeroIsland(modifier = Modifier.align(Alignment.Center).offset(x = 70.dp, y = 6.dp))
-
-        Row(
-            modifier = Modifier.align(Alignment.TopStart),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            HzTag("NATIVE RUST")
-        }
-
         var boostOn by remember { mutableStateOf(Boost.isOn(context)) }
         HzChip(
             label = if (boostOn) "Boost on" else "Boost",
