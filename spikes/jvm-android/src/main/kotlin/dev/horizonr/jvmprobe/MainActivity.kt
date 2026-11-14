@@ -334,6 +334,11 @@ class MainActivity : Activity() {
         results["rss_peak_kib"]?.let { out.append("Peak RSS (VmHWM): ").append(kibText(it)).append('\n') }
         results["threads"]?.let { out.append("Threads: ").append(it).append('\n') }
         results["done"]?.let { out.append("Done: ").append(it).append('\n') }
+        val ping = results.filterKeys { it.startsWith("ping_") }
+        if (ping.isNotEmpty()) {
+            out.append(getString(R.string.server_ping_header, ServerConfig.SERVER_HOST, ServerConfig.SERVER_PORT.toString())).append('\n')
+            ping.forEach { (key, value) -> out.append("  ").append(key.removePrefix("ping_")).append(": ").append(value).append('\n') }
+        }
         results["stop"]?.let { out.append("Stop: ").append(it).append('\n') }
         if (results["rss_peak_kib"] == null) beat["vmhwm_kib"]?.let { out.append("Peak RSS so far (VmHWM): ").append(kibText(it)).append('\n') }
         out.append(summary.loading ?: getString(R.string.server_loading_none)).append('\n')

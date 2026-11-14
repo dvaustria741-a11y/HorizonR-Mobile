@@ -158,6 +158,7 @@ class JvmService : Service() {
                 }
             }
             results["done_ms"] = (System.currentTimeMillis() - startMs).toString()
+            results.putAll(pingFacts())
             Thread.sleep(ServerConfig.SETTLE_SECONDS * 1000L)
             val status = runCatching { File("/proc/self/status").readText() }.getOrDefault("")
             results["rss_kib_settled"] = ProbeFiles.parseStatusNumber(status, "VmRSS")?.toString() ?: "unknown"
@@ -173,6 +174,18 @@ class JvmService : Service() {
             ProbeFiles.writeKeyValues(File(dir, ProbeFiles.SERVER), results)
             Process.killProcess(Process.myPid())
         }, "jvmprobe-server-monitor").apply { isDaemon = true }.start()
+    }
+
+    /** What the running server answers to a status ping; single-line values, because server.txt is key=value lines. */
+    private fun pingFacts(): Map<String, String> {
+        val outcome = ServerPing.queryWithRetry(ServerConfig.SERVER_HOST, ServerConfig.SERVER_PORT, ServerConfig.PING_ATTEMPTS, ServerConfig.PING_DELAY_MS, ServerConfig.PING_TIMEOUT_MS)
+        val status = outcome.status ?: return mapOf("ping_error" to (outcome.error ?: "unknown").replace('\n', ' '))
+        return linkedMapOf(
+            "ping_version_name" to (status.versionName ?: "missing in the reply"),
+            "ping_protocol" to (status.protocol?.toString() ?: "missing in the reply"),
+            "ping_ms" to status.roundTripMs.toString(),
+            "ping_json" to status.rawJson.replace('\n', ' ').take(400),
+        )
     }
 
     /** The whole log up to 2 MiB; empty when unreadable. */

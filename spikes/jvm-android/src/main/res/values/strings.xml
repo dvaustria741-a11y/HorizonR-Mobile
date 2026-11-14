@@ -81,4 +81,5 @@
     <string name="export_done">Saved %1$s files to %2$s.</string>
     <string name="export_not_saved">Not saved: %1$s</string>
     <string name="export_failed">Export failed: %1$s</string>
+    <string name="server_ping_header">Status ping (%1$s:%2$s)</string>
 </resources>

@@ -30,13 +30,21 @@ object ServerConfig {
      * server.properties as written by run_smoke.sh, plus `server-ip=127.0.0.1` so the test server is not reachable
      * from the network while it runs (the later join test would come from this same phone).
      */
+    const val SERVER_HOST = "127.0.0.1"
+    const val SERVER_PORT = 25565
+
     val SERVER_PROPERTIES = listOf(
         "online-mode=false",
-        "server-ip=127.0.0.1",
-        "server-port=25565",
+        "server-ip=$SERVER_HOST",
+        "server-port=$SERVER_PORT",
         "view-distance=2",
         "simulation-distance=2",
     )
+
+    /** Status ping after "Done": tries, pause between tries and per-try timeout. Guesses. */
+    const val PING_ATTEMPTS = 3
+    const val PING_DELAY_MS = 1000L
+    const val PING_TIMEOUT_MS = 5000
 
     /** run_smoke.sh waits up to 420 s on a CI runner; the phone is untested, so this is a guess. */
     const val START_TIMEOUT_SECONDS = 900
