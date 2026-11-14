@@ -79,7 +79,15 @@ class MainActivity : Activity() {
             .putExtra(ProbeFiles.EXTRA_MODE, mode)
             .putExtra(ProbeFiles.EXTRA_HEAP_MIB, ProbeFiles.DEFAULT_HEAP_MIB)
             .putExtra(ProbeFiles.EXTRA_FOREGROUND, foreground)
-        if (foreground) startForegroundService(intent) else startService(intent)
+        try {
+            if (foreground) startForegroundService(intent) else startService(intent)
+        } catch (e: RuntimeException) {
+            // Android refuses to start a service of a process it marked bad; show the reason instead of crashing the UI.
+            val detail = getString(R.string.start_failed, e.message ?: e.javaClass.simpleName).replace('\n', ' ')
+            ProbeFiles.writeKeyValues(File(dir, ProbeFiles.STAGE), mapOf("pid" to "0", "stage" to "error", "detail" to detail, "mode" to mode.toString()))
+            render()
+            return
+        }
         render()
         poll()
     }
@@ -190,7 +198,7 @@ class MainActivity : Activity() {
         if (state == State.DIED || state == State.ERROR || merged["error"] != null) {
             val stdio = ProbeFiles.tail(File(dir, ProbeFiles.STDIO), 15)
             if (stdio.isNotEmpty()) out.append('\n').append(getString(R.string.stdio_header)).append('\n').append(stdio).append('\n')
-            val exits = ProbeFiles.exitInfoTail(this, 4)
+            val exits = ProbeFiles.exitInfoTail(this, 8)
             if (exits.isNotEmpty()) out.append('\n').append(getString(R.string.exit_header)).append('\n').append(exits).append('\n')
             val hsErr = ProbeFiles.hsErrHead(dir, 30)
             if (hsErr.isNotEmpty()) out.append('\n').append(getString(R.string.hserr_header)).append('\n').append(hsErr).append('\n')
