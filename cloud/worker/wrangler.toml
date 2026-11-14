@@ -1,8 +1,0 @@
-name = "horizon-perf-profile"
-main = "index.js"
-compatibility_date = "2026-11-01"
-
-# Optional: create a KV namespace, put its id here, then store the profile under the key "profile".
-# [[kv_namespaces]]
-# binding = "PROFILE_KV"
-# id = "<your KV namespace id>"
