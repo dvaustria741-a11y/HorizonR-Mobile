@@ -18,6 +18,16 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
   config `clumps`) passed: annotation said PASS, Done in 2.380 s, "Loading 5 mods" with clumps 26.3.2 and
   fabricloader 0.20.1 named (the other three were not captured). That is a GitHub Linux runner, not Android,
   and proves startup only, not mod behaviour. Not done: a Rust client joining on protocol 777.
+- Step 2 on the phone (Redmi Note 11 Pro 5G, Android 13), user-reported builds 10 to 12: the Fabric 26.3 server with
+  Clumps boots through JLI_Launch in the `:jvm` process, G1, -Xmx1024m. Server log Done 14.443 s and 16.051 s in two
+  runs (12.641 s in the first, cold); about 82 to 85 s from service start to Done when warm. RSS 10 s after Done
+  574.7 to 596.8 MiB, peak 578.1 to 609.1 MiB, 63 to 65 threads. Available processors vary between runs (3, 5, 7 of 8;
+  cause unknown). A status ping to 127.0.0.1:25565 returns version name 26.3 and protocol 777 (155 ms), which matches the
+  engine's protocol. MixinExtras 0.5.5 initialises; Mixin read `clumps.mixins.json` (refmap warning); whether any mixin
+  applied is not shown. Known failure: Minecraft's `SystemReport` (oshi, JNA) cannot load the glibc `libjnidispatch`
+  (`libc.so.6` not found); non-fatal, the server still reaches Done. SIGTERM ends the JVM with status 143, but no
+  "Stopping server" line appears in `latest.log`: a clean stop is not shown yet (build 13 sends `stop` on stdin instead).
+  Not done: a Horizon client joining this server; how long Android keeps a busy `:jvm` alive in the background.
 - Step 3 (sample): `spikes/mod-api-scan`. AppleSkin 3.0.10 55 classes/68 methods/19 fields, Clumps 26.3.2
   13/21/2, Xaero's Minimap 26.6.2 353/566/155 (+ nested xaerolib 137/250/31). Union of the three: 385 classes,
   634 methods, 169 fields. Mixin shapes seen: Inject, ModifyVariable, ModifyArg, ModifyReturnValue, Accessor, Shadow.

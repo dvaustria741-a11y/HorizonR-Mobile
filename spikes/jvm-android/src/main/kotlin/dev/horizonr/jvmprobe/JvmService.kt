@@ -10,6 +10,9 @@ import android.os.Process
 import android.system.Os
 import android.system.OsConstants
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.OutputStream
 
 /**
  * Runs in the `:jvm` process (see the manifest). It copies the runtime, loads the Rust library, boots a JVM once,
@@ -126,9 +129,13 @@ class JvmService : Service() {
             "-XX:ErrorFile=${File(dir, "hs_err_%p.log").path}",
             "-Xlog:gc+init=info,gc=info:file=${File(dir, ProbeFiles.GC_LOG).path}",
         )
-        startServerMonitor(dir, startMs)
+        val console = redirectConsoleInput()
+        startServerMonitor(dir, startMs, console)
         stage(dir, "booting", "server")
         val code = NativeBoot.runServer(heapMib, home.path, dir.path, prepared.dir.path, prepared.jar.path, options.joinToString("\n"))
+        // Reached only when the JVM returned by itself (the console stop worked); a SIGTERM exit never gets here.
+        val server = File(dir, ProbeFiles.SERVER)
+        ProbeFiles.writeKeyValues(server, ProbeFiles.readKeyValues(server) + mapOf("exit_code" to code.toString()))
         finish(dir, "done", code.toString())
     }
 
@@ -138,7 +145,7 @@ class JvmService : Service() {
      * running shutdown hooks (Minecraft's saves the world). Whether HotSpot handles SIGTERM next to ART is unverified;
      * after [ServerConfig.STOP_TIMEOUT_SECONDS] the process is killed instead and `stop=killed` is recorded.
      */
-    private fun startServerMonitor(dir: File, startMs: Long) {
+    private fun startServerMonitor(dir: File, startMs: Long, console: OutputStream?) {
         Thread({
             val log = File(dir, ProbeFiles.STDIO)
             val results = LinkedHashMap<String, String>()
@@ -165,15 +172,42 @@ class JvmService : Service() {
             results["rss_peak_kib"] = ProbeFiles.parseStatusNumber(status, "VmHWM")?.toString() ?: "unknown"
             results["threads"] = ProbeFiles.parseStatusNumber(status, "Threads")?.toString() ?: "unknown"
             results["settle_s"] = ServerConfig.SETTLE_SECONDS.toString()
-            results["stop"] = "SIGTERM sent"
+            val viaConsole = console != null && sendConsoleStop(console)
+            results["stop"] = if (viaConsole) "console command '${ServerConfig.STOP_COMMAND}' sent" else "SIGTERM sent (no console)"
             ProbeFiles.writeKeyValues(File(dir, ProbeFiles.SERVER), results)
-            stage(dir, "server_stopping", "SIGTERM sent, waiting up to ${ServerConfig.STOP_TIMEOUT_SECONDS} s")
+            stage(dir, "server_stopping", "${results["stop"]}, waiting")
+            if (viaConsole) {
+                Thread.sleep(ServerConfig.CONSOLE_STOP_SECONDS * 1000L)
+                results["stop"] = "the console command did not end the JVM within ${ServerConfig.CONSOLE_STOP_SECONDS} s; SIGTERM sent"
+                ProbeFiles.writeKeyValues(File(dir, ProbeFiles.SERVER), results)
+            }
             runCatching { Os.kill(Process.myPid(), OsConstants.SIGTERM) }
             Thread.sleep(ServerConfig.STOP_TIMEOUT_SECONDS * 1000L)
             results["stop"] = "killed: the JVM did not exit within ${ServerConfig.STOP_TIMEOUT_SECONDS} s of SIGTERM"
             ProbeFiles.writeKeyValues(File(dir, ProbeFiles.SERVER), results)
             Process.killProcess(Process.myPid())
         }, "jvmprobe-server-monitor").apply { isDaemon = true }.start()
+    }
+
+    /**
+     * Points this process's stdin (fd 0) at a pipe before the JVM starts, so the server's console can be driven with
+     * `stop`. Returns the pipe's write end, or null when the pipe could not be set up (SIGTERM is used then).
+     */
+    private fun redirectConsoleInput(): OutputStream? = try {
+        val pipe = Os.pipe()
+        Os.dup2(pipe[0], 0)
+        Os.close(pipe[0])
+        FileOutputStream(pipe[1])
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun sendConsoleStop(console: OutputStream): Boolean = try {
+        console.write((ServerConfig.STOP_COMMAND + "\n").toByteArray())
+        console.flush()
+        true
+    } catch (e: IOException) {
+        false
     }
 
     /** What the running server answers to a status ping; single-line values, because server.txt is key=value lines. */

@@ -339,6 +339,7 @@ class MainActivity : Activity() {
             out.append(getString(R.string.server_ping_header, ServerConfig.SERVER_HOST, ServerConfig.SERVER_PORT.toString())).append('\n')
             ping.forEach { (key, value) -> out.append("  ").append(key.removePrefix("ping_")).append(": ").append(value).append('\n') }
         }
+        results["exit_code"]?.let { out.append("JVM exit code (the JVM returned by itself): ").append(it).append('\n') }
         results["stop"]?.let { out.append("Stop: ").append(it).append('\n') }
         if (results["rss_peak_kib"] == null) beat["vmhwm_kib"]?.let { out.append("Peak RSS so far (VmHWM): ").append(kibText(it)).append('\n') }
         out.append(summary.loading ?: getString(R.string.server_loading_none)).append('\n')

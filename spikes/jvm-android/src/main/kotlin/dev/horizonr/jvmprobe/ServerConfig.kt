@@ -52,6 +52,10 @@ object ServerConfig {
     /** Seconds to let the server idle after "Done" before RSS is read and the stop signal is sent. A guess. */
     const val SETTLE_SECONDS = 10
 
+    /** The vanilla console command that stops the server cleanly, sent on the JVM's stdin, and how long it gets before SIGTERM. */
+    const val STOP_COMMAND = "stop"
+    const val CONSOLE_STOP_SECONDS = 20
+
     /** Seconds the JVM gets to exit after SIGTERM before the process is killed. A guess. */
     const val STOP_TIMEOUT_SECONDS = 30
 
