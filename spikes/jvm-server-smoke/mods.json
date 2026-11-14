@@ -1,0 +1,24 @@
+{
+  "_source": "Hashes of the jars the user uploaded on 2026-11-14 (sha1 and sha512 computed from those files). Fabric, Minecraft 26.3.",
+  "mods": {
+    "clumps": {
+      "file": "Clumps-fabric-26_3-26_3_2.jar",
+      "sha1": "86d6618f772320bb5e66b4696396a450d5cb845e",
+      "sha512": "8c166ae97e1999d0f213d0a181d6ef87b99648016c92c9aa1414d2c2e24364b12549569cd7e247a3d675df703ae6a8a88fc175d3f527818c710578408508c8ab"
+    },
+    "fabric-api": {
+      "file": "fabric-api-0_166_2_26_3.jar",
+      "sha1": "65636253571429971f25f5619692e6c1a6362028",
+      "sha512": "fb686a9fa923248328107a12498229d6951e316257f18b7d0e4cbd6885ba447ed50a44076a8a5ba47cfe2043b329db3587ab000aeab1face26b2587a5d4ba6b5"
+    },
+    "placeholder-api": {
+      "file": "placeholder-api-3_2_0_26_3.jar",
+      "sha1": "4c455faa6333dbaef72cedbb91fe4a2a03176741",
+      "sha512": "eb2bb31e51068aad2581b7864ea7b11b1209ba1c2b27551cd5837d9b312b818b73bb47c06374b46b99b73401c62c6b6c115f702c55aed6afd467ad8ad6448de4"
+    }
+  },
+  "configs": {
+    "clumps": ["clumps"],
+    "clumps-fabric-api-placeholder": ["clumps", "fabric-api", "placeholder-api"]
+  }
+}

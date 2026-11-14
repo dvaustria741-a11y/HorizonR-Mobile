@@ -1,0 +1,59 @@
+name: JVM server smoke
+
+# Boots a Fabric 26.3 server on Java 25 with the pinned mods of spikes/jvm-server-smoke/mods.json
+# and prints the result as annotations. Mod jars are downloaded from Modrinth at run time, never committed.
+# Two triggers: the Run workflow button (GitHub offers it only for workflows on the default branch), or a push
+# to jvm-mod-runtime that adds or changes spikes/jvm-server-smoke/run.json, e.g.
+#   {"config": "clumps", "accept_mojang_eula": true}
+on:
+  push:
+    branches: [ "jvm-mod-runtime" ]
+    paths: [ "spikes/jvm-server-smoke/run.json" ]
+  workflow_dispatch:
+    inputs:
+      config:
+        description: Which mods.json config to boot
+        type: choice
+        options:
+          - clumps
+          - clumps-fabric-api-placeholder
+        default: clumps
+      accept_mojang_eula:
+        description: Tick to write eula=true (you accept https://aka.ms/MinecraftEULA)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Fabric 26.3 server smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Unit tests of the smoke scripts
+        working-directory: spikes/jvm-server-smoke
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Boot the server
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_CONFIG: ${{ inputs.config }}
+          INPUT_EULA: ${{ inputs.accept_mojang_eula }}
+        run: |
+          if [ "$EVENT" = "push" ]; then
+            CONFIG="$(python3 -c "import json;print(json.load(open('spikes/jvm-server-smoke/run.json')).get('config',''))")"
+            ACCEPT_EULA="$(python3 -c "import json;print(str(json.load(open('spikes/jvm-server-smoke/run.json')).get('accept_mojang_eula') is True).lower())")"
+          else
+            CONFIG="$INPUT_CONFIG"; ACCEPT_EULA="$INPUT_EULA"
+          fi
+          export ACCEPT_EULA
+          spikes/jvm-server-smoke/run_smoke.sh "$CONFIG"
