@@ -2525,7 +2525,7 @@ private fun CleanAccountsAndSkinsViewport(
                                                         Icon(
                                                             imageVector = Icons.Outlined.Delete,
                                                             contentDescription = "Delete Skin",
-                                                            tint = Color(0xFFFF8A80),
+                                                            tint = HzColor.Danger,
                                                             modifier = Modifier
                                                                 .size(17.dp)
                                                                 .clickable {
@@ -2893,7 +2893,7 @@ private fun CleanServersViewport(
                     servers.remove(target)
                     persist()
                     pendingDelete = null
-                }) { Text("Remove", color = Color(0xFFFF8A80)) }
+                }) { Text("Remove", color = HzColor.Danger) }
             }
         )
     }
@@ -3248,7 +3248,7 @@ private fun CleanLogsViewport(
             items(filteredEntries, key = { it.id }) { entry ->
                 val sevColor = when (entry.severity) {
                     LogSeverityFilter.ERR -> Color(0xFFFF6B6B)
-                    LogSeverityFilter.WARN -> Color(0xFFFFB74D)
+                    LogSeverityFilter.WARN -> HzColor.Warning
                     LogSeverityFilter.DL -> Color(0xFF66BB6A)
                     else -> SkyBlueAccent
                 }
@@ -3316,7 +3316,7 @@ private fun CleanVersionsViewport(
         AlertDialog(
             onDismissRequest = { showCancelConfirmDialog = false },
             containerColor = Color(0xFF1F262B),
-            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFFFB74D)) },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = HzColor.Warning) },
             title = { Text("Cancel Download?", style = MaterialTheme.typography.titleMedium) },
             text = {
                 Text(
@@ -3386,7 +3386,7 @@ private fun CleanVersionsViewport(
         AlertDialog(
             onDismissRequest = { repairResultPopupMessage = null },
             containerColor = Color(0xFF1F262B),
-            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF81C784)) },
+            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = HzColor.Success) },
             title = { Text("Smart Repair Results", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Text(
@@ -3411,7 +3411,7 @@ private fun CleanVersionsViewport(
         AlertDialog(
             onDismissRequest = { showDeleteAllConfirmDialog = false },
             containerColor = Color(0xFF1F262B),
-            icon = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = Color(0xFFFF8A80)) },
+            icon = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = HzColor.Danger) },
             title = { Text("Delete All Minecraft Assets?", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Text(
@@ -3534,7 +3534,7 @@ private fun CleanVersionsViewport(
                                     else -> "Download the official Mojang asset pack to start playing Minecraft 26.3"
                                 },
                                 fontSize = 11.sp,
-                                color = if (installStatus.ready) Color(0xFF81C784) else MutedSubtitleText,
+                                color = if (installStatus.ready) HzColor.Success else MutedSubtitleText,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -3564,7 +3564,7 @@ private fun CleanVersionsViewport(
                                     text = if (isRepairRunning) "Verifying and repairing files..." else installStatus.stage,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (installStatus.paused) Color(0xFFFFB74D) else SkyBlueAccent,
+                                    color = if (installStatus.paused) HzColor.Warning else SkyBlueAccent,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
@@ -3599,7 +3599,7 @@ private fun CleanVersionsViewport(
                             Text(
                                 text = installStatus.error,
                                 fontSize = 11.sp,
-                                color = Color(0xFFFF8A80),
+                                color = HzColor.Danger,
                                 modifier = Modifier.padding(10.dp)
                             )
                         }
@@ -4017,7 +4017,7 @@ private fun CleanStoreViewport(
     pendingIncompatibleItem?.let { item ->
         AlertDialog(
             onDismissRequest = { pendingIncompatibleItem = null },
-            icon = { Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFFFB74D)) },
+            icon = { Icon(Icons.Default.WarningAmber, contentDescription = null, tint = HzColor.Warning) },
             title = { Text("Minecraft Version Warning", style = MaterialTheme.typography.titleMedium) },
             text = {
                 Text(
@@ -4283,14 +4283,14 @@ private fun CleanStoreViewport(
                                             }
                                             Surface(
                                                 shape = RoundedCornerShape(8.dp),
-                                                color = Color(0xFF3A2326),
+                                                color = HzColor.DangerFill,
                                                 modifier = Modifier.animatedPressScale { showCancelStoreDialog = true }
                                             ) {
                                                 Text(
                                                     text = "Cancel",
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.SemiBold,
-                                                    color = Color(0xFFFF8A80),
+                                                    color = HzColor.Danger,
                                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                                 )
                                             }
@@ -4418,7 +4418,7 @@ private fun CleanStoreViewport(
                                             isCurrentlyDownloading -> StoreActionButton(
                                                 label = "${storeProgress.percent}%",
                                                 icon = Icons.Default.Cancel,
-                                                bg = Color(0xFF3A2326),
+                                                bg = HzColor.DangerFill,
                                                 fg = HzColor.Danger
                                             ) { showCancelStoreDialog = true }
 
@@ -4429,7 +4429,7 @@ private fun CleanStoreViewport(
                                                 StoreActionButton(
                                                     label = "Update",
                                                     icon = Icons.Default.SystemUpdateAlt,
-                                                    bg = Color(0xFFFFB74D),
+                                                    bg = HzColor.Warning,
                                                     fg = Color(0xFF261600),
                                                     enabled = !storeProgress.running
                                                 ) {
@@ -4440,7 +4440,7 @@ private fun CleanStoreViewport(
                                                     text = "v${installedVer ?: "0.1"} \u2192 v${item.version}",
                                                     fontFamily = HzFont.Mono,
                                                     fontSize = 8.5.sp,
-                                                    color = Color(0xFFFFB74D),
+                                                    color = HzColor.Warning,
                                                     maxLines = 1
                                                 )
                                             }
@@ -4450,8 +4450,8 @@ private fun CleanStoreViewport(
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                                                    Icon(Icons.Default.CheckCircle, contentDescription = "Installed", tint = Color(0xFF81C784), modifier = Modifier.size(13.dp))
-                                                    Text("Installed", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFF81C784))
+                                                    Icon(Icons.Default.CheckCircle, contentDescription = "Installed", tint = HzColor.Success, modifier = Modifier.size(13.dp))
+                                                    Text("Installed", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = HzColor.Success)
                                                 }
                                                 Box(
                                                     contentAlignment = Alignment.Center,
@@ -5042,7 +5042,7 @@ private fun CleanStoreViewport(
                                                                                 fontSize = 12.sp,
                                                                                 fontWeight = FontWeight.Bold,
                                                                                 color = when {
-                                                                                    isThisExactVerInstalled -> Color(0xFF81C784)
+                                                                                    isThisExactVerInstalled -> HzColor.Success
                                                                                     installedVerForProj != null -> Color(0xFFFFD54F)
                                                                                     else -> SkyBlueDarkText
                                                                                 },
@@ -5160,7 +5160,7 @@ private fun CleanStoreViewport(
                                 shape = RoundedCornerShape(6.dp),
                                 color = when (detailInstallState) {
                                     StoreInstallState.INSTALLED -> Color(0xFF1E3E29)
-                                    StoreInstallState.UPDATE_AVAILABLE -> Color(0xFFFFB74D)
+                                    StoreInstallState.UPDATE_AVAILABLE -> HzColor.Warning
                                     StoreInstallState.NOT_INSTALLED -> SkyBlueAccent
                                 },
                                 modifier = Modifier
@@ -5194,7 +5194,7 @@ private fun CleanStoreViewport(
                                         },
                                         contentDescription = null,
                                         tint = when (detailInstallState) {
-                                            StoreInstallState.INSTALLED -> Color(0xFF81C784)
+                                            StoreInstallState.INSTALLED -> HzColor.Success
                                             StoreInstallState.UPDATE_AVAILABLE -> Color(0xFF261600)
                                             StoreInstallState.NOT_INSTALLED -> SkyBlueDarkText
                                         },
@@ -5210,7 +5210,7 @@ private fun CleanStoreViewport(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = when (detailInstallState) {
-                                            StoreInstallState.INSTALLED -> Color(0xFF81C784)
+                                            StoreInstallState.INSTALLED -> HzColor.Success
                                             StoreInstallState.UPDATE_AVAILABLE -> Color(0xFF261600)
                                             StoreInstallState.NOT_INSTALLED -> SkyBlueDarkText
                                         }
@@ -5221,7 +5221,7 @@ private fun CleanStoreViewport(
                             if (detailInstallState == StoreInstallState.INSTALLED || detailInstallState == StoreInstallState.UPDATE_AVAILABLE) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFF3A2326),
+                                    color = HzColor.DangerFill,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .animatedPressScale {
@@ -5234,9 +5234,9 @@ private fun CleanStoreViewport(
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(15.dp))
+                                        Icon(Icons.Outlined.Delete, contentDescription = null, tint = HzColor.Danger, modifier = Modifier.size(15.dp))
                                         Spacer(Modifier.width(5.dp))
-                                        Text("Uninstall from Horizon", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF8A80))
+                                        Text("Uninstall from Horizon", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = HzColor.Danger)
                                     }
                                 }
                             }
@@ -5832,7 +5832,7 @@ private fun CleanFilesViewport(
                 Icon(
                     imageVector = Icons.Default.WarningAmber,
                     contentDescription = null,
-                    tint = Color(0xFFFF8A80)
+                    tint = HzColor.Danger
                 )
             },
             title = {
@@ -6199,7 +6199,7 @@ private fun FileManagerRowCard(
                                 if (rowItem.hasStoreUpdate && rowItem.storeCatalogMatch != null) {
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
-                                        color = Color(0xFFFFB74D),
+                                        color = HzColor.Warning,
                                         modifier = Modifier.clickable {
                                             val targetItem = rowItem.storeCatalogMatch
                                             Toast.makeText(context, "Mengupdate ${targetItem.title} ke v${targetItem.version}...", Toast.LENGTH_SHORT).show()
@@ -6229,13 +6229,13 @@ private fun FileManagerRowCard(
                                 }
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = if (isEnabled) Color(0xFF1E3E29) else Color(0xFF3A2326)
+                                    color = if (isEnabled) Color(0xFF1E3E29) else HzColor.DangerFill
                                 ) {
                                     Text(
                                         text = if (isEnabled) "ON" else "OFF",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = if (isEnabled) Color(0xFF81C784) else Color(0xFFFF8A80),
+                                        color = if (isEnabled) HzColor.Success else HzColor.Danger,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
@@ -6255,7 +6255,7 @@ private fun FileManagerRowCard(
                                             text = "ACTIVE",
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = Color(0xFF81C784),
+                                            color = HzColor.Success,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
@@ -6366,12 +6366,12 @@ private fun FileManagerRowCard(
                                         Text(
                                             text = "Capabilities: ${modDetail.capabilities.joinToString(", ").ifEmpty { "registries" }}",
                                             fontSize = 12.sp,
-                                            color = Color(0xFF81C784)
+                                            color = HzColor.Success
                                         )
                                         Text(
                                             text = "Status: ${if (isEnabled) "ON (Synced with horizon-mods.txt)" else "OFF (Disabled)"}",
                                             fontSize = 12.sp,
-                                            color = if (isEnabled) Color(0xFF81C784) else Color(0xFFFF8A80)
+                                            color = if (isEnabled) HzColor.Success else HzColor.Danger
                                         )
                                     }
                                 }
@@ -6383,7 +6383,7 @@ private fun FileManagerRowCard(
                         Icon(
                             imageVector = Icons.Outlined.Delete,
                             contentDescription = "Delete Mod",
-                            tint = Color(0xFFFF8A80),
+                            tint = HzColor.Danger,
                             modifier = Modifier
                                 .size(20.dp)
                                 .clickable {
@@ -6394,7 +6394,7 @@ private fun FileManagerRowCard(
                         Icon(
                             imageVector = Icons.Outlined.Delete,
                             contentDescription = "Delete",
-                            tint = Color(0xFFFF8A80),
+                            tint = HzColor.Danger,
                             modifier = Modifier
                                 .size(19.dp)
                                 .clickable {
@@ -6443,8 +6443,8 @@ private fun FileManagerRowCard(
                                             }
                                         )
                                         DropdownMenuItem(
-                                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(17.dp)) },
-                                            text = { Text("Delete", fontSize = 12.sp, color = Color(0xFFFF8A80)) },
+                                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = HzColor.Danger, modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Delete", fontSize = 12.sp, color = HzColor.Danger) },
                                             onClick = {
                                                 showMoreMenu = false
                                                 onRequestDelete(file, displayTitle)
@@ -6477,8 +6477,8 @@ private fun FileManagerRowCard(
                                             }
                                         )
                                         DropdownMenuItem(
-                                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(17.dp)) },
-                                            text = { Text("Delete", fontSize = 12.sp, color = Color(0xFFFF8A80)) },
+                                            leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = HzColor.Danger, modifier = Modifier.size(17.dp)) },
+                                            text = { Text("Delete", fontSize = 12.sp, color = HzColor.Danger) },
                                             onClick = {
                                                 showMoreMenu = false
                                                 onRequestDelete(file, displayTitle)
@@ -6522,21 +6522,21 @@ private fun FileManagerRowCard(
                                     text = if (isEnabled) "Disable" else "Enable",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isEnabled) Color(0xFF81C784) else SkyBlueDarkText,
+                                    color = if (isEnabled) HzColor.Success else SkyBlueDarkText,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
                         }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFF3A2326),
+                            color = HzColor.DangerFill,
                             modifier = Modifier.clickable { onRequestDelete(file, displayTitle) }
                         ) {
                             Text(
                                 text = "Delete",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFF8A80),
+                                color = HzColor.Danger,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
@@ -6664,11 +6664,10 @@ private fun CleanSettingsViewport(
                     .verticalScroll(rememberScrollState())
                     .padding(end = 4.dp, bottom = 12.dp)
             ) {
-                Text(
-                    text = section.label.uppercase(),
-                    fontFamily = HzFont.Mono, fontSize = 10.sp, letterSpacing = 1.sp,
-                    color = MutedSubtitleText,
-                    modifier = Modifier.padding(start = 2.dp, bottom = 6.dp)
+                HzPageHeader(
+                    title = section.label,
+                    subtitle = null,
+                    modifier = Modifier.padding(bottom = HzSpace.S)
                 )
                 when (section) {
                     SettingsSubCategory.RENDERER -> {
@@ -6882,7 +6881,7 @@ private fun CleanSettingsViewport(
                                         Icon(
                                             imageVector = if (testResultSuccess) Icons.Default.CheckCircle else Icons.Default.ErrorOutline,
                                             contentDescription = null,
-                                            tint = if (testResultSuccess) Color(0xFF81C784) else Color(0xFFFF8A80)
+                                            tint = if (testResultSuccess) HzColor.Success else HzColor.Danger
                                         )
                                         Text(
                                             text = if (testResultSuccess) "Google AI Studio Connected!" else "Gemini API Connection Failed",
@@ -7053,7 +7052,7 @@ private fun CleanSettingsViewport(
                                                 Toast.makeText(context, "API Key lokal dihapus.", Toast.LENGTH_SHORT).show()
                                             }
                                         ) {
-                                            Icon(Icons.Default.DeleteOutline, contentDescription = "Clear Key", tint = Color(0xFFFF8A80), modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Default.DeleteOutline, contentDescription = "Clear Key", tint = HzColor.Danger, modifier = Modifier.size(16.dp))
                                         }
                                     }
                                 }
@@ -7682,8 +7681,8 @@ private fun LauncherLaunchDock(
         label = "DockProgress"
     )
     val statusColor by animateColorAsState(
-        targetValue = if (installStatus.ready) Color(0xFF81C784)
-        else if (installStatus.paused) Color(0xFFFFB74D)
+        targetValue = if (installStatus.ready) HzColor.Success
+        else if (installStatus.paused) HzColor.Warning
         else SkyBlueAccent,
         animationSpec = tween(300),
         label = "DockStatusColor"
