@@ -24,8 +24,9 @@ import java.util.Locale
 internal object CloudPerfProfile {
     private const val TAG = "CloudPerfProfile"
 
-    /** Default profile location: the horizon-perf-profile Cloudflare Worker (source in `cloud/worker/`). */
-    const val DEFAULT_URL = "https://horizon-perf-profile.dvaustria741.workers.dev/perf-profile.json"
+    /** Default profile location. Replace with a Cloudflare Worker URL if you want to front it. */
+    const val DEFAULT_URL =
+        "https://raw.githubusercontent.com/dvaustria741-a11y/HorizonR-Mobile/launcher-ui-desktop/cloud/perf-profile.json"
 
     private const val CACHE_NAME = "cloud-perf-profile.json"
     private const val REFRESH_EVERY_MS = 6L * 60L * 60L * 1000L
