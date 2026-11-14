@@ -1,0 +1,18 @@
+[package]
+name = "jvm-boot-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Step 1 spike: load a libjvm.so and call one Java method over JNI. Not part of the Horizon workspace."
+
+# Standalone on purpose: the spike must not touch the workspace's Cargo.lock or CI.
+[workspace]
+
+[dependencies]
+jni = "0.21"
+libloading = "0.8"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
