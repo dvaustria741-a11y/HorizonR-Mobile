@@ -121,14 +121,14 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-private val wallpaperCache = android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(4)
+private val wallpaperCache = android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(2)
 
-/** Decodes a wallpaper at roughly screen size (never the full file) and keeps the last few in memory. */
-private fun loadWallpaper(context: android.content.Context, idx: Int, custom: List<File>): androidx.compose.ui.graphics.ImageBitmap? {
-    val builtIn = idx % DASHBOARD_WALLPAPERS.size
-    val customIdx = idx - DASHBOARD_WALLPAPERS.size
-    val file = if (idx >= DASHBOARD_WALLPAPERS.size && customIdx in custom.indices) custom[customIdx] else null
-    val key = file?.let { "f:${it.absolutePath}:${it.lastModified()}" } ?: "r:$builtIn"
+/** The one built-in Home wallpaper. A wallpaper the user imported replaces it. */
+private val HOME_WALLPAPER = R.drawable.mc_wall_19
+
+/** Decodes the wallpaper at roughly screen size (never the full file) and caches it. */
+private fun loadWallpaper(context: android.content.Context, custom: File?): androidx.compose.ui.graphics.ImageBitmap? {
+    val key = custom?.let { "f:${it.absolutePath}:${it.lastModified()}" } ?: "r:builtin"
     wallpaperCache.get(key)?.let { return it }
     val target = context.resources.displayMetrics.widthPixels.coerceAtLeast(720)
     fun sample(w: Int): Int {
@@ -138,45 +138,23 @@ private fun loadWallpaper(context: android.content.Context, idx: Int, custom: Li
     }
     val bitmap = runCatching {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        if (file != null) BitmapFactory.decodeFile(file.absolutePath, bounds)
-        else BitmapFactory.decodeResource(context.resources, DASHBOARD_WALLPAPERS[builtIn], bounds)
+        if (custom != null) BitmapFactory.decodeFile(custom.absolutePath, bounds)
+        else BitmapFactory.decodeResource(context.resources, HOME_WALLPAPER, bounds)
         val opts = BitmapFactory.Options().apply { inSampleSize = sample(bounds.outWidth) }
-        if (file != null) BitmapFactory.decodeFile(file.absolutePath, opts)
-        else BitmapFactory.decodeResource(context.resources, DASHBOARD_WALLPAPERS[builtIn], opts)
+        if (custom != null) BitmapFactory.decodeFile(custom.absolutePath, opts)
+        else BitmapFactory.decodeResource(context.resources, HOME_WALLPAPER, opts)
     }.getOrNull()?.asImageBitmap() ?: return null
     wallpaperCache.put(key, bitmap)
     return bitmap
 }
 
 @Composable
-private fun rememberWallpaper(context: android.content.Context, idx: Int, custom: List<File>): androidx.compose.ui.graphics.ImageBitmap? {
-    val state = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, idx, custom) {
-        value = withContext(Dispatchers.IO) { loadWallpaper(context, idx, custom) }
+private fun rememberWallpaper(context: android.content.Context, custom: File?): androidx.compose.ui.graphics.ImageBitmap? {
+    val state = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, custom) {
+        value = withContext(Dispatchers.IO) { loadWallpaper(context, custom) }
     }
     return state.value
 }
-
-private val DASHBOARD_WALLPAPERS = listOf(
-    R.drawable.mc_wall_01,
-    R.drawable.mc_wall_02,
-    R.drawable.mc_wall_03,
-    R.drawable.mc_wall_04,
-    R.drawable.mc_wall_05,
-    R.drawable.mc_wall_06,
-    R.drawable.mc_wall_07,
-    R.drawable.mc_wall_08,
-    R.drawable.mc_wall_09,
-    R.drawable.mc_wall_10,
-    R.drawable.mc_wall_11,
-    R.drawable.mc_wall_12,
-    R.drawable.mc_wall_13,
-    R.drawable.mc_wall_14,
-    R.drawable.mc_wall_15,
-    R.drawable.mc_wall_16,
-    R.drawable.mc_wall_17,
-    R.drawable.mc_wall_18,
-    R.drawable.mc_wall_19
-)
 
 data class HorizonDynamicPalette(
     val rootBg: Color = HzColor.Background,
@@ -1754,9 +1732,8 @@ private fun HorizonTopNav(
 }
 
 /**
- * Main Dashboard Viewport:
- * - 18 Authentic HD 16:9 Minecraft Wallpapers cycling every 5 seconds with smooth crossfade.
- * - Zero duplicate navigation buttons on top-right (only a single clean `Wallpaper` button).
+ * Main Dashboard Viewport: one fixed wallpaper (the built-in one, or the newest wallpaper the user imported),
+ * the quick-access grid and the version dock. No wallpaper rotation.
  */
 @Composable
 private fun CleanHomeViewport(
@@ -1778,9 +1755,8 @@ private fun CleanHomeViewport(
             HorizonNativeBridge.getCustomWallpapers(context)
         }
     }
-    val totalCount = DASHBOARD_WALLPAPERS.size + customWallpapers.size
+    val customWallpaper = customWallpapers.maxByOrNull { it.lastModified() }
     var quoteIndex by remember { mutableIntStateOf((MINECRAFT_SPLASH_QUOTES.indices).random()) }
-    var wallpaperIndex by remember { mutableIntStateOf((0 until totalCount.coerceAtLeast(1)).random()) }
 
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
@@ -1792,22 +1768,6 @@ private fun CleanHomeViewport(
                 logEnabled
             )
             customWallpapers = HorizonNativeBridge.getCustomWallpapers(context)
-            wallpaperIndex = DASHBOARD_WALLPAPERS.size
-        }
-    }
-
-    // Decode the next wallpaper off the main thread before it fades in, so the carousel never hitches.
-    LaunchedEffect(wallpaperIndex, totalCount, customWallpapers) {
-        if (!isHibernated && totalCount > 1) {
-            val next = (wallpaperIndex + 1) % totalCount
-            withContext(Dispatchers.IO) { loadWallpaper(context, next, customWallpapers) }
-        }
-    }
-
-    LaunchedEffect(totalCount, isHibernated) {
-        while (!isHibernated) {
-            delay(9000L)
-            wallpaperIndex = (wallpaperIndex + 1) % totalCount.coerceAtLeast(1)
         }
     }
 
@@ -1829,18 +1789,18 @@ private fun CleanHomeViewport(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (!isHibernated) {
+            val wall = rememberWallpaper(context, customWallpaper)
             AnimatedContent(
-                targetState = wallpaperIndex % totalCount.coerceAtLeast(1),
+                targetState = wall,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(700)).togetherWith(fadeOut(animationSpec = tween(700))).using(sizeTransform = null)
+                    fadeIn(animationSpec = tween(HzMotion.Medium)).togetherWith(fadeOut(animationSpec = tween(HzMotion.Short))).using(sizeTransform = null)
                 },
                 modifier = Modifier.fillMaxSize(),
-                label = "MinecraftWallpaperCarousel"
-            ) { idx ->
-                val wall = rememberWallpaper(context, idx, customWallpapers)
-                if (wall != null) {
+                label = "HomeWallpaper"
+            ) { image ->
+                if (image != null) {
                     Image(
-                        bitmap = wall,
+                        bitmap = image,
                         contentDescription = "Minecraft Wallpaper",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -1898,7 +1858,6 @@ private fun CleanHomeViewport(
                 quote = MINECRAFT_SPLASH_QUOTES[quoteIndex],
                 onQuoteTap = {
                     quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size
-                    wallpaperIndex = (wallpaperIndex + 1) % totalCount.coerceAtLeast(1)
                 },
                 onNavigate = onNavigate,
                 onOpenFolder = onOpenFolder,

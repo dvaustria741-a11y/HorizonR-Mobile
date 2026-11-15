@@ -199,4 +199,3 @@ def fetch_real_hd_minecraft_wallpapers():
 
 if __name__ == "__main__":
     prestage_bedrock_controls()
-    fetch_real_hd_minecraft_wallpapers()
