@@ -1307,10 +1307,12 @@ object HorizonNativeBridge {
                 val shaderSrcKey = obj.optString("shader_source", HorizonContentOrigin.HORIZON.serdeKey)
                 val shaderSource = HorizonContentOrigin.entries.firstOrNull { it.serdeKey == shaderSrcKey }
                     ?: HorizonContentOrigin.HORIZON
-                val paletteName = obj.optString("themePalette", LauncherThemePalette.HORIZON_DUSK.name)
-                val storedPalette = runCatching { LauncherThemePalette.valueOf(paletteName) }.getOrDefault(LauncherThemePalette.HORIZON_DUSK)
+                val paletteName = obj.optString("themePalette", LauncherThemePalette.HORIZON_SLATE.name)
+                val storedPalette = runCatching { LauncherThemePalette.valueOf(paletteName) }.getOrDefault(LauncherThemePalette.HORIZON_SLATE)
                 // Configs saved before the Horizon Dusk theme existed still say "Volt": move them over once.
-                val palette = if (!obj.optBoolean("paletteV2", false) && storedPalette == LauncherThemePalette.MATERIAL_YOU) LauncherThemePalette.HORIZON_DUSK else storedPalette
+                val migratedPalette = if (!obj.optBoolean("paletteV2", false) && storedPalette == LauncherThemePalette.MATERIAL_YOU) LauncherThemePalette.HORIZON_DUSK else storedPalette
+                // Configs saved before the Default (slate) theme existed still carry the old default: move them over once.
+                val palette = if (!obj.optBoolean("paletteV3", false) && migratedPalette == LauncherThemePalette.HORIZON_DUSK) LauncherThemePalette.HORIZON_SLATE else migratedPalette
 
                 state = HorizonConfigState(
                     profile = obj.optInt("profile", 0).coerceIn(0, 3),
@@ -1481,6 +1483,7 @@ object HorizonNativeBridge {
             put("mcFullscreen", config.mcFullscreen)
             put("themePalette", config.themePalette.name)
             put("paletteV2", true)
+            put("paletteV3", true)
             put("useDynamicColor", config.useDynamicColor)
             put("enableSystemLog", config.enableSystemLog)
             put("disableAudioSafeMode", config.disableAudioSafeMode)

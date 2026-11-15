@@ -177,15 +177,15 @@ private val DASHBOARD_WALLPAPERS = listOf(
 )
 
 data class HorizonDynamicPalette(
-    val rootBg: Color = Color(0xFF0E1220),
-    val cardSlateBg: Color = Color(0xFF161B2E),
-    val cardRowBg: Color = Color(0xFF1E2438),
-    val subRailCapsuleActive: Color = Color(0xFF3A2F2A),
-    val skyBlueAccent: Color = Color(0xFFFFB454),
-    val skyBlueDarkText: Color = Color(0xFF2A1700),
-    val lavenderBadgeBg: Color = Color(0xFF2A3150),
-    val lavenderBadgeText: Color = Color(0xFFFFD9A0),
-    val mutedSubtitleText: Color = Color(0xFF9AA3BF)
+    val rootBg: Color = HzColor.Background,
+    val cardSlateBg: Color = HzColor.Panel,
+    val cardRowBg: Color = HzColor.PanelHi,
+    val subRailCapsuleActive: Color = Color(0xFF173038),
+    val skyBlueAccent: Color = HzColor.Accent,
+    val skyBlueDarkText: Color = HzColor.OnAccent,
+    val lavenderBadgeBg: Color = Color(0xFF1D2A33),
+    val lavenderBadgeText: Color = Color(0xFFB9E6EE),
+    val mutedSubtitleText: Color = HzColor.TextMuted
 )
 
 private var activeUiPalette by mutableStateOf(HorizonDynamicPalette())
@@ -221,6 +221,7 @@ private fun SyncDynamicLauncherPalette(palette: LauncherThemePalette, useDynamic
             )
         } else {
             when (palette) {
+                LauncherThemePalette.HORIZON_SLATE -> HorizonDynamicPalette()
                 LauncherThemePalette.HORIZON_DUSK -> HorizonDynamicPalette(
                     rootBg = Color(0xFF0E1220),
                     cardSlateBg = Color(0xFF161B2E),

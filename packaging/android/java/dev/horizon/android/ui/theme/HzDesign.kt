@@ -46,20 +46,47 @@ object HzMotion {
     const val Medium = 240
 }
 
-/** Surfaces for the desktop-style shell. Flat fills and a single hairline, no gradients. */
+/**
+ * Default theme tokens: graphite surfaces with a cool tint, soft cyan accent. Every launcher and editor
+ * colour that is not a per-theme palette colour comes from here, so a new theme only has to change this block.
+ */
 object HzColor {
-    val Rail = Color(0xFF0E1117)
-    val Panel = Color(0xFF151921)
-    val PanelHi = Color(0xFF1E232D)
-    val Hairline = Color(0x1FFFFFFF)
-    val Glass = Color(0xD0111419)
-    val Danger = Color(0xFFFF8A80)
+    /** Page background behind everything. */
+    val Background = Color(0xFF0F1216)
+
+    /** Top bar, side rails. */
+    val Rail = Color(0xFF0C0F13)
+
+    /** Cards, dialogs, side panels. */
+    val Panel = Color(0xFF14181E)
+
+    /** Raised or selected surfaces inside a Panel: rows, chips, fields. */
+    val PanelHi = Color(0xFF1C2128)
 
     /** Recessed wells: log boxes, text fields, anything that sits inside a Panel. */
-    val PanelLow = Color(0xFF0F131A)
+    val PanelLow = Color(0xFF0E1115)
+
+    /** Panels drawn over wallpaper artwork. */
+    val Glass = Color(0xD00F1217)
+
+    val Hairline = Color(0x1FFFFFFF)
 
     /** Hairline for focused or selected outlines and for dividers on bright surfaces. */
     val HairlineStrong = Color(0x38FFFFFF)
+
+    val TextPrimary = Color(0xFFE9EDF1)
+    val TextIcon = Color(0xFFC3CAD2)
+    val TextMuted = Color(0xFF8A94A0)
+
+    val Accent = Color(0xFF5EC4D4)
+    val AccentSecondary = Color(0xFF8EA4C4)
+    val OnAccent = Color(0xFF05232A)
+
+    /** Selected / active fill and outline for tabs, tiles and chips. */
+    val AccentSoft = Color(0x245EC4D4)
+    val AccentLine = Color(0x8C5EC4D4)
+
+    val Danger = Color(0xFFFF8A80)
 
     /** Fill behind destructive buttons and error banners. */
     val DangerFill = Color(0xFF3A2326)

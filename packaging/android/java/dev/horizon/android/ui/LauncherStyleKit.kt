@@ -82,14 +82,14 @@ import dev.horizon.android.ui.theme.HzText
 import kotlinx.coroutines.delay
 
 /** Neutral dark surfaces shared by every launcher page: dark gray cards, a hairline stroke. */
-internal val VoltGrayRoot = Color(0xFF0D0F16)
-internal val VoltGrayCard = Color(0xFF1A1D25)
-internal val VoltGrayRow = Color(0xFF272C36)
-internal val VoltGrayStroke = Color(0x24FFFFFF)
-internal val VoltGlass = Color(0xCA16191F)
-internal val VoltMutedText = Color(0xFF8F969B)
-internal val VoltIconMuted = Color(0xFFC6CCC9)
-internal val VoltTextMain = Color(0xFFF2F5F3)
+internal val VoltGrayRoot = HzColor.Background
+internal val VoltGrayCard = HzColor.Panel
+internal val VoltGrayRow = HzColor.PanelHi
+internal val VoltGrayStroke = HzColor.Hairline
+internal val VoltGlass = HzColor.Glass
+internal val VoltMutedText = HzColor.TextMuted
+internal val VoltIconMuted = HzColor.TextIcon
+internal val VoltTextMain = HzColor.TextPrimary
 
 /**
  * White, transparent-background launcher icon.
@@ -323,77 +323,67 @@ internal fun HzTag(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-private val HOME_CHIP_HEIGHT = 36.dp
+private val HOME_TILE_HEIGHT = 52.dp
 
+/** One tile of the Home quick-access grid. Tiles fade in one after the other, once. */
 @Composable
-private fun HzChip(label: String, icon: ImageVector, active: Boolean, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun HzHomeTile(
+    label: String,
+    hint: String?,
+    iconName: String,
+    fallback: ImageVector,
+    index: Int,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    active: Boolean = false,
+    onClick: () -> Unit
+) {
+    val enter = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(60L + index * 40L)
+        enter.animateTo(1f, tween(HzMotion.Medium, easing = HzMotion.Ease))
+    }
     val tint by animateColorAsState(
         targetValue = if (active) accent else VoltIconMuted,
         animationSpec = tween(HzMotion.Short),
-        label = "ChipTint"
+        label = "TileTint"
     )
     Row(
         modifier = modifier
-            .height(HOME_CHIP_HEIGHT)
-            .animatedPressScale(pressedScale = 0.96f, onClick = onClick)
+            .height(HOME_TILE_HEIGHT)
+            .graphicsLayer {
+                alpha = enter.value
+                translationY = (1f - enter.value) * 8.dp.toPx()
+            }
+            .animatedPressScale(pressedScale = 0.97f, onClick = onClick)
             .clip(HzShape.Control)
-            .background(if (active) accent.copy(alpha = 0.14f) else HzColor.Glass)
+            .background(if (active) accent.copy(alpha = 0.14f) else HzColor.PanelHi.copy(alpha = 0.6f))
             .border(1.dp, if (active) accent.copy(alpha = 0.55f) else HzColor.Hairline, HzShape.Control)
             .padding(horizontal = HzSpace.M),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
-        Text(text = label, fontSize = HzText.Body.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = VoltTextMain, maxLines = 1)
-    }
-}
-
-/** One row of the Home shortcut list. Rows slide in one after the other, once. */
-@Composable
-private fun HzShortcut(label: String, hint: String?, iconName: String, fallback: ImageVector, index: Int, onClick: () -> Unit) {
-    val enter = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        delay(60L + index * 45L)
-        enter.animateTo(1f, tween(HzMotion.Medium, easing = HzMotion.Ease))
-    }
-    Row(
-        modifier = Modifier
-            .width(212.dp)
-            .height(44.dp)
-            .graphicsLayer {
-                alpha = enter.value
-                translationX = (1f - enter.value) * 14.dp.toPx()
-            }
-            .animatedPressScale(pressedScale = 0.97f, onClick = onClick)
-            .clip(HzShape.Panel)
-            .background(HzColor.Glass)
-            .border(1.dp, HzColor.Hairline, HzShape.Panel)
-            .padding(horizontal = HzSpace.M),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
-    ) {
-        VoltIcon(name = iconName, fallback = fallback, size = 20.dp, tint = VoltIconMuted)
-        Text(
-            text = label,
-            fontSize = HzText.Section.sp,
-            lineHeight = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = VoltTextMain,
-            maxLines = 1,
-            modifier = Modifier.weight(1f)
-        )
-        if (hint != null) {
+        VoltIcon(name = iconName, fallback = fallback, size = 20.dp, tint = tint)
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = hint,
-                fontFamily = HzFont.Mono,
-                fontSize = HzText.Caption.sp,
-                color = VoltMutedText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 84.dp)
+                text = label,
+                fontSize = HzText.Section.sp,
+                lineHeight = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = VoltTextMain,
+                maxLines = 1
             )
-        } else {
-            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = VoltMutedText, modifier = Modifier.size(14.dp))
+            if (hint != null) {
+                Text(
+                    text = hint,
+                    fontFamily = HzFont.Mono,
+                    fontSize = HzText.Micro.sp,
+                    lineHeight = 12.sp,
+                    color = VoltMutedText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -405,7 +395,7 @@ private fun HzPlayButton(installStatus: AssetInstallStatus, accent: Color, onLau
         animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
         label = "PlayProgress"
     )
-    val onAccent = if (accent.luminance() > 0.45f) Color(0xFF0B0F0D) else Color.White
+    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
     val busy = installStatus.running
     val fg = if (busy) accent else onAccent
     Box(
@@ -469,8 +459,9 @@ private fun hzStatusLine(s: AssetInstallStatus, playTime: String): String = when
 }
 
 /**
- * Home: the wallpaper behind, the selected version and PLAY at the bottom left,
- * a short list of shortcuts on the right and a Boost chip top right. The rail is drawn by the shell.
+ * Home: the wallpaper stays clear. A quote sits top left, a 2 x 3 quick-access grid (Boost is one of the tiles)
+ * top right, and one full-width dock along the bottom carries the selected version, its status and PLAY.
+ * The rail is drawn by the shell.
  */
 @Composable
 internal fun VoltHomeLayer(
@@ -487,54 +478,14 @@ internal fun VoltHomeLayer(
 ) {
     val context = LocalContext.current
     val playTime = PlayTime.label(context)
+    var boostOn by remember { mutableStateOf(Boost.isOn(context)) }
     Box(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(hzContentInsets())
             .padding(horizontal = HzSpace.L, vertical = HzSpace.M)
     ) {
-        HzTag("NATIVE RUST", modifier = Modifier.align(Alignment.TopStart))
-
-        var boostOn by remember { mutableStateOf(Boost.isOn(context)) }
-        HzChip(
-            label = if (boostOn) "Boost on" else "Boost",
-            icon = Icons.Default.Bolt,
-            active = boostOn,
-            accent = accent,
-            modifier = Modifier.align(Alignment.TopEnd)
-        ) {
-            boostOn = !boostOn
-            Boost.set(context, boostOn)
-            android.widget.Toast.makeText(
-                context,
-                if (boostOn) "Boost on: memory freed, game runs at higher priority" else "Boost off",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = HOME_CHIP_HEIGHT + HzSpace.S),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(HzSpace.XS)
-        ) {
-            HzShortcut("Mods", null, "ic_ui_mods", Icons.Default.Extension, 0) { onNavigate(LauncherNavTab.FILES) }
-            HzShortcut("Shaders", null, "ic_ui_shaders", Icons.Default.WbSunny, 1) { onNavigate(LauncherNavTab.STORE) }
-            HzShortcut("Worlds", null, "ic_ui_worlds", Icons.Default.Public, 2) {
-                FilesNav.pendingFolder = "saves"
-                onNavigate(LauncherNavTab.FILES)
-            }
-            HzShortcut("Servers", null, "ic_ui_servers", Icons.Default.Dns, 3) { onNavigate(LauncherNavTab.SERVERS) }
-            HzShortcut("Skins", activeAccount.username, "ic_ui_skins", Icons.Default.Checkroom, 4) { onNavigate(LauncherNavTab.ACCOUNTS) }
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .widthIn(max = 340.dp),
-            verticalArrangement = Arrangement.spacedBy(HzSpace.XS)
-        ) {
+        Box(modifier = Modifier.align(Alignment.TopStart).widthIn(max = 360.dp)) {
             Crossfade(targetState = quote, animationSpec = tween(HzMotion.Medium), label = "HomeQuote") { q ->
                 if (q != null) {
                     Text(
@@ -549,53 +500,103 @@ internal fun VoltHomeLayer(
                     )
                 }
             }
-            Text(
-                text = "SELECTED VERSION",
-                fontFamily = HzFont.Mono,
-                fontSize = HzText.Caption.sp,
-                lineHeight = 14.sp,
-                letterSpacing = 1.sp,
-                color = VoltMutedText,
-                maxLines = 1
-            )
-            Text(
-                text = "Minecraft 26.3",
-                fontSize = 34.sp,
-                lineHeight = 38.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
-                val dot = when {
-                    installStatus.ready -> HzColor.Success
-                    installStatus.paused -> HzColor.Warning
-                    installStatus.running -> accent
-                    else -> VoltMutedText
-                }
-                Box(modifier = Modifier.size(6.dp).clip(HzShape.Chip).background(dot))
-                Text(
-                    text = hzStatusLine(installStatus, playTime),
-                    fontSize = HzText.Section.sp,
-                    lineHeight = 18.sp,
-                    color = Color.White.copy(alpha = 0.86f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (installStatus.running) {
-                val bar by animateFloatAsState(
-                    targetValue = (installStatus.percent / 100f).coerceIn(0f, 1f),
-                    animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
-                    label = "HomeBar"
-                )
-                HzProgressBar(progress = bar, color = accent)
-            }
-            Spacer(Modifier.height(HzSpace.S))
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .width(256.dp)
+                .clip(HzShape.Panel)
+                .background(HzColor.Glass)
+                .border(1.dp, HzColor.Hairline, HzShape.Panel)
+                .padding(HzSpace.S),
+            verticalArrangement = Arrangement.spacedBy(HzSpace.S)
+        ) {
             Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
-                HzPlayButton(installStatus = installStatus, accent = accent, onLaunch = onLaunch)
-                HzGhostButton("Game files", "ic_ui_folder", Icons.Default.Folder) { onNavigate(LauncherNavTab.VERSIONS) }
+                HzHomeTile("Mods", null, "ic_ui_mods", Icons.Default.Extension, 0, accent, Modifier.weight(1f)) { onNavigate(LauncherNavTab.FILES) }
+                HzHomeTile("Shaders", null, "ic_ui_shaders", Icons.Default.WbSunny, 1, accent, Modifier.weight(1f)) { onNavigate(LauncherNavTab.STORE) }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                HzHomeTile("Worlds", null, "ic_ui_worlds", Icons.Default.Public, 2, accent, Modifier.weight(1f)) {
+                    FilesNav.pendingFolder = "saves"
+                    onNavigate(LauncherNavTab.FILES)
+                }
+                HzHomeTile("Servers", null, "ic_ui_servers", Icons.Default.Dns, 3, accent, Modifier.weight(1f)) { onNavigate(LauncherNavTab.SERVERS) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                HzHomeTile("Skins", activeAccount.username, "ic_ui_skins", Icons.Default.Checkroom, 4, accent, Modifier.weight(1f)) { onNavigate(LauncherNavTab.ACCOUNTS) }
+                HzHomeTile(
+                    label = if (boostOn) "Boost on" else "Boost",
+                    hint = null,
+                    iconName = "ic_ui_boost",
+                    fallback = Icons.Default.Bolt,
+                    index = 5,
+                    accent = accent,
+                    modifier = Modifier.weight(1f),
+                    active = boostOn
+                ) {
+                    boostOn = !boostOn
+                    Boost.set(context, boostOn)
+                    android.widget.Toast.makeText(
+                        context,
+                        if (boostOn) "Boost on: memory freed, game runs at higher priority" else "Boost off",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .clip(HzShape.Panel)
+                .background(HzColor.Glass)
+                .border(1.dp, HzColor.Hairline, HzShape.Panel)
+                .padding(HzSpace.M),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(HzSpace.M)
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(HzSpace.XS)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                    Text(
+                        text = "Minecraft 26.3",
+                        fontSize = 26.sp,
+                        lineHeight = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                    HzTag("NATIVE RUST")
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                    val dot = when {
+                        installStatus.ready -> HzColor.Success
+                        installStatus.paused -> HzColor.Warning
+                        installStatus.running -> accent
+                        else -> VoltMutedText
+                    }
+                    Box(modifier = Modifier.size(6.dp).clip(HzShape.Chip).background(dot))
+                    Text(
+                        text = hzStatusLine(installStatus, playTime),
+                        fontSize = HzText.Section.sp,
+                        lineHeight = 18.sp,
+                        color = Color.White.copy(alpha = 0.86f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (installStatus.running) {
+                    val bar by animateFloatAsState(
+                        targetValue = (installStatus.percent / 100f).coerceIn(0f, 1f),
+                        animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
+                        label = "HomeBar"
+                    )
+                    HzProgressBar(progress = bar, color = accent)
+                }
+            }
+            HzGhostButton("Game files", "ic_ui_folder", Icons.Default.Folder) { onNavigate(LauncherNavTab.VERSIONS) }
+            HzPlayButton(installStatus = installStatus, accent = accent, onLaunch = onLaunch)
         }
     }
 }
@@ -650,7 +651,7 @@ internal fun HzSwitch(checked: Boolean, accent: Color, onChange: (Boolean) -> Un
         animationSpec = tween(HzMotion.Short, easing = HzMotion.Ease),
         label = "HzSwitch"
     )
-    val onAccent = if (accent.luminance() > 0.45f) Color(0xFF0B0F0D) else Color.White
+    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
     Box(
         modifier = Modifier
             .size(width = 44.dp, height = 26.dp)
@@ -778,7 +779,7 @@ internal fun HzSegmented(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val onAccent = if (accent.luminance() > 0.45f) Color(0xFF0B0F0D) else Color.White
+    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
     Row(
         modifier = modifier
             .height(38.dp)
@@ -954,7 +955,7 @@ internal fun HzToolbarButton(
     filled: Boolean = false,
     onClick: () -> Unit
 ) {
-    val onAccent = if (accent.luminance() > 0.45f) Color(0xFF0B0F0D) else Color.White
+    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
     Row(
         modifier = Modifier
             .height(38.dp)
@@ -989,7 +990,7 @@ internal fun HzButton(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    val onAccent = if (accent.luminance() > 0.45f) Color(0xFF0B0F0D) else Color.White
+    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
     val fill = when (kind) {
         HzButtonKind.Primary -> accent
         HzButtonKind.Secondary -> HzColor.PanelHi
