@@ -346,7 +346,6 @@ private fun HzHomeTile(
     index: Int,
     accent: Color,
     modifier: Modifier = Modifier,
-    active: Boolean = false,
     onClick: () -> Unit
 ) {
     val enter = remember { Animatable(0f) }
@@ -354,11 +353,6 @@ private fun HzHomeTile(
         delay(60L + index * 40L)
         enter.animateTo(1f, tween(HzMotion.Medium, easing = HzMotion.Ease))
     }
-    val tint by animateColorAsState(
-        targetValue = if (active) accent else VoltIconMuted,
-        animationSpec = tween(HzMotion.Short),
-        label = "TileTint"
-    )
     Row(
         modifier = modifier
             .height(HOME_TILE_HEIGHT)
@@ -368,13 +362,13 @@ private fun HzHomeTile(
             }
             .animatedPressScale(pressedScale = 0.97f, onClick = onClick)
             .clip(HzShape.Control)
-            .background(if (active) accent.copy(alpha = 0.14f) else HzColor.PanelHi.copy(alpha = 0.6f))
-            .border(1.dp, if (active) accent.copy(alpha = 0.55f) else HzColor.Hairline, HzShape.Control)
+            .background(HzColor.PanelHi.copy(alpha = 0.6f))
+            .border(1.dp, HzColor.Hairline, HzShape.Control)
             .padding(horizontal = HzSpace.M),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
     ) {
-        VoltIcon(name = iconName, fallback = fallback, size = 20.dp, tint = tint)
+        VoltIcon(name = iconName, fallback = fallback, size = 20.dp, tint = VoltIconMuted)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
@@ -470,7 +464,7 @@ private fun hzStatusLine(s: AssetInstallStatus, playTime: String): String = when
 }
 
 /**
- * Home: the wallpaper stays clear. A quote sits top left, a 2 x 3 quick-access grid (Boost is one of the tiles)
+ * Home: the wallpaper stays clear. A quote sits top left, a quick-access grid (2 x 2 plus a full-width Skins tile)
  * top right, and one full-width dock along the bottom carries the selected version, its status and PLAY.
  * The rail is drawn by the shell.
  */
@@ -489,7 +483,6 @@ internal fun VoltHomeLayer(
 ) {
     val context = LocalContext.current
     val playTime = PlayTime.label(context)
-    var boostOn by remember { mutableStateOf(Boost.isOn(context)) }
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -535,25 +528,7 @@ internal fun VoltHomeLayer(
                 HzHomeTile("Servers", null, "ic_ui_servers", Icons.Default.Dns, 3, accent, Modifier.weight(1f)) { onNavigate(LauncherNavTab.SERVERS) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
-                HzHomeTile("Skins", activeAccount.username, "ic_ui_skins", Icons.Default.Checkroom, 4, accent, Modifier.weight(1f)) { onNavigate(LauncherNavTab.ACCOUNTS) }
-                HzHomeTile(
-                    label = if (boostOn) "Boost on" else "Boost",
-                    hint = null,
-                    iconName = "ic_ui_boost",
-                    fallback = Icons.Default.Bolt,
-                    index = 5,
-                    accent = accent,
-                    modifier = Modifier.weight(1f),
-                    active = boostOn
-                ) {
-                    boostOn = !boostOn
-                    Boost.set(context, boostOn)
-                    android.widget.Toast.makeText(
-                        context,
-                        if (boostOn) "Boost on: memory freed, game runs at higher priority" else "Boost off",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
+                HzHomeTile("Skins", activeAccount.username, "ic_ui_skins", Icons.Default.Checkroom, 4, accent, Modifier.fillMaxWidth()) { onNavigate(LauncherNavTab.ACCOUNTS) }
             }
         }
 
