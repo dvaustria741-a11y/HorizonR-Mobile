@@ -3809,139 +3809,137 @@ private fun CleanVersionsViewport(
 }
 
 @Composable
-private fun StoreTranslatorSelector(
-    selected: ShaderTranslator,
-    onSelect: (ShaderTranslator) -> Unit
+private fun <T> StoreDropdownChip(
+    title: String,
+    current: String,
+    options: List<T>,
+    optionLabel: (T) -> String,
+    onSelect: (T) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    Surface(
-        shape = HzShape.Panel,
-        color = HzColor.Panel,
-        border = BorderStroke(1.dp, HzColor.Hairline),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(horizontal = HzSpace.M, vertical = HzSpace.M),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Translator", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                    LavenderTagBadge(text = selected.label)
-                }
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier.padding(start = HzSpace.S, end = HzSpace.S, bottom = HzSpace.S),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    ShaderTranslator.entries.forEach { option ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(HzShape.Control)
-                                .clickable {
-                                    onSelect(option)
-                                    expanded = false
-                                }
-                                .padding(horizontal = HzSpace.S, vertical = HzSpace.XS),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selected == option,
-                                onClick = {
-                                    onSelect(option)
-                                    expanded = false
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = SkyBlueAccent),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Column {
-                                Text(option.label, fontSize = HzText.Body.sp, color = Color.White)
-                                Text(option.summary, fontSize = HzText.Micro.sp, color = Color.White.copy(alpha = 0.66f))
-                            }
-                        }
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .height(36.dp)
+                .animatedPressScale { open = true }
+                .clip(HzShape.Control)
+                .background(HzColor.PanelHi)
+                .border(1.dp, HzColor.Hairline, HzShape.Control)
+                .padding(horizontal = HzSpace.S),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(title, fontSize = HzText.Micro.sp, color = MutedSubtitleText, maxLines = 1)
+            Text(current, fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+            Icon(Icons.Default.ExpandMore, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { opt ->
+                DropdownMenuItem(
+                    text = { Text(optionLabel(opt), fontSize = HzText.Body.sp) },
+                    onClick = {
+                        onSelect(opt)
+                        open = false
                     }
-                }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun StoreSourceSelector(
-    selected: StoreSource,
-    onSelect: (StoreSource) -> Unit
+private fun StoreFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bg by animateColorAsState(
+        targetValue = if (selected) SubRailCapsuleActive else HzColor.PanelHi,
+        animationSpec = tween(HzMotion.Short),
+        label = "StoreChipBg"
+    )
+    Text(
+        text = label,
+        fontSize = HzText.Caption.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = if (selected) SkyBlueAccent else MutedSubtitleText,
+        maxLines = 1,
+        modifier = Modifier
+            .animatedPressScale(onClick = onClick)
+            .clip(HzShape.Control)
+            .background(bg)
+            .border(1.dp, if (selected) SkyBlueAccent.copy(alpha = 0.5f) else HzColor.Hairline, HzShape.Control)
+            .padding(horizontal = 10.dp, vertical = 7.dp)
+    )
+}
+
+/**
+ * Store toolbar: replaces the old right-hand filter column. Row one is search, game version, sort and source
+ * (plus translator for shader packs and the .hpack import for modpacks). Row two is the status chips and the
+ * two Horizon portal links.
+ */
+@Composable
+private fun StoreToolbar(
+    source: StoreSource,
+    category: StoreCategory,
+    translator: ShaderTranslator,
+    searchQuery: String,
+    versionQuery: String,
+    sort: StoreSortOption,
+    status: StoreStatusFilter,
+    searchPlaceholder: String,
+    onSource: (StoreSource) -> Unit,
+    onSearch: (String) -> Unit,
+    onVersion: (String) -> Unit,
+    onSort: (StoreSortOption) -> Unit,
+    onStatus: (StoreStatusFilter) -> Unit,
+    onTranslator: (ShaderTranslator) -> Unit,
+    onImportModpack: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    Surface(
-        shape = HzShape.Panel,
-        color = HzColor.Panel,
-        border = BorderStroke(1.dp, HzColor.Hairline),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            StoreRightSearchPill(
+                value = searchQuery,
+                placeholder = searchPlaceholder,
+                onValueChange = onSearch,
+                modifier = Modifier.weight(1f)
+            )
+            StoreRightSearchPill(
+                value = versionQuery,
+                placeholder = "Version (26.3)",
+                onValueChange = onVersion,
+                modifier = Modifier.width(132.dp)
+            )
+            StoreDropdownChip("Sort", sort.label, StoreSortOption.entries.toList(), { it.label }, onSort)
+            StoreDropdownChip("Source", source.label, StoreSource.entries.toList(), { it.label }, onSource)
+            if (category == StoreCategory.SHADER_PACK) {
+                StoreDropdownChip("Translator", translator.label, ShaderTranslator.entries.toList(), { it.label }, onTranslator)
+            }
+            if (category == StoreCategory.MODPACK) {
+                StoreFilterChip(".hpack import", selected = false, onClick = onImportModpack)
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(horizontal = HzSpace.M, vertical = HzSpace.M),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Source", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                    LavenderTagBadge(text = selected.label)
+                StoreStatusFilter.entries.forEach { st ->
+                    StoreFilterChip(st.label, selected = status == st) { onStatus(st) }
                 }
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
             }
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier.padding(start = HzSpace.S, end = HzSpace.S, bottom = HzSpace.S),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    StoreSource.entries.forEach { src ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(HzShape.Control)
-                                .clickable {
-                                    onSelect(src)
-                                    expanded = false
-                                }
-                                .padding(horizontal = HzSpace.S, vertical = HzSpace.XS),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selected == src,
-                                onClick = {
-                                    onSelect(src)
-                                    expanded = false
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = SkyBlueAccent),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(src.label, fontSize = HzText.Body.sp, color = Color.White)
-                        }
-                    }
-                }
+            StoreFilterChip("Submit a mod", selected = false) {
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://playhorizon.dev/mods/submit"))) }
+            }
+            StoreFilterChip("Make a mod", selected = false) {
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://playhorizon.dev/docs/make-a-mod"))) }
             }
         }
     }
@@ -3969,10 +3967,6 @@ private fun CleanStoreViewport(
     var totalPages by remember { mutableIntStateOf(1) }
     var totalHits by remember { mutableIntStateOf(19) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
-
-    // Expandable filter accordions in Right Sidebar
-    var expandSortBy by remember { mutableStateOf(false) }
-    var expandStatus by remember { mutableStateOf(false) }
 
     // Drill-down selected project for Version Accordion & Right Detail Card
     var selectedProject by remember { mutableStateOf<StoreCatalogItem?>(null) }
@@ -4362,6 +4356,50 @@ private fun CleanStoreViewport(
                             }
                         }
 
+                        StoreToolbar(
+                            source = selectedSource,
+                            category = selectedCategory,
+                            translator = shaderTranslator,
+                            searchQuery = searchQuery,
+                            versionQuery = gameVersionQuery,
+                            sort = sortOption,
+                            status = statusFilter,
+                            searchPlaceholder = if (selectedSource == StoreSource.HORIZON) "Search Horizon mods..." else if (selectedSource == StoreSource.ZENKAI) "Search Zenkai mods..." else "Search ${selectedSource.label} ${if (selectedCategory == StoreCategory.SHADER_PACK) "shader" else "resource"} packs...",
+                            onSource = { src ->
+                                selectedSource = src
+                                if (src == StoreSource.ZENKAI) {
+                                    if (selectedCategory != StoreCategory.ALL && selectedCategory != StoreCategory.MOD && selectedCategory != StoreCategory.NATIVE_MOD) {
+                                        selectedCategory = StoreCategory.ALL
+                                    }
+                                } else if (src != StoreSource.HORIZON && selectedCategory != StoreCategory.SHADER_PACK) {
+                                    selectedCategory = StoreCategory.RESOURCE_PACK
+                                }
+                                selectedProject = null
+                                currentPage = 1
+                            },
+                            onSearch = {
+                                searchQuery = it
+                                currentPage = 1
+                            },
+                            onVersion = {
+                                gameVersionQuery = it
+                                currentPage = 1
+                            },
+                            onSort = {
+                                sortOption = it
+                                currentPage = 1
+                            },
+                            onStatus = {
+                                statusFilter = it
+                                currentPage = 1
+                            },
+                            onTranslator = {
+                                shaderTranslator = it
+                                ShaderTranslator.save(context, it)
+                            },
+                            onImportModpack = { modpackImportPicker.launch("*/*") }
+                        )
+
                         if (isLoading) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 LinearProgressIndicator(
@@ -4532,283 +4570,6 @@ private fun CleanStoreViewport(
                                                 else pendingIncompatibleItem = item
                                             }
                                         }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 3. Right Filter & Registry Actions Sidebar (`208.dp`, tailored to playhorizon.dev/mods!)
-                    Column(
-                        modifier = Modifier
-                            .width(232.dp)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(HzSpace.S)
-                    ) {
-                        StoreSourceSelector(
-                            selected = selectedSource,
-                            onSelect = { src ->
-                                selectedSource = src
-                                if (src == StoreSource.ZENKAI) {
-                                    if (selectedCategory != StoreCategory.ALL && selectedCategory != StoreCategory.MOD && selectedCategory != StoreCategory.NATIVE_MOD) {
-                                        selectedCategory = StoreCategory.ALL
-                                    }
-                                } else if (src != StoreSource.HORIZON && selectedCategory != StoreCategory.SHADER_PACK) {
-                                    selectedCategory = StoreCategory.RESOURCE_PACK
-                                }
-                                selectedProject = null
-                                currentPage = 1
-                            }
-                        )
-
-                        if (selectedCategory == StoreCategory.SHADER_PACK) {
-                            StoreTranslatorSelector(
-                                selected = shaderTranslator,
-                                onSelect = {
-                                    shaderTranslator = it
-                                    ShaderTranslator.save(context, it)
-                                }
-                            )
-                        }
-
-                        StoreRightSearchPill(
-                            value = searchQuery,
-                            placeholder = if (selectedSource == StoreSource.HORIZON) "Search Horizon mods..." else if (selectedSource == StoreSource.ZENKAI) "Search Zenkai mods..." else "Search ${selectedSource.label} ${if (selectedCategory == StoreCategory.SHADER_PACK) "shader" else "resource"} packs...",
-                            onValueChange = {
-                                searchQuery = it
-                                currentPage = 1
-                            }
-                        )
-
-                        StoreRightSearchPill(
-                            value = gameVersionQuery,
-                            placeholder = "Game Version (26.3)",
-                            onValueChange = {
-                                gameVersionQuery = it
-                                currentPage = 1
-                            }
-                        )
-
-                        if (selectedCategory == StoreCategory.MODPACK) {
-                            Surface(
-                                shape = HzShape.Control,
-                                color = HzColor.Panel,
-                                border = BorderStroke(1.dp, HzColor.Hairline),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animatedPressScale { modpackImportPicker.launch("*/*") }
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = HzSpace.M, horizontal = HzSpace.M),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.Add, contentDescription = null, tint = SkyBlueAccent, modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(5.dp))
-                                    Text("Import .hpack Modpack", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                                }
-                            }
-                        }
-
-                        // Sort By Accordion (`Most downloaded`, `Best rated`, `Recently updated`, `Name (A-Z)` — matching 429816.jpg!)
-                        Surface(
-                            shape = HzShape.Panel,
-                            color = HzColor.Panel,
-                            border = BorderStroke(1.dp, HzColor.Hairline),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { expandSortBy = !expandSortBy }
-                                        .padding(horizontal = HzSpace.M, vertical = HzSpace.M),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text("Sort By", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                                        LavenderTagBadge(text = sortOption.label)
-                                    }
-                                    Icon(
-                                        imageVector = if (expandSortBy) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                AnimatedVisibility(visible = expandSortBy) {
-                                    Column(
-                                        modifier = Modifier.padding(start = HzSpace.S, end = HzSpace.S, bottom = HzSpace.S),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        StoreSortOption.entries.forEach { opt ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(HzShape.Control)
-                                                    .clickable {
-                                                        sortOption = opt
-                                                        currentPage = 1
-                                                        expandSortBy = false
-                                                    }
-                                                    .padding(horizontal = HzSpace.S, vertical = HzSpace.XS),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = sortOption == opt,
-                                                    onClick = {
-                                                        sortOption = opt
-                                                        currentPage = 1
-                                                        expandSortBy = false
-                                                    },
-                                                    colors = RadioButtonDefaults.colors(selectedColor = SkyBlueAccent),
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Spacer(Modifier.width(6.dp))
-                                                Text(opt.label, fontSize = HzText.Body.sp, color = Color.White)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Status Filter Accordion (`All Projects`, `Installed Only`, `Updates Available`, `Official & Signed`)
-                        Surface(
-                            shape = HzShape.Panel,
-                            color = HzColor.Panel,
-                            border = BorderStroke(1.dp, HzColor.Hairline),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { expandStatus = !expandStatus }
-                                        .padding(horizontal = HzSpace.M, vertical = HzSpace.M),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text("Filter Status", fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                                        LavenderTagBadge(text = statusFilter.label)
-                                    }
-                                    Icon(
-                                        imageVector = if (expandStatus) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                AnimatedVisibility(visible = expandStatus) {
-                                    Column(
-                                        modifier = Modifier.padding(start = HzSpace.S, end = HzSpace.S, bottom = HzSpace.S),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        StoreStatusFilter.entries.forEach { st ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(HzShape.Control)
-                                                    .clickable {
-                                                        statusFilter = st
-                                                        currentPage = 1
-                                                        expandStatus = false
-                                                    }
-                                                    .padding(horizontal = HzSpace.S, vertical = HzSpace.XS),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = statusFilter == st,
-                                                    onClick = {
-                                                        statusFilter = st
-                                                        currentPage = 1
-                                                        expandStatus = false
-                                                    },
-                                                    colors = RadioButtonDefaults.colors(selectedColor = SkyBlueAccent),
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Spacer(Modifier.width(6.dp))
-                                                Text(st.label, fontSize = HzText.Body.sp, color = Color.White)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Official playhorizon.dev/mods Portal Actions (`Submit yours` & `Make a mod` from 429816.jpg!)
-                        Surface(
-                            shape = HzShape.Panel,
-                            color = HzColor.Panel,
-                            border = BorderStroke(1.dp, HzColor.Hairline),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(HzSpace.M),
-                                verticalArrangement = Arrangement.spacedBy(HzSpace.S)
-                            ) {
-                                Text(
-                                    text = "Horizon Mods Portal",
-                                    fontSize = HzText.Section.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "Reviewed mods, native mods, modpacks, resource packs & WGSL shaders for Horizon 26.3.",
-                                    fontSize = HzText.Body.sp,
-                                    color = MutedSubtitleText,
-                                    lineHeight = 16.sp
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Surface(
-                                        shape = HzShape.Control,
-                                        color = Color(0xFF5E5CE6),
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .animatedPressScale {
-                                                runCatching {
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://playhorizon.dev/mods/submit")))
-                                                }
-                                            }
-                                    ) {
-                                        Text(
-                                            text = "Submit yours",
-                                            fontSize = HzText.Body.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            textAlign = TextAlign.Center,
-                                            maxLines = 1,
-                                            modifier = Modifier.padding(vertical = HzSpace.M, horizontal = HzSpace.XS)
-                                        )
-                                    }
-                                    Surface(
-                                        shape = HzShape.Control,
-                                        color = CardRowBg,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .animatedPressScale {
-                                                runCatching {
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://playhorizon.dev/docs/make-a-mod")))
-                                                }
-                                            }
-                                    ) {
-                                        Text(
-                                            text = "Make a mod",
-                                            fontSize = HzText.Body.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            textAlign = TextAlign.Center,
-                                            maxLines = 1,
-                                            modifier = Modifier.padding(vertical = HzSpace.M, horizontal = HzSpace.XS)
-                                        )
                                     }
                                 }
                             }
@@ -5379,13 +5140,13 @@ private fun StoreActionButton(
 private fun StoreRightSearchPill(
     value: String,
     placeholder: String,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     Surface(
         shape = HzShape.Control,
         color = HzColor.PanelHi,
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .height(36.dp)
             .border(1.dp, HzColor.Hairline, HzShape.Control)
     ) {
