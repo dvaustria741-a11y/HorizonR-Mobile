@@ -5293,6 +5293,13 @@ enum class FilesSortMode(val label: String) {
     BY_LAST_MODIFIED("Sort by Last Updated")
 }
 
+private enum class FilesStatusFilter(val label: String) {
+    ALL("All"),
+    ENABLED("Enabled"),
+    DISABLED("Disabled"),
+    UPDATES("Updates")
+}
+
 private data class PendingDeleteTarget(
     val file: File,
     val displayTitle: String,
@@ -5325,7 +5332,7 @@ private fun CleanFilesViewport(
     var currentFolder by remember { mutableStateOf(FilesNav.pendingFolder ?: "mods") }
     remember { FilesNav.pendingFolder = null }
     var searchQuery by remember { mutableStateOf("") }
-    var filterEnabledOnly by remember { mutableStateOf(false) }
+    var statusFilter by remember { mutableStateOf(FilesStatusFilter.ALL) }
     var sortMode by remember { mutableStateOf(FilesSortMode.BY_NAME) }
     var showSortDropdown by remember { mutableStateOf(false) }
     var refreshCount by remember { mutableIntStateOf(0) }
@@ -5445,15 +5452,20 @@ private fun CleanFilesViewport(
         folderCache[folder] = built
     }
 
-    val filteredList = remember(folderItems, searchQuery, filterEnabledOnly, currentFolder, sortMode) {
+    val filteredList = remember(folderItems, searchQuery, statusFilter, currentFolder, sortMode) {
         val isToggleableFolder = currentFolder in listOf("mods", "shaderpacks", "resourcepacks")
         val matched = folderItems.orEmpty().filter { item ->
             val matchesQuery = searchQuery.isBlank() ||
                 item.file.name.contains(searchQuery, ignoreCase = true) ||
                 item.displayTitle.contains(searchQuery, ignoreCase = true) ||
                 item.subtitleText.contains(searchQuery, ignoreCase = true)
-            val matchesEnabled = !filterEnabledOnly || !isToggleableFolder || item.isEnabled
-            matchesQuery && matchesEnabled
+            val matchesStatus = !isToggleableFolder || when (statusFilter) {
+                FilesStatusFilter.ALL -> true
+                FilesStatusFilter.ENABLED -> item.isEnabled
+                FilesStatusFilter.DISABLED -> !item.isEnabled
+                FilesStatusFilter.UPDATES -> currentFolder != "mods" || item.hasStoreUpdate
+            }
+            matchesQuery && matchesStatus
         }
         when (sortMode) {
             FilesSortMode.BY_NAME -> matched.sortedBy { it.displayTitle.lowercase(Locale.US) }
@@ -5723,7 +5735,10 @@ private fun CleanFilesViewport(
             selectedItem = categories.first { it.first == currentFolder },
             itemLabel = { it.second },
             itemIcon = { it.third },
-            onSelect = { currentFolder = it.first }
+            onSelect = {
+                currentFolder = it.first
+                statusFilter = FilesStatusFilter.ALL
+            }
         )
 
         // Right Main Rounded Slate Container
@@ -5744,14 +5759,6 @@ private fun CleanFilesViewport(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (currentFolder == "mods") {
-                        HzIconButton(
-                            icon = Icons.Default.FilterAlt,
-                            contentDescription = "Filter Enabled Mods",
-                            tint = if (filterEnabledOnly) SkyBlueAccent else VoltIconMuted
-                        ) { filterEnabledOnly = !filterEnabledOnly }
-                    }
-
                     Box {
                         HzIconButton(icon = Icons.Default.Sort, contentDescription = "Sort") { showSortDropdown = true }
                         DropdownMenu(
@@ -5819,17 +5826,6 @@ private fun CleanFilesViewport(
                         maxLines = 1
                     )
 
-                    if (currentFolder in listOf("saves", "resourcepacks", "shaderpacks")) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.animatedPressScale(pressedScale = 0.97f) { filterEnabledOnly = !filterEnabledOnly }
-                        ) {
-                            HzSwitch(checked = filterEnabledOnly, accent = SkyBlueAccent, onChange = { filterEnabledOnly = it })
-                            Text("Active", fontSize = 11.sp, color = Color.White)
-                        }
-                    }
-
                     HzToolbarButton(label = "Import", icon = Icons.Default.Add, accent = SkyBlueAccent) {
                         if (currentFolder == "shaderpacks") {
                             importTranslator = ShaderTranslator.current(context)
@@ -5853,6 +5849,28 @@ private fun CleanFilesViewport(
                     HzIconButton(icon = Icons.Default.Refresh, contentDescription = "Refresh & Sync") {
                         refreshCount += 1
                         Toast.makeText(context, "Folder ${currentFolder} synced & verified!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                if (currentFolder in listOf("mods", "resourcepacks", "shaderpacks") && !isFolderLoading) {
+                    val rows = folderItems.orEmpty()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilesStatusFilter.entries.forEach { f ->
+                            if (f != FilesStatusFilter.UPDATES || (currentFolder == "mods" && rows.any { it.hasStoreUpdate })) {
+                                val count = when (f) {
+                                    FilesStatusFilter.ALL -> rows.size
+                                    FilesStatusFilter.ENABLED -> rows.count { it.isEnabled }
+                                    FilesStatusFilter.DISABLED -> rows.count { !it.isEnabled }
+                                    FilesStatusFilter.UPDATES -> rows.count { it.hasStoreUpdate }
+                                }
+                                StoreFilterChip("${f.label} $count", selected = statusFilter == f) { statusFilter = f }
+                            }
+                        }
                     }
                 }
 
@@ -6080,6 +6098,15 @@ private fun FileManagerRowCard(
                         lineHeight = 14.sp,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (modDetail != null) {
+                        Text(
+                            text = "API ${modDetail.apiLine}  \u00B7  ${modDetail.side}  \u00B7  ${modDetail.fileSizeFormatted}",
+                            fontFamily = HzFont.Mono,
+                            fontSize = 10.sp,
+                            color = MutedSubtitleText,
+                            maxLines = 1
+                        )
+                    }
                 }
 
                 Spacer(Modifier.width(10.dp))
@@ -6108,7 +6135,7 @@ private fun FileManagerRowCard(
                                 onDismissRequest = { showInfoPopover = false },
                                 modifier = Modifier
                                     .widthIn(min = 260.dp, max = 330.dp)
-                                    .background(Color(0xFF283036))
+                                    .background(HzColor.PanelHi)
                             ) {
                                 Column(
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -6213,7 +6240,7 @@ private fun FileManagerRowCard(
                                 DropdownMenu(
                                     expanded = showMoreMenu,
                                     onDismissRequest = { showMoreMenu = false },
-                                    modifier = Modifier.background(Color(0xFF283036))
+                                    modifier = Modifier.background(HzColor.PanelHi)
                                 ) {
                                     if (folder == "saves") {
                                         DropdownMenuItem(
