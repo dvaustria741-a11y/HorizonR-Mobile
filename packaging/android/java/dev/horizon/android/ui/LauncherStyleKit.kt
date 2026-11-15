@@ -562,15 +562,17 @@ internal fun VoltHomeLayer(
                         installStatus.running -> accent
                         else -> VoltMutedText
                     }
-                    Box(modifier = Modifier.size(6.dp).clip(HzShape.Chip).background(dot))
-                    Text(
-                        text = hzStatusLine(installStatus, playTime),
-                        fontSize = HzText.Section.sp,
-                        lineHeight = 18.sp,
-                        color = Color.White.copy(alpha = 0.86f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    HzStatusPill(text = hzStatusLine(installStatus, ""), color = dot)
+                    if (playTime.isNotEmpty()) {
+                        Text(
+                            text = "$playTime played",
+                            fontFamily = HzFont.Mono,
+                            fontSize = HzText.Caption.sp,
+                            lineHeight = 14.sp,
+                            color = VoltMutedText,
+                            maxLines = 1
+                        )
+                    }
                 }
                 if (installStatus.running) {
                     val bar by animateFloatAsState(
