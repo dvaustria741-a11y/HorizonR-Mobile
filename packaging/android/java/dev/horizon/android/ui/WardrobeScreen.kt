@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
@@ -78,7 +79,7 @@ private val WGreen: Color @Composable get() = LocalWAccent.current
 private val WOnGreen: Color @Composable get() = LocalWOnAccent.current
 private val WCardBg: Color @Composable get() = LocalWCard.current
 private val WRowBg: Color @Composable get() = LocalWRow.current
-private val WDanger = Color(0xFFFF8A80)
+private val WDanger = HzColor.Danger
 
 private class FetchOutcome(val account: LauncherAccount, val message: String, val ok: Boolean)
 
@@ -131,6 +132,8 @@ private fun VoltWardrobeBody(
     var newName by remember { mutableStateOf("") }
     var newType by remember { mutableStateOf(AccountType.OFFLINE) }
     var capeTick by remember { mutableStateOf(0) }
+    var toolTab by remember { mutableStateOf(0) }
+    var showAdd by remember { mutableStateOf(false) }
 
     val capeBitmap = remember(activeAccount.capePath, capeTick) { SkinTools.loadCapeBitmap(activeAccount.capePath) }
 
@@ -243,70 +246,77 @@ private fun VoltWardrobeBody(
         WCard(Modifier.weight(1.35f)) {
             WTitle("Skin & Capes")
 
-            WLabel("Skin")
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                WButton("Import from Files", Icons.Default.Folder, primary = true, modifier = Modifier.weight(1f)) { onPickSkinFile() }
+                WChip("Skin", toolTab == 0, Modifier.weight(1f)) { toolTab = 0 }
+                WChip("Cape", toolTab == 1, Modifier.weight(1f)) { toolTab = 1 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                WField(linkInput, { linkInput = it }, "Skin image link (https://…png)", Modifier.weight(1f))
-                WButton("Fetch", Icons.Default.Link) {
-                    val url = linkInput.trim()
-                    val acc = activeAccount
-                    if (url.isEmpty()) say("Paste a link to a skin PNG first.")
-                    else runBg("Downloading skin…") {
-                        val bytes = SkinTools.fetchSkinUrl(url)
-                            ?: return@runBg FetchOutcome(acc, "Couldn't download a PNG from that link.", false)
-                        val r = SkinTools.importSkinBytes(context, bytes, acc, configNow, "link")
-                        if (r.success && r.skinFile != null)
-                            FetchOutcome(acc.copy(skinPath = r.skinFile.absolutePath, slimSkinModel = r.slimModel, skinSourceLabel = "Link"), "Skin imported from link.", true)
-                        else FetchOutcome(acc, r.message, false)
-                    }
+            if (toolTab == 0) {
+                WLabel("Skin")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    WButton("Import from Files", Icons.Default.Folder, primary = true, modifier = Modifier.weight(1f)) { onPickSkinFile() }
                 }
-            }
-
-            WLabel("Get skin & cape by player name")
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                WField(nameInput, { nameInput = it }, "Player name", Modifier.weight(1f))
-                SkinTools.Source.entries.filter { it != SkinTools.Source.URL }.forEach { s ->
-                    WChip(s.label, lookupSource == s) { lookupSource = s }
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                WButton("Skin + Cape", Icons.Default.Download, primary = true, modifier = Modifier.weight(1f)) {
-                    val n = nameInput.trim(); val acc = activeAccount; val src = lookupSource
-                    if (n.isEmpty()) say("Enter a player name first.")
-                    else runBg("Looking up $n…") { fetchByName(n, src, acc, wantSkin = true, wantCape = true) }
-                }
-                WButton("Cape only", Icons.Default.Download, modifier = Modifier.weight(1f)) {
-                    val n = nameInput.trim(); val acc = activeAccount; val src = lookupSource
-                    if (n.isEmpty()) say("Enter a player name first.")
-                    else runBg("Looking up $n…") { fetchByName(n, src, acc, wantSkin = false, wantCape = true) }
-                }
-            }
-
-            WLabel("Cape")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                CapeThumb(null, selected = activeAccount.capePath.isBlank(), label = "None") {
-                    val acc = activeAccount
-                    SkinTools.deleteCape(acc)
-                    mutate(acc.id) { it.copy(capePath = "") }
-                    capeTick++
-                    say("Cape removed.")
-                }
-                SkinTools.CAPE_PRESETS.forEach { p ->
-                    val preview = remember(p.id) { SkinTools.generateCapePreset(p.id) }
-                    CapeThumb(preview, selected = false, label = p.title) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    WField(linkInput, { linkInput = it }, "Skin image link (https://…png)", Modifier.weight(1f))
+                    WButton("Fetch", Icons.Default.Link) {
+                        val url = linkInput.trim()
                         val acc = activeAccount
-                        runBg("Applying cape…") {
-                            val f = SkinTools.savePresetCape(context, acc.id, p.id)
-                            if (f != null) FetchOutcome(acc.copy(capePath = f.absolutePath), "${p.title} cape equipped.", true)
-                            else FetchOutcome(acc, "Couldn't create the cape.", false)
+                        if (url.isEmpty()) say("Paste a link to a skin PNG first.")
+                        else runBg("Downloading skin…") {
+                            val bytes = SkinTools.fetchSkinUrl(url)
+                                ?: return@runBg FetchOutcome(acc, "Couldn't download a PNG from that link.", false)
+                            val r = SkinTools.importSkinBytes(context, bytes, acc, configNow, "link")
+                            if (r.success && r.skinFile != null)
+                                FetchOutcome(acc.copy(skinPath = r.skinFile.absolutePath, slimSkinModel = r.slimModel, skinSourceLabel = "Link"), "Skin imported from link.", true)
+                            else FetchOutcome(acc, r.message, false)
                         }
                     }
                 }
-                capeBitmap?.let { CapeThumb(it, selected = true, label = "Current") {} }
+
+                WLabel("Get skin & cape by player name")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    WField(nameInput, { nameInput = it }, "Player name", Modifier.weight(1f))
+                    SkinTools.Source.entries.filter { it != SkinTools.Source.URL }.forEach { s ->
+                        WChip(s.label, lookupSource == s) { lookupSource = s }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    WButton("Skin + Cape", Icons.Default.Download, primary = true, modifier = Modifier.weight(1f)) {
+                        val n = nameInput.trim(); val acc = activeAccount; val src = lookupSource
+                        if (n.isEmpty()) say("Enter a player name first.")
+                        else runBg("Looking up $n…") { fetchByName(n, src, acc, wantSkin = true, wantCape = true) }
+                    }
+                    WButton("Cape only", Icons.Default.Download, modifier = Modifier.weight(1f)) {
+                        val n = nameInput.trim(); val acc = activeAccount; val src = lookupSource
+                        if (n.isEmpty()) say("Enter a player name first.")
+                        else runBg("Looking up $n…") { fetchByName(n, src, acc, wantSkin = false, wantCape = true) }
+                    }
+                }
+
+            } else {
+                WLabel("Cape")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CapeThumb(null, selected = activeAccount.capePath.isBlank(), label = "None") {
+                        val acc = activeAccount
+                        SkinTools.deleteCape(acc)
+                        mutate(acc.id) { it.copy(capePath = "") }
+                        capeTick++
+                        say("Cape removed.")
+                    }
+                    SkinTools.CAPE_PRESETS.forEach { p ->
+                        val preview = remember(p.id) { SkinTools.generateCapePreset(p.id) }
+                        CapeThumb(preview, selected = false, label = p.title) {
+                            val acc = activeAccount
+                            runBg("Applying cape…") {
+                                val f = SkinTools.savePresetCape(context, acc.id, p.id)
+                                if (f != null) FetchOutcome(acc.copy(capePath = f.absolutePath), "${p.title} cape equipped.", true)
+                                else FetchOutcome(acc, "Couldn't create the cape.", false)
+                            }
+                        }
+                    }
+                    capeBitmap?.let { CapeThumb(it, selected = true, label = "Current") {} }
+                }
+                WButton("Import cape image", Icons.Default.Folder, modifier = Modifier.fillMaxWidth()) { capePicker.launch("image/*") }
             }
-            WButton("Import cape image", Icons.Default.Folder, modifier = Modifier.fillMaxWidth()) { capePicker.launch("image/*") }
 
             val s = busy ?: status
             if (s != null) Text(s, fontSize = 11.sp, color = if (busy != null) WGreen else VoltMutedText)
@@ -319,35 +329,6 @@ private fun VoltWardrobeBody(
         // ---------------------------------------------------------------- Card 3: accounts
         WCard(Modifier.weight(1.1f)) {
             WTitle("Accounts")
-            WField(newName, { newName = it }, "Player name", Modifier.fillMaxWidth())
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                AccountType.entries.forEach { t ->
-                    WChip(t.badge, newType == t, Modifier.weight(1f)) { newType = t }
-                }
-            }
-            if (newType == AccountType.MICROSOFT) {
-                Text("Microsoft sign-in isn't built yet – this saves a Microsoft-labelled profile (offline play).", fontSize = 10.5.sp, color = VoltMutedText)
-            }
-            WButton("Add account", Icons.Default.PersonAdd, primary = true, modifier = Modifier.fillMaxWidth()) {
-                val n = newName.trim()
-                if (n.isEmpty()) {
-                    say("Enter a player name first.")
-                } else {
-                    val added = LauncherAccount(
-                        id = UUID.randomUUID().toString(),
-                        username = n,
-                        uuid = UUID.nameUUIDFromBytes("OfflinePlayer:$n".toByteArray()).toString(),
-                        accountType = newType,
-                        isActive = true
-                    )
-                    onAccountsChange(accountsNow.map { it.copy(isActive = false) } + added)
-                    newName = ""
-                    if (newType == AccountType.ELYBY) {
-                        runBg("Fetching $n from Ely.by…") { fetchByName(n, SkinTools.Source.ELYBY, added, wantSkin = true, wantCape = true) }
-                    } else say("Added $n.")
-                }
-            }
-
             accounts.forEach { acc ->
                 val bmp = remember(acc.id, acc.skinPath, acc.slimSkinModel, skinReloadCounter) {
                     HorizonNativeBridge.loadOrGenerateAccountSkinBitmap(context, acc)
@@ -386,6 +367,42 @@ private fun VoltWardrobeBody(
                                 Icon(Icons.Default.Delete, contentDescription = "Delete account", tint = WDanger, modifier = Modifier.size(18.dp))
                             }
                         }
+                    }
+                }
+            }
+            WButton(
+                if (showAdd) "Cancel" else "New account",
+                if (showAdd) Icons.Default.Close else Icons.Default.PersonAdd,
+                modifier = Modifier.fillMaxWidth()
+            ) { showAdd = !showAdd }
+            if (showAdd) {
+                WField(newName, { newName = it }, "Player name", Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    AccountType.entries.forEach { t ->
+                        WChip(t.badge, newType == t, Modifier.weight(1f)) { newType = t }
+                    }
+                }
+                if (newType == AccountType.MICROSOFT) {
+                    Text("Microsoft sign-in isn't built yet – this saves a Microsoft-labelled profile (offline play).", fontSize = 10.5.sp, color = VoltMutedText)
+                }
+                WButton("Add account", Icons.Default.PersonAdd, primary = true, modifier = Modifier.fillMaxWidth()) {
+                    val n = newName.trim()
+                    if (n.isEmpty()) {
+                        say("Enter a player name first.")
+                    } else {
+                        val added = LauncherAccount(
+                            id = UUID.randomUUID().toString(),
+                            username = n,
+                            uuid = UUID.nameUUIDFromBytes("OfflinePlayer:$n".toByteArray()).toString(),
+                            accountType = newType,
+                            isActive = true
+                        )
+                        onAccountsChange(accountsNow.map { it.copy(isActive = false) } + added)
+                        newName = ""
+                        showAdd = false
+                        if (newType == AccountType.ELYBY) {
+                            runBg("Fetching $n from Ely.by…") { fetchByName(n, SkinTools.Source.ELYBY, added, wantSkin = true, wantCape = true) }
+                        } else say("Added $n.")
                     }
                 }
             }
