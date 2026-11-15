@@ -6315,18 +6315,7 @@ private fun FileManagerRowCard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     if (isToggleable) {
-                        Checkbox(
-                            checked = isEnabled,
-                            onCheckedChange = {
-                                onToggleEnabled()
-                            },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = SkyBlueAccent,
-                                checkmarkColor = SkyBlueDarkText,
-                                uncheckedColor = MutedSubtitleText
-                            ),
-                            modifier = Modifier.size(20.dp)
-                        )
+                        HzSwitch(checked = isEnabled, accent = SkyBlueAccent, onChange = { onToggleEnabled() })
                     }
 
                     Box {
