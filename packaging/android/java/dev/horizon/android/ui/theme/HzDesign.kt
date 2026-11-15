@@ -96,6 +96,9 @@ object HzColor {
     val Warning = Color(0xFFFFB74D)
     /** Text and icons drawn on a [Warning] fill. */
     val OnWarning = Color(0xFF261600)
+
+    /** Unfilled track of switches and sliders. */
+    val Track = Color(0xFF2C313B)
 }
 
 /** One 4dp spacing grid for gaps and paddings: 4, 8, 12, 16, 24. */

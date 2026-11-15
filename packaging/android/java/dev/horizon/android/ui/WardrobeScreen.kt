@@ -69,10 +69,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import dev.horizon.android.bridge.HorizonNativeBridge
 
-private val LocalWAccent = androidx.compose.runtime.compositionLocalOf { Color(0xFFFFB454) }
-private val LocalWOnAccent = androidx.compose.runtime.compositionLocalOf { Color(0xFF2A1700) }
-private val LocalWCard = androidx.compose.runtime.compositionLocalOf { Color(0xFF161B2E) }
-private val LocalWRow = androidx.compose.runtime.compositionLocalOf { Color(0xFF1E2438) }
+private val LocalWAccent = androidx.compose.runtime.compositionLocalOf { HzColor.Accent }
+private val LocalWOnAccent = androidx.compose.runtime.compositionLocalOf { HzColor.OnAccent }
+private val LocalWCard = androidx.compose.runtime.compositionLocalOf { HzColor.Panel }
+private val LocalWRow = androidx.compose.runtime.compositionLocalOf { HzColor.PanelHi }
 
 // Colours come from the launcher theme, so the wardrobe follows whichever palette is selected.
 private val WGreen: Color @Composable get() = LocalWAccent.current
@@ -96,10 +96,10 @@ internal fun VoltWardrobe(
     onPickSkinFile: () -> Unit,
     onSkinUpdated: () -> Unit,
     onAccountsChange: (List<LauncherAccount>) -> Unit,
-    accent: Color = Color(0xFFFFB454),
-    onAccent: Color = Color(0xFF2A1700),
-    cardColor: Color = Color(0xFF161B2E),
-    rowColor: Color = Color(0xFF1E2438)
+    accent: Color = HzColor.Accent,
+    onAccent: Color = HzColor.OnAccent,
+    cardColor: Color = HzColor.Panel,
+    rowColor: Color = HzColor.PanelHi
 ) {
     androidx.compose.runtime.CompositionLocalProvider(
         LocalWAccent provides accent, LocalWOnAccent provides onAccent, LocalWCard provides cardColor, LocalWRow provides rowColor
@@ -503,9 +503,9 @@ private fun CapeThumb(cape: Bitmap?, selected: Boolean, label: String, onClick: 
         Box(
             modifier = Modifier
                 .size(width = 28.dp, height = 44.dp)
-                .clip(RoundedCornerShape(5.dp))
+                .clip(HzShape.Control)
                 .background(VoltGrayRoot)
-                .border(1.dp, if (selected) WGreen else HzColor.Hairline, RoundedCornerShape(5.dp))
+                .border(1.dp, if (selected) WGreen else HzColor.Hairline, HzShape.Control)
                 .animatedPressScale { onClick() },
             contentAlignment = Alignment.Center
         ) {

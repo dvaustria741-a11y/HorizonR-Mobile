@@ -645,7 +645,7 @@ internal fun HzSwitch(checked: Boolean, accent: Color, onChange: (Boolean) -> Un
             .size(width = 44.dp, height = 26.dp)
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(13.dp))
             .drawBehind {
-                drawRect(androidx.compose.ui.graphics.lerp(Color(0xFF2C313B), accent, t))
+                drawRect(androidx.compose.ui.graphics.lerp(HzColor.Track, accent, t))
                 val r = size.height / 2f - 3.dp.toPx()
                 val left = size.height / 2f
                 val right = size.width - size.height / 2f
@@ -736,7 +736,7 @@ internal fun HzSlider(
                 val pad = 8.dp.toPx()
                 val trackW = size.width
                 val fillX = (trackW * shown).coerceIn(thumb, trackW - thumb)
-                drawRoundRect(Color(0xFF2C313B), Offset(0f, cy - h / 2f), Size(trackW, h), CornerRadius(h / 2f))
+                drawRoundRect(HzColor.Track, Offset(0f, cy - h / 2f), Size(trackW, h), CornerRadius(h / 2f))
                 if (tickStep > 0) {
                     var v = range.first
                     while (v <= range.last) {
@@ -940,7 +940,7 @@ internal fun <T> HzCategoryList(
 internal fun HzIconButton(
     icon: ImageVector,
     contentDescription: String?,
-    tint: Color = Color(0xFFD5DEE5),
+    tint: Color = HzColor.TextIcon,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {

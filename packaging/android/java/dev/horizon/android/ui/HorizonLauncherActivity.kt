@@ -2538,7 +2538,7 @@ private fun CleanAccountsAndSkinsViewport(
                                                         )
                                                         Surface(
                                                             shape = RoundedCornerShape(9.dp),
-                                                            color = if (isCurrent) SkyBlueAccent else Color(0xFF344149)
+                                                            color = if (isCurrent) SkyBlueAccent else HzColor.HairlineStrong
                                                         ) {
                                                             Text(
                                                                 text = if (isCurrent) "Active" else "Use",
@@ -2615,7 +2615,7 @@ private fun CleanAccountsAndSkinsViewport(
 
                                                 Surface(
                                                     shape = RoundedCornerShape(9.dp),
-                                                    color = if (isCurrent) SkyBlueAccent else Color(0xFF344149)
+                                                    color = if (isCurrent) SkyBlueAccent else HzColor.HairlineStrong
                                                 ) {
                                                     Text(
                                                         text = if (isCurrent) "Active" else "Use",
@@ -4346,7 +4346,7 @@ private fun CleanStoreViewport(
                                     LinearProgressIndicator(
                                         progress = { (storeProgress.percent / 100f).coerceIn(0f, 1f) },
                                         color = SkyBlueAccent,
-                                        trackColor = Color(0xFF263238),
+                                        trackColor = HzColor.PanelHi,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(3.dp)
@@ -5242,7 +5242,7 @@ private fun StoreOrFileItemIconBadge(
     // Dark square pixel-styled initial badge matching playhorizon.dev/mods (`429816.jpg`)
     val bgBrush = when {
         isWorld -> Brush.linearGradient(listOf(Color(0xFF43A047), Color(0xFF5D4037)))
-        isMod -> Brush.linearGradient(listOf(Color(0xFF141820), Color(0xFF222A36)))
+        isMod -> Brush.linearGradient(listOf(HzColor.PanelLow, HzColor.PanelHi))
         else -> Brush.linearGradient(listOf(Color(0xFF281E3D), Color(0xFF1B3538)))
     }
     Box(
@@ -5560,7 +5560,7 @@ private fun CleanFilesViewport(
                     LinearProgressIndicator(
                         progress = { (prog.percent / 100f).coerceIn(0f, 1f) },
                         color = SkyBlueAccent,
-                        trackColor = Color(0xFF263238),
+                        trackColor = HzColor.PanelHi,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
@@ -7031,7 +7031,7 @@ private fun CleanSettingsViewport(
                                     accent = SkyBlueAccent,
                                     onAccent = SkyBlueDarkText,
                                     muted = MutedSubtitleText,
-                                    track = Color(0xFF33424B),
+                                    track = HzColor.Track,
                                     row = CardRowBg,
                                     capsule = SubRailCapsuleActive
                                 )
