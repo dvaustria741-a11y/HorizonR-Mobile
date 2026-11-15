@@ -83,6 +83,18 @@ Rule (user): do not watch or babysit CI after a push. Never put the token in mem
   Loader with a Horizon game provider over (real server classes downloaded on the device) + (our clean-room client
   facade, generated as stubs from the mods' contracts and filled in by priority) bridged to the Rust client over JNI;
   singleplayer with Java mods on = local JVM server (proven: joined 8.5 min), mods off = Rust integrated server as today.
+- Store change (user request 22:50, UNBUILT, Kotlin not compiled here): Modrinth and CurseForge now apply to the Mods tab
+  (Java mods: Modrinth `project_type:mod` with `categories:fabric`, versions with `loaders=["fabric"]`; CurseForge classId 6
+  and modLoaderType 4, both constants from memory and unchecked against the live API, and CurseForge still needs the
+  `CURSEFORGE_API_KEY` build secret). The Native Mods tab returns an empty result for both sources, because neither hosts
+  `.hnmod`. Choosing those sources no longer forces Resource Packs. A downloaded Java mod is saved as the jar to
+  `horizon-java-mods/` (no `.hmod` wrapping, no pack checks), and the app says Horizon cannot run Java mods yet. Files:
+  `bridge/ContentSources.kt`, `bridge/HorizonNativeBridge.kt` (`installExternalStoreItem`, `externalInstallFolder`, the
+  external search routing), `ui/HorizonLauncherActivity.kt` (two source/category gates). A rough bracket-balance check
+  passed; the real check is the APK build. `build-apk.yml` does not list `jvm-mod-runtime` in its push branches; it has
+  `workflow_dispatch`.
+- Not started: the stub generator, the new engine capabilities (food saturation/exhaustion in the snapshot, a tooltip
+  hook), the Fabric game provider, the JNI bridge from the Rust client to a JVM.
 - Step 3 (sample): `spikes/mod-api-scan`. AppleSkin 3.0.10 55 classes/68 methods/19 fields, Clumps 26.3.2
   13/21/2, Xaero's Minimap 26.6.2 353/566/155 (+ nested xaerolib 137/250/31). Union of the three: 385 classes,
   634 methods, 169 fields. Mixin shapes seen: Inject, ModifyVariable, ModifyArg, ModifyReturnValue, Accessor, Shadow.

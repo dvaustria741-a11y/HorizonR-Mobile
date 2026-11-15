@@ -4276,7 +4276,12 @@ object HorizonNativeBridge {
             return searchZenkaiMods(context, profileSlot, category, searchQuery, statusFilter)
         }
         if (source != StoreSource.HORIZON) {
-            val externalCategory = if (category == StoreCategory.SHADER_PACK) StoreCategory.SHADER_PACK else StoreCategory.RESOURCE_PACK
+            val externalCategory = when (category) {
+                StoreCategory.SHADER_PACK -> StoreCategory.SHADER_PACK
+                StoreCategory.MOD -> StoreCategory.MOD
+                StoreCategory.NATIVE_MOD -> StoreCategory.NATIVE_MOD
+                else -> StoreCategory.RESOURCE_PACK
+            }
             return searchExternalResourcePacks(context, profileSlot, source, externalCategory, searchQuery, gameVersionFilter, sortOption, statusFilter, page)
         }
         val allProjects = fetchLivePlayHorizonCatalog()
@@ -4840,8 +4845,11 @@ object HorizonNativeBridge {
         return runCatching { JSONObject(regFile.readText()).optString("${projectId}__file", "") }.getOrDefault("")
     }
 
-    private fun externalInstallFolder(item: StoreCatalogItem): String =
-        if (item.category == StoreCategory.SHADER_PACK) "shaderpacks" else "resourcepacks"
+    private fun externalInstallFolder(item: StoreCatalogItem): String = when (item.category) {
+        StoreCategory.SHADER_PACK -> "shaderpacks"
+        StoreCategory.MOD -> "horizon-java-mods"
+        else -> "resourcepacks"
+    }
 
     private fun removeRecordedExternalPack(
         context: Context,
@@ -4887,8 +4895,9 @@ object HorizonNativeBridge {
                 val profileHome = getProfileHome(home, profileSlot)
                 val sourceLabel = item.source.label
                 val isShader = item.category == StoreCategory.SHADER_PACK
+                val isJavaMod = item.category == StoreCategory.MOD
                 val folder = externalInstallFolder(item)
-                val kindName = if (isShader) "shader pack" else "resource pack"
+                val kindName = if (isShader) "shader pack" else if (isJavaMod) "Java mod" else "resource pack"
                 // With Translator v2 the bar has two parts: the download fills the first 30%, the translation the rest.
                 val translateV2 = isShader && ShaderTranslator.current(context) == ShaderTranslator.V2
                 val downloadCap = if (translateV2) 30 else 95
@@ -4905,10 +4914,14 @@ object HorizonNativeBridge {
                 )
 
                 val target = ContentSources.resolveInstallTarget(item)
-                val canonicalName = ContentSources.sanitizePackFileName(
-                    target.fileName,
-                    if (isShader) "shaderpack" else "resourcepack"
-                )
+                val canonicalName = if (isJavaMod) {
+                    ContentSources.sanitizeJavaModFileName(target.fileName)
+                } else {
+                    ContentSources.sanitizePackFileName(
+                        target.fileName,
+                        if (isShader) "shaderpack" else "resourcepack"
+                    )
+                }
                 val destDir = File(profileHome, folder).apply { mkdirs() }
                 val part = File(destDir, "$canonicalName.part")
                 partFile = part
@@ -4999,6 +5012,25 @@ object HorizonNativeBridge {
                     }
                 }
 
+                if (isJavaMod) {
+                    // A Java mod is stored as the jar it is: no pack checks and no `.hmod` wrapping.
+                    val jar = File(destDir, canonicalName)
+                    if (jar.exists()) jar.delete()
+                    if (!part.renameTo(jar)) {
+                        part.copyTo(jar, overwrite = true)
+                        part.delete()
+                    }
+                    listOf(home, profileHome).distinctBy { it.absolutePath }.forEach { base ->
+                        val copyTarget = File(File(base, folder).apply { mkdirs() }, canonicalName)
+                        if (copyTarget.absolutePath != jar.absolutePath) jar.copyTo(copyTarget, overwrite = true)
+                    }
+                    recordInstalledStoreItem(context, profileSlot, item.id, target.version, canonicalName)
+                    invalidateContentCaches()
+                    onProgress(StoreDownloadProgress())
+                    appendSystemLog("Saved Java mod '${item.title}' ($canonicalName) from $sourceLabel to $folder. Horizon cannot run Java mods yet.", logEnabled, context)
+                    onComplete(true, "Downloaded ${item.title} to Java mods. Horizon cannot run Java mods yet, so it stays inactive.")
+                    return@Thread
+                }
                 onProgress(
                     StoreDownloadProgress(
                         activeItemId = item.id,

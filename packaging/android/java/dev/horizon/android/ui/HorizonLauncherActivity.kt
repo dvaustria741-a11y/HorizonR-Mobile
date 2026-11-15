@@ -4258,7 +4258,7 @@ private fun CleanStoreViewport(
                 val zenkaiCategory = it == StoreCategory.ALL || it == StoreCategory.MOD || it == StoreCategory.NATIVE_MOD
                 if (selectedSource == StoreSource.ZENKAI) {
                     if (!zenkaiCategory) selectedSource = StoreSource.HORIZON
-                } else if (it != StoreCategory.RESOURCE_PACK && it != StoreCategory.SHADER_PACK && selectedSource != StoreSource.HORIZON) {
+                } else if (it != StoreCategory.RESOURCE_PACK && it != StoreCategory.SHADER_PACK && it != StoreCategory.MOD && it != StoreCategory.NATIVE_MOD && selectedSource != StoreSource.HORIZON) {
                     selectedSource = StoreSource.HORIZON
                 }
                 selectedProject = null
@@ -4658,7 +4658,7 @@ private fun CleanStoreViewport(
                                     if (selectedCategory != StoreCategory.ALL && selectedCategory != StoreCategory.MOD && selectedCategory != StoreCategory.NATIVE_MOD) {
                                         selectedCategory = StoreCategory.ALL
                                     }
-                                } else if (src != StoreSource.HORIZON && selectedCategory != StoreCategory.SHADER_PACK) {
+                                } else if (src != StoreSource.HORIZON && selectedCategory != StoreCategory.SHADER_PACK && selectedCategory != StoreCategory.MOD && selectedCategory != StoreCategory.NATIVE_MOD) {
                                     selectedCategory = StoreCategory.RESOURCE_PACK
                                 }
                                 selectedProject = null

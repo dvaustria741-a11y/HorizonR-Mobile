@@ -36,6 +36,9 @@ object ContentSources {
     private const val CF_GAME_ID = 432
     private const val CF_CLASS_RESOURCE_PACKS = 12
     private const val CF_CLASS_SHADERS = 6552
+    /** CurseForge classId for Minecraft mods and the Fabric modLoaderType: from memory, not checked against the live API. */
+    private const val CF_CLASS_MODS = 6
+    private const val CF_LOADER_FABRIC = 4
     private const val PAGE_SIZE = 20
     private const val USER_AGENT = "dvaustria741-a11y/HorizonR-Mobile/1.8 (Android resource pack browser)"
     const val PREFERRED_GAME_VERSION = "26.3"
@@ -48,7 +51,50 @@ object ContentSources {
 
     private fun isShader(category: StoreCategory): Boolean = category == StoreCategory.SHADER_PACK
 
-    private fun kindLabel(category: StoreCategory): String = if (isShader(category)) "SHADER PACK" else "RESOURCE PACK"
+    private fun isJavaMod(category: StoreCategory): Boolean = category == StoreCategory.MOD
+
+    private fun kindLabel(category: StoreCategory): String = when {
+        isShader(category) -> "SHADER PACK"
+        isJavaMod(category) -> "JAVA MOD"
+        else -> "RESOURCE PACK"
+    }
+
+    private fun modrinthProjectType(category: StoreCategory): String = when {
+        isShader(category) -> "shader"
+        isJavaMod(category) -> "mod"
+        else -> "resourcepack"
+    }
+
+    private fun resultCategory(category: StoreCategory): StoreCategory = when {
+        isShader(category) -> StoreCategory.SHADER_PACK
+        isJavaMod(category) -> StoreCategory.MOD
+        else -> StoreCategory.RESOURCE_PACK
+    }
+
+    private fun cfClassId(category: StoreCategory): Int = when {
+        isShader(category) -> CF_CLASS_SHADERS
+        isJavaMod(category) -> CF_CLASS_MODS
+        else -> CF_CLASS_RESOURCE_PACKS
+    }
+
+    private fun cfPageSection(category: StoreCategory): String = when {
+        isShader(category) -> "shaders"
+        isJavaMod(category) -> "mc-mods"
+        else -> "texture-packs"
+    }
+
+    /** Modrinth and CurseForge host no `.hnmod` native mods, so that tab has nothing to list from them. */
+    private fun hostsNothingFor(category: StoreCategory): Boolean = category == StoreCategory.NATIVE_MOD
+
+    /** A Java mod file name: no path parts or list separators, always ending in `.jar`. */
+    fun sanitizeJavaModFileName(raw: String, fallback: String = "mod"): String {
+        val stem = raw.trim().substringAfterLast('/').substringAfterLast('\\')
+            .removeSuffix(".jar").removeSuffix(".JAR")
+            .replace(Regex("[^A-Za-z0-9._+-]"), "_")
+            .trim('.', '_')
+            .ifBlank { fallback }
+        return "$stem.jar"
+    }
 
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 
@@ -134,8 +180,10 @@ object ContentSources {
         page: Int,
         category: StoreCategory = StoreCategory.RESOURCE_PACK
     ): StoreSearchPageResult {
-        val projectType = if (isShader(category)) "shader" else "resourcepack"
+        if (hostsNothingFor(category)) return StoreSearchPageResult(emptyList(), 1, 1, 0)
+        val projectType = modrinthProjectType(category)
         val facets = JSONArray().put(JSONArray().put("project_type:$projectType"))
+        if (isJavaMod(category)) facets.put(JSONArray().put("categories:fabric"))
         if (gameVersion.isNotBlank()) {
             facets.put(JSONArray().put("versions:${gameVersion.trim()}"))
         }
@@ -171,7 +219,7 @@ object ContentSources {
                     downloadUrl = "",
                     fileName = "",
                     sizeBytes = 0L,
-                    category = if (isShader(category)) StoreCategory.SHADER_PACK else StoreCategory.RESOURCE_PACK,
+                    category = resultCategory(category),
                     kindBadge = "MODRINTH • ${kindLabel(category)}",
                     pageUrl = "https://modrinth.com/$projectType/$slug",
                     iconUrl = h.optString("icon_url", ""),
@@ -201,6 +249,7 @@ object ContentSources {
         if (gameVersion.isNotBlank()) {
             url += "&game_versions=${enc(JSONArray().put(gameVersion.trim()).toString())}"
         }
+        if (isJavaMod(category)) url += "&loaders=${enc(JSONArray().put("fabric").toString())}"
         val arr = JSONArray(httpGetText(url))
         val out = ArrayList<StoreVersionRelease>()
         for (i in 0 until arr.length()) {
@@ -251,6 +300,7 @@ object ContentSources {
         page: Int,
         category: StoreCategory = StoreCategory.RESOURCE_PACK
     ): StoreSearchPageResult {
+        if (hostsNothingFor(category)) return StoreSearchPageResult(emptyList(), 1, 1, 0)
         if (!isCurseForgeConfigured()) {
             return StoreSearchPageResult(
                 emptyList(), 1, 1, 0,
@@ -265,7 +315,8 @@ object ContentSources {
         }
         val sortOrder = if (sort == StoreSortOption.NAME_AZ) "asc" else "desc"
         val safePage = page.coerceAtLeast(1)
-        val sb = StringBuilder("$CURSEFORGE_API/mods/search?gameId=$CF_GAME_ID&classId=${if (isShader(category)) CF_CLASS_SHADERS else CF_CLASS_RESOURCE_PACKS}")
+        val sb = StringBuilder("$CURSEFORGE_API/mods/search?gameId=$CF_GAME_ID&classId=${cfClassId(category)}")
+        if (isJavaMod(category)) sb.append("&modLoaderType=").append(CF_LOADER_FABRIC)
         if (query.isNotBlank()) sb.append("&searchFilter=").append(enc(query.trim()))
         if (gameVersion.isNotBlank()) sb.append("&gameVersion=").append(enc(gameVersion.trim()))
         sb.append("&sortField=$sortField&sortOrder=$sortOrder")
@@ -286,7 +337,7 @@ object ContentSources {
             val icon = logo?.optString("thumbnailUrl", "")?.takeIf { it.isNotBlank() }
                 ?: logo?.optString("url", "").orEmpty()
             val websiteUrl = d.optJSONObject("links")?.optString("websiteUrl", "")?.takeIf { it.isNotBlank() }
-                ?: "https://www.curseforge.com/minecraft/${if (isShader(category)) "shaders" else "texture-packs"}/$slug"
+                ?: "https://www.curseforge.com/minecraft/${cfPageSection(category)}/$slug"
             val indexes = d.optJSONArray("latestFilesIndexes")
             val rawVersions = ArrayList<String>()
             if (indexes != null) {
@@ -309,7 +360,7 @@ object ContentSources {
                     downloadUrl = "",
                     fileName = "",
                     sizeBytes = 0L,
-                    category = if (isShader(category)) StoreCategory.SHADER_PACK else StoreCategory.RESOURCE_PACK,
+                    category = resultCategory(category),
                     kindBadge = "CURSEFORGE • ${kindLabel(category)}",
                     pageUrl = websiteUrl,
                     iconUrl = icon,
@@ -348,6 +399,7 @@ object ContentSources {
         }
         val sb = StringBuilder("$CURSEFORGE_API/mods/${enc(modId)}/files?index=0&pageSize=50")
         if (gameVersion.isNotBlank()) sb.append("&gameVersion=").append(enc(gameVersion.trim()))
+        if (isJavaMod(category)) sb.append("&modLoaderType=").append(CF_LOADER_FABRIC)
         val root = JSONObject(httpGetText(sb.toString(), curseForgeHeaders()))
         val data = root.optJSONArray("data") ?: JSONArray()
         val out = ArrayList<StoreVersionRelease>()
