@@ -2255,16 +2255,28 @@ object HorizonNativeBridge {
         Toast.makeText(context, "Download cancelled & temporary file deleted", Toast.LENGTH_SHORT).show()
     }
 
-    fun getInstalledAssetsDiskSizeFormatted(context: Context): String {
+    /** Total size in bytes of the installed Minecraft 26.3 asset folder; 0 when it does not exist. */
+    fun getInstalledAssetsDiskBytes(context: Context): Long {
         val home = ensureHomeDirectories(context)
         val root26 = File(home, ".local/horizon-client/26.3")
-        if (!root26.exists()) return "0 MB"
+        if (!root26.exists()) return 0L
         var totalBytes = 0L
         runCatching {
             root26.walkTopDown().forEach { f ->
                 if (f.isFile) totalBytes += f.length()
             }
         }
+        return totalBytes
+    }
+
+    /** Free bytes on the volume that holds the asset folder; 0 when the volume cannot be queried. */
+    fun getAssetsVolumeFreeBytes(context: Context): Long =
+        runCatching { android.os.StatFs(ensureHomeDirectories(context).absolutePath).availableBytes }.getOrDefault(0L)
+
+    fun getInstalledAssetsDiskSizeFormatted(context: Context): String =
+        formatDiskBytes(getInstalledAssetsDiskBytes(context))
+
+    fun formatDiskBytes(totalBytes: Long): String {
         if (totalBytes <= 0L) return "0 MB"
         val mb = totalBytes / (1024.0 * 1024.0)
         return if (mb >= 1024.0) {

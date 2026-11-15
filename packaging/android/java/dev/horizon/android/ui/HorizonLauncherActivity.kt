@@ -35,6 +35,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1395,12 +1396,11 @@ fun CleanLauncherScreen(
             if (!isHibernated) {
                 HorizonAuroraBackground()
             }
-            Column(modifier = Modifier.fillMaxSize()) {
-              HzTopBar(
+            Row(modifier = Modifier.fillMaxSize()) {
+              HzSideRail(
                   selectedTab = selectedTab,
                   installStatus = installStatus,
                   accent = SkyBlueAccent,
-                  surface = LauncherRootBg,
                   onSelectTab = { selectedTab = it },
                   onOpenFolder = { HorizonNativeBridge.openSystemFilesApp(context) }
               )
@@ -1409,7 +1409,7 @@ fun CleanLauncherScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        // Home draws its wallpaper edge to edge; every other page sits inside the insets with a small margin.
+                        // Home draws its wallpaper edge to edge; every other page sits inside the insets beside the side rail with a small margin.
                         .then(
                             if (selectedTab == LauncherNavTab.HOME) Modifier
                             else Modifier.windowInsetsPadding(hzContentInsets()).padding(horizontal = 10.dp, vertical = 8.dp)
@@ -3290,7 +3290,6 @@ private fun CleanVersionsViewport(
     onCancelDownload: () -> Unit,
     onSmartRepairAssets: () -> Unit
 ) {
-    var logExpanded by remember { mutableStateOf(false) }
     var showCancelConfirmDialog by remember { mutableStateOf(false) }
     var showRepairConfirmDialog by remember { mutableStateOf(false) }
     var showDeleteAllConfirmDialog by remember { mutableStateOf(false) }
@@ -3298,19 +3297,21 @@ private fun CleanVersionsViewport(
     var repairResultPopupMessage by remember { mutableStateOf<String?>(null) }
     var deleteResultPopupMessage by remember { mutableStateOf<String?>(null) }
     var sizeRefreshTick by remember { mutableIntStateOf(0) }
-    var installedSizeText by remember { mutableStateOf("Checking...") }
+    var installedBytes by remember { mutableStateOf<Long?>(null) }
+    var freeBytes by remember { mutableStateOf(0L) }
+    val installedSizeText = installedBytes?.let { HorizonNativeBridge.formatDiskBytes(it) } ?: "Checking..."
 
     LaunchedEffect(installStatus.ready, installStatus.running, sizeRefreshTick) {
-        installedSizeText = withContext(Dispatchers.IO) {
-            HorizonNativeBridge.getInstalledAssetsDiskSizeFormatted(context)
+        withContext(Dispatchers.IO) {
+            val used = HorizonNativeBridge.getInstalledAssetsDiskBytes(context)
+            val free = HorizonNativeBridge.getAssetsVolumeFreeBytes(context)
+            withContext(Dispatchers.Main) {
+                installedBytes = used
+                freeBytes = free
+            }
         }
     }
 
-    val chevronRotation by animateFloatAsState(
-        targetValue = if (logExpanded) 180f else 0f,
-        animationSpec = tween(250),
-        label = "ChevronRotation"
-    )
     val animatedProgress by animateFloatAsState(
         targetValue = installStatus.progressFraction,
         animationSpec = tween(300),
@@ -3481,287 +3482,256 @@ private fun CleanVersionsViewport(
         )
     }
 
-    Surface(
-        shape = HzShape.Panel,
-        color = Color.Transparent,
-        modifier = Modifier.fillMaxSize()
+    val accent = SkyBlueAccent
+    val (statusText, statusColor) = when {
+        isRepairRunning -> "Repairing" to HzColor.Warning
+        installStatus.running && installStatus.paused -> "Paused" to HzColor.Warning
+        installStatus.running -> "Downloading ${installStatus.percent}%" to accent
+        installStatus.ready -> "Ready" to HzColor.Success
+        else -> "Not installed" to HzColor.TextMuted
+    }
+    val used = installedBytes ?: 0L
+    val volumeTotal = used + freeBytes
+    val usedFraction = if (volumeTotal > 0L) used.toFloat() / volumeTotal.toFloat() else 0f
+    val animatedUsed by animateFloatAsState(
+        targetValue = usedFraction,
+        animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
+        label = "StorageUsed"
+    )
+    val logLines = when {
+        installStatus.logs.isNotEmpty() -> installStatus.logs.takeLast(200)
+        installStatus.ready -> listOf("[OK] Minecraft 26.3 assets, worldgen tables, and 60/60 touch controls verified.")
+        else -> listOf("Press 'Download Assets' to download or 'Repair Assets' to check files.")
+    }
+    val logListState = rememberLazyListState()
+    LaunchedEffect(logLines.size) {
+        if (logLines.isNotEmpty()) logListState.scrollToItem(logLines.lastIndex)
+    }
+
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(HzSpace.M)
     ) {
+        // Left column: what is installed and what can be done about it. No card, the page itself is the surface.
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(0.9f)
+                .fillMaxHeight()
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(HzSpace.M)
         ) {
-            HzPageHeader(
-                title = "Game & assets",
-                subtitle = "Install, repair or remove the Minecraft asset pack"
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(HzSpace.M)
+            ) {
+                MinecraftGrassCubeIcon(size = 40.dp)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(HzSpace.XS)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                        Text(
+                            text = "Minecraft 26.3",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = HzColor.TextPrimary,
+                            maxLines = 1
+                        )
+                        HzTag("RUST \u00B7 v0.7.6")
+                    }
+                    HzStatusPill(text = statusText, color = statusColor)
+                }
+            }
 
-            // Main Clean Version & Assets Card
-            Surface(
-                shape = HzShape.Panel,
-                color = HzColor.Panel,
-                border = BorderStroke(1.dp, HzColor.Hairline),
-                modifier = Modifier.fillMaxWidth()
+            Column(verticalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Storage",
+                        fontSize = HzText.Caption.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = HzColor.TextMuted,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = if (volumeTotal > 0L) "$installedSizeText of ${HorizonNativeBridge.formatDiskBytes(volumeTotal)}" else installedSizeText,
+                        fontFamily = HzFont.Mono,
+                        fontSize = HzText.Caption.sp,
+                        color = HzColor.TextPrimary,
+                        maxLines = 1
+                    )
+                }
+                HzProgressBar(progress = animatedUsed.coerceAtLeast(if (used > 0L) 0.01f else 0f), color = accent)
+                Text(
+                    text = if (freeBytes > 0L) "${HorizonNativeBridge.formatDiskBytes(freeBytes)} free on this volume" else "Free space unavailable",
+                    fontSize = HzText.Micro.sp,
+                    color = HzColor.TextMuted
+                )
+            }
+
+            Column(modifier = Modifier.fillMaxWidth()) {
+                HzSpecRow(
+                    "Asset status",
+                    if (installStatus.ready) "Complete" else "${installStatus.percent}% downloaded",
+                    if (installStatus.ready) HzColor.Success else HzColor.TextPrimary
+                )
+                HzSpecRow("Components", "Worldgen + 60 touch icons", accent)
+                HzSpecRow("Disk size", installedSizeText, HzColor.TextPrimary)
+            }
+
+            // Running downloads get Pause/Cancel; otherwise one primary action plus Repair and Delete side by side.
+            if (installStatus.running) {
+                Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                    HzButton(
+                        label = if (installStatus.paused) "Resume" else "Pause",
+                        icon = if (installStatus.paused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                        kind = HzButtonKind.Primary,
+                        accent = accent,
+                        modifier = Modifier.weight(1f),
+                        onClick = { if (installStatus.paused) onResumeDownload() else onPauseDownload() }
+                    )
+                    HzButton(
+                        label = "Cancel",
+                        icon = Icons.Default.Cancel,
+                        kind = HzButtonKind.Danger,
+                        accent = accent,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showCancelConfirmDialog = true }
+                    )
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                    HzButton(
+                        label = if (installStatus.ready) "Verify Assets" else "Download Assets",
+                        icon = if (installStatus.ready) Icons.Default.Verified else Icons.Default.Download,
+                        kind = HzButtonKind.Primary,
+                        accent = accent,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { if (installStatus.ready) showRepairConfirmDialog = true else onStartDownload() }
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                        HzButton(
+                            label = "Repair",
+                            icon = Icons.Default.Build,
+                            kind = HzButtonKind.Secondary,
+                            accent = accent,
+                            modifier = Modifier.weight(1f),
+                            onClick = { showRepairConfirmDialog = true }
+                        )
+                        HzButton(
+                            label = "Delete",
+                            icon = Icons.Outlined.Delete,
+                            kind = HzButtonKind.Danger,
+                            accent = accent,
+                            modifier = Modifier.weight(1f),
+                            onClick = { showDeleteAllConfirmDialog = true }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Right column: a console that is always visible, with live progress pinned above the log.
+        Column(
+            modifier = Modifier
+                .weight(1.1f)
+                .fillMaxHeight()
+                .clip(HzShape.Panel)
+                .background(HzColor.PanelLow)
+                .border(1.dp, HzColor.Hairline, HzShape.Panel)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(HzColor.Panel)
+                    .padding(start = HzSpace.M, end = HzSpace.XS, top = HzSpace.XS, bottom = HzSpace.XS),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
+            ) {
+                Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(14.dp), tint = accent)
+                Text(
+                    text = "Activity",
+                    fontSize = HzText.Body.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = HzColor.TextPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+                HzToolbarButton(label = "Copy", icon = Icons.Default.ContentCopy, accent = accent) {
+                    val textToCopy = if (installStatus.logs.isNotEmpty()) {
+                        installStatus.logs.joinToString("\n")
+                    } else {
+                        "Stage: ${installStatus.stage} (${installStatus.percent}%)"
+                    }
+                    HorizonNativeBridge.copyToClipboard(context, "Download Log", textToCopy)
+                }
+            }
+
+            AnimatedVisibility(
+                visible = installStatus.running || installStatus.done > 0L || isRepairRunning,
+                enter = expandVertically(tween(HzMotion.Short, easing = HzMotion.Ease)) + fadeIn(tween(HzMotion.Short)),
+                exit = shrinkVertically(tween(HzMotion.Quick)) + fadeOut(tween(HzMotion.Quick))
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = HzSpace.M, vertical = HzSpace.S),
+                    verticalArrangement = Arrangement.spacedBy(HzSpace.XS)
                 ) {
-                    // Row 1: Icon + Version Name + 3 Simple Summary Pills (Zero Overlap)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        MinecraftGrassCubeIcon(size = 36.dp)
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "Minecraft 26.3",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "RUST \u00B7 v0.7.6",
-                                    fontFamily = HzFont.Mono,
-                                    fontSize = 9.sp,
-                                    color = MutedSubtitleText,
-                                    modifier = Modifier
-                                        .border(1.dp, HzColor.Hairline, HzShape.Chip)
-                                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                                )
-                            }
-                            Text(
-                                text = when {
-                                    installStatus.ready -> "Assets fully installed • Ready to jump into the game"
-                                    installStatus.running -> "${installStatus.stage} ${if (installStatus.speedText.isNotBlank()) "• ${installStatus.speedText}" else ""}"
-                                    else -> "Download the official Mojang asset pack to start playing Minecraft 26.3"
-                                },
-                                fontSize = 11.sp,
-                                color = if (installStatus.ready) HzColor.Success else MutedSubtitleText,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    // Spec table: label left, mono value right, hairlines between.
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        HzSpecRow(
-                            "Asset status",
-                            if (installStatus.ready) "Complete" else "${installStatus.percent}% downloaded",
-                            if (installStatus.ready) HzColor.Success else VoltTextMain
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (isRepairRunning) "Verifying and repairing files..." else installStatus.stage,
+                            fontSize = HzText.Caption.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (installStatus.paused) HzColor.Warning else accent,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
-                        HzSpecRow("Components", "Worldgen + 60 touch icons", SkyBlueAccent)
-                        HzSpecRow("Disk size", installedSizeText, VoltTextMain)
-                    }
-
-                    // Row 3: Progress Bar (shown cleanly when downloading or when progress > 0)
-                    if (installStatus.running || installStatus.done > 0L || isRepairRunning) {
-                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (isRepairRunning) "Verifying and repairing files..." else installStatus.stage,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (installStatus.paused) HzColor.Warning else SkyBlueAccent,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = buildString {
-                                        if (installStatus.speedText.isNotBlank()) {
-                                            append(installStatus.speedText)
-                                            append(" • ")
-                                        }
-                                        append("${installStatus.percent}%")
-                                    },
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                            HzProgressBar(
-                                progress = if (isRepairRunning) 1f else animatedProgress,
-                                color = if (installStatus.ready) HzColor.Success else SkyBlueAccent
-                            )
-                        }
-                    }
-
-                    if (installStatus.error.isNotEmpty()) {
-                        Surface(
-                            shape = HzShape.Control,
-                            color = HzColor.Danger.copy(alpha = 0.14f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = installStatus.error,
-                                fontSize = 11.sp,
-                                color = HzColor.Danger,
-                                modifier = Modifier.padding(10.dp)
-                            )
-                        }
-                    }
-
-                    // Actions: running downloads get Pause/Cancel, otherwise Verify/Repair/Delete.
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (installStatus.running) {
-                            HzButton(
-                                label = if (installStatus.paused) "Resume download" else "Pause",
-                                icon = if (installStatus.paused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                                kind = HzButtonKind.Primary,
-                                accent = SkyBlueAccent,
-                                modifier = Modifier.weight(1f),
-                                onClick = { if (installStatus.paused) onResumeDownload() else onPauseDownload() }
-                            )
-                            HzButton(
-                                label = "Cancel download",
-                                icon = Icons.Default.Cancel,
-                                kind = HzButtonKind.Danger,
-                                accent = SkyBlueAccent,
-                                modifier = Modifier.weight(1f),
-                                onClick = { showCancelConfirmDialog = true }
-                            )
-                        } else {
-                            HzButton(
-                                label = if (installStatus.ready) "Verify Assets" else "Download Assets",
-                                icon = if (installStatus.ready) Icons.Default.Verified else Icons.Default.Download,
-                                kind = HzButtonKind.Primary,
-                                accent = SkyBlueAccent,
-                                modifier = Modifier.weight(1f),
-                                onClick = { if (installStatus.ready) showRepairConfirmDialog = true else onStartDownload() }
-                            )
-                            HzButton(
-                                label = "Repair Assets",
-                                icon = Icons.Default.Build,
-                                kind = HzButtonKind.Secondary,
-                                accent = SkyBlueAccent,
-                                modifier = Modifier.weight(1f),
-                                onClick = { showRepairConfirmDialog = true }
-                            )
-                            HzButton(
-                                label = "Delete All Assets",
-                                icon = Icons.Outlined.Delete,
-                                kind = HzButtonKind.Danger,
-                                accent = SkyBlueAccent,
-                                modifier = Modifier.weight(1f),
-                                onClick = { showDeleteAllConfirmDialog = true }
-                            )
-                        }
-                    }
-
-                    // Collapsible download and repair log
-                    Surface(
-                        shape = HzShape.Control,
-                        color = HzColor.PanelLow,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { logExpanded = !logExpanded }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Terminal,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = SkyBlueAccent
-                                    )
-                                    Text(
-                                        text = "Asset Activity Log Details",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = VoltIconMuted
-                                    )
+                        Spacer(Modifier.width(HzSpace.S))
+                        Text(
+                            text = buildString {
+                                if (installStatus.speedText.isNotBlank()) {
+                                    append(installStatus.speedText)
+                                    append(" \u2022 ")
                                 }
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = "Copy Log",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SkyBlueAccent,
-                                        modifier = Modifier.clickable {
-                                            val textToCopy = if (installStatus.logs.isNotEmpty()) {
-                                                installStatus.logs.joinToString("\n")
-                                            } else {
-                                                "Stage: ${installStatus.stage} (${installStatus.percent}%)"
-                                            }
-                                            HorizonNativeBridge.copyToClipboard(context, "Download Log", textToCopy)
-                                        }
-                                    )
-                                    Icon(
-                                        Icons.Default.ExpandMore,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .rotate(chevronRotation)
-                                    )
-                                }
-                            }
-
-                            AnimatedVisibility(
-                                visible = logExpanded,
-                                enter = expandVertically(tween(200)) + fadeIn(tween(180)),
-                                exit = shrinkVertically(tween(180)) + fadeOut(tween(150))
-                            ) {
-                                val logContent = if (installStatus.logs.isNotEmpty()) {
-                                    installStatus.logs.takeLast(25).joinToString("\n")
-                                } else if (installStatus.ready) {
-                                    "[OK] Minecraft 26.3 assets, worldgen tables, and 60/60 touch controls verified."
-                                } else {
-                                    "Press 'Download Assets' to download or 'Repair Assets' to check files."
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 60.dp, max = 130.dp)
-                                        .padding(start = 10.dp, end = 10.dp, bottom = 10.dp)
-                                        .clip(HzShape.Control)
-                                        .background(HzColor.Rail)
-                                        .padding(8.dp)
-                                        .verticalScroll(rememberScrollState())
-                                ) {
-                                    Text(
-                                        text = logContent,
-                                        fontFamily = HzFont.Mono,
-                                        fontSize = 10.sp,
-                                        color = HzColor.Success
-                                    )
-                                }
-                            }
-                        }
+                                append("${installStatus.percent}%")
+                            },
+                            fontFamily = HzFont.Mono,
+                            fontSize = HzText.Caption.sp,
+                            color = HzColor.TextPrimary,
+                            maxLines = 1
+                        )
                     }
+                    HzProgressBar(
+                        progress = if (isRepairRunning) 1f else animatedProgress,
+                        color = if (installStatus.ready) HzColor.Success else accent
+                    )
+                }
+            }
+
+            if (installStatus.error.isNotEmpty()) {
+                Text(
+                    text = installStatus.error,
+                    fontSize = HzText.Caption.sp,
+                    color = HzColor.Danger,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = HzSpace.M, vertical = HzSpace.XS)
+                        .clip(HzShape.Control)
+                        .background(HzColor.DangerFill)
+                        .padding(HzSpace.S)
+                )
+            }
+
+            LazyColumn(
+                state = logListState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = HzSpace.M, vertical = HzSpace.S),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                items(logLines.size) { i ->
+                    Text(
+                        text = logLines[i],
+                        fontFamily = HzFont.Mono,
+                        fontSize = HzText.Micro.sp,
+                        lineHeight = 14.sp,
+                        color = if (logLines[i].startsWith("[OK]")) HzColor.Success else HzColor.TextIcon
+                    )
                 }
             }
         }

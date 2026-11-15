@@ -136,25 +136,24 @@ internal object FilesNav {
 
 
 /**
- * Insets for the pages under the top bar: the bar takes the top edge, so pages keep the sides and the bottom.
+ * Insets for the pages beside the side rail: the rail takes the start edge, so pages keep top, end and bottom.
  */
 @Composable
 internal fun hzContentInsets(): WindowInsets =
-    WindowInsets.safeDrawing.union(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+    WindowInsets.safeDrawing.union(WindowInsets.displayCutout).only(WindowInsetsSides.End + WindowInsetsSides.Vertical)
 
 private data class HzNavEntry(val tab: LauncherNavTab, val label: String, val icon: String, val fallback: ImageVector)
 
 /**
- * Top navigation bar: brand on the left, one labelled tab per page in the middle, logs and folder on the right.
- * Every tab is at least 40dp tall with a visible label, so nobody has to guess what an icon means.
- * The selected tab is a soft accent pill; nothing glows and only colours animate.
+ * Side rail: brand on top, one labelled row per page, logs and the files app pinned at the bottom.
+ * Desktop launchers keep navigation on the left and give the page the full height; rows are 38dp tall with a
+ * visible label. The selected row gets a soft accent fill and a 3dp bar on its leading edge; only colours animate.
  */
 @Composable
-internal fun HzTopBar(
+internal fun HzSideRail(
     selectedTab: LauncherNavTab,
     installStatus: AssetInstallStatus,
     accent: Color,
-    surface: Color,
     onSelectTab: (LauncherNavTab) -> Unit,
     onOpenFolder: () -> Unit,
     modifier: Modifier = Modifier
@@ -170,41 +169,118 @@ internal fun HzTopBar(
             HzNavEntry(LauncherNavTab.SETTINGS, "Settings", "ic_ui_settings", Icons.Default.Settings)
         )
     }
-    Row(
+    Column(
         modifier = modifier
-            .fillMaxWidth()
-            .background(surface)
-            .windowInsetsPadding(
-                WindowInsets.safeDrawing.union(WindowInsets.displayCutout).only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
-            )
-            .height(50.dp)
+            .width(132.dp)
+            .fillMaxHeight()
+            .background(HzColor.Rail)
             .drawBehind {
-                drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
+                drawLine(HzColor.Hairline, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1f)
             }
-            .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .windowInsetsPadding(
+                WindowInsets.safeDrawing.union(WindowInsets.displayCutout).only(WindowInsetsSides.Start + WindowInsetsSides.Vertical)
+            )
+            .padding(horizontal = HzSpace.S, vertical = HzSpace.S),
+        verticalArrangement = Arrangement.spacedBy(HzSpace.XS)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            HzBrandCube(size = 28.dp)
-            Text(text = "HorizonR", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
+        Row(
+            modifier = Modifier.fillMaxWidth().height(36.dp).padding(horizontal = HzSpace.XS),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
+        ) {
+            HzBrandCube(size = 24.dp)
+            Text(text = "HorizonR", fontSize = HzText.Section.sp, fontWeight = FontWeight.ExtraBold, color = HzColor.TextPrimary, maxLines = 1)
         }
-        Spacer(Modifier.width(10.dp))
-        // All seven pages share the width equally, so nothing has to be scrolled to be found.
-        Row(modifier = Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
             entries.forEach { e ->
-                HzNavTab(
+                HzRailItem(
                     entry = e,
                     selected = e.tab == selectedTab,
                     label = if (e.tab == LauncherNavTab.VERSIONS && installStatus.running) "${installStatus.percent}%" else e.label,
                     accent = accent,
-                    modifier = Modifier.weight(1f),
                     onClick = { onSelectTab(e.tab) }
                 )
             }
         }
-        Spacer(Modifier.width(4.dp))
-        HzNavIcon("ic_ui_logs", Icons.Default.Terminal, "Logs", selectedTab == LauncherNavTab.LOGS, accent) { onSelectTab(LauncherNavTab.LOGS) }
-        HzNavIcon("ic_ui_folder", Icons.Default.Folder, "Open files", false, accent, onOpenFolder)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawBehind { drawLine(HzColor.Hairline, Offset(0f, 0.5f), Offset(size.width, 0.5f), 1f) }
+                .padding(top = HzSpace.XS),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            HzRailFooterButton("ic_ui_logs", Icons.Default.Terminal, selectedTab == LauncherNavTab.LOGS, accent, Modifier.weight(1f)) {
+                onSelectTab(LauncherNavTab.LOGS)
+            }
+            HzRailFooterButton("ic_ui_folder", Icons.Default.Folder, false, accent, Modifier.weight(1f), onOpenFolder)
+        }
+    }
+}
+
+@Composable
+private fun HzRailItem(entry: HzNavEntry, selected: Boolean, label: String, accent: Color, onClick: () -> Unit) {
+    val tint by animateColorAsState(
+        targetValue = if (selected) accent else HzColor.TextMuted,
+        animationSpec = tween(HzMotion.Short),
+        label = "RailTint"
+    )
+    val sel by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = tween(HzMotion.Short, easing = HzMotion.Ease),
+        label = "RailSelected"
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(38.dp)
+            .animatedPressScale(pressedScale = 0.98f, onClick = onClick)
+            .clip(HzShape.Control)
+            .drawBehind {
+                if (sel > 0.01f) {
+                    drawRect(HzColor.AccentSoft.copy(alpha = HzColor.AccentSoft.alpha * sel))
+                    drawRoundRect(
+                        color = accent.copy(alpha = sel),
+                        topLeft = Offset(0f, size.height * 0.22f),
+                        size = Size(3.dp.toPx(), size.height * 0.56f),
+                        cornerRadius = CornerRadius(2.dp.toPx())
+                    )
+                }
+            }
+            .padding(horizontal = HzSpace.M),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
+    ) {
+        VoltIcon(name = entry.icon, fallback = entry.fallback, size = 18.dp, tint = tint)
+        Text(
+            text = label,
+            fontSize = HzText.Body.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            color = if (selected) HzColor.TextPrimary else HzColor.TextMuted,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+@Composable
+private fun HzRailFooterButton(name: String, fallback: ImageVector, selected: Boolean, accent: Color, modifier: Modifier, onClick: () -> Unit) {
+    val tint by animateColorAsState(
+        targetValue = if (selected) accent else HzColor.TextMuted,
+        animationSpec = tween(HzMotion.Short),
+        label = "RailFooterTint"
+    )
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .height(38.dp)
+            .animatedPressScale(pressedScale = 0.96f, onClick = onClick)
+            .clip(HzShape.Control)
+            .background(if (selected) HzColor.AccentSoft else Color.Transparent)
+    ) {
+        VoltIcon(name = name, fallback = fallback, size = 18.dp, tint = tint)
     }
 }
 
@@ -238,72 +314,6 @@ internal fun HzBrandCube(size: Dp) {
         )
     } else {
         MinecraftGrassCubeIcon(size = size)
-    }
-}
-
-@Composable
-private fun HzNavTab(entry: HzNavEntry, selected: Boolean, label: String, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val tint by animateColorAsState(
-        targetValue = if (selected) accent else VoltMutedText,
-        animationSpec = tween(HzMotion.Short),
-        label = "NavTint"
-    )
-    val bar by animateFloatAsState(
-        targetValue = if (selected) 1f else 0f,
-        animationSpec = tween(HzMotion.Short, easing = HzMotion.Ease),
-        label = "NavBar"
-    )
-    Row(
-        modifier = modifier
-            .fillMaxHeight()
-            .animatedPressScale(pressedScale = 0.97f, onClick = onClick)
-            .drawBehind {
-                if (bar > 0.01f) {
-                    drawRoundRect(
-                        color = accent.copy(alpha = 0.10f * bar),
-                        topLeft = Offset(4.dp.toPx(), 7.dp.toPx()),
-                        size = Size(size.width - 8.dp.toPx(), size.height - 14.dp.toPx()),
-                        cornerRadius = CornerRadius(6.dp.toPx())
-                    )
-                    val w = size.width * 0.6f * bar
-                    drawRoundRect(
-                        color = accent,
-                        topLeft = Offset((size.width - w) / 2f, size.height - 3.dp.toPx()),
-                        size = Size(w, 3.dp.toPx()),
-                        cornerRadius = CornerRadius(2.dp.toPx())
-                    )
-                }
-            },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
-    ) {
-        VoltIcon(name = entry.icon, fallback = entry.fallback, size = 18.dp, tint = tint)
-        Text(
-            text = label,
-            fontSize = 12.5.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-            color = if (selected) Color.White else VoltMutedText,
-            maxLines = 1,
-            softWrap = false
-        )
-    }
-}
-
-@Composable
-private fun HzNavIcon(name: String, fallback: ImageVector, description: String, selected: Boolean, accent: Color, onClick: () -> Unit) {
-    val tint by animateColorAsState(
-        targetValue = if (selected) accent else VoltMutedText,
-        animationSpec = tween(HzMotion.Short),
-        label = "NavIconTint"
-    )
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(40.dp)
-            .animatedPressScale(pressedScale = 0.94f, onClick = onClick)
-            .clip(RoundedCornerShape(10.dp))
-    ) {
-        VoltIcon(name = name, fallback = fallback, size = 20.dp, tint = tint)
     }
 }
 
