@@ -39,24 +39,24 @@ import dev.horizon.android.ui.theme.HzShape
 import dev.horizon.android.ui.theme.HzSpace
 import dev.horizon.android.ui.theme.HzText
 
-val Slate = Color(0xFF2C313D)
+val Slate = HzColor.PanelHi
 
-// The overlay menu and layout editor use ZalithLauncher's dark grey and teal. The launcher's own
+// The overlay menu and layout editor use the launcher's default tokens. The launcher's own
 // setting cards pass their palette in through ControlsCardStyle, so they are not affected.
 val ControlsColors = darkColorScheme(
-    primary = Color(0xFF79E59C),
-    onPrimary = Color(0xFF0B2616),
-    primaryContainer = Color(0xFF232731),
-    onPrimaryContainer = Color(0xFFE6E6E6),
-    secondary = Color(0xFF79E59C),
-    secondaryContainer = Color(0xFF232731),
-    onSecondaryContainer = Color(0xFFE6E6E6),
-    background = Color(0xFF0D0F16),
-    surface = Color(0xFF1A1D25),
-    surfaceVariant = Color(0xFF232731),
-    onSurface = Color(0xFFFFFFFF),
-    onSurfaceVariant = Color(0xFFB4B4B4),
-    error = Color(0xFFFF8A80),
+    primary = HzColor.Accent,
+    onPrimary = HzColor.OnAccent,
+    primaryContainer = HzColor.PanelHi,
+    onPrimaryContainer = HzColor.TextPrimary,
+    secondary = HzColor.AccentSecondary,
+    secondaryContainer = HzColor.PanelHi,
+    onSecondaryContainer = HzColor.TextPrimary,
+    background = HzColor.Background,
+    surface = HzColor.Panel,
+    surfaceVariant = HzColor.PanelHi,
+    onSurface = HzColor.TextPrimary,
+    onSurfaceVariant = HzColor.TextMuted,
+    error = HzColor.Danger,
 )
 
 /** Colors of a setting card. The launcher passes its own (dynamic) palette so the cards match its other ones. */
@@ -65,9 +65,9 @@ data class ControlsCardStyle(
     val accent: Color,
     val onAccent: Color,
     val muted: Color,
-    val track: Color = Color(0xFF555555),
-    val row: Color = Color(0xFF232731),
-    val capsule: Color = Color(0xFF2C313D),
+    val track: Color = HzColor.HairlineStrong,
+    val row: Color = HzColor.PanelHi,
+    val capsule: Color = HzColor.PanelHi,
 )
 
 private val DefaultCardStyle = ControlsCardStyle(
@@ -190,14 +190,14 @@ fun screenSize(context: Context): Pair<Int, Int> {
 }
 
 // Same dark grays, hairline stroke and green accent as the launcher (Volt style); no blue anywhere.
-val HzRoot = Color(0xFF0D0F16)
-val HzCard = Color(0xFF1A1D25)
-val HzRow = Color(0xFF232731)
-val HzCapsule = Color(0xFF2C313D)
+val HzRoot = HzColor.Background
+val HzCard = HzColor.Panel
+val HzRow = HzColor.PanelHi
+val HzCapsule = HzColor.PanelHi
 val HzStroke = Color(0x24FFFFFF)
-val HzAccent = Color(0xFF79E59C)
-val HzOnAccent = Color(0xFF0B2616)
-val HzMuted = Color(0xFF9097A6)
+val HzAccent = HzColor.Accent
+val HzOnAccent = HzColor.OnAccent
+val HzMuted = HzColor.TextMuted
 
 val HorizonCardStyle = ControlsCardStyle(
     card = HzRow,

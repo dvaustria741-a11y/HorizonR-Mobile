@@ -8,8 +8,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -20,6 +19,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -104,18 +105,17 @@ import dev.horizon.android.ui.theme.HzText
 // Colours follow the Horizon launcher; wording follows the "Edit Control Layout" screens.
 private val ZPanel = HzColor.Panel
 private val ZItem = HzColor.PanelHi
-private val ZBox = Color(0xFF262C38)
+private val ZBox = HzColor.PanelLow
 private val ZTeal = HzAccent
 private val ZMuted = HzMuted
 private val ZLine = HzColor.Hairline
 private val ZScrim = Color(0x99000000)
-private val ZTrack = Color(0xFF394952)
+private val ZTrack = HzColor.HairlineStrong
 
-// Delete / Clone bar above a selected control, and the draggable gear.
+// Delete / Clone bar above a selected control.
 private const val PILL_W = 72
 private const val PILL_H = 32
 private const val PILL_GAP = 4
-private const val GEAR_DP = 38
 
 private enum class Mode { HOLD, TAP, TOGGLE }
 
@@ -141,7 +141,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
     var version by remember { mutableIntStateOf(0) }
     var dirty by remember { mutableStateOf(false) }
     var onLeft by remember { mutableStateOf(false) }
-    var menuOpen by remember { mutableStateOf(false) }
+    var moreOpen by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<Dialog?>(null) }
     var currentId by remember { mutableStateOf(settings.layout) }
     var snapOn by remember { mutableStateOf(settings.snapEnabled) }
@@ -155,7 +155,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
             selection = s
             version++
             if (s != null) {
-                menuOpen = false
+                moreOpen = false
                 val cx = when (s) {
                     is Selection.Button -> controls.layout.buttons.getOrNull(s.index)?.x ?: 0.5f
                     is Selection.Stick -> controls.layout.sticks.getOrNull(s.index)?.x ?: 0.5f
@@ -254,66 +254,22 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
     val rect: RectF? = remember(version, selection) { controls.selectionRect() }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        var hintOn by remember { mutableStateOf(true) }
-        LaunchedEffect(Unit) {
-            delay(7000L)
-            hintOn = false
-        }
-        val hintAlpha by animateFloatAsState(if (hintOn) 1f else 0f, tween(HzMotion.Medium), label = "hint")
-        Text(
-            "Tap the gear for the menu  \u00B7  tap a control to edit, resize, remap or delete it",
-            color = ZMuted, fontSize = HzText.Caption.sp, maxLines = 1,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 8.dp)
-                .graphicsLayer { alpha = hintAlpha }
-                .clip(HzShape.Control)
-                .background(HzColor.Glass)
-                .padding(horizontal = 10.dp, vertical = 5.dp)
+        EditorToolbar(
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 6.dp, start = 8.dp, end = 8.dp),
+            name = controls.layout.name,
+            dirty = dirty,
+            snapOn = snapOn,
+            snapDp = snapDp,
+            moreOpen = moreOpen,
+            onExit = { if (dirty) dialog = Dialog.ConfirmExit else onExit() },
+            onAddButton = { addButton() },
+            onAddDrawer = { addDrawer() },
+            onAddJoystick = { addJoystick() },
+            onSnap = { snapOn = it; settings.snapEnabled = it },
+            onSnapStep = { d -> snapDp = (snapDp + d).coerceIn(1f, 32f); settings.snapDp = snapDp },
+            onSave = { dialog = Dialog.SaveForm(After.STAY) },
+            onMore = { moreOpen = !moreOpen; if (moreOpen) controls.select(null) }
         )
-        val gearPx = with(density) { GEAR_DP.dp.toPx() }
-        var gearX by remember { mutableFloatStateOf(settings.editorGearX) }
-        var gearY by remember { mutableFloatStateOf(settings.editorGearY) }
-        var gearDrag by remember { mutableStateOf(false) }
-        val gearScale by animateFloatAsState(if (gearDrag) 1.1f else 1f, tween(HzMotion.Short, easing = HzMotion.Ease), label = "gear")
-        Box(
-            modifier = Modifier
-                .offset {
-                    IntOffset(
-                        ((controls.width - gearPx).coerceAtLeast(0f) * gearX).roundToInt(),
-                        ((controls.height - gearPx).coerceAtLeast(0f) * gearY).roundToInt()
-                    )
-                }
-                .size(GEAR_DP.dp)
-                .graphicsLayer { scaleX = gearScale; scaleY = gearScale }
-                .clip(HzShape.Panel)
-                .background(HzColor.Panel)
-                .border(1.dp, if (menuOpen) ZTeal.copy(alpha = 0.6f) else HzColor.Hairline, HzShape.Panel)
-                .pointerInput(Unit) {
-                    detectTapGestures {
-                        menuOpen = !menuOpen
-                        if (menuOpen) controls.select(null)
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { gearDrag = true },
-                        onDragEnd = {
-                            gearDrag = false
-                            settings.editorGearX = gearX
-                            settings.editorGearY = gearY
-                        },
-                        onDragCancel = { gearDrag = false },
-                    ) { change, drag ->
-                        change.consume()
-                        val rx = (controls.width - gearPx).coerceAtLeast(1f)
-                        val ry = (controls.height - gearPx).coerceAtLeast(1f)
-                        gearX = (gearX + drag.x / rx).coerceIn(0f, 1f)
-                        gearY = (gearY + drag.y / ry).coerceIn(0f, 1f)
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) { GlyphIcon(Glyph.GEAR, HzAccent, Modifier.size(20.dp)) }
 
         // Delete / Clone sit right above the selected button, like Zalith's handle.
         val sel = selection
@@ -368,7 +324,8 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
         if (sel != null) {
             Column(
                 modifier = Modifier
-                    .align(if (onLeft) Alignment.CenterStart else Alignment.CenterEnd)
+                    .align(if (onLeft) Alignment.BottomStart else Alignment.BottomEnd)
+                    .padding(top = 50.dp)
                     .zPanel(onLeft)
             ) {
                 when (sel) {
@@ -392,48 +349,30 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
         }
 
         AnimatedVisibility(
-            visible = menuOpen,
-            modifier = Modifier.align(Alignment.CenterEnd),
+            visible = moreOpen,
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 50.dp),
             enter = fadeIn(tween(HzMotion.Short, easing = HzMotion.Ease)) +
-                slideInHorizontally(tween(HzMotion.Medium, easing = HzMotion.Ease)) { it / 5 },
-            exit = fadeOut(tween(HzMotion.Quick)) +
-                slideOutHorizontally(tween(HzMotion.Quick, easing = HzMotion.EaseIn)) { it / 6 }
+                slideInVertically(tween(HzMotion.Medium, easing = HzMotion.Ease)) { -it / 8 },
+            exit = fadeOut(tween(HzMotion.Quick))
         ) {
-            Column(modifier = Modifier.zPanel(animate = false)) {
-                Header("Edit Control Layout")
-                ZButton("Add Button") { addButton(); menuOpen = false }
-                ZButton("Add Drawer") { addDrawer(); menuOpen = false }
-                ZButton("Add Joystick") { addJoystick(); menuOpen = false }
-                ZSection("Save")
-                ZButton("Load") { dialog = Dialog.Load }
-                ZButton("Save") { dialog = Dialog.SaveForm(After.STAY) }
-                ZButton("Save and Exit") { dialog = Dialog.SaveForm(After.EXIT) }
-                ZButton("Save and Share") { dialog = Dialog.SaveForm(After.SHARE) }
-                ZSection("Control Layout")
-                Row(
-                    modifier = Modifier.padding(top = 6.dp).fillMaxWidth().clip(HzShape.Control).background(ZItem).padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Button Snapping", color = Color.White, fontSize = HzText.Body.sp, modifier = Modifier.weight(1f))
-                    ZSwitch(snapOn) { snapOn = it; settings.snapEnabled = it }
+            Column(
+                modifier = Modifier
+                    .width(240.dp)
+                    .clip(HzShape.Panel)
+                    .background(HzColor.Panel)
+                    .border(1.dp, HzColor.Hairline, HzShape.Panel)
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                ZButton("Load layout") { moreOpen = false; dialog = Dialog.Load }
+                ZButton("Revert to saved") {
+                    moreOpen = false
+                    controls.editLayout(ControlLayouts.load(context, currentId, defaultName), null)
+                    dirty = false
                 }
-                ZLabel("Snapping Distance")
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("\u2212", color = ZMuted, fontSize = 14.sp, modifier = Modifier.zClick { snapDp = (snapDp - 1f).coerceAtLeast(1f); settings.snapDp = snapDp }.padding(horizontal = 4.dp, vertical = 2.dp))
-                    ZSlider(
-                        value = snapDp, range = 1f..32f,
-                        onValue = { snapDp = it.roundToInt().toFloat() },
-                        onDone = { settings.snapDp = snapDp },
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text("+", color = ZMuted, fontSize = 14.sp, modifier = Modifier.zClick { snapDp = (snapDp + 1f).coerceAtMost(32f); settings.snapDp = snapDp }.padding(horizontal = 4.dp, vertical = 2.dp))
-                    Text(
-                        "${snapDp.roundToInt()} dp", color = Color.White, fontSize = HzText.Caption.sp, fontFamily = HzFont.Mono,
-                        modifier = Modifier.clip(HzShape.Chip).background(ZItem).padding(horizontal = 6.dp, vertical = 3.dp)
-                    )
-                }
-                ZButton("Select Default Control Layout") { dialog = Dialog.SelectDefault }
-                ZButton("Exit Editor") { if (dirty) dialog = Dialog.ConfirmExit else onExit() }
+                ZButton("Save and Exit") { moreOpen = false; dialog = Dialog.SaveForm(After.EXIT) }
+                ZButton("Save and Share") { moreOpen = false; dialog = Dialog.SaveForm(After.SHARE) }
+                ZButton("Select Default Control Layout") { moreOpen = false; dialog = Dialog.SelectDefault }
             }
         }
 
@@ -447,7 +386,6 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                             currentId = info.id
                             dirty = false
                             dialog = null
-                            menuOpen = false
                         }, onInfo = { dialog = Dialog.Info(info) })
                     }
                 }
@@ -490,7 +428,7 @@ fun ControlEditor(controls: ControlsView, settings: ControlSettings, onExit: () 
                             when (d.after) {
                                 After.EXIT -> onExit()
                                 After.SHARE -> share()
-                                After.STAY -> menuOpen = false
+                                After.STAY -> moreOpen = false
                             }
                         }
                     },
@@ -720,6 +658,92 @@ private fun Modifier.zClick(onClick: () -> Unit): Modifier = composed {
         .clickable(interactionSource = src, indication = null, onClick = onClick)
 }
 
+/** Persistent editor toolbar: exit, layout name, add controls, snapping, save. Replaces the old floating gear menu. */
+@Composable
+private fun EditorToolbar(
+    name: String,
+    dirty: Boolean,
+    snapOn: Boolean,
+    snapDp: Float,
+    moreOpen: Boolean,
+    onExit: () -> Unit,
+    onAddButton: () -> Unit,
+    onAddDrawer: () -> Unit,
+    onAddJoystick: () -> Unit,
+    onSnap: (Boolean) -> Unit,
+    onSnapStep: (Float) -> Unit,
+    onSave: () -> Unit,
+    onMore: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(HzShape.Panel)
+            .background(HzColor.Glass)
+            .border(1.dp, HzColor.Hairline, HzShape.Panel)
+            .pointerInput(Unit) { detectTapGestures { } }
+            .horizontalScroll(rememberScrollState())
+            .padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        TbButton("Exit", danger = dirty, onClick = onExit)
+        TbDivider()
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(name, color = HzColor.TextPrimary, fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.widthIn(max = 140.dp))
+            if (dirty) Box(Modifier.size(6.dp).clip(RoundedCornerShape(50)).background(HzColor.Warning))
+        }
+        TbDivider()
+        TbButton("+ Button", onClick = onAddButton)
+        TbButton("+ Drawer", onClick = onAddDrawer)
+        TbButton("+ Stick", onClick = onAddJoystick)
+        TbDivider()
+        TbButton(if (snapOn) "Snap on" else "Snap off", active = snapOn) { onSnap(!snapOn) }
+        if (snapOn) {
+            TbButton("\u2212") { onSnapStep(-1f) }
+            Text("${snapDp.roundToInt()} dp", color = HzColor.TextPrimary, fontSize = HzText.Caption.sp, fontFamily = HzFont.Mono, maxLines = 1)
+            TbButton("+") { onSnapStep(1f) }
+        }
+        TbDivider()
+        TbButton("Save", accent = true, onClick = onSave)
+        TbButton("More", active = moreOpen, onClick = onMore)
+    }
+}
+
+@Composable
+private fun TbButton(label: String, accent: Boolean = false, active: Boolean = false, danger: Boolean = false, onClick: () -> Unit) {
+    val bg = when {
+        accent -> HzColor.Accent
+        active -> HzColor.AccentSoft
+        else -> Color.Transparent
+    }
+    val fg = when {
+        accent -> HzColor.OnAccent
+        danger -> HzColor.Danger
+        active -> HzColor.Accent
+        else -> HzColor.TextPrimary
+    }
+    Box(
+        modifier = Modifier
+            .height(38.dp)
+            .widthIn(min = 34.dp)
+            .zClick(onClick)
+            .clip(HzShape.Control)
+            .background(bg)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center
+    ) { Text(label, color = fg, fontSize = HzText.Body.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false) }
+}
+
+@Composable
+private fun TbDivider() {
+    Box(Modifier.padding(horizontal = 3.dp).size(width = 1.dp, height = 18.dp).background(HzColor.Hairline))
+}
+
 @Composable
 private fun ZPill(text: String, danger: Boolean = false, onClick: () -> Unit) {
     Box(
@@ -797,12 +821,12 @@ private fun ZSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
             .size(width = 32.dp, height = 18.dp)
             .clip(RoundedCornerShape(9.dp))
             .drawBehind {
-                drawRect(lerp(Color(0xFF3A3F4B), ZTeal, t))
+                drawRect(lerp(HzColor.HairlineStrong, ZTeal, t))
                 val r = size.height / 2f - 3.dp.toPx()
                 val left = size.height / 2f
                 val right = size.width - size.height / 2f
                 drawCircle(
-                    color = lerp(Color(0xFFC8C8C8), HzOnAccent, t),
+                    color = lerp(HzColor.TextIcon, HzOnAccent, t),
                     radius = r,
                     center = Offset(left + (right - left) * t, size.height / 2f)
                 )
@@ -900,7 +924,7 @@ private fun ZCheck(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
                     val r = CornerRadius(4.dp.toPx())
                     drawRoundRect(color = lerp(Color.Transparent, ZTeal, t), cornerRadius = r)
                     drawRoundRect(
-                        color = lerp(Color(0xFF6A7280), ZTeal, t), cornerRadius = r,
+                        color = lerp(HzColor.HairlineStrong, ZTeal, t), cornerRadius = r,
                         style = androidx.compose.ui.graphics.drawscope.Stroke(1.2.dp.toPx())
                     )
                     val mark = HzOnAccent.copy(alpha = t)

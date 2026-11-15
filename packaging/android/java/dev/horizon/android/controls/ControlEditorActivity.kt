@@ -16,7 +16,10 @@ import dev.horizon.android.controls.ControlLayouts
 import dev.horizon.android.controls.ControlSettings
 import dev.horizon.android.controls.ControlsHost
 import dev.horizon.android.controls.ControlsView
+import androidx.compose.ui.graphics.toArgb
 import dev.horizon.android.controls.ui.ControlEditor
+import dev.horizon.android.controls.ui.EditorBackdrop
+import dev.horizon.android.ui.theme.HzColor
 import dev.horizon.android.controls.ui.ControlsTheme
 
 class ControlEditorActivity : ComponentActivity(), ControlsHost {
@@ -33,8 +36,11 @@ class ControlEditorActivity : ComponentActivity(), ControlsHost {
         )
         controls.setEditMode(true)
         val root = FrameLayout(this).apply {
-            background = ColorDrawable(0xFF14181B.toInt())
+            background = ColorDrawable(HzColor.Background.toArgb())
         }
+        root.addView(ComposeView(this).apply {
+            setContent { ControlsTheme { EditorBackdrop() } }
+        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(controls, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(ComposeView(this).apply {
             setContent { ControlsTheme { ControlEditor(controls, settings) { finish() } } }

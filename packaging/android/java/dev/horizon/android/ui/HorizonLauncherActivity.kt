@@ -6636,6 +6636,7 @@ private fun CleanSettingsViewport(
                 )
                 when (section) {
                     SettingsSubCategory.RENDERER -> {
+                        HzSectionLabel("Memory")
                         LauncherRamAllocationCard(
                             context = context,
                             ramAllocationMb = config.ramAllocationMb,
@@ -6644,6 +6645,7 @@ private fun CleanSettingsViewport(
                             }
                         )
 
+                        HzSectionLabel("Graphics")
                         LauncherSettingDropdownCard(
                             title = "Graphics API (Horizon Android 0.7.6)",
                             description = "Set the native Vulkan / OpenGL ES renderer used by Minecraft 26.3",
@@ -6653,6 +6655,7 @@ private fun CleanSettingsViewport(
                             onSelect = { onConfigChange(config.copy(renderer = it)) }
                         )
 
+                        HzSectionLabel("Screen")
                         LauncherSettingDropdownCard(
                             title = "Screen Presentation Aspect Ratio (v0.7.5)",
                             description = "Configure display fitting ratio for both logical rendering and touch input bounds",
@@ -6671,6 +6674,7 @@ private fun CleanSettingsViewport(
                             onSelect = { onConfigChange(config.copy(orientation = it)) }
                         )
 
+                        HzSectionLabel("Frame pacing")
                         LauncherSettingSliderCard(
                             title = "Resolution Scale",
                             description = "Lower values boost FPS on mobile GPUs; higher values sharpen 3D terrain & HUD",
@@ -6720,6 +6724,7 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.GAME -> {
+                        HzSectionLabel("Memory")
                         LauncherRamAllocationCard(
                             context = context,
                             ramAllocationMb = config.ramAllocationMb,
@@ -6728,6 +6733,7 @@ private fun CleanSettingsViewport(
                             }
                         )
 
+                        HzSectionLabel("Profile")
                         LauncherSettingDropdownCard(
                             title = "Game Profile Slot",
                             description = "Select which isolated profile directory (saves, mods, options.txt) is active",
@@ -6737,6 +6743,7 @@ private fun CleanSettingsViewport(
                             onSelect = { onConfigChange(config.copy(profile = it)) }
                         )
 
+                        HzSectionLabel("World")
                         LauncherSettingSliderCard(
                             title = "Render Distance",
                             description = "Number of visible world chunks rendered around the player (synced with options.txt)",
@@ -6757,6 +6764,7 @@ private fun CleanSettingsViewport(
                             onValueChange = { onConfigChange(config.copy(mcSimulationDistance = it)) }
                         )
 
+                        HzSectionLabel("Video")
                         LauncherSettingSliderCard(
                             title = "Max Framerate Limit",
                             description = "Maximum FPS cap inside Minecraft (260 = Unlimited, synced with options.txt)",
@@ -6777,6 +6785,7 @@ private fun CleanSettingsViewport(
                         )
 
                         // Built-in Horizon 26.3 Client Extras (`horizon-extras.txt`)
+                        HzSectionLabel("Horizon extras")
                         LauncherSettingToggleCard(
                             title = "Fullbright Cave Lighting (Horizon Extra)",
                             description = "Display blocks and entities with a fully bright lightmap in dark caves (horizon-extras.txt)",
@@ -7134,6 +7143,7 @@ private fun CleanSettingsViewport(
                             }
                         }
                         // null stands for Zalith Controller: the editable touch layouts drawn over the game.
+                        HzSectionLabel("Input")
                         LauncherSettingDropdownCard(
                             title = "Input Mode (v0.7.5)",
                             description = "Select primary input host (Auto follows active touch, mouse, or controller input). Zalith Controller uses Keyboard & Mouse and draws the editable touch layouts over the game",
@@ -7177,6 +7187,7 @@ private fun CleanSettingsViewport(
                             }
                         }
 
+                        HzSectionLabel("Touch")
                         LauncherSettingToggleCard(
                             title = "On-Screen Touch Keypad",
                             description = "Enable customizable virtual touch buttons inside Minecraft (horizon-keypad.json)",
@@ -7243,6 +7254,7 @@ private fun CleanSettingsViewport(
 
                     SettingsSubCategory.GAMEPAD -> {
                         val touchControls = remember { ControlSettings(context) }
+                        HzSectionLabel("Routing")
                         LauncherSettingDropdownCard(
                             title = "Controller & Gamepad Routing (v0.7.5)",
                             description = "Configure USB & Bluetooth gamepad input host (Xbox, DualSense, Switch Pro)",
@@ -7272,6 +7284,7 @@ private fun CleanSettingsViewport(
                             onCheckedChange = { onConfigChange(config.copy(controllerVibration = it)) }
                         )
 
+                        HzSectionLabel("Tuning")
                         LauncherSettingSliderCard(
                             title = "Controller Look Sensitivity",
                             description = "Right-stick camera yaw/pitch rotation speed (synced with horizon-controller.txt)",
@@ -7301,6 +7314,7 @@ private fun CleanSettingsViewport(
                     }
 
                     SettingsSubCategory.EXPERIMENTAL -> {
+                        HzSectionLabel("Performance modes")
                         LauncherSettingToggleCard(
                             title = "Super Performance Mode",
                             description = "Aggressive chunk culling, fast clouds, minimal particles & Vulkan batching (applies on the next game launch)",
@@ -7390,6 +7404,7 @@ private fun CleanSettingsViewport(
                             onCheckedChange = { onConfigChange(config.copy(cloudPerfProfile = it)) }
                         )
 
+                        HzSectionLabel("Shaders")
                         LauncherSettingToggleCard(
                             title = "Trust shader packs (skip safety checks)",
                             description = "Compile shader pack programs without bounds and loop checks: the same picture for a well-written pack, with less GPU time. A broken pack may glitch or freeze the game instead of being stopped (applies on the next game launch)",
@@ -7404,6 +7419,7 @@ private fun CleanSettingsViewport(
                             onCheckedChange = { onConfigChange(config.copy(autoShaderSwitches = it)) }
                         )
 
+                        HzSectionLabel("Frame generation")
                         LauncherSettingToggleCard(
                             title = "Frame Generation (FSR 3.1)",
                             description = "Shows a made frame between each two real ones (optical flow + interpolation). Real frames run at half the screen rate with VSync on, frames show about half a frame later, and it stays off under shader packs, on the title screen and over blurred menus. Check the F3 screen for the frames per second reaching the screen (applies on the next game launch)",
@@ -7441,6 +7457,7 @@ private fun CleanSettingsViewport(
                             HzToolbarButton(label = "Browse", icon = Icons.Default.History, accent = SkyBlueAccent) { showLauncherVersions = true }
                         }
 
+                        HzSectionLabel("Appearance")
                         LauncherSettingDropdownCard(
                             title = "Theme Palette",
                             description = "Choose the color scheme used across HorizonR (applies immediately)",
@@ -7459,6 +7476,7 @@ private fun CleanSettingsViewport(
                             onCheckedChange = { onConfigChange(config.copy(useDynamicColor = it)) }
                         )
 
+                        HzSectionLabel("Diagnostics")
                         LauncherSettingToggleCard(
                             title = "System & Game Runtime Logs",
                             description = "Record launcher, installer, and Minecraft runtime logs for troubleshooting",

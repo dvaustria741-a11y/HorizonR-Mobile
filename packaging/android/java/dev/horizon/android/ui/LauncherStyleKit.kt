@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -845,17 +846,39 @@ internal fun HzSettingRow(
             .drawBehind {
                 drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
             }
-            .padding(horizontal = 4.dp, vertical = 12.dp),
+            .heightIn(min = 48.dp)
+            .padding(horizontal = HzSpace.XS, vertical = HzSpace.S + 1.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(HzSpace.L)
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(text = title, fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, color = VoltTextMain)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(text = title, fontSize = HzText.Section.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold, color = HzColor.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (description.isNotBlank()) {
-                Text(text = description, fontSize = 12.sp, lineHeight = 16.sp, color = VoltMutedText, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(text = description, fontSize = HzText.Caption.sp, lineHeight = 15.sp, color = HzColor.TextMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         control()
+    }
+}
+
+/** Small caps label that opens a group of settings rows; the accent tick ties the group to the selected category. */
+@Composable
+internal fun HzSectionLabel(text: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(top = HzSpace.L, bottom = HzSpace.XS),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
+    ) {
+        Box(modifier = Modifier.size(width = 3.dp, height = 11.dp).clip(HzShape.Chip).background(HzColor.Accent))
+        Text(
+            text = text.uppercase(),
+            fontFamily = HzFont.Mono,
+            fontSize = HzText.Micro.sp,
+            letterSpacing = 1.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = HzColor.TextMuted,
+            maxLines = 1
+        )
     }
 }
 
@@ -911,7 +934,7 @@ internal fun <T> HzCategoryList(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(32.dp)
+                    .height(38.dp)
                     .animatedPressScale(pressedScale = 0.98f) { onSelect(item) }
                     .clip(HzShape.Control)
                     .drawBehind {

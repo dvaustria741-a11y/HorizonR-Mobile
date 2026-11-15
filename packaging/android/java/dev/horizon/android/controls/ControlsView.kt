@@ -34,6 +34,8 @@ import dev.horizon.android.controls.ControlSettings
 import dev.horizon.android.controls.ControlStick
 import dev.horizon.android.controls.Style
 import dev.horizon.android.controls.Visibility
+import androidx.compose.ui.graphics.toArgb
+import dev.horizon.android.ui.theme.HzColor
 import java.io.File
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -906,7 +908,7 @@ class ControlsView(
             }
         }
         if (editMode) {
-            stroke.color = Color.argb(220, 255, 214, 0)
+            stroke.color = HzColor.Warning.toArgb()
             stroke.strokeWidth = 1.5f * density
             guideX?.let { canvas.drawLine(it, 0f, it, height.toFloat(), stroke) }
             guideY?.let { canvas.drawLine(0f, it, width.toFloat(), it, stroke) }
@@ -1004,5 +1006,5 @@ class ControlsView(
     }
 }
 
-/** Outline of the selected button in the editor (the Zalith editor's teal). */
-private val SELECTION = 0xFF79E59C.toInt()
+/** Outline of the selected button in the editor: the launcher accent. */
+private val SELECTION = HzColor.Accent.toArgb()
