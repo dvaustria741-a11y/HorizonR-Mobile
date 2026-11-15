@@ -4443,10 +4443,11 @@ private fun CleanStoreViewport(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .animatedPressScale(pressedScale = 0.99f) { selectedProject = item }
+                                            .background(if (installState == StoreInstallState.INSTALLED) HzColor.Success.copy(alpha = 0.05f) else Color.Transparent)
                                             .drawBehind {
                                                 drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
                                             }
-                                            .padding(vertical = 10.dp),
+                                            .padding(vertical = 10.dp, horizontal = HzSpace.XS),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
@@ -4486,11 +4487,23 @@ private fun CleanStoreViewport(
                                                     color = SkyBlueAccent,
                                                     maxLines = 1
                                                 )
+                                                if (!item.isCompatibleWith26_3) {
+                                                    Text(
+                                                        text = "Not 26.3",
+                                                        fontFamily = HzFont.Mono,
+                                                        fontSize = 9.5.sp,
+                                                        color = HzColor.Warning,
+                                                        maxLines = 1,
+                                                        modifier = Modifier
+                                                            .border(1.dp, HzColor.Warning.copy(alpha = 0.5f), HzShape.Chip)
+                                                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                                                    )
+                                                }
                                             }
                                             Text(
                                                 text = item.summary,
                                                 fontSize = 11.5.sp,
-                                                color = Color(0xFFB8C1C9),
+                                                color = HzColor.TextIcon,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
@@ -4521,7 +4534,7 @@ private fun CleanStoreViewport(
                                                     label = "Update",
                                                     icon = Icons.Default.SystemUpdateAlt,
                                                     bg = HzColor.Warning,
-                                                    fg = Color(0xFF261600),
+                                                    fg = HzColor.OnWarning,
                                                     enabled = !storeProgress.running
                                                 ) {
                                                     if (item.isCompatibleWith26_3) startItemDownload(item)
@@ -5009,7 +5022,7 @@ private fun CleanStoreViewport(
                                         contentDescription = null,
                                         tint = when (detailInstallState) {
                                             StoreInstallState.INSTALLED -> HzColor.Success
-                                            StoreInstallState.UPDATE_AVAILABLE -> Color(0xFF261600)
+                                            StoreInstallState.UPDATE_AVAILABLE -> HzColor.OnWarning
                                             StoreInstallState.NOT_INSTALLED -> SkyBlueDarkText
                                         },
                                         modifier = Modifier.size(15.dp)
@@ -5025,7 +5038,7 @@ private fun CleanStoreViewport(
                                         fontWeight = FontWeight.Bold,
                                         color = when (detailInstallState) {
                                             StoreInstallState.INSTALLED -> HzColor.Success
-                                            StoreInstallState.UPDATE_AVAILABLE -> Color(0xFF261600)
+                                            StoreInstallState.UPDATE_AVAILABLE -> HzColor.OnWarning
                                             StoreInstallState.NOT_INSTALLED -> SkyBlueDarkText
                                         }
                                     )
@@ -6037,7 +6050,7 @@ private fun FileManagerRowCard(
                                             text = "↑ Update v${rowItem.storeCatalogMatch.version}",
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = Color(0xFF261600),
+                                            color = HzColor.OnWarning,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }

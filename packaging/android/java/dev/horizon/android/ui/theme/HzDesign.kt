@@ -94,6 +94,8 @@ object HzColor {
     /** State colours: one green, one amber, used for ready / paused everywhere. */
     val Success = Color(0xFF81C784)
     val Warning = Color(0xFFFFB74D)
+    /** Text and icons drawn on a [Warning] fill. */
+    val OnWarning = Color(0xFF261600)
 }
 
 /** One 4dp spacing grid for gaps and paddings: 4, 8, 12, 16, 24. */
