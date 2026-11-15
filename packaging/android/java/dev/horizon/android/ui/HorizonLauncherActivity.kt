@@ -2835,6 +2835,7 @@ private fun CleanServersViewport(
     var editing by remember { mutableStateOf<ServerEntry?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<ServerEntry?>(null) }
+    var selectedAddress by remember { mutableStateOf<String?>(null) }
     var refreshTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(serversFile) {
@@ -2920,12 +2921,16 @@ private fun CleanServersViewport(
                 HzEmptyState("hz_empty_server", "No servers yet. Tap Add server to save one and see if it is online.", SkyBlueAccent)
             }
         } else {
+            // The list on the left, the selected server's details on the right.
+            val selectedServer = servers.firstOrNull { it.address == selectedAddress } ?: servers.firstOrNull()
+            Row(modifier = Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
             // Column headers
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .drawBehind { drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f) }
-                    .padding(start = 56.dp, end = 118.dp, bottom = 5.dp),
+                    .padding(start = 62.dp, end = 76.dp, bottom = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 val head = @Composable { t: String, m: Modifier ->
@@ -2933,8 +2938,7 @@ private fun CleanServersViewport(
                 }
                 head("SERVER", Modifier.weight(1f))
                 head("PLAYERS", Modifier.width(62.dp))
-                head("PING", Modifier.width(48.dp))
-                head("VERSION", Modifier.width(96.dp))
+                head("PING", Modifier.width(56.dp))
             }
             LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 items(servers.toList(), key = { System.identityHashCode(it) }) { entry ->
@@ -2942,7 +2946,6 @@ private fun CleanServersViewport(
                     val known = statuses.containsKey(entry.address)
                     val iconBytes = status?.favicon
                         ?: (entry.raw["icon"]?.value as? String)?.let { HorizonServerStore.decodeFavicon(it) }
-                    var showMenu by remember { mutableStateOf(false) }
                     val online = known && status != null && status.online
                     val dot = when {
                         !known || status == null -> HzColor.Warning
@@ -2950,11 +2953,15 @@ private fun CleanServersViewport(
                         else -> HzColor.Danger
                     }
                     val mono = HzFont.Mono
+                    val isSelected = entry.address == selectedServer?.address
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(HzShape.Control)
+                            .background(if (isSelected) HzColor.PanelHi else Color.Transparent)
+                            .animatedPressScale(pressedScale = 0.99f) { selectedAddress = entry.address }
                             .drawBehind { drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f) }
-                            .padding(vertical = 7.dp),
+                            .padding(horizontal = 6.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -2990,12 +2997,7 @@ private fun CleanServersViewport(
                         )
                         Text(
                             if (online && status!!.pingMs >= 0) "${status.pingMs} ms" else "-",
-                            fontFamily = mono, fontSize = 11.sp, color = VoltIconMuted, maxLines = 1, modifier = Modifier.width(48.dp)
-                        )
-                        Text(
-                            if (online && status!!.version.isNotBlank()) status.version else "-",
-                            fontFamily = mono, fontSize = 10.sp, color = MutedSubtitleText, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis, modifier = Modifier.width(96.dp)
+                            fontFamily = mono, fontSize = 11.sp, color = VoltIconMuted, maxLines = 1, modifier = Modifier.width(56.dp)
                         )
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -3010,35 +3012,103 @@ private fun CleanServersViewport(
                             Icon(Icons.Default.PlayArrow, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(14.dp))
                             Text("Play", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = SkyBlueDarkText)
                         }
-                        Box {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .animatedPressScale(pressedScale = 0.94f) { showMenu = true }
-                                    .clip(HzShape.Control)
-                                    .background(HzColor.PanelHi)
-                            ) { Icon(Icons.Default.MoreHoriz, contentDescription = "More options", tint = VoltIconMuted, modifier = Modifier.size(15.dp)) }
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false },
-                                modifier = Modifier.background(HzColor.PanelHi)
-                            ) {
-                                DropdownMenuItem(
-                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp)) },
-                                    text = { Text("Edit", fontSize = 12.sp, color = Color.White) },
-                                    onClick = { showMenu = false; editing = entry; showEditor = true }
-                                )
-                                DropdownMenuItem(
-                                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = HzColor.Danger, modifier = Modifier.size(15.dp)) },
-                                    text = { Text("Remove", fontSize = 12.sp, color = HzColor.Danger) },
-                                    onClick = { showMenu = false; pendingDelete = entry }
-                                )
-                            }
-                        }
                     }
                 }
             }
+            }
+            val shown = selectedServer
+            if (shown != null) {
+                val shownStatus = statuses[shown.address]
+                ServerDetailPanel(
+                    entry = shown,
+                    status = shownStatus,
+                    known = statuses.containsKey(shown.address),
+                    iconBytes = shownStatus?.favicon
+                        ?: (shown.raw["icon"]?.value as? String)?.let { HorizonServerStore.decodeFavicon(it) },
+                    onPlay = { onQuickPlayServer(shown.address) },
+                    onEdit = { editing = shown; showEditor = true },
+                    onRemove = { pendingDelete = shown },
+                    modifier = Modifier.width(280.dp).fillMaxHeight()
+                )
+            }
+            }
+        }
+    }
+}
+
+/** Details of the selected server: status, address, players, ping, version, message of the day, and its actions. */
+@Composable
+private fun ServerDetailPanel(
+    entry: ServerEntry,
+    status: ServerStatus?,
+    known: Boolean,
+    iconBytes: ByteArray?,
+    onPlay: () -> Unit,
+    onEdit: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val online = known && status != null && status.online
+    val stateText = when {
+        !known || status == null -> "Checking"
+        status.online -> "Online"
+        else -> "Offline"
+    }
+    val stateColor = when {
+        !known || status == null -> HzColor.Warning
+        status.online -> HzColor.Success
+        else -> HzColor.Danger
+    }
+    Column(
+        modifier = modifier
+            .clip(HzShape.Panel)
+            .background(HzColor.Panel)
+            .border(1.dp, HzColor.Hairline, HzShape.Panel)
+            .verticalScroll(rememberScrollState())
+            .padding(HzSpace.M),
+        verticalArrangement = Arrangement.spacedBy(HzSpace.M)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ServerIcon(iconBytes, entry.name.ifBlank { entry.address }, online)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    entry.name.ifBlank { "Minecraft Server" },
+                    fontSize = 14.sp, fontWeight = FontWeight.Bold, color = VoltTextMain,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                HzStatusPill(text = stateText, color = stateColor)
+            }
+        }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            HzSpecRow("Address", entry.address)
+            HzSpecRow("Players", if (online) "${status!!.playersOnline} / ${status.playersMax}" else "-")
+            HzSpecRow("Ping", if (online && status!!.pingMs >= 0) "${status.pingMs} ms" else "-")
+            HzSpecRow("Version", if (online && status!!.version.isNotBlank()) status.version else "-")
+        }
+        val motd = if (online) status!!.motd.replace('\n', ' ').trim() else ""
+        if (motd.isNotEmpty()) {
+            Text(
+                motd,
+                fontSize = 11.sp, lineHeight = 15.sp, color = VoltMutedText,
+                maxLines = 3, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(HzShape.Control)
+                    .background(HzColor.PanelLow)
+                    .padding(HzSpace.S)
+            )
+        }
+        HzButton(
+            label = "Play",
+            icon = Icons.Default.PlayArrow,
+            kind = HzButtonKind.Primary,
+            accent = SkyBlueAccent,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onPlay
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S), modifier = Modifier.fillMaxWidth()) {
+            HzButton("Edit", Icons.Default.Edit, HzButtonKind.Secondary, SkyBlueAccent, Modifier.weight(1f), onClick = onEdit)
+            HzButton("Remove", Icons.Default.Delete, HzButtonKind.Danger, SkyBlueAccent, Modifier.weight(1f), onClick = onRemove)
         }
     }
 }

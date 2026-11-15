@@ -172,7 +172,7 @@ internal fun HzSideRail(
     }
     Column(
         modifier = modifier
-            .width(132.dp)
+            .width(150.dp)
             .fillMaxHeight()
             .background(HzColor.Rail)
             .drawBehind {
@@ -250,7 +250,7 @@ private fun HzRailItem(entry: HzNavEntry, selected: Boolean, label: String, acce
                     )
                 }
             }
-            .padding(horizontal = HzSpace.M),
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
     ) {
@@ -922,7 +922,7 @@ internal fun <T> HzCategoryList(
 ) {
     Column(
         modifier = modifier
-            .width(150.dp)
+            .width(176.dp)
             .fillMaxHeight()
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(2.dp)
