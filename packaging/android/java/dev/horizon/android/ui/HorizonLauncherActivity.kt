@@ -174,7 +174,8 @@ private val DASHBOARD_WALLPAPERS = listOf(
     R.drawable.mc_wall_15,
     R.drawable.mc_wall_16,
     R.drawable.mc_wall_17,
-    R.drawable.mc_wall_18
+    R.drawable.mc_wall_18,
+    R.drawable.mc_wall_19
 )
 
 data class HorizonDynamicPalette(
