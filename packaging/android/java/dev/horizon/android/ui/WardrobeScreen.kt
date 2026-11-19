@@ -129,11 +129,8 @@ private fun VoltWardrobeBody(
     var nameInput by remember { mutableStateOf("") }
     var linkInput by remember { mutableStateOf("") }
     var lookupSource by remember { mutableStateOf(SkinTools.Source.ELYBY) }
-    var newName by remember { mutableStateOf("") }
-    var newType by remember { mutableStateOf(AccountType.OFFLINE) }
     var capeTick by remember { mutableStateOf(0) }
     var toolTab by remember { mutableStateOf(0) }
-    var showAdd by remember { mutableStateOf(false) }
 
     val capeBitmap = remember(activeAccount.capePath, capeTick) { SkinTools.loadCapeBitmap(activeAccount.capePath) }
 
@@ -203,7 +200,7 @@ private fun VoltWardrobeBody(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // ---------------------------------------------------------------- Card 1: active account
-        WCard(Modifier.weight(0.95f)) {
+        WCard(Modifier.weight(0.8f).hzEnter()) {
             WTitle("Active Account")
             Box(
                 modifier = Modifier
@@ -243,7 +240,7 @@ private fun VoltWardrobeBody(
         }
 
         // ---------------------------------------------------------------- Card 2: skin + cape tools
-        WCard(Modifier.weight(1.35f)) {
+        WCard(Modifier.weight(1.7f).hzEnter(60)) {
             WTitle("Skin & Capes")
 
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
@@ -251,6 +248,8 @@ private fun VoltWardrobeBody(
                 WChip("Cape", toolTab == 1, Modifier.weight(1f)) { toolTab = 1 }
             }
             if (toolTab == 0) {
+              Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 WLabel("Skin")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                     WButton("Import from Files", Icons.Default.Folder, primary = true, modifier = Modifier.weight(1f)) { onPickSkinFile() }
@@ -272,11 +271,13 @@ private fun VoltWardrobeBody(
                     }
                 }
 
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 WLabel("Get skin & cape by player name")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    WField(nameInput, { nameInput = it }, "Player name", Modifier.weight(1f))
+                WField(nameInput, { nameInput = it }, "Player name", Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                     SkinTools.Source.entries.filter { it != SkinTools.Source.URL }.forEach { s ->
-                        WChip(s.label, lookupSource == s) { lookupSource = s }
+                        WChip(s.label, lookupSource == s, Modifier.weight(1f)) { lookupSource = s }
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
@@ -291,6 +292,8 @@ private fun VoltWardrobeBody(
                         else runBg("Looking up $n…") { fetchByName(n, src, acc, wantSkin = false, wantCape = true) }
                     }
                 }
+                }
+              }
 
             } else {
                 WLabel("Cape")
@@ -324,88 +327,6 @@ private fun VoltWardrobeBody(
                 "Capes show in-game for your own player. Ely.by/Mojang are looked up by name (no password needed).",
                 fontSize = 10.5.sp, color = VoltMutedText
             )
-        }
-
-        // ---------------------------------------------------------------- Card 3: accounts
-        WCard(Modifier.weight(1.1f)) {
-            WTitle("Accounts")
-            accounts.forEach { acc ->
-                val bmp = remember(acc.id, acc.skinPath, acc.slimSkinModel, skinReloadCounter) {
-                    HorizonNativeBridge.loadOrGenerateAccountSkinBitmap(context, acc)
-                }
-                Surface(
-                    shape = HzShape.Panel,
-                    color = if (acc.isActive) WRowBg else WCardBg,
-                    border = BorderStroke(1.dp, if (acc.isActive) WGreen.copy(alpha = 0.55f) else HzColor.Hairline),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animatedPressScale {
-                            if (!acc.isActive) onAccountsChange(accountsNow.map { it.copy(isActive = it.id == acc.id) })
-                        }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        MinecraftSkinHeadAvatar(skinBitmap = bmp, size = 28.dp, cornerRadius = 6.dp)
-                        Column(Modifier.weight(1f)) {
-                            Text(acc.username, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(acc.accountType.badge + if (acc.isActive) " · Active" else "", fontSize = 10.5.sp, color = if (acc.isActive) WGreen else VoltMutedText)
-                        }
-                        if (accounts.size > 1) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .animatedPressScale {
-                                        SkinTools.deleteCape(acc)
-                                        val rest = accountsNow.filterNot { it.id == acc.id }
-                                        onAccountsChange(if (rest.none { it.isActive }) rest.mapIndexed { i, a -> a.copy(isActive = i == 0) } else rest)
-                                    }
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete account", tint = WDanger, modifier = Modifier.size(18.dp))
-                            }
-                        }
-                    }
-                }
-            }
-            WButton(
-                if (showAdd) "Cancel" else "New account",
-                if (showAdd) Icons.Default.Close else Icons.Default.PersonAdd,
-                modifier = Modifier.fillMaxWidth()
-            ) { showAdd = !showAdd }
-            if (showAdd) {
-                WField(newName, { newName = it }, "Player name", Modifier.fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AccountType.entries.forEach { t ->
-                        WChip(t.badge, newType == t, Modifier.weight(1f)) { newType = t }
-                    }
-                }
-                if (newType == AccountType.MICROSOFT) {
-                    Text("Microsoft sign-in isn't built yet – this saves a Microsoft-labelled profile (offline play).", fontSize = 10.5.sp, color = VoltMutedText)
-                }
-                WButton("Add account", Icons.Default.PersonAdd, primary = true, modifier = Modifier.fillMaxWidth()) {
-                    val n = newName.trim()
-                    if (n.isEmpty()) {
-                        say("Enter a player name first.")
-                    } else {
-                        val added = LauncherAccount(
-                            id = UUID.randomUUID().toString(),
-                            username = n,
-                            uuid = UUID.nameUUIDFromBytes("OfflinePlayer:$n".toByteArray()).toString(),
-                            accountType = newType,
-                            isActive = true
-                        )
-                        onAccountsChange(accountsNow.map { it.copy(isActive = false) } + added)
-                        newName = ""
-                        showAdd = false
-                        if (newType == AccountType.ELYBY) {
-                            runBg("Fetching $n from Ely.by…") { fetchByName(n, SkinTools.Source.ELYBY, added, wantSkin = true, wantCape = true) }
-                        } else say("Added $n.")
-                    }
-                }
-            }
         }
     }
 }
