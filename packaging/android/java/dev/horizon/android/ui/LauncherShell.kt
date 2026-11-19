@@ -149,14 +149,14 @@ internal fun HzDock(
             .border(1.dp, HzColor.Hairline, DockShape)
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        HzBrandCube(size = 28.dp)
-        Spacer(modifier = Modifier.height(2.dp))
+        HzBrandCube(size = 26.dp)
+        Spacer(modifier = Modifier.height(4.dp))
         Column(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             entries.forEach { e ->
                 HzDockButton(
@@ -180,7 +180,7 @@ private fun HzDockButton(entry: HzDockEntry, selected: Boolean, busy: Boolean, o
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(44.dp)
+            .size(40.dp)
             .semantics { contentDescription = entry.label }
             .animatedPressScale(pressedScale = 0.92f, onClick = onClick)
             .clip(HzShape.Control)
@@ -191,7 +191,7 @@ private fun HzDockButton(entry: HzDockEntry, selected: Boolean, busy: Boolean, o
                 else Modifier
             )
     ) {
-        VoltIcon(name = entry.icon, fallback = entry.fallback, size = 22.dp, tint = tint)
+        VoltIcon(name = entry.icon, fallback = entry.fallback, size = 21.dp, tint = tint)
         if (busy) {
             Box(
                 modifier = Modifier
@@ -217,11 +217,10 @@ internal fun HzTopBar(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().height(46.dp).padding(horizontal = 4.dp),
+        modifier = modifier.fillMaxWidth().height(46.dp).padding(start = 6.dp, end = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
     ) {
-        Box(modifier = Modifier.size(width = 3.dp, height = 18.dp).clip(RoundedCornerShape(2.dp)).background(HzBrush.Vertical))
         Text(
             text = hzTabTitle(tab),
             fontSize = 16.sp,
@@ -278,5 +277,29 @@ private fun HzBarIconButton(name: String, fallback: ImageVector, description: St
             .border(1.dp, if (selected) HzColor.AccentLine else HzColor.Hairline, HzShape.Control)
     ) {
         VoltIcon(name = name, fallback = fallback, size = 17.dp, tint = if (selected) HzColor.Accent else HzColor.TextIcon)
+    }
+}
+
+/** One figure with a small label above it: used in rows of stats instead of a spec table. */
+@Composable
+internal fun HzStatTile(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(HzShape.Control)
+            .background(HzColor.PanelLow.copy(alpha = 0.85f))
+            .border(1.dp, HzColor.Hairline, HzShape.Control)
+            .padding(horizontal = HzSpace.M, vertical = HzSpace.S),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(text = label, fontSize = HzText.Micro.sp, lineHeight = 12.sp, color = HzColor.TextMuted, maxLines = 1)
+        Text(
+            text = value,
+            fontFamily = HzFont.Mono,
+            fontSize = HzText.Body.sp,
+            lineHeight = 16.sp,
+            color = valueColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

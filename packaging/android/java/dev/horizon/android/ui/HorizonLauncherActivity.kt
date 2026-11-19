@@ -2747,8 +2747,8 @@ private fun CleanServersViewport(
 
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HzPageHeader(
-            title = "Servers",
-            subtitle = if (servers.size == 1) "1 saved server" else "${servers.size} saved servers"
+            title = if (servers.size == 1) "1 saved server" else "${servers.size} saved servers",
+            subtitle = null
         ) {
             HzIconButton(icon = Icons.Default.Refresh, contentDescription = "Refresh") { refreshTick++ }
             Spacer(Modifier.width(HzSpace.S))
@@ -3432,19 +3432,34 @@ private fun CleanVersionsViewport(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(HzSpace.M)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(HzSpace.M)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(104.dp)
+                    .clip(HzShape.Panel)
+                    .border(1.dp, HzColor.HairlineStrong, HzShape.Panel)
             ) {
-                MinecraftGrassCubeIcon(size = 40.dp)
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(HzSpace.XS)) {
+                Image(
+                    painter = painterResource(R.drawable.hz_purple_hero),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(0.15f to Color.Transparent, 1f to HzColor.Background.copy(alpha = 0.92f))
+                    )
+                )
+                Column(
+                    modifier = Modifier.align(Alignment.BottomStart).padding(HzSpace.M),
+                    verticalArrangement = Arrangement.spacedBy(HzSpace.XS)
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
                         Text(
                             text = "Minecraft 26.3",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = HzColor.TextPrimary,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 20.sp,
+                            color = Color.White,
                             maxLines = 1
                         )
                         HzTag("RUST \u00B7 v0.7.6")
@@ -3478,14 +3493,15 @@ private fun CleanVersionsViewport(
                 )
             }
 
-            Column(modifier = Modifier.fillMaxWidth()) {
-                HzSpecRow(
-                    "Asset status",
-                    if (installStatus.ready) "Complete" else "${installStatus.percent}% downloaded",
-                    if (installStatus.ready) HzColor.Success else HzColor.TextPrimary
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                HzStatTile(
+                    "Assets",
+                    if (installStatus.ready) "Complete" else "${installStatus.percent}%",
+                    if (installStatus.ready) HzColor.Success else HzColor.TextPrimary,
+                    Modifier.weight(1f)
                 )
-                HzSpecRow("Components", "Worldgen + 60 touch icons", accent)
-                HzSpecRow("Disk size", installedSizeText, HzColor.TextPrimary)
+                HzStatTile("Disk size", installedSizeText, HzColor.TextPrimary, Modifier.weight(1f))
+                HzStatTile("Components", "Worldgen + 60 icons", accent, Modifier.weight(1.4f))
             }
 
             // Running downloads get Pause/Cancel; otherwise one primary action plus Repair and Delete side by side.
