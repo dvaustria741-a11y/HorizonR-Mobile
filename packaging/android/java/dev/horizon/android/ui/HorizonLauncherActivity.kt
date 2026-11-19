@@ -1430,6 +1430,7 @@ fun CleanLauncherScreen(
                                         storeInitialCategory = targetCat
                                         selectedTab = LauncherNavTab.STORE
                                     },
+                                    launchProgress = launchProgress,
                                     onQuickPlayWorld = { worldName ->
                                         HorizonServerStore.pendingQuickPlayWorld = worldName
                                         handleLaunchOrDownload()
@@ -1438,6 +1439,7 @@ fun CleanLauncherScreen(
 
                                 LauncherNavTab.SERVERS -> CleanServersViewport(
                                     profileSlot = config.profile,
+                                    launchProgress = launchProgress,
                                     onQuickPlayServer = { address ->
                                         HorizonServerStore.pendingQuickPlayServer = address
                                         handleLaunchOrDownload()
@@ -2627,6 +2629,7 @@ private fun CleanAccountsAndSkinsViewport(
 @Composable
 private fun CleanServersViewport(
     profileSlot: Int,
+    launchProgress: Float?,
     onQuickPlayServer: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -2805,6 +2808,7 @@ private fun CleanServersViewport(
                     known = statuses.containsKey(shown.address),
                     iconBytes = shownStatus?.favicon
                         ?: (shown.raw["icon"]?.value as? String)?.let { HorizonServerStore.decodeFavicon(it) },
+                    launchProgress = launchProgress,
                     onPlay = { onQuickPlayServer(shown.address) },
                     onEdit = { editing = shown; showEditor = true },
                     onRemove = { pendingDelete = shown },
@@ -2823,6 +2827,7 @@ private fun ServerDetailPanel(
     status: ServerStatus?,
     known: Boolean,
     iconBytes: ByteArray?,
+    launchProgress: Float?,
     onPlay: () -> Unit,
     onEdit: () -> Unit,
     onRemove: () -> Unit,
@@ -2878,14 +2883,20 @@ private fun ServerDetailPanel(
                     .padding(HzSpace.S)
             )
         }
+        val serverBar by animateFloatAsState(
+            targetValue = (launchProgress ?: 0f).coerceIn(0f, 1f),
+            animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
+            label = "ServerPlayBar"
+        )
         HzButton(
-            label = "Play",
+            label = if (launchProgress != null) "Loading" else "Play",
             icon = Icons.Default.PlayArrow,
             kind = HzButtonKind.Primary,
             accent = SkyBlueAccent,
             modifier = Modifier.fillMaxWidth(),
-            onClick = onPlay
+            onClick = { if (launchProgress == null) onPlay() }
         )
+        if (launchProgress != null) HzProgressBar(progress = serverBar, color = SkyBlueAccent)
         Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S), modifier = Modifier.fillMaxWidth()) {
             HzButton("Edit", Icons.Default.Edit, HzButtonKind.Secondary, SkyBlueAccent, Modifier.weight(1f), onClick = onEdit)
             HzButton("Remove", Icons.Default.Delete, HzButtonKind.Danger, SkyBlueAccent, Modifier.weight(1f), onClick = onRemove)
@@ -5128,6 +5139,7 @@ private fun CleanFilesViewport(
     profileSlot: Int,
     logEnabled: Boolean,
     onNavigateToStoreCategory: (StoreCategory) -> Unit,
+    launchProgress: Float?,
     onQuickPlayWorld: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -5751,6 +5763,7 @@ private fun CleanFilesViewport(
                                             folderLabel = folderLabel
                                         )
                                     },
+                                    launchProgress = launchProgress,
                                     onQuickPlayWorld = onQuickPlayWorld
                                 )
                             }
@@ -5772,6 +5785,7 @@ private fun FileManagerRowCard(
     onToggleEnabled: () -> Unit,
     onRequestRename: (File) -> Unit,
     onRequestDelete: (File, String) -> Unit,
+    launchProgress: Float?,
     onQuickPlayWorld: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -6052,10 +6066,24 @@ private fun FileManagerRowCard(
                                     if (folder == "saves") {
                                         DropdownMenuItem(
                                             leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp)) },
-                                            text = { Text("Quick Play", fontSize = 12.sp, color = Color.White) },
+                                            text = {
+                                                Column {
+                                                    Text(
+                                                        if (launchProgress != null) "Loading" else "Quick Play",
+                                                        fontSize = 12.sp, color = Color.White
+                                                    )
+                                                    if (launchProgress != null) {
+                                                        HzProgressBar(
+                                                            progress = launchProgress,
+                                                            color = SkyBlueAccent,
+                                                            modifier = Modifier.width(96.dp).padding(top = 4.dp)
+                                                        )
+                                                    }
+                                                }
+                                            },
                                             onClick = {
-                                                showMoreMenu = false
-                                                onQuickPlayWorld(file.name)
+                                                // Stays open while loading so the bar shows on this entry.
+                                                if (launchProgress == null) onQuickPlayWorld(file.name)
                                             }
                                         )
                                         DropdownMenuItem(
