@@ -95,6 +95,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import dev.horizon.android.R
+import dev.horizon.android.ui.theme.HzBrush
 import dev.horizon.android.ui.theme.HzColor
 import dev.horizon.android.ui.theme.HzFont
 import dev.horizon.android.ui.theme.HzMotion
@@ -2746,22 +2747,10 @@ private fun CleanServersViewport(
             val selectedServer = servers.firstOrNull { it.address == selectedAddress } ?: servers.firstOrNull()
             Row(modifier = Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            // Column headers
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .drawBehind { drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f) }
-                    .padding(start = 62.dp, end = 76.dp, bottom = 5.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val head = @Composable { t: String, m: Modifier ->
-                    Text(t, fontFamily = HzFont.Mono, fontSize = 9.sp, letterSpacing = 1.sp, color = MutedSubtitleText, modifier = m)
-                }
-                head("SERVER", Modifier.weight(1f))
-                head("PLAYERS", Modifier.width(62.dp))
-                head("PING", Modifier.width(56.dp))
-            }
-            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 items(servers.toList(), key = { System.identityHashCode(it) }) { entry ->
                     val status = statuses[entry.address]
                     val known = statuses.containsKey(entry.address)
@@ -2778,11 +2767,11 @@ private fun CleanServersViewport(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(HzShape.Control)
-                            .background(if (isSelected) HzColor.PanelHi else Color.Transparent)
                             .animatedPressScale(pressedScale = 0.99f) { selectedAddress = entry.address }
-                            .drawBehind { drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f) }
-                            .padding(horizontal = 6.dp, vertical = 8.dp),
+                            .clip(HzShape.Panel)
+                            .background(if (isSelected) HzColor.AccentSoft else HzColor.PanelLow.copy(alpha = 0.75f))
+                            .border(1.dp, if (isSelected) HzColor.AccentLine else HzColor.Hairline, HzShape.Panel)
+                            .padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -2827,11 +2816,11 @@ private fun CleanServersViewport(
                                 .height(26.dp)
                                 .animatedPressScale(pressedScale = 0.96f) { onQuickPlayServer(entry.address) }
                                 .clip(HzShape.Control)
-                                .background(SkyBlueAccent)
-                                .padding(horizontal = 8.dp)
+                                .background(HzBrush.Signature)
+                                .padding(horizontal = 10.dp)
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = SkyBlueDarkText, modifier = Modifier.size(14.dp))
-                            Text("Play", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = SkyBlueDarkText)
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            Text("Play", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                         }
                     }
                 }
