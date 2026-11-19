@@ -1307,12 +1307,14 @@ object HorizonNativeBridge {
                 val shaderSrcKey = obj.optString("shader_source", HorizonContentOrigin.HORIZON.serdeKey)
                 val shaderSource = HorizonContentOrigin.entries.firstOrNull { it.serdeKey == shaderSrcKey }
                     ?: HorizonContentOrigin.HORIZON
-                val paletteName = obj.optString("themePalette", LauncherThemePalette.HORIZON_SLATE.name)
-                val storedPalette = runCatching { LauncherThemePalette.valueOf(paletteName) }.getOrDefault(LauncherThemePalette.HORIZON_SLATE)
+                val paletteName = obj.optString("themePalette", LauncherThemePalette.GALAXY_PURPLE.name)
+                val storedPalette = runCatching { LauncherThemePalette.valueOf(paletteName) }.getOrDefault(LauncherThemePalette.GALAXY_PURPLE)
                 // Configs saved before the Horizon Dusk theme existed still say "Volt": move them over once.
                 val migratedPalette = if (!obj.optBoolean("paletteV2", false) && storedPalette == LauncherThemePalette.MATERIAL_YOU) LauncherThemePalette.HORIZON_DUSK else storedPalette
                 // Configs saved before the Default (slate) theme existed still carry the old default: move them over once.
-                val palette = if (!obj.optBoolean("paletteV3", false) && migratedPalette == LauncherThemePalette.HORIZON_DUSK) LauncherThemePalette.HORIZON_SLATE else migratedPalette
+                val slatePalette = if (!obj.optBoolean("paletteV3", false) && migratedPalette == LauncherThemePalette.HORIZON_DUSK) LauncherThemePalette.HORIZON_SLATE else migratedPalette
+                // Configs saved before the purple theme existed still carry the slate default: move them over once.
+                val palette = if (!obj.optBoolean("paletteV4", false) && slatePalette == LauncherThemePalette.HORIZON_SLATE) LauncherThemePalette.GALAXY_PURPLE else slatePalette
 
                 state = HorizonConfigState(
                     profile = obj.optInt("profile", 0).coerceIn(0, 3),
@@ -1484,6 +1486,7 @@ object HorizonNativeBridge {
             put("themePalette", config.themePalette.name)
             put("paletteV2", true)
             put("paletteV3", true)
+            put("paletteV4", true)
             put("useDynamicColor", config.useDynamicColor)
             put("enableSystemLog", config.enableSystemLog)
             put("disableAudioSafeMode", config.disableAudioSafeMode)

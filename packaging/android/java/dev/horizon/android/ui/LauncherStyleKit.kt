@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import dev.horizon.android.bridge.AssetInstallStatus
 import dev.horizon.android.model.LauncherAccount
 import dev.horizon.android.model.LauncherNavTab
+import dev.horizon.android.ui.theme.HzBrush
 import dev.horizon.android.ui.theme.HzColor
 import dev.horizon.android.ui.theme.HzFont
 import dev.horizon.android.ui.theme.HzMotion
@@ -243,9 +244,10 @@ private fun HzRailItem(entry: HzNavEntry, selected: Boolean, label: String, acce
                 if (sel > 0.01f) {
                     drawRect(HzColor.AccentSoft.copy(alpha = HzColor.AccentSoft.alpha * sel))
                     drawRoundRect(
-                        color = accent.copy(alpha = sel),
-                        topLeft = Offset(0f, size.height * 0.22f),
-                        size = Size(3.dp.toPx(), size.height * 0.56f),
+                        brush = HzBrush.Vertical,
+                        alpha = sel,
+                        topLeft = Offset(0f, size.height * 0.20f),
+                        size = Size(3.dp.toPx(), size.height * 0.60f),
                         cornerRadius = CornerRadius(2.dp.toPx())
                     )
                 }
@@ -400,9 +402,8 @@ private fun HzPlayButton(installStatus: AssetInstallStatus, accent: Color, onLau
         animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
         label = "PlayProgress"
     )
-    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
     val busy = installStatus.running
-    val fg = if (busy) accent else onAccent
+    val fg = if (busy) accent else Color.White
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -410,7 +411,7 @@ private fun HzPlayButton(installStatus: AssetInstallStatus, accent: Color, onLau
             .height(48.dp)
             .animatedPressScale(onClick = onLaunch)
             .clip(HzShape.Control)
-            .background(if (busy) HzColor.PanelHi else accent)
+            .then(if (busy) Modifier.background(HzColor.PanelHi) else Modifier.background(HzBrush.Signature))
             .drawBehind {
                 if (busy) drawRect(color = accent.copy(alpha = 0.28f), size = Size(size.width * progress, size.height))
             }
@@ -639,7 +640,7 @@ internal fun HzSwitch(checked: Boolean, accent: Color, onChange: (Boolean) -> Un
         animationSpec = tween(HzMotion.Short, easing = HzMotion.Ease),
         label = "HzSwitch"
     )
-    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
+    val onAccent = if (accent.luminance() > 0.3f) HzColor.OnAccent else Color.White
     Box(
         modifier = Modifier
             .size(width = 44.dp, height = 26.dp)
@@ -767,7 +768,7 @@ internal fun HzSegmented(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
+    val onAccent = if (accent.luminance() > 0.3f) HzColor.OnAccent else Color.White
     Row(
         modifier = modifier
             .height(38.dp)
@@ -965,7 +966,7 @@ internal fun HzToolbarButton(
     filled: Boolean = false,
     onClick: () -> Unit
 ) {
-    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
+    val onAccent = if (accent.luminance() > 0.3f) HzColor.OnAccent else Color.White
     Row(
         modifier = Modifier
             .height(38.dp)
@@ -1000,7 +1001,7 @@ internal fun HzButton(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    val onAccent = if (accent.luminance() > 0.45f) HzColor.OnAccent else Color.White
+    val onAccent = if (accent.luminance() > 0.3f) HzColor.OnAccent else Color.White
     val fill = when (kind) {
         HzButtonKind.Primary -> accent
         HzButtonKind.Secondary -> HzColor.PanelHi
@@ -1124,7 +1125,7 @@ internal fun HzProgressBar(progress: Float, color: Color, modifier: Modifier = M
             .clip(RoundedCornerShape(50))
             .background(HzColor.PanelHi)
             .drawBehind {
-                drawRect(color = color, size = Size(size.width * progress.coerceIn(0f, 1f), size.height))
+                drawRect(brush = HzBrush.Signature, size = Size(size.width * progress.coerceIn(0f, 1f), size.height))
             }
     )
 }

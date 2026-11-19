@@ -269,7 +269,8 @@ data class SavedCustomSkinItem(
 )
 
 enum class LauncherThemePalette(val label: String, val primaryHex: Long, val secondaryHex: Long, val surfaceHex: Long) {
-    HORIZON_SLATE("Default", 0xFF5EC4D4, 0xFF8EA4C4, 0xFF0F1216),
+    GALAXY_PURPLE("Galaxy Purple", 0xFFB388FF, 0xFFFF63C8, 0xFF0B0724),
+    HORIZON_SLATE("Slate", 0xFF5EC4D4, 0xFF8EA4C4, 0xFF0F1216),
     HORIZON_DUSK("Horizon Dusk", 0xFFFFB454, 0xFFFF7A59, 0xFF0E1220),
     MATERIAL_YOU("Volt Green", 0xFF79E59C, 0xFF79E59C, 0xFF0D0F16),
     EMBERMIRE("Embermire Dark", 0xFFFF7043, 0xFFFFB74D, 0xFF12151E),
@@ -491,7 +492,7 @@ data class HorizonConfigState(
     val mcFov: Int = 70,
     val mcVsync: Boolean = true,
     val mcFullscreen: Boolean = true,
-    val themePalette: LauncherThemePalette = LauncherThemePalette.HORIZON_SLATE,
+    val themePalette: LauncherThemePalette = LauncherThemePalette.GALAXY_PURPLE,
     val useDynamicColor: Boolean = false,
     val enableSystemLog: Boolean = true,
     val disableAudioSafeMode: Boolean = false,

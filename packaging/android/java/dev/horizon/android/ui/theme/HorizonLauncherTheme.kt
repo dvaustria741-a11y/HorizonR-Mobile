@@ -39,7 +39,7 @@ val LauncherTypography = Typography(
 
 @Composable
 fun HorizonLauncherTheme(
-    palette: LauncherThemePalette = LauncherThemePalette.EMBERMIRE,
+    palette: LauncherThemePalette = LauncherThemePalette.GALAXY_PURPLE,
     useDynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {

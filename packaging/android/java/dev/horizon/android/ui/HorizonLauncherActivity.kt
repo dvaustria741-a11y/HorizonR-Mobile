@@ -123,8 +123,8 @@ import java.util.UUID
 
 private val wallpaperCache = android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(2)
 
-/** The one built-in Home wallpaper. A wallpaper the user imported replaces it. */
-private val HOME_WALLPAPER = R.drawable.mc_wall_19
+/** The one fixed Home wallpaper: a still from the RussoViller Purple theme. */
+private val HOME_WALLPAPER = R.drawable.hz_purple_wall
 
 /** Decodes the wallpaper at roughly screen size (never the full file) and caches it. */
 private fun loadWallpaper(context: android.content.Context, custom: File?): androidx.compose.ui.graphics.ImageBitmap? {
@@ -160,11 +160,11 @@ data class HorizonDynamicPalette(
     val rootBg: Color = HzColor.Background,
     val cardSlateBg: Color = HzColor.Panel,
     val cardRowBg: Color = HzColor.PanelHi,
-    val subRailCapsuleActive: Color = Color(0xFF173038),
+    val subRailCapsuleActive: Color = Color(0xFF2E1F66),
     val skyBlueAccent: Color = HzColor.Accent,
     val skyBlueDarkText: Color = HzColor.OnAccent,
-    val lavenderBadgeBg: Color = Color(0xFF1D2A33),
-    val lavenderBadgeText: Color = Color(0xFFB9E6EE),
+    val lavenderBadgeBg: Color = Color(0xFF2A1D5C),
+    val lavenderBadgeText: Color = Color(0xFFE2D0FF),
     val mutedSubtitleText: Color = HzColor.TextMuted
 )
 
@@ -201,7 +201,18 @@ private fun SyncDynamicLauncherPalette(palette: LauncherThemePalette, useDynamic
             )
         } else {
             when (palette) {
-                LauncherThemePalette.HORIZON_SLATE -> HorizonDynamicPalette()
+                LauncherThemePalette.GALAXY_PURPLE -> HorizonDynamicPalette()
+                LauncherThemePalette.HORIZON_SLATE -> HorizonDynamicPalette(
+                    rootBg = Color(0xFF0F1216),
+                    cardSlateBg = Color(0xFF14181E),
+                    cardRowBg = Color(0xFF1C2128),
+                    subRailCapsuleActive = Color(0xFF173038),
+                    skyBlueAccent = Color(0xFF5EC4D4),
+                    skyBlueDarkText = Color(0xFF05232A),
+                    lavenderBadgeBg = Color(0xFF1D2A33),
+                    lavenderBadgeText = Color(0xFFB9E6EE),
+                    mutedSubtitleText = Color(0xFF8A94A0)
+                )
                 LauncherThemePalette.HORIZON_DUSK -> HorizonDynamicPalette(
                     rootBg = Color(0xFF0E1220),
                     cardSlateBg = Color(0xFF161B2E),
@@ -1548,17 +1559,25 @@ private data class HorizonNavItem(val tab: LauncherNavTab, val icon: ImageVector
 @Composable
 private fun horizonGlassBorder(): BorderStroke = BorderStroke(1.dp, HzColor.Hairline)
 
-/** One faint accent wash in the top-left corner. Static, so it is drawn once and costs nothing per frame. */
+/** Violet wash top-left and pink wash bottom-right. Static, so it is drawn once and costs nothing per frame. */
 @Composable
 private fun HorizonAuroraBackground() {
-    val accent = SkyBlueAccent
+    val violet = HzColor.Violet
+    val pink = HzColor.AccentSecondary
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val r = maxOf(size.width, size.height) * 0.7f
+        val r = maxOf(size.width, size.height) * 0.75f
         drawRect(
             brush = Brush.radialGradient(
-                colors = listOf(accent.copy(alpha = 0.07f), Color.Transparent),
-                center = Offset(size.width * 0.15f, 0f),
+                colors = listOf(violet.copy(alpha = 0.22f), Color.Transparent),
+                center = Offset(size.width * 0.12f, 0f),
                 radius = r
+            )
+        )
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(pink.copy(alpha = 0.10f), Color.Transparent),
+                center = Offset(size.width, size.height),
+                radius = r * 0.8f
             )
         )
     }
@@ -1732,8 +1751,8 @@ private fun HorizonTopNav(
 }
 
 /**
- * Main Dashboard Viewport: one fixed wallpaper (the built-in one, or the newest wallpaper the user imported),
- * the quick-access grid and the version dock. No wallpaper rotation.
+ * Main Dashboard Viewport: one fixed wallpaper (the Galaxy Purple still), the quick-access grid and the version dock.
+ * No wallpaper rotation and no wallpaper import.
  */
 @Composable
 private fun CleanHomeViewport(
@@ -1749,27 +1768,7 @@ private fun CleanHomeViewport(
     onLaunch: () -> Unit
 ) {
     val context = LocalContext.current
-    var customWallpapers by remember { mutableStateOf<List<File>>(emptyList()) }
-    LaunchedEffect(Unit) {
-        customWallpapers = withContext(Dispatchers.IO) {
-            HorizonNativeBridge.getCustomWallpapers(context)
-        }
-    }
-    val customWallpaper = customWallpapers.maxByOrNull { it.lastModified() }
     var quoteIndex by remember { mutableIntStateOf((MINECRAFT_SPLASH_QUOTES.indices).random()) }
-
-    val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            HorizonNativeBridge.importUriToDestination(
-                context,
-                uri,
-                "custom_wallpapers",
-                "mc_custom_${System.currentTimeMillis()}.jpg",
-                logEnabled
-            )
-            customWallpapers = HorizonNativeBridge.getCustomWallpapers(context)
-        }
-    }
 
     LaunchedEffect(isHibernated) {
         while (!isHibernated) {
@@ -1789,7 +1788,7 @@ private fun CleanHomeViewport(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (!isHibernated) {
-            val wall = rememberWallpaper(context, customWallpaper)
+            val wall = rememberWallpaper(context, null)
             AnimatedContent(
                 targetState = wall,
                 transitionSpec = {
@@ -1801,7 +1800,7 @@ private fun CleanHomeViewport(
                 if (image != null) {
                     Image(
                         bitmap = image,
-                        contentDescription = "Minecraft Wallpaper",
+                        contentDescription = "Launcher wallpaper",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -1817,8 +1816,8 @@ private fun CleanHomeViewport(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.08f),
-                                Color.Black.copy(alpha = 0.68f)
+                                HzColor.Background.copy(alpha = 0.10f),
+                                HzColor.Background.copy(alpha = 0.78f)
                             )
                         )
                     )
@@ -1829,26 +1828,10 @@ private fun CleanHomeViewport(
                     .fillMaxSize()
                     .background(
                         Brush.horizontalGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.50f), Color.Black.copy(alpha = 0.08f))
+                            colors = listOf(HzColor.Background.copy(alpha = 0.55f), Color.Transparent)
                         )
                     )
             )
-
-            // Top controls: import a custom wallpaper
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .windowInsetsPadding(hzContentInsets())
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                DashboardQuickIconPill(
-                    icon = Icons.Default.Wallpaper,
-                    label = "Change wallpaper",
-                    onClick = { wallpaperPicker.launch("image/*") }
-                )
-            }
 
             VoltHomeLayer(
                 accent = SkyBlueAccent,
@@ -1864,30 +1847,6 @@ private fun CleanHomeViewport(
                 onLaunch = onLaunch
             )
         }
-    }
-}
-
-@Composable
-private fun DashboardQuickIconPill(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(28.dp)
-            .animatedPressScale(pressedScale = 0.94f, onClick = onClick)
-            .clip(HzShape.Control)
-            .background(HzColor.Glass)
-            .border(1.dp, HzColor.Hairline, HzShape.Control)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = Color.White,
-            modifier = Modifier.size(15.dp)
-        )
     }
 }
 
