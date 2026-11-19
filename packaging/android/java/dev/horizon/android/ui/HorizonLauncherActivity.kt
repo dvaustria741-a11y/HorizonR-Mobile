@@ -1349,26 +1349,35 @@ fun CleanLauncherScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().background(LauncherRootBg)) {
             if (!isHibernated) {
+                HzBackdrop()
                 HorizonAuroraBackground()
             }
             Row(modifier = Modifier.fillMaxSize()) {
-              HzSideRail(
+              HzDock(
                   selectedTab = selectedTab,
                   installStatus = installStatus,
-                  accent = SkyBlueAccent,
-                  onSelectTab = { selectedTab = it },
-                  onOpenFolder = { HorizonNativeBridge.openSystemFilesApp(context) }
+                  onSelectTab = { selectedTab = it }
               )
-              Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+              Column(
+                  modifier = Modifier
+                      .weight(1f)
+                      .fillMaxHeight()
+                      .windowInsetsPadding(hzContentInsets())
+                      .padding(start = 8.dp, end = 10.dp, bottom = 10.dp)
+              ) {
+                HzTopBar(
+                    tab = selectedTab,
+                    activeAccount = activeAccount,
+                    activeSkinBitmap = activeSkinBitmap,
+                    installStatus = installStatus,
+                    onOpenAccount = { selectedTab = LauncherNavTab.ACCOUNTS },
+                    onOpenLogs = { selectedTab = LauncherNavTab.LOGS },
+                    onOpenFolder = { HorizonNativeBridge.openSystemFilesApp(context) }
+                )
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        // Home draws its wallpaper edge to edge; every other page sits inside the insets beside the side rail with a small margin.
-                        .then(
-                            if (selectedTab == LauncherNavTab.HOME) Modifier
-                            else Modifier.windowInsetsPadding(hzContentInsets()).padding(horizontal = 10.dp, vertical = 8.dp)
-                        )
                 ) {
                     // Main Morphing Content Area:
                     // Smoothly expands/contracts its width and morphs
@@ -1391,7 +1400,14 @@ fun CleanLauncherScreen(
                         val baseDensity = LocalDensity.current
                         val compactDensity = remember(baseDensity) { Density(baseDensity.density * 0.9f, baseDensity.fontScale) }
                         CompositionLocalProvider(LocalDensity provides if (tab == LauncherNavTab.HOME) baseDensity else compactDensity) {
-                        Box(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (tab == LauncherNavTab.HOME) Modifier
+                                    else Modifier.hzWindow().padding(horizontal = 10.dp, vertical = 8.dp)
+                                )
+                        ) {
                             when (tab) {
                                 LauncherNavTab.HOME -> CleanHomeViewport(
                                     config = config,
@@ -1715,10 +1731,7 @@ private fun HorizonTopNav(
     }
 }
 
-/**
- * Main Dashboard Viewport: one fixed wallpaper (the Galaxy Purple still), the quick-access grid and the version dock.
- * No wallpaper rotation and no wallpaper import.
- */
+/** Main Dashboard Viewport: the bento Home (hero video, portrait video, quick tiles). Nothing plays while the game runs. */
 @Composable
 private fun CleanHomeViewport(
     config: HorizonConfigState,
@@ -1732,7 +1745,6 @@ private fun CleanHomeViewport(
     onOpenFolder: () -> Unit,
     onLaunch: () -> Unit
 ) {
-    val context = LocalContext.current
     var quoteIndex by remember { mutableIntStateOf((MINECRAFT_SPLASH_QUOTES.indices).random()) }
 
     LaunchedEffect(isHibernated) {
@@ -1746,57 +1758,18 @@ private fun CleanHomeViewport(
         }
     }
 
-    Surface(
-        shape = RoundedCornerShape(0.dp),
-        color = CardSlateBg.copy(alpha = 0.90f),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (!isHibernated) {
-                HzVideoBackground(
-                    video = R.raw.hz_wall,
-                    still = R.drawable.hz_purple_wall,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                HzColor.Background.copy(alpha = 0.10f),
-                                HzColor.Background.copy(alpha = 0.78f)
-                            )
-                        )
-                    )
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(HzColor.Background.copy(alpha = 0.55f), Color.Transparent)
-                        )
-                    )
-            )
-
-            VoltHomeLayer(
-                accent = SkyBlueAccent,
-                activeAccount = activeAccount,
-                activeSkinBitmap = activeSkinBitmap,
-                installStatus = installStatus,
-                quote = MINECRAFT_SPLASH_QUOTES[quoteIndex],
-                onQuoteTap = {
-                    quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size
-                },
-                onNavigate = onNavigate,
-                onOpenFolder = onOpenFolder,
-                onLaunch = onLaunch
-            )
-        }
+    if (!isHibernated) {
+        HzHomeBento(
+            accent = SkyBlueAccent,
+            activeAccount = activeAccount,
+            activeSkinBitmap = activeSkinBitmap,
+            installStatus = installStatus,
+            quote = MINECRAFT_SPLASH_QUOTES[quoteIndex],
+            onQuoteTap = { quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size },
+            onNavigate = onNavigate,
+            onOpenFolder = onOpenFolder,
+            onLaunch = onLaunch
+        )
     }
 }
 
