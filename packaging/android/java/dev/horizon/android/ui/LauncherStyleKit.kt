@@ -497,7 +497,6 @@ internal fun HzSectionLabel(text: String, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
     ) {
-        Box(modifier = Modifier.size(width = 3.dp, height = 11.dp).clip(HzShape.Chip).background(HzColor.Accent))
         Text(
             text = text.uppercase(),
             fontFamily = HzFont.Mono,
@@ -562,16 +561,15 @@ internal fun <T> HzCategoryList(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(38.dp)
+                    .height(40.dp)
                     .animatedPressScale(pressedScale = 0.98f) { onSelect(item) }
                     .clip(HzShape.Control)
                     .drawBehind {
                         if (sel > 0.01f) {
-                            drawRoundRect(HzColor.PanelHi.copy(alpha = sel), cornerRadius = CornerRadius(6.dp.toPx()))
-                            val barH = size.height * 0.5f * sel
                             drawRoundRect(
-                                accent.copy(alpha = sel), Offset(0f, (size.height - barH) / 2f),
-                                Size(2.5.dp.toPx(), barH), CornerRadius(2.dp.toPx())
+                                brush = Brush.horizontalGradient(listOf(HzColor.Violet.copy(alpha = 0.42f), HzColor.AccentSecondary.copy(alpha = 0.28f))),
+                                alpha = sel,
+                                cornerRadius = CornerRadius(12.dp.toPx())
                             )
                         }
                     }

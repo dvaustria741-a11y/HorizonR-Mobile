@@ -2482,19 +2482,13 @@ private fun CleanAccountsAndSkinsViewport(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                        .hzEnter()
                                         .animatedPressScale(pressedScale = 0.99f) { activate() }
-                                        .drawBehind {
-                                            if (acc.isActive) {
-                                                drawRect(HzColor.PanelHi)
-                                                drawRoundRect(
-                                                    SkyBlueAccent, Offset(0f, size.height * 0.25f),
-                                                    androidx.compose.ui.geometry.Size(2.5.dp.toPx(), size.height * 0.5f),
-                                                    androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
-                                                )
-                                            }
-                                            drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
-                                        }
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        .clip(HzShape.Panel)
+                                        .background(if (acc.isActive) HzColor.AccentSoft else HzColor.PanelLow.copy(alpha = 0.75f))
+                                        .border(1.dp, if (acc.isActive) HzColor.AccentLine else HzColor.Hairline, HzShape.Panel)
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
@@ -2767,6 +2761,7 @@ private fun CleanServersViewport(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .hzEnter()
                             .animatedPressScale(pressedScale = 0.99f) { selectedAddress = entry.address }
                             .clip(HzShape.Panel)
                             .background(if (isSelected) HzColor.AccentSoft else HzColor.PanelLow.copy(alpha = 0.75f))
@@ -2809,19 +2804,6 @@ private fun CleanServersViewport(
                             if (online && status!!.pingMs >= 0) "${status.pingMs} ms" else "-",
                             fontFamily = mono, fontSize = 11.sp, color = VoltIconMuted, maxLines = 1, modifier = Modifier.width(56.dp)
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier
-                                .height(26.dp)
-                                .animatedPressScale(pressedScale = 0.96f) { onQuickPlayServer(entry.address) }
-                                .clip(HzShape.Control)
-                                .background(HzBrush.Signature)
-                                .padding(horizontal = 10.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                            Text("Play", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        }
                     }
                 }
             }
@@ -4271,6 +4253,7 @@ private fun CleanStoreViewport(
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .hzEnter()
                                             .animatedPressScale(pressedScale = 0.985f) { selectedProject = item }
                                             .clip(HzShape.Panel)
                                             .background(if (installState == StoreInstallState.INSTALLED) HzColor.Success.copy(alpha = 0.08f) else HzColor.PanelLow.copy(alpha = 0.75f))
@@ -5820,13 +5803,14 @@ private fun FileManagerRowCard(
 
     val isToggleable = folder in listOf("mods", "shaderpacks", "resourcepacks")
     val borderColor = if (isToggleable && isEnabled) SkyBlueAccent.copy(alpha = 0.38f) else HzColor.Hairline
-    val cardColor = if (expandedDetails) HzColor.PanelHi else HzColor.Panel
+    val cardColor = if (expandedDetails) HzColor.PanelHi else HzColor.PanelLow.copy(alpha = 0.8f)
 
     Surface(
         shape = HzShape.Panel,
         color = cardColor,
         modifier = Modifier
             .fillMaxWidth()
+            .hzEnter()
             .border(1.dp, borderColor, HzShape.Panel)
             .clickable { expandedDetails = !expandedDetails }
     ) {

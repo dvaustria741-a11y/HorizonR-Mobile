@@ -41,10 +41,13 @@ import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -177,10 +180,16 @@ private fun HzDockButton(entry: HzDockEntry, selected: Boolean, busy: Boolean, o
         animationSpec = tween(HzMotion.Short),
         label = "DockTint"
     )
+    val pop by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (selected) 1.08f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 380f),
+        label = "DockPop"
+    )
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(40.dp)
+            .graphicsLayer { scaleX = pop; scaleY = pop }
             .semantics { contentDescription = entry.label }
             .animatedPressScale(pressedScale = 0.92f, onClick = onClick)
             .clip(HzShape.Control)
@@ -301,5 +310,17 @@ internal fun HzStatTile(label: String, value: String, valueColor: Color, modifie
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+/** Card entrance: fades in and rises a few dp when it first appears (also when a lazy list scrolls it into view). */
+internal fun Modifier.hzEnter(delayMillis: Int = 0): Modifier = composed {
+    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, tween(HzMotion.Medium, delayMillis = delayMillis, easing = HzMotion.Ease))
+    }
+    graphicsLayer {
+        alpha = progress.value
+        translationY = (1f - progress.value) * 10.dp.toPx()
     }
 }
