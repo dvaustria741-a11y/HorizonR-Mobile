@@ -121,41 +121,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-private val wallpaperCache = android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(2)
-
-/** The one fixed Home wallpaper: a still from the RussoViller Purple theme. */
-private val HOME_WALLPAPER = R.drawable.hz_purple_wall
-
-/** Decodes the wallpaper at roughly screen size (never the full file) and caches it. */
-private fun loadWallpaper(context: android.content.Context, custom: File?): androidx.compose.ui.graphics.ImageBitmap? {
-    val key = custom?.let { "f:${it.absolutePath}:${it.lastModified()}" } ?: "r:builtin"
-    wallpaperCache.get(key)?.let { return it }
-    val target = context.resources.displayMetrics.widthPixels.coerceAtLeast(720)
-    fun sample(w: Int): Int {
-        var n = 1
-        while (w / (n * 2) >= target) n *= 2
-        return n
-    }
-    val bitmap = runCatching {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        if (custom != null) BitmapFactory.decodeFile(custom.absolutePath, bounds)
-        else BitmapFactory.decodeResource(context.resources, HOME_WALLPAPER, bounds)
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample(bounds.outWidth) }
-        if (custom != null) BitmapFactory.decodeFile(custom.absolutePath, opts)
-        else BitmapFactory.decodeResource(context.resources, HOME_WALLPAPER, opts)
-    }.getOrNull()?.asImageBitmap() ?: return null
-    wallpaperCache.put(key, bitmap)
-    return bitmap
-}
-
-@Composable
-private fun rememberWallpaper(context: android.content.Context, custom: File?): androidx.compose.ui.graphics.ImageBitmap? {
-    val state = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, custom) {
-        value = withContext(Dispatchers.IO) { loadWallpaper(context, custom) }
-    }
-    return state.value
-}
-
 data class HorizonDynamicPalette(
     val rootBg: Color = HzColor.Background,
     val cardSlateBg: Color = HzColor.Panel,
@@ -1788,26 +1753,11 @@ private fun CleanHomeViewport(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (!isHibernated) {
-            val wall = rememberWallpaper(context, null)
-            AnimatedContent(
-                targetState = wall,
-                transitionSpec = {
-                    fadeIn(animationSpec = tween(HzMotion.Medium)).togetherWith(fadeOut(animationSpec = tween(HzMotion.Short))).using(sizeTransform = null)
-                },
-                modifier = Modifier.fillMaxSize(),
-                label = "HomeWallpaper"
-            ) { image ->
-                if (image != null) {
-                    Image(
-                        bitmap = image,
-                        contentDescription = "Launcher wallpaper",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize().background(VoltGrayRoot))
-                }
-            }
+                HzVideoBackground(
+                    video = R.raw.hz_wall,
+                    still = R.drawable.hz_purple_wall,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             Box(

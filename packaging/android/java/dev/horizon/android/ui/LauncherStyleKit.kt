@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -71,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.horizon.android.R
 import dev.horizon.android.bridge.AssetInstallStatus
 import dev.horizon.android.model.LauncherAccount
 import dev.horizon.android.model.LauncherNavTab
@@ -440,9 +442,9 @@ private fun HzPlayButton(installStatus: AssetInstallStatus, accent: Color, onLau
 }
 
 @Composable
-private fun HzGhostButton(label: String, iconName: String, fallback: ImageVector, onClick: () -> Unit) {
+private fun HzGhostButton(label: String, iconName: String, fallback: ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .height(48.dp)
             .animatedPressScale(onClick = onClick)
             .clip(HzShape.Control)
@@ -450,7 +452,7 @@ private fun HzGhostButton(label: String, iconName: String, fallback: ImageVector
             .border(1.dp, HzColor.Hairline, HzShape.Control)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
     ) {
         VoltIcon(name = iconName, fallback = fallback, size = 18.dp, tint = VoltIconMuted)
         Text(text = label, fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, color = VoltTextMain, maxLines = 1)
@@ -465,9 +467,9 @@ private fun hzStatusLine(s: AssetInstallStatus, playTime: String): String = when
 }
 
 /**
- * Home: the wallpaper stays clear. A quote sits top left, a quick-access grid (2 x 2 plus a full-width Skins tile)
- * top right, and one full-width dock along the bottom carries the selected version, its status and PLAY.
- * The rail is drawn by the shell.
+ * Home: the video wallpaper plays behind everything. A hero card (the second theme video, with the selected
+ * version, its status and PLAY) fills the left; a glass column on the right holds the quick-access tiles and
+ * the game files button; the quote sits under the hero card. The rail is drawn by the shell.
  */
 @Composable
 internal fun VoltHomeLayer(
@@ -484,13 +486,85 @@ internal fun VoltHomeLayer(
 ) {
     val context = LocalContext.current
     val playTime = PlayTime.label(context)
-    Box(
+    Row(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(hzContentInsets())
-            .padding(horizontal = HzSpace.L, vertical = HzSpace.M)
+            .padding(horizontal = HzSpace.L, vertical = HzSpace.M),
+        horizontalArrangement = Arrangement.spacedBy(HzSpace.M)
     ) {
-        Box(modifier = Modifier.align(Alignment.TopStart).widthIn(max = 360.dp)) {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            verticalArrangement = Arrangement.spacedBy(HzSpace.S)
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(HzShape.Panel)
+                    .border(1.dp, HzColor.HairlineStrong, HzShape.Panel)
+            ) {
+                HzVideoBackground(
+                    video = R.raw.hz_hero,
+                    still = R.drawable.hz_purple_hero,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            0.35f to Color.Transparent,
+                            1f to HzColor.Background.copy(alpha = 0.92f)
+                        )
+                    )
+                )
+                Row(
+                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(HzSpace.M),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(HzSpace.M)
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(HzSpace.XS)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                            Text(
+                                text = "Minecraft 26.3",
+                                fontSize = 26.sp,
+                                lineHeight = 30.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White,
+                                maxLines = 1
+                            )
+                            HzTag("NATIVE RUST")
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
+                            val dot = when {
+                                installStatus.ready -> HzColor.Success
+                                installStatus.paused -> HzColor.Warning
+                                installStatus.running -> accent
+                                else -> VoltMutedText
+                            }
+                            HzStatusPill(text = hzStatusLine(installStatus, ""), color = dot)
+                            if (playTime.isNotEmpty()) {
+                                Text(
+                                    text = "$playTime played",
+                                    fontFamily = HzFont.Mono,
+                                    fontSize = HzText.Caption.sp,
+                                    lineHeight = 14.sp,
+                                    color = VoltMutedText,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                        if (installStatus.running) {
+                            val bar by animateFloatAsState(
+                                targetValue = (installStatus.percent / 100f).coerceIn(0f, 1f),
+                                animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
+                                label = "HomeBar"
+                            )
+                            HzProgressBar(progress = bar, color = accent)
+                        }
+                    }
+                    HzPlayButton(installStatus = installStatus, accent = accent, onLaunch = onLaunch)
+                }
+            }
             Crossfade(targetState = quote, animationSpec = tween(HzMotion.Medium), label = "HomeQuote") { q ->
                 if (q != null) {
                     Text(
@@ -498,10 +572,10 @@ internal fun VoltHomeLayer(
                         fontSize = HzText.Caption.sp,
                         lineHeight = 14.sp,
                         fontStyle = FontStyle.Italic,
-                        color = Color.White.copy(alpha = 0.66f),
+                        color = Color.White.copy(alpha = 0.72f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.animatedPressScale(onClick = onQuoteTap)
+                        modifier = Modifier.padding(horizontal = HzSpace.XS).animatedPressScale(onClick = onQuoteTap)
                     )
                 }
             }
@@ -509,11 +583,12 @@ internal fun VoltHomeLayer(
 
         Column(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .width(256.dp)
+                .width(264.dp)
+                .fillMaxHeight()
                 .clip(HzShape.Panel)
                 .background(HzColor.Glass)
                 .border(1.dp, HzColor.Hairline, HzShape.Panel)
+                .verticalScroll(rememberScrollState())
                 .padding(HzSpace.S),
             verticalArrangement = Arrangement.spacedBy(HzSpace.S)
         ) {
@@ -528,64 +603,8 @@ internal fun VoltHomeLayer(
                 }
                 HzHomeTile("Servers", null, "ic_ui_servers", Icons.Default.Dns, 3, accent, Modifier.weight(1f)) { onNavigate(LauncherNavTab.SERVERS) }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
-                HzHomeTile("Skins", activeAccount.username, "ic_ui_skins", Icons.Default.Checkroom, 4, accent, Modifier.fillMaxWidth()) { onNavigate(LauncherNavTab.ACCOUNTS) }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .clip(HzShape.Panel)
-                .background(HzColor.Glass)
-                .border(1.dp, HzColor.Hairline, HzShape.Panel)
-                .padding(HzSpace.M),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(HzSpace.M)
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(HzSpace.XS)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
-                    Text(
-                        text = "Minecraft 26.3",
-                        fontSize = 26.sp,
-                        lineHeight = 30.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 1
-                    )
-                    HzTag("NATIVE RUST")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(HzSpace.S)) {
-                    val dot = when {
-                        installStatus.ready -> HzColor.Success
-                        installStatus.paused -> HzColor.Warning
-                        installStatus.running -> accent
-                        else -> VoltMutedText
-                    }
-                    HzStatusPill(text = hzStatusLine(installStatus, ""), color = dot)
-                    if (playTime.isNotEmpty()) {
-                        Text(
-                            text = "$playTime played",
-                            fontFamily = HzFont.Mono,
-                            fontSize = HzText.Caption.sp,
-                            lineHeight = 14.sp,
-                            color = VoltMutedText,
-                            maxLines = 1
-                        )
-                    }
-                }
-                if (installStatus.running) {
-                    val bar by animateFloatAsState(
-                        targetValue = (installStatus.percent / 100f).coerceIn(0f, 1f),
-                        animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
-                        label = "HomeBar"
-                    )
-                    HzProgressBar(progress = bar, color = accent)
-                }
-            }
-            HzGhostButton("Game files", "ic_ui_folder", Icons.Default.Folder) { onNavigate(LauncherNavTab.VERSIONS) }
-            HzPlayButton(installStatus = installStatus, accent = accent, onLaunch = onLaunch)
+            HzHomeTile("Skins", activeAccount.username, "ic_ui_skins", Icons.Default.Checkroom, 4, accent, Modifier.fillMaxWidth()) { onNavigate(LauncherNavTab.ACCOUNTS) }
+            HzGhostButton("Game files", "ic_ui_folder", Icons.Default.Folder, Modifier.fillMaxWidth()) { onNavigate(LauncherNavTab.VERSIONS) }
         }
     }
 }
