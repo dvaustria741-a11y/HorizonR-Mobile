@@ -593,7 +593,7 @@ fun MinecraftPixelRustBadge() {
 
     Surface(
         shape = HzShape.Panel,
-        color = Color(0xFF161D22).copy(alpha = 0.86f),
+        color = HzColor.Panel.copy(alpha = 0.86f),
         modifier = Modifier.border(1.dp, accentColor.copy(alpha = 0.45f), HzShape.Panel)
     ) {
         Canvas(
@@ -618,7 +618,7 @@ fun MinecraftPixelRustBadge() {
                     for (c in 0 until cols) {
                         if (g[r][c] == 1) {
                             drawRect(
-                                color = Color(0xFF0A1014),
+                                color = HzColor.PanelLow,
                                 topLeft = Offset(lx + c * px + shadow, startY + r * px + shadow),
                                 size = Size(px + 0.4f, px + 0.4f)
                             )
@@ -655,7 +655,7 @@ fun MinecraftSkinHeadAvatar(
         modifier = Modifier
             .size(size)
             .clip(RoundedCornerShape(cornerRadius))
-            .background(Color(0xFF1A2228))
+            .background(HzColor.PanelHi)
     ) {
         val dstW = this.size.width.toInt().coerceAtLeast(1)
         val dstH = this.size.height.toInt().coerceAtLeast(1)
@@ -1591,7 +1591,7 @@ private fun HorizonTopNav(
             Text(
                 text = "HorizonR",
                 style = TextStyle(
-                    brush = Brush.linearGradient(listOf(Color.White, accent, Color(0xFFB39DFF))),
+                    brush = Brush.linearGradient(listOf(Color.White, accent, HzColor.AccentSecondary)),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -2011,7 +2011,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         .clip(HzShape.Panel)
                                         .background(
                                             Brush.verticalGradient(
-                                                listOf(Color(0xFF171E24), Color(0xFF101519))
+                                                listOf(HzColor.PanelHi, HzColor.PanelLow)
                                             )
                                         ),
                                     contentAlignment = Alignment.Center
@@ -2176,7 +2176,7 @@ private fun CleanAccountsAndSkinsViewport(
 
                                     Surface(
                                         shape = HzShape.Panel,
-                                        color = Color(0xFF1A2024),
+                                        color = HzColor.PanelHi,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(38.dp)
@@ -2992,7 +2992,7 @@ private fun ServerIcon(bytes: ByteArray?, label: String, online: Boolean) {
         modifier = Modifier
             .size(36.dp)
             .clip(HzShape.Control)
-            .background(Color(0xFF14161D))
+            .background(HzColor.Panel)
             .border(1.dp, if (online) SkyBlueAccent.copy(alpha = 0.7f) else HzColor.Hairline, HzShape.Control),
         contentAlignment = Alignment.Center
     ) {
@@ -5112,7 +5112,7 @@ private fun StoreOrFileItemIconBadge(
     val bgBrush = when {
         isWorld -> Brush.linearGradient(listOf(Color(0xFF43A047), Color(0xFF5D4037)))
         isMod -> Brush.linearGradient(listOf(HzColor.PanelLow, HzColor.PanelHi))
-        else -> Brush.linearGradient(listOf(Color(0xFF281E3D), Color(0xFF1B3538)))
+        else -> Brush.linearGradient(listOf(Color(0xFF2A1B5C), Color(0xFF45195A)))
     }
     Box(
         contentAlignment = Alignment.Center,
@@ -6575,7 +6575,7 @@ private fun CleanSettingsViewport(
                         if (testResultDialogText != null) {
                             AlertDialog(
                                 onDismissRequest = { testResultDialogText = null },
-                                containerColor = Color(0xFF1E2429),
+                                containerColor = HzColor.PanelHi,
                                 title = {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,

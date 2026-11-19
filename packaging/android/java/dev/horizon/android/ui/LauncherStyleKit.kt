@@ -177,7 +177,7 @@ internal fun HzSideRail(
         modifier = modifier
             .width(150.dp)
             .fillMaxHeight()
-            .background(HzColor.Rail)
+            .background(Brush.verticalGradient(listOf(HzColor.Rail, HzColor.Panel)))
             .drawBehind {
                 drawLine(HzColor.Hairline, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1f)
             }
@@ -193,7 +193,11 @@ internal fun HzSideRail(
             horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
         ) {
             HzBrandCube(size = 24.dp)
-            Text(text = "HorizonR", fontSize = HzText.Section.sp, fontWeight = FontWeight.ExtraBold, color = HzColor.TextPrimary, maxLines = 1)
+            Text(
+                text = "HorizonR",
+                style = androidx.compose.ui.text.TextStyle(brush = HzBrush.Signature, fontSize = HzText.Section.sp, fontWeight = FontWeight.ExtraBold),
+                maxLines = 1
+            )
         }
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -670,7 +674,7 @@ internal fun HzSwitch(checked: Boolean, accent: Color, onChange: (Boolean) -> Un
                 val left = size.height / 2f
                 val right = size.width - size.height / 2f
                 drawCircle(
-                    color = androidx.compose.ui.graphics.lerp(Color(0xFF9AA1AB), onAccent, t),
+                    color = androidx.compose.ui.graphics.lerp(HzColor.TextMuted, onAccent, t),
                     radius = r,
                     center = Offset(left + (right - left) * t, size.height / 2f)
                 )
@@ -763,7 +767,7 @@ internal fun HzSlider(
                         val x = trackW * (v - range.first).toFloat() / span
                         val on = x <= fillX
                         drawLine(
-                            color = if (on) Color.White.copy(alpha = 0.55f) else Color(0xFF4A5260),
+                            color = if (on) Color.White.copy(alpha = 0.55f) else HzColor.Track,
                             start = Offset(x.coerceIn(0.5f, trackW - 0.5f), cy - 5.dp.toPx() * 0.5f - h),
                             end = Offset(x.coerceIn(0.5f, trackW - 0.5f), cy - h),
                             strokeWidth = 1.dp.toPx()
