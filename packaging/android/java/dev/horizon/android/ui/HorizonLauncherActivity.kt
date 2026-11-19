@@ -34,6 +34,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -517,34 +520,10 @@ fun HorizonZBlackSplashOverlay() {
     )
 }
 
-/**
- * Custom Canvas Minecraft Grass Block Icon (for Dashboard & item badges).
- */
+/** The launcher's cube logo (dashboard and item badges). */
 @Composable
 fun MinecraftGrassCubeIcon(size: Dp = 36.dp) {
-    Canvas(
-        modifier = Modifier
-            .size(size)
-            .clip(RoundedCornerShape(9.dp))
-    ) {
-        val w = this.size.width
-        val h = this.size.height
-        drawRect(color = Color(0xFF79553A), size = Size(w, h))
-        drawRect(color = Color(0xFF569E3E), size = Size(w, h * 0.36f))
-        drawRect(color = Color(0xFF74C454), size = Size(w, h * 0.12f))
-        val step = w / 6f
-        for (i in 0..5) {
-            val fringeH = if (i % 2 == 0) h * 0.48f else h * 0.38f
-            drawRect(
-                color = Color(0xFF569E3E),
-                topLeft = Offset(i * step, 0f),
-                size = Size(step + 1f, fringeH)
-            )
-        }
-        drawRect(color = Color(0xFF5E402A), topLeft = Offset(w * 0.2f, h * 0.62f), size = Size(step, step))
-        drawRect(color = Color(0xFF91684A), topLeft = Offset(w * 0.6f, h * 0.55f), size = Size(step, step))
-        drawRect(color = Color(0xFF5E402A), topLeft = Offset(w * 0.45f, h * 0.78f), size = Size(step, step))
-    }
+    HzBrandCube(size = size)
 }
 
 /**
@@ -3462,7 +3441,7 @@ private fun CleanVersionsViewport(
                             color = Color.White,
                             maxLines = 1
                         )
-                        HzTag("RUST \u00B7 v0.7.6")
+                        Box(modifier = Modifier.clip(HzShape.Chip).background(HzColor.Glass)) { HzTag("RUST \u00B7 v0.7.6") }
                     }
                     HzStatusPill(text = statusText, color = statusColor)
                 }
@@ -3501,7 +3480,7 @@ private fun CleanVersionsViewport(
                     Modifier.weight(1f)
                 )
                 HzStatTile("Disk size", installedSizeText, HzColor.TextPrimary, Modifier.weight(1f))
-                HzStatTile("Components", "Worldgen + 60 icons", accent, Modifier.weight(1.4f))
+                HzStatTile("Components", "Worldgen + 60 icons", accent, Modifier.weight(1.9f))
             }
 
             // Running downloads get Pause/Cancel; otherwise one primary action plus Repair and Delete side by side.
@@ -4288,27 +4267,29 @@ private fun CleanStoreViewport(
                                 }
                             }
                         } else {
-                            LazyColumn(
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = 8.dp)
+                                contentPadding = PaddingValues(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(catalogItems, key = { it.id }) { item ->
                                     val installState = HorizonNativeBridge.getStoreItemInstallState(item, installedMap)
                                     val installedVer = installedMap[item.id] ?: installedMap[item.slug]
                                     val isCurrentlyDownloading = storeProgress.running && storeProgress.activeItemId == item.id
 
-                                    Row(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .animatedPressScale(pressedScale = 0.99f) { selectedProject = item }
-                                            .background(if (installState == StoreInstallState.INSTALLED) HzColor.Success.copy(alpha = 0.05f) else Color.Transparent)
-                                            .drawBehind {
-                                                drawLine(HzColor.Hairline, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f)
-                                            }
-                                            .padding(vertical = 10.dp, horizontal = HzSpace.XS),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            .animatedPressScale(pressedScale = 0.985f) { selectedProject = item }
+                                            .clip(HzShape.Panel)
+                                            .background(if (installState == StoreInstallState.INSTALLED) HzColor.Success.copy(alpha = 0.08f) else HzColor.PanelLow.copy(alpha = 0.75f))
+                                            .border(1.dp, HzColor.Hairline, HzShape.Panel)
+                                            .padding(HzSpace.M),
+                                        verticalArrangement = Arrangement.spacedBy(HzSpace.S)
                                     ) {
+                                      Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                         StoreAsyncProjectIcon(
                                             iconUrl = item.iconUrl,
                                             title = item.title,
@@ -4362,7 +4343,7 @@ private fun CleanStoreViewport(
                                                 text = item.summary,
                                                 fontSize = 11.5.sp,
                                                 color = HzColor.TextIcon,
-                                                maxLines = 1,
+                                                maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                             Text(
@@ -4375,7 +4356,13 @@ private fun CleanStoreViewport(
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
+                                      }
 
+                                      Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.End
+                                      ) {
                                         when {
                                             isCurrentlyDownloading -> StoreActionButton(
                                                 label = "${storeProgress.percent}%",
@@ -4441,6 +4428,7 @@ private fun CleanStoreViewport(
                                                 else pendingIncompatibleItem = item
                                             }
                                         }
+                                      }
                                     }
                                 }
                             }

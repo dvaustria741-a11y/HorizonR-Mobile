@@ -166,17 +166,11 @@ internal fun HzEmptyState(art: String, message: String, accent: Color, modifier:
 /** The launcher's logo: the grass cube art when it is bundled, the drawn cube otherwise. */
 @Composable
 internal fun HzBrandCube(size: Dp) {
-    val context = LocalContext.current
-    val resId = remember { context.resources.getIdentifier("hz_logo_grass", "drawable", context.packageName) }
-    if (resId != 0) {
-        androidx.compose.foundation.Image(
-            painter = painterResource(id = resId),
-            contentDescription = "HorizonR",
-            modifier = Modifier.size(size)
-        )
-    } else {
-        MinecraftGrassCubeIcon(size = size)
-    }
+    androidx.compose.foundation.Image(
+        painter = painterResource(id = R.drawable.hz_logo_grass),
+        contentDescription = "HorizonR",
+        modifier = Modifier.size(size)
+    )
 }
 
 /** Mono tag, e.g. a version number: hairline outline, no fill. */
