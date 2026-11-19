@@ -190,35 +190,56 @@ internal fun HzTag(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun HzPlayButton(installStatus: AssetInstallStatus, accent: Color, onLaunch: () -> Unit) {
+internal fun HzPlayButton(
+    installStatus: AssetInstallStatus,
+    accent: Color,
+    onLaunch: () -> Unit,
+    launchProgress: Float? = null
+) {
+    val launching = launchProgress != null
     val progress by animateFloatAsState(
-        targetValue = (installStatus.percent / 100f).coerceIn(0f, 1f),
+        targetValue = (if (launching) launchProgress ?: 0f else installStatus.percent / 100f).coerceIn(0f, 1f),
         animationSpec = tween(HzMotion.Medium, easing = HzMotion.Ease),
         label = "PlayProgress"
     )
-    val busy = installStatus.running
+    val busy = installStatus.running || launching
     val fg = if (busy) accent else Color.White
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .width(176.dp)
             .height(48.dp)
-            .animatedPressScale(onClick = onLaunch)
+            .animatedPressScale(enabled = !launching, onClick = onLaunch)
             .clip(HzShape.Control)
             .then(if (busy) Modifier.background(HzColor.PanelHi) else Modifier.background(HzBrush.Signature))
             .drawBehind {
                 if (busy) drawRect(color = accent.copy(alpha = 0.28f), size = Size(size.width * progress, size.height))
             }
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            VoltIcon(
-                name = if (installStatus.ready) "ic_ui_play" else "ic_ui_download",
-                fallback = if (installStatus.ready) Icons.Default.PlayArrow else Icons.Default.Download,
-                size = 19.dp,
-                tint = fg
+        if (launching) {
+            // The loading bar: a track along the bottom of the button that fills with the launch progress.
+            HzProgressBar(
+                progress = progress,
+                color = accent,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 7.dp)
             )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = if (launching) Modifier.padding(bottom = 6.dp) else Modifier
+        ) {
+            if (!launching) {
+                VoltIcon(
+                    name = if (installStatus.ready) "ic_ui_play" else "ic_ui_download",
+                    fallback = if (installStatus.ready) Icons.Default.PlayArrow else Icons.Default.Download,
+                    size = 19.dp,
+                    tint = fg
+                )
+            }
             Text(
-                text = if (installStatus.paused) "PAUSED"
+                text = if (launching) "LOADING"
+                else if (installStatus.paused) "PAUSED"
                 else if (installStatus.running) "${installStatus.percent}%"
                 else if (installStatus.ready) "PLAY"
                 else "INSTALL",

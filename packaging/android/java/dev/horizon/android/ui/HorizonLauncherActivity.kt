@@ -301,6 +301,8 @@ class HorizonLauncherActivity : ComponentActivity() {
 
             var isLauncherHibernated by remember { mutableStateOf(false) }
             var isLaunchingSplash by remember { mutableStateOf(false) }
+            // 0..1 while a launch is being prepared (drives the bar on PLAY); null when idle.
+            var launchProgress by remember { mutableStateOf<Float?>(null) }
             var isGameProcessSleeping by remember { mutableStateOf(false) }
             var releaseUpdateInfo by remember { mutableStateOf<GithubReleaseUpdateInfo?>(null) }
             var showUpdateBanner by remember { mutableStateOf(false) }
@@ -325,6 +327,7 @@ class HorizonLauncherActivity : ComponentActivity() {
                         Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> {
                             isLauncherHibernated = false
                             isLaunchingSplash = false
+                            launchProgress = null
                             isGameProcessSleeping = false
                             scope.launch(Dispatchers.IO) {
                                 val loadedCfg = HorizonNativeBridge.loadSavedConfig(context)
@@ -377,6 +380,7 @@ class HorizonLauncherActivity : ComponentActivity() {
                             accounts = accounts,
                             activeAccount = activeAccount,
                             isHibernated = isGameProcessSleeping || isLaunchingSplash,
+                            launchProgress = launchProgress,
                             onConfigChange = { updated ->
                                 config = updated
                                 val accSnapshot = activeAccount
@@ -412,13 +416,34 @@ class HorizonLauncherActivity : ComponentActivity() {
                             onEnterGameHibernation = {
                                 if (!isLaunchingSplash) {
                                     isLaunchingSplash = true
+                                    launchProgress = 0.04f
                                     val cfgSnapshot = config
                                     val accSnapshot = activeAccount
+                                    // Follows the milestones the launch writes to the boot file (12, 22, 32 %).
+                                    val bootFile = File(context.filesDir, "zalith-game-boot.txt")
+                                    runCatching { bootFile.delete() } // drop last run's "100|Main Menu Ready"
+                                    val progressJob = scope.launch(Dispatchers.IO) {
+                                        while (true) {
+                                            val pct = runCatching {
+                                                bootFile.takeIf { it.exists() }?.readText()?.substringBefore('|')?.trim()?.toInt()
+                                            }.getOrNull()
+                                            if (pct != null) {
+                                                val p = (pct / 100f).coerceIn(0f, 0.95f)
+                                                withContext(Dispatchers.Main) {
+                                                    launchProgress = maxOf(launchProgress ?: 0f, p)
+                                                }
+                                            }
+                                            delay(40L)
+                                        }
+                                    }
                                     scope.launch {
+                                        val prepareStartMs = System.currentTimeMillis()
                                         withContext(Dispatchers.IO) {
                                             HorizonNativeBridge.prepareNativeGameLaunch(context, cfgSnapshot, accSnapshot)
                                         }
-                                        delay(180L)
+                                        android.util.Log.i("HorizonLaunch", "prepareNativeGameLaunch took ${System.currentTimeMillis() - prepareStartMs} ms")
+                                        progressJob.cancel()
+                                        launchProgress = 1f
                                         isLauncherHibernated = true
                                         HorizonNativeBridge.startHorizonGameActivity(context, cfgSnapshot, accSnapshot)
                                     }
@@ -491,34 +516,6 @@ fun Modifier.animatedPressScale(
             enabled = enabled,
             onClick = onClick
         )
-}
-
-/**
- * The animated HorizonZ splash, shown the instant PLAY is pressed (and while the game runs on top).
- * It is the same view HorizonActivity shows in the game process, started from a shared wall-clock
- * time, so the logo reveal plays once and carries straight over instead of restarting.
- */
-@Composable
-fun HorizonZBlackSplashOverlay() {
-    val startMs = remember {
-        val now = System.currentTimeMillis()
-        val old = HorizonSplashClock.startMs
-        val start = if (old > 0L && now - old < 30000L) old else now
-        HorizonSplashClock.startMs = start
-        start
-    }
-    DisposableEffect(Unit) {
-        onDispose { HorizonSplashClock.startMs = 0L }
-    }
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { ctx ->
-            HorizonActivity.HorizonSplashOverlayView(ctx, ctx.filesDir, null).apply {
-                setLauncherMode(true)
-                setStartTimeMs(startMs)
-            }
-        }
-    )
 }
 
 /** The launcher's cube logo (dashboard and item badges). */
@@ -1254,6 +1251,7 @@ fun CleanLauncherScreen(
     accounts: List<LauncherAccount>,
     activeAccount: LauncherAccount,
     isHibernated: Boolean,
+    launchProgress: Float?,
     onConfigChange: (HorizonConfigState) -> Unit,
     onAccountsChange: (List<LauncherAccount>) -> Unit,
     onCheckForUpdatesManual: () -> Unit = {},
@@ -1328,10 +1326,8 @@ fun CleanLauncherScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().background(LauncherRootBg)) {
-            if (!isHibernated) {
-                HzBackdrop()
-                HorizonAuroraBackground()
-            }
+            HzBackdrop()
+            HorizonAuroraBackground()
             Row(modifier = Modifier.fillMaxSize()) {
               HzDock(
                   selectedTab = selectedTab,
@@ -1394,6 +1390,7 @@ fun CleanLauncherScreen(
                                     onConfigChange = onConfigChange,
                                     logEnabled = config.enableSystemLog,
                                     isHibernated = isHibernated,
+                                    launchProgress = launchProgress,
                                     onNavigate = { selectedTab = it },
                                     activeAccount = activeAccount,
                                     activeSkinBitmap = activeSkinBitmap,
@@ -1502,15 +1499,6 @@ fun CleanLauncherScreen(
             }
         }
 
-        // Render the Black "HORIZONZ" Splash Screen as a top-level overlay when launching the game
-        // (without unmounting the Compose tree underneath!)
-        AnimatedVisibility(
-            visible = isHibernated,
-            enter = fadeIn(tween(180)),
-            exit = fadeOut(tween(220))
-        ) {
-            HorizonZBlackSplashOverlay()
-        }
     }
 }
 
@@ -1718,6 +1706,7 @@ private fun CleanHomeViewport(
     onConfigChange: (HorizonConfigState) -> Unit,
     logEnabled: Boolean,
     isHibernated: Boolean,
+    launchProgress: Float?,
     onNavigate: (LauncherNavTab) -> Unit,
     activeAccount: LauncherAccount,
     activeSkinBitmap: Bitmap,
@@ -1738,19 +1727,18 @@ private fun CleanHomeViewport(
         }
     }
 
-    if (!isHibernated) {
-        HzHomeBento(
-            accent = SkyBlueAccent,
-            activeAccount = activeAccount,
-            activeSkinBitmap = activeSkinBitmap,
-            installStatus = installStatus,
-            quote = MINECRAFT_SPLASH_QUOTES[quoteIndex],
-            onQuoteTap = { quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size },
-            onNavigate = onNavigate,
-            onOpenFolder = onOpenFolder,
-            onLaunch = onLaunch
-        )
-    }
+    HzHomeBento(
+        accent = SkyBlueAccent,
+        activeAccount = activeAccount,
+        activeSkinBitmap = activeSkinBitmap,
+        installStatus = installStatus,
+        quote = MINECRAFT_SPLASH_QUOTES[quoteIndex],
+        onQuoteTap = { quoteIndex = (quoteIndex + 1) % MINECRAFT_SPLASH_QUOTES.size },
+        onNavigate = onNavigate,
+        onOpenFolder = onOpenFolder,
+        onLaunch = onLaunch,
+        launchProgress = launchProgress
+    )
 }
 
 /**

@@ -70,6 +70,7 @@ internal fun HzHomeBento(
     onNavigate: (LauncherNavTab) -> Unit,
     onOpenFolder: () -> Unit,
     onLaunch: () -> Unit,
+    launchProgress: Float? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -87,6 +88,7 @@ internal fun HzHomeBento(
                 onQuoteTap = onQuoteTap,
                 onGameFiles = { onNavigate(LauncherNavTab.VERSIONS) },
                 onLaunch = onLaunch,
+                launchProgress = launchProgress,
                 modifier = Modifier.weight(1f).fillMaxWidth()
             )
             Row(
@@ -119,6 +121,7 @@ private fun HeroCard(
     onQuoteTap: () -> Unit,
     onGameFiles: () -> Unit,
     onLaunch: () -> Unit,
+    launchProgress: Float?,
     modifier: Modifier = Modifier
 ) {
     val playTime = PlayTime.label(LocalContext.current)
@@ -212,7 +215,7 @@ private fun HeroCard(
                     HzProgressBar(progress = bar, color = accent)
                 }
             }
-            HzPlayButton(installStatus = installStatus, accent = accent, onLaunch = onLaunch)
+            HzPlayButton(installStatus = installStatus, accent = accent, onLaunch = onLaunch, launchProgress = launchProgress)
         }
     }
 }
