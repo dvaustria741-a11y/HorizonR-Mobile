@@ -419,31 +419,19 @@ class HorizonLauncherActivity : ComponentActivity() {
                                     launchProgress = 0.04f
                                     val cfgSnapshot = config
                                     val accSnapshot = activeAccount
-                                    // The launcher stays on screen, with the bar on PLAY, until the engine writes
-                                    // "100|Main Menu Ready"; the game window is invisible until then (HorizonActivity).
+                                    // Follows the milestones the launch writes to the boot file (12, 22, 32 %).
                                     val bootFile = File(context.filesDir, "zalith-game-boot.txt")
                                     runCatching { bootFile.delete() } // drop last run's "100|Main Menu Ready"
-                                    scope.launch(Dispatchers.IO) {
-                                        var shown = 0.04f
-                                        // Ends when the launcher is resumed again (game closed or crashed): that clears isLaunchingSplash.
-                                        while (isLaunchingSplash) {
+                                    val progressJob = scope.launch(Dispatchers.IO) {
+                                        while (true) {
                                             val pct = runCatching {
                                                 bootFile.takeIf { it.exists() }?.readText()?.substringBefore('|')?.trim()?.toInt()
                                             }.getOrNull()
-                                            if (pct != null && pct >= 100) {
-                                                withContext(Dispatchers.Main) { launchProgress = 1f }
-                                                delay(350L)
+                                            if (pct != null) {
+                                                val p = (pct / 100f).coerceIn(0f, 0.95f)
                                                 withContext(Dispatchers.Main) {
-                                                    isLauncherHibernated = true
-                                                    isGameProcessSleeping = true
+                                                    launchProgress = maxOf(launchProgress ?: 0f, p)
                                                 }
-                                                break
-                                            }
-                                            shown = maxOf(shown, ((pct ?: 0) / 100f).coerceAtMost(0.9f))
-                                            // Creeps between milestones, never past 96 %, so it does not look frozen or finished early.
-                                            shown += (0.96f - shown) * 0.004f
-                                            withContext(Dispatchers.Main) {
-                                                if (isLaunchingSplash) launchProgress = maxOf(launchProgress ?: 0f, shown)
                                             }
                                             delay(40L)
                                         }
@@ -454,6 +442,9 @@ class HorizonLauncherActivity : ComponentActivity() {
                                             HorizonNativeBridge.prepareNativeGameLaunch(context, cfgSnapshot, accSnapshot)
                                         }
                                         android.util.Log.i("HorizonLaunch", "prepareNativeGameLaunch took ${System.currentTimeMillis() - prepareStartMs} ms")
+                                        // No 100 % here: the game window's own bar carries on until Minecraft is ready.
+                                        progressJob.cancel()
+                                        isLauncherHibernated = true
                                         HorizonNativeBridge.startHorizonGameActivity(context, cfgSnapshot, accSnapshot)
                                     }
                                 }
