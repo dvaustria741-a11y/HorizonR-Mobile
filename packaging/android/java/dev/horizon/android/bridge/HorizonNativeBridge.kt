@@ -5817,20 +5817,39 @@ object HorizonNativeBridge {
         File(home, "zalith-game-boot.txt").writeText("12|Preparing Profile, Mods & Skin...")
         runCatching { syncAndRepairModsStorage(context, config.profile) }
         runCatching { syncAndRepairShadersStorage(context, config.profile) }
-        saveValidatedStamps(home)
         File(home, "zalith-game-boot.txt").writeText("22|Syncing Engine Config & options.txt...")
         runCatching { saveConfig(context, config, activeAccount) }
 
-        // Skin: always rewritten (a few small files). Skipping it on unchanged stamps left the engine copy and the
-        // HorizonZ-CustomSkin.zip pack stale or disabled whenever options.txt or the engine's assets changed.
         runCatching {
-            val skinBmp = loadOrGenerateAccountSkinBitmap(context, activeAccount)
+            loadValidatedStamps(home)
             val activeSkinFile = File(home, "custom_skin_active.png")
-            FileOutputStream(activeSkinFile).use { fos ->
-                skinBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
+            // The skin that gets read: the account's own file, else the active one, else a preset.
+            fun skinSourceStamp(): String {
+                val src = activeAccount.skinPath.takeIf { it.isNotBlank() }?.let { File(it) }
+                    ?.takeIf { it.isFile && it.length() > 64L }
+                    ?: activeSkinFile.takeIf { it.isFile && it.length() > 64L }
+                return if (src != null) "${src.absolutePath}:${src.length()}:${src.lastModified()}"
+                else "preset:${activeAccount.slimSkinModel}"
             }
-            syncActiveSkinToGameEngine(context, activeSkinFile, activeAccount.slimSkinModel, config.profile, config.enableSystemLog)
+            val skinKey = "skin-sync:${config.profile}"
+            val engineSkinProbe = File(
+                home,
+                ".local/horizon-client/26.3/assets/minecraft/textures/entity/player/wide/${VANILLA_PLAYER_SKIN_NAMES.first()}"
+            )
+            val skinPackProbe = File(File(getProfileHome(home, config.profile), "resourcepacks"), "HorizonZ-CustomSkin.zip")
+            val skinUpToDate = stampMatches(skinKey, "${skinSourceStamp()}:${activeAccount.slimSkinModel}") &&
+                activeSkinFile.isFile && engineSkinProbe.isFile &&
+                engineSkinProbe.length() == activeSkinFile.length() && skinPackProbe.isFile
+            if (!skinUpToDate) {
+                val skinBmp = loadOrGenerateAccountSkinBitmap(context, activeAccount)
+                FileOutputStream(activeSkinFile).use { fos ->
+                    skinBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                }
+                syncActiveSkinToGameEngine(context, activeSkinFile, activeAccount.slimSkinModel, config.profile, config.enableSystemLog)
+                stampSet(skinKey, "${skinSourceStamp()}:${activeAccount.slimSkinModel}")
+            }
         }
+        saveValidatedStamps(home)
 
         releaseMemoryForGameLaunch(context)
         File(home, "zalith-game-boot.txt").writeText("32|Starting HorizonZ Native Engine...")

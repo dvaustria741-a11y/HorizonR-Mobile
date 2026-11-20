@@ -253,14 +253,6 @@ class ControlsView(
         invalidate()
     }
 
-    // A tap clicks where the finger touched, so menu buttons work with one tap; dragging still moves the cursor relatively.
-    private fun jumpCursor(x: Float, y: Float) {
-        cursorX = x.coerceIn(0f, width - 1f)
-        cursorY = y.coerceIn(0f, height - 1f)
-        HorizonBridge.cursor(cursorX, cursorY)
-        invalidate()
-    }
-
     private fun centerCursorIfUnset() {
         if (cursorX < 0f) {
             cursorX = width / 2f
@@ -611,7 +603,6 @@ class ControlsView(
             if (!m.moved && !m.consumed && roles[id] === m) {
                 m.dragging = true
                 vibrate()
-                jumpCursor(m.startX, m.startY)
                 HorizonBridge.button(0, true)
             }
         }.also { uiHandler.postDelayed(it, settings.longPressMs.toLong() + 100) }
@@ -801,7 +792,6 @@ class ControlsView(
                 role.longPress?.let(uiHandler::removeCallbacks)
                 if (role.dragging) HorizonBridge.button(0, false)
                 else if (!cancel && !role.consumed && !role.moved && settings.tapToClick && time - role.downTime < 300) {
-                    jumpCursor(role.startX, role.startY)
                     HorizonBridge.button(0, true)
                     HorizonBridge.button(0, false)
                 }
