@@ -14449,9 +14449,10 @@ fn signal_menu_ready() {
     }
 }
 
-/// Android: counts presented frames of the real title screen (after the renderer was rebuilt with
-/// the menu atlas). The launcher splash may only fade once the menu is really on screen, otherwise
-/// the window shows black while the swapchain is rebuilt.
+/// Android: counts presented frames of the title screen once `Game` runs it (after the handoff from
+/// the loading screen, which only queues the touch overlay's input). The launcher splash may only fade
+/// once the menu is on screen and takes input, otherwise the window shows black while the swapchain
+/// is rebuilt, or taps are ignored until the handoff.
 #[cfg(target_os = "android")]
 fn note_title_frame() {
     static FRAMES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);

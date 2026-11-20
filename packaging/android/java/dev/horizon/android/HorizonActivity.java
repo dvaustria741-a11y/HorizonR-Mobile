@@ -51,7 +51,7 @@ import java.nio.charset.StandardCharsets;
  * - Guaranteed single-shot launch & clean return to HorizonLauncherActivity on game exit.
  * - No splash or loading screen: the window stays hidden over the launcher (which shows the PLAY bar) and is
  *   revealed, with the touch overlay, as soon as the engine writes `100|Main Menu Ready` to `zalith-game-boot.txt`
- *   (or after 60 s regardless).
+ *   (or after 120 s regardless).
  */
 public final class HorizonActivity extends NativeActivity {
     private static final String TAG = "HorizonActivity";
@@ -107,12 +107,12 @@ public final class HorizonActivity extends NativeActivity {
 
     /**
      * Shows the touch layout once the engine reports its menu is ready. The engine writes
-     * `100|Main Menu Ready` to the boot file; after 60 s the overlay is shown regardless, as before.
+     * `100|Main Menu Ready` to the boot file; after 120 s the overlay is shown regardless.
      */
     private void startMenuReadyWatcher(final File homeDir) {
         Thread watcher = new Thread(() -> {
             File bootFile = new File(homeDir, "zalith-game-boot.txt");
-            long deadline = System.currentTimeMillis() + 60000L;
+            long deadline = System.currentTimeMillis() + 120000L;
             while (watchdogRunning && System.currentTimeMillis() < deadline) {
                 if (isMenuReady(bootFile)) break;
                 try {

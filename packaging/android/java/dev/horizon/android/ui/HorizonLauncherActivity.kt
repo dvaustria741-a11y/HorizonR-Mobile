@@ -423,7 +423,7 @@ class HorizonLauncherActivity : ComponentActivity() {
                                     // "100|Main Menu Ready"; the game window is invisible until then (HorizonActivity).
                                     val bootFile = File(context.filesDir, "zalith-game-boot.txt")
                                     runCatching { bootFile.delete() } // drop last run's "100|Main Menu Ready"
-                                    // Set once the game window exists; HorizonActivity reveals itself after 60 s even without the signal.
+                                    // Set once the game window exists; HorizonActivity reveals itself after 120 s even without the signal.
                                     val gameStartedAtMs = java.util.concurrent.atomic.AtomicLong(0L)
                                     scope.launch(Dispatchers.IO) {
                                         var shown = 0.04f
@@ -433,7 +433,7 @@ class HorizonLauncherActivity : ComponentActivity() {
                                                 bootFile.takeIf { it.exists() }?.readText()?.substringBefore('|')?.trim()?.toInt()
                                             }.getOrNull()
                                             val startedAt = gameStartedAtMs.get()
-                                            val gaveUpWaiting = startedAt > 0L && System.currentTimeMillis() - startedAt > 62_000L
+                                            val gaveUpWaiting = startedAt > 0L && System.currentTimeMillis() - startedAt > 122_000L
                                             if ((pct != null && pct >= 100) || gaveUpWaiting) {
                                                 withContext(Dispatchers.Main) { launchProgress = 1f }
                                                 delay(350L)

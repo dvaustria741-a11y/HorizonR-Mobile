@@ -385,8 +385,9 @@ impl Loading {
                 Ok(true) if self.gui.is_some() && self.menu.pending.is_none() => {
                     self.title_drawn = true;
                     self.menu.perf.title_shown();
-                    #[cfg(target_os = "android")]
-                    note_title_frame();
+                    // Not `note_title_frame()` here: while this loading screen runs, the touch overlay's input is
+                    // only queued (`touch_overlay::poll_touch_overlay` belongs to `Game`), so the menu would look
+                    // ready and ignore taps until the handoff. The signal comes from `Game` (game.rs).
                 }
                 Ok(_) => {}
                 Err(e) => log::warn!("Horizon: loading screen frame failed: {e}"),
