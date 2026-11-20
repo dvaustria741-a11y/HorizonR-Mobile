@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="HorizonGameTheme" parent="@android:style/Theme.NoTitleBar.Fullscreen">
-        <item name="android:windowBackground">@color/horizon_intro_bg</item>
+    <!-- Translucent so the launcher (and its PLAY bar) stays visible, and is not stopped, until HorizonActivity
+         reveals the game window. A non-translucent override here stops the launcher the moment the game opens. -->
+    <style name="HorizonGameTheme" parent="@android:style/Theme.Translucent.NoTitleBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-        <item name="android:windowSplashScreenBackground">@color/horizon_intro_bg</item>
+        <item name="android:windowSplashScreenBackground">@android:color/transparent</item>
         <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
     </style>
 </resources>
