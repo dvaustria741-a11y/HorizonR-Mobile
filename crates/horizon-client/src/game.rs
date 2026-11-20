@@ -606,7 +606,7 @@ pub use native_world_read::NativeBlockReadError;
 use resource_load::{Progress, launch_world, load_resources, named_scope, synchronous_startup};
 use resource_loader::{
     EntityModels, GameCpuResources, Loaded, LoaderMsg, PendingWorldEntry, WorldRestLoader,
-    loading_app, new_event_loop, run_loading, write_report,
+    loading_app, run_loading, write_report,
 };
 use std::{
     cell::RefCell,
@@ -10688,16 +10688,6 @@ impl Game<'_> {
         // LevelExtractor.extractBlockOutline: model translucency controls draw order;
         // no outline when an entity is targeted (Minecraft.hitResult an EntityHitResult).
         let mut outline_after_terrain = false;
-        let touch_target_visible = self.interaction_crosshair() || {
-            #[cfg(target_os = "android")]
-            {
-                self.pad.touch.aim.or(self.pad.touch_aim).is_some()
-            }
-            #[cfg(not(target_os = "android"))]
-            {
-                true
-            }
-        };
         // GameRenderer.shouldRenderBlockOutline: not with the HUD hidden (F1), and only for a
         // player who may build. Adventure players only get one with a CAN_BREAK or
         // CAN_PLACE_ON item matching the block, and spectators with a menu block; Horizon
@@ -14424,7 +14414,7 @@ mod entity_die_tests;
 
 
 /// Leaves the game: the event loop ends on a desktop; on Android the launcher takes over again.
-pub(crate) fn exit_app(events: &dyn EventLoopCtl) {
+fn exit_app(events: &dyn EventLoopCtl) {
     #[cfg(target_os = "android")]
     horizon_client::android_runtime::return_to_launcher();
     #[cfg(not(target_os = "android"))]

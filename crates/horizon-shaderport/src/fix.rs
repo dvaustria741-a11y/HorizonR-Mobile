@@ -196,6 +196,7 @@ pub fn fix(files: &mut Files, before: &Eval) -> (Vec<Change>, Eval) {
 }
 
 /// Applies the rule `name` without checking it (the `apply` debugging command).
+#[allow(dead_code)]
 pub fn apply_one(files: &mut Files, eval: &Eval, name: &str) -> Result<usize, String> {
     let rule = RULES.iter().find(|r| r.name == name).ok_or(format!("no rule {name}"))?;
     let edits = (rule.apply)(files, eval);

@@ -21,3 +21,6 @@ horizon-shader-api = { path = "../horizon-shader-api" }
 naga = { version = "30.0.1", features = ["glsl-in", "wgsl-in", "wgsl-out", "spv-out"] }
 png = "0.17"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[lints]
+workspace = true

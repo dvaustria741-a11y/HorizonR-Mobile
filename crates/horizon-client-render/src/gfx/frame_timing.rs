@@ -47,6 +47,7 @@ impl FrameTiming {
         self.timers[1].end(device, encoder, target);
         self.timers[2].begin(encoder);
     }
+    #[allow(dead_code)]
     pub(super) fn end(
         &mut self,
         device: &wgpu::Device,

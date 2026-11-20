@@ -28,6 +28,8 @@ pub mod lock;
 #[path = "browser/modrinth.rs"]
 pub mod modrinth;
 
+// The game compiles this file as a private module and uses only `lock_home`.
+#[allow(unused_imports)]
 pub use lock::{lock_home, try_lock_home, HomeLockGuard};
 
 use serde::{Deserialize, Serialize};

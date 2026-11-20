@@ -2473,7 +2473,7 @@ impl PackPost {
     ///
     /// `cancel` set (the pack isn't wanted any more) stops the build between programs: a refusal
     /// whose `is_cancelled` is true.
-    pub fn new(
+    pub(super) fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         adapter: &wgpu::Adapter,
@@ -4642,7 +4642,7 @@ impl PackPost {
     }
 
     /// The block outline to draw this frame (`None`: none).
-    pub fn set_lines(&mut self, lines: Option<Lines>) {
+    pub(super) fn set_lines(&mut self, lines: Option<Lines>) {
         self.line_draw = lines.filter(|l| l.count > 0);
     }
 
@@ -4652,7 +4652,7 @@ impl PackPost {
     }
 
     /// The clouds to draw this frame (`None`: none).
-    pub fn set_clouds(&mut self, clouds: Option<Clouds>) {
+    pub(super) fn set_clouds(&mut self, clouds: Option<Clouds>) {
         self.cloud_draw = clouds.filter(|c| c.quads > 0);
     }
 
@@ -4775,7 +4775,7 @@ impl PackPost {
     }
 
     /// The rain and snow to draw this frame (`None`: none).
-    pub fn set_weather(&mut self, weather: Option<Weather>) {
+    pub(super) fn set_weather(&mut self, weather: Option<Weather>) {
         self.weather_draw = weather;
     }
 
@@ -4815,7 +4815,7 @@ impl PackPost {
     }
 
     /// What the shadow camera draws of the terrain this frame, when the pack draws it.
-    pub fn shadow_view(&self, frame: &super::Frame) -> Option<ShadowView> {
+    pub(super) fn shadow_view(&self, frame: &super::Frame) -> Option<ShadowView> {
         if !self.has_shadow() {
             return None;
         }
@@ -5336,7 +5336,7 @@ impl PackPost {
     /// Runs the pack over the world drawn into `world` (colour) and `world_depth`, then draws
     /// the result onto `screen`.
     #[allow(clippy::too_many_arguments)]
-    pub fn run(
+    pub(super) fn run(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,

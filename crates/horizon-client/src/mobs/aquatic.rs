@@ -7,7 +7,7 @@ use super::{
     control::MoveKind,
     goals::{
         Avoid, AvoidEntity, BreathAir, Cx, Goal, HurtByTarget, LookAtPlayer, MeleeAttack, Panic,
-        RandomLookAround, Stroll, Tempt, TryFindWater, goal_clone, reduced,
+        RandomLookAround, Stroll, TryFindWater, goal_clone, reduced,
     },
     nav::NavKind,
 };

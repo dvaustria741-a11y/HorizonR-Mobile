@@ -314,6 +314,7 @@ impl Eval {
         v.sort();
         v
     }
+    #[allow(dead_code)]
     pub fn skipped_names(&self) -> Vec<String> {
         let set: BTreeSet<String> = self
             .dims
