@@ -49,16 +49,13 @@ import java.nio.charset.StandardCharsets;
  * NativeActivity for the Vasysik/horizon-android + horizon-rust/horizon 26.3 engine.
  * Includes:
  * - Guaranteed single-shot launch & clean return to HorizonLauncherActivity on game exit.
- * - No splash art: the launcher shows the loading bar on PLAY, and a slim bar at the bottom of the game
- *   window (`HorizonLoadBarView`) carries on with the engine's real progress until the engine writes
- *   `100|Main Menu Ready` to `zalith-game-boot.txt`; then it goes and the touch overlay appears.
+ * - No splash or loading screen: the touch overlay appears as soon as the engine writes
+ *   `100|Main Menu Ready` to `zalith-game-boot.txt`.
  */
 public final class HorizonActivity extends NativeActivity {
     private static final String TAG = "HorizonActivity";
     public static final int SAF_DOCUMENT_REQUEST_CODE = 4101;
     private volatile boolean watchdogRunning = true;
-    private Dialog loadBarDialog;
-    private HorizonLoadBarView loadBarView;
     private dev.horizon.android.controls.ControlsOverlay controlsOverlay;
 
     static {
@@ -98,7 +95,6 @@ public final class HorizonActivity extends NativeActivity {
         applyRequestedOrientationFromIntent(getIntent());
         enableImmersiveFullscreen();
 
-        showLoadBar(homeDir);
         startExitWatchdog(homeDir);
         startMenuReadyWatcher(homeDir);
         startGeminiAiAgentBridgeIfEnabled(homeDir, getIntent());
@@ -123,8 +119,6 @@ public final class HorizonActivity extends NativeActivity {
             }
             if (!watchdogRunning) return;
             runOnUiThread(() -> {
-                if (loadBarView != null) loadBarView.markReady();
-                new Handler(Looper.getMainLooper()).postDelayed(this::dismissLoadBar, 220L);
                 if (!isFinishing()) showControlsOverlay();
             });
         }, "HorizonZ-MenuReadyWatcher");
@@ -145,50 +139,6 @@ public final class HorizonActivity extends NativeActivity {
         } catch (Exception e) {
             return false;
         }
-    }
-
-    /** A slim loading bar at the bottom of the game window, on its own window so it sits above the engine's surface. */
-    private void showLoadBar(final File homeDir) {
-        try {
-            final int barHeight = (int) (72 * getResources().getDisplayMetrics().density);
-            loadBarDialog = new Dialog(this, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);
-            loadBarDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-            loadBarDialog.setCancelable(false);
-            loadBarView = new HorizonLoadBarView(this, homeDir);
-            loadBarDialog.setContentView(
-                loadBarView,
-                new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, barHeight)
-            );
-            Window win = loadBarDialog.getWindow();
-            if (win != null) {
-                win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-                win.setFormat(android.graphics.PixelFormat.TRANSLUCENT);
-                win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-                win.setLayout(WindowManager.LayoutParams.MATCH_PARENT, barHeight);
-                win.setGravity(android.view.Gravity.BOTTOM);
-                win.addFlags(
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        | WindowManager.LayoutParams.FLAG_FULLSCREEN
-                        | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                );
-            }
-            loadBarDialog.show();
-        } catch (Exception e) {
-            Log.w(TAG, "Could not show loading bar: " + e.getMessage());
-        }
-    }
-
-    private void dismissLoadBar() {
-        try {
-            if (loadBarView != null) loadBarView.stop();
-            if (loadBarDialog != null && loadBarDialog.isShowing()) loadBarDialog.dismiss();
-        } catch (Exception ignored) {
-        }
-        loadBarView = null;
-        loadBarDialog = null;
-        enableImmersiveFullscreen();
     }
 
     /** The launcher's touch layout over the game, when the player turned it on in Settings. */
@@ -529,7 +479,6 @@ public final class HorizonActivity extends NativeActivity {
 
     private void returnToLauncherAndFinish() {
         watchdogRunning = false;
-        dismissLoadBar();
         try {
             Intent backIntent = new Intent(this, HorizonLauncherActivity.class);
             backIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -586,7 +535,6 @@ public final class HorizonActivity extends NativeActivity {
         mirrorLogsOnce();
         watchdogRunning = false;
         hideControlsOverlay();
-        dismissLoadBar();
         super.onDestroy();
     }
 
@@ -834,126 +782,6 @@ public final class HorizonActivity extends NativeActivity {
             } catch (UnsatisfiedLinkError err) {
                 Log.e(TAG, "nativeDocumentResult JNI symbol not linked: " + err.getMessage());
             }
-        }
-    }
-
-    /**
-     * Slim loading bar for the game window: no art, just a thin bar and a percentage at the bottom,
-     * following the milestones the launcher and the engine write to `zalith-game-boot.txt`.
-     * It only reaches 100 % once the engine reports `100|Main Menu Ready`.
-     */
-    public static final class HorizonLoadBarView extends View {
-        private final File bootFile;
-        private final Handler handler = new Handler(Looper.getMainLooper());
-        private final Paint trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final RectF rect = new RectF();
-        private float shown = 0.05f;
-        private float target = 0.05f;
-        private boolean ready = false;
-        private boolean running = true;
-        private long lastPollMs = 0L;
-
-        private final Runnable tick = new Runnable() {
-            @Override
-            public void run() {
-                if (!running) return;
-                step();
-                invalidate();
-                handler.postDelayed(this, 33L);
-            }
-        };
-
-        HorizonLoadBarView(Context context, File homeDir) {
-            super(context);
-            bootFile = new File(homeDir, "zalith-game-boot.txt");
-            trackPaint.setColor(0x33FFFFFF);
-            fillPaint.setColor(0xFF8BE0FF);
-            textPaint.setColor(0xFFD5DEE5);
-            textPaint.setTextAlign(Paint.Align.CENTER);
-            textPaint.setFakeBoldText(true);
-            handler.post(tick);
-        }
-
-        void markReady() {
-            ready = true;
-        }
-
-        void stop() {
-            running = false;
-            handler.removeCallbacksAndMessages(null);
-        }
-
-        private int readPercent() {
-            if (!bootFile.exists()) return -1;
-            try (BufferedReader br = new BufferedReader(
-                new InputStreamReader(new FileInputStream(bootFile), StandardCharsets.UTF_8))) {
-                String line = br.readLine();
-                if (line == null) return -1;
-                int sep = line.indexOf('|');
-                if (sep <= 0) return -1;
-                return Integer.parseInt(line.substring(0, sep).trim());
-            } catch (Exception e) {
-                return -1;
-            }
-        }
-
-        private void step() {
-            long now = System.currentTimeMillis();
-            if (now - lastPollMs >= 100L) {
-                lastPollMs = now;
-                int pct = readPercent();
-                if (pct >= 100) {
-                    ready = true;
-                } else if (pct > 0) {
-                    target = Math.max(target, Math.min(0.97f, pct / 100.0f));
-                }
-            }
-            if (ready) {
-                shown += (1.0f - shown) * 0.35f;
-            } else {
-                // A slow creep between milestones so the bar never looks frozen; it stays under 97 %.
-                target = Math.min(0.97f, target + 0.0003f);
-                shown += (target - shown) * 0.08f;
-            }
-        }
-
-        @Override
-        protected void onDetachedFromWindow() {
-            handler.removeCallbacks(tick);
-            super.onDetachedFromWindow();
-        }
-
-        @Override
-        protected void onAttachedToWindow() {
-            super.onAttachedToWindow();
-            if (running) {
-                handler.removeCallbacks(tick);
-                handler.post(tick);
-            }
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            float d = getResources().getDisplayMetrics().density;
-            float w = getWidth();
-            float h = getHeight();
-            float barW = Math.min(w * 0.5f, 420f * d);
-            float barH = 6f * d;
-            float left = (w - barW) / 2f;
-            float bottom = h - 18f * d;
-            float top = bottom - barH;
-            rect.set(left, top, left + barW, bottom);
-            canvas.drawRoundRect(rect, barH / 2f, barH / 2f, trackPaint);
-            float frac = Math.max(0f, Math.min(1f, shown));
-            if (frac > 0.001f) {
-                rect.set(left, top, left + barW * frac, bottom);
-                canvas.drawRoundRect(rect, barH / 2f, barH / 2f, fillPaint);
-            }
-            textPaint.setTextSize(11f * d);
-            int pct = Math.max(1, Math.min(100, Math.round(frac * 100f)));
-            canvas.drawText("Loading Minecraft 26.3  " + pct + "%", w / 2f, top - 8f * d, textPaint);
         }
     }
 }
