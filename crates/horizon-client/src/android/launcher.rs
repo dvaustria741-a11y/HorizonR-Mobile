@@ -28,6 +28,7 @@ use winit::{
 };
 
 static GAME_LAUNCHED_ONCE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static SKIN_WORKER: std::sync::Mutex<Option<std::thread::JoinHandle<()>>> = std::sync::Mutex::new(None);
 
 /// Same verdict as reading the whole file for the zip magic and the `horizon-mod.toml` entry name, but a
 /// zip lists its entry names in the central directory at the end, so the tail is checked first and the whole
@@ -178,6 +179,38 @@ fn apply_horizonz_custom_skin(home: &std::path::Path) {
     }
     for legacy in ["steve.png", "alex.png"] {
         let _ = std::fs::write(entity_dir.join(legacy), &skin_bytes);
+    }
+}
+
+fn pin_max_job_threads() {
+    let parallelism = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let threads = parallelism.saturating_sub(1).max(1);
+    unsafe {
+        std::env::set_var("HORIZON_JOB_THREADS", threads.to_string());
+    }
+}
+
+fn spawn_boot_io_workers(home: std::path::PathBuf) {
+    // Run sanitize_and_repair_horizon_mods + apply_horizonz_custom_skin on a background
+    // thread so they no longer block the main thread before open(events) / Vulkan init.
+    let handle = std::thread::spawn(move || {
+        sanitize_and_repair_horizon_mods(&home);
+        apply_horizonz_custom_skin(&home);
+    });
+    if let Ok(mut guard) = SKIN_WORKER.lock() {
+        *guard = Some(handle);
+    }
+}
+
+fn join_boot_io_workers() {
+    // Zero-cost sync: Vulkan surface creation (~100-200 ms) already ate the boot-IO
+    // window, so the worker is virtually always done by the time we reach action().
+    if let Ok(mut guard) = SKIN_WORKER.lock() {
+        if let Some(handle) = guard.take() {
+            let _ = handle.join();
+        }
     }
 }
 
@@ -561,9 +594,10 @@ impl ApplicationHandler for Launcher {
             return;
         }
         let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "38|Verifying Horizon Mods & Profile Catalog...");
+        pin_max_job_threads();
         apply_horizonz_ram_allocation(&self.home);
         apply_horizonz_shader_and_agent_config(&self.home);
-        sanitize_and_repair_horizon_mods(&self.home);
+        spawn_boot_io_workers(self.home.clone()); // fires sanitize + custom_skin off-thread
         self.catalog.refresh(&self.home);
         let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "55|Creating Vulkan / WGPU Surface...");
         if let Err(error) = self.open(events) {
@@ -574,7 +608,7 @@ impl ApplicationHandler for Launcher {
         if self.game.is_none() && self.worker.is_none() {
             if !GAME_LAUNCHED_ONCE.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "78|Loading Minecraft 26.3 Resources & Custom Skin...");
-                apply_horizonz_custom_skin(&self.home);
+                join_boot_io_workers(); // sync: waits for sanitize + custom_skin (effectively free)
                 let cape = self.home.join("custom_cape_active.png");
                 if cape.is_file() {
                     // Read once by the renderer (`offline_cape`), so it must be set before launch.
