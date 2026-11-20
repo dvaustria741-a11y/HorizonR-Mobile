@@ -49,13 +49,16 @@ import java.nio.charset.StandardCharsets;
  * NativeActivity for the Vasysik/horizon-android + horizon-rust/horizon 26.3 engine.
  * Includes:
  * - Guaranteed single-shot launch & clean return to HorizonLauncherActivity on game exit.
- * - No splash or loading screen: the touch overlay appears as soon as the engine writes
- *   `100|Main Menu Ready` to `zalith-game-boot.txt`.
+ * - No splash or loading screen: the window stays hidden over the launcher (which shows the PLAY bar) and is
+ *   revealed, with the touch overlay, as soon as the engine writes `100|Main Menu Ready` to `zalith-game-boot.txt`
+ *   (or after 60 s regardless).
  */
 public final class HorizonActivity extends NativeActivity {
     private static final String TAG = "HorizonActivity";
     public static final int SAF_DOCUMENT_REQUEST_CODE = 4101;
     private volatile boolean watchdogRunning = true;
+    private static final float HIDDEN_WINDOW_ALPHA = 0.01f;
+    private boolean gameWindowHidden;
     private dev.horizon.android.controls.ControlsOverlay controlsOverlay;
 
     static {
@@ -99,6 +102,7 @@ public final class HorizonActivity extends NativeActivity {
         startMenuReadyWatcher(homeDir);
         startGeminiAiAgentBridgeIfEnabled(homeDir, getIntent());
         super.onCreate(savedInstanceState);
+        hideGameWindowUntilMenuReady();
     }
 
     /**
@@ -119,6 +123,7 @@ public final class HorizonActivity extends NativeActivity {
             }
             if (!watchdogRunning) return;
             runOnUiThread(() -> {
+                revealGameWindow();
                 if (!isFinishing()) showControlsOverlay();
             });
         }, "HorizonZ-MenuReadyWatcher");
@@ -138,6 +143,39 @@ public final class HorizonActivity extends NativeActivity {
             return Integer.parseInt(line.substring(0, sep).trim()) >= 100;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * The game window starts translucent (HorizonGameTheme) and nearly invisible, so the launcher, with its
+     * PLAY bar, stays what the player sees while the engine boots. The window must stay visible to the system
+     * (an alpha of exactly 0 could stop the compositor from taking the engine's frames), and not touchable so
+     * taps cannot reach the engine's boot screen. {@link #revealGameWindow()} undoes both.
+     */
+    private void hideGameWindowUntilMenuReady() {
+        try {
+            Window w = getWindow();
+            WindowManager.LayoutParams lp = w.getAttributes();
+            lp.alpha = HIDDEN_WINDOW_ALPHA;
+            w.setAttributes(lp);
+            w.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+            gameWindowHidden = true;
+        } catch (Throwable t) {
+            Log.e(TAG, "Could not hide the game window while loading: " + t.getMessage());
+        }
+    }
+
+    private void revealGameWindow() {
+        if (!gameWindowHidden) return;
+        gameWindowHidden = false;
+        try {
+            Window w = getWindow();
+            w.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+            WindowManager.LayoutParams lp = w.getAttributes();
+            lp.alpha = 1.0f;
+            w.setAttributes(lp);
+        } catch (Throwable t) {
+            Log.e(TAG, "Could not reveal the game window: " + t.getMessage());
         }
     }
 
