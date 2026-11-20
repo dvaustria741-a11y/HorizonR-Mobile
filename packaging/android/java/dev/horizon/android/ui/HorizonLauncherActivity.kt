@@ -442,8 +442,8 @@ class HorizonLauncherActivity : ComponentActivity() {
                                             HorizonNativeBridge.prepareNativeGameLaunch(context, cfgSnapshot, accSnapshot)
                                         }
                                         android.util.Log.i("HorizonLaunch", "prepareNativeGameLaunch took ${System.currentTimeMillis() - prepareStartMs} ms")
+                                        // No 100 % here: the game window's own bar carries on until Minecraft is ready.
                                         progressJob.cancel()
-                                        launchProgress = 1f
                                         isLauncherHibernated = true
                                         HorizonNativeBridge.startHorizonGameActivity(context, cfgSnapshot, accSnapshot)
                                     }

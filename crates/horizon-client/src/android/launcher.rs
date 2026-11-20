@@ -29,6 +29,37 @@ use winit::{
 
 static GAME_LAUNCHED_ONCE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Same verdict as reading the whole file for the zip magic and the `horizon-mod.toml` entry name, but a
+/// zip lists its entry names in the central directory at the end, so the tail is checked first and the whole
+/// file is read only when the tail does not show the manifest. `None` when the file cannot be read.
+fn hmod_looks_valid(path: &std::path::Path) -> Option<bool> {
+    use std::io::{Read, Seek, SeekFrom};
+    const MANIFEST: &[u8] = b"horizon-mod.toml";
+    const TAIL_BYTES: u64 = 256 * 1024;
+    let mut file = std::fs::File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    if len <= 22 {
+        return Some(false);
+    }
+    let mut magic = [0u8; 4];
+    file.read_exact(&mut magic).ok()?;
+    if magic != [0x50u8, 0x4Bu8, 0x03u8, 0x04u8] {
+        return Some(false);
+    }
+    let start = len.saturating_sub(TAIL_BYTES);
+    file.seek(SeekFrom::Start(start)).ok()?;
+    let mut tail = Vec::with_capacity((len - start) as usize);
+    file.read_to_end(&mut tail).ok()?;
+    if tail.windows(MANIFEST.len()).any(|w| w == MANIFEST) {
+        return Some(true);
+    }
+    if start == 0 {
+        return Some(false);
+    }
+    let bytes = std::fs::read(path).ok()?;
+    Some(bytes.windows(MANIFEST.len()).any(|w| w == MANIFEST))
+}
+
 fn sanitize_and_repair_horizon_mods(home: &std::path::Path) {
     let mods_dir = home.join("horizon-mods");
     let _ = std::fs::create_dir_all(&mods_dir);
@@ -46,12 +77,10 @@ fn sanitize_and_repair_horizon_mods(home: &std::path::Path) {
         if !fname.ends_with(".hmod") {
             continue;
         }
-        let Ok(bytes) = std::fs::read(&path) else {
+        let Some(looks_valid) = hmod_looks_valid(&path) else {
             continue;
         };
-        let has_zip_magic = bytes.len() > 22 && bytes[0..4] == [0x50u8, 0x4Bu8, 0x03u8, 0x04u8];
-        let has_manifest_name = bytes.windows(16).any(|w| w == b"horizon-mod.toml");
-        if !has_zip_magic || !has_manifest_name {
+        if !looks_valid {
             let _ = std::fs::remove_file(&path);
         }
     }

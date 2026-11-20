@@ -2937,6 +2937,43 @@ object HorizonNativeBridge {
         }
     }
 
+    // Files this launcher already validated and has not seen change since. Re-reading every mod and shader
+    // zip on every launch was pure waiting; a changed size or modified time makes it validate again.
+    private val validatedStamps = java.util.Properties()
+    private var validatedStampsLoaded = false
+
+    @Synchronized
+    private fun loadValidatedStamps(home: File) {
+        if (validatedStampsLoaded) return
+        validatedStampsLoaded = true
+        runCatching {
+            File(home, "launch-validated.properties").takeIf { it.isFile }?.inputStream()?.use { validatedStamps.load(it) }
+        }
+    }
+
+    @Synchronized
+    private fun saveValidatedStamps(home: File) {
+        runCatching { File(home, "launch-validated.properties").outputStream().use { validatedStamps.store(it, null) } }
+    }
+
+    @Synchronized
+    private fun stampMatches(key: String, value: String): Boolean = validatedStamps.getProperty(key) == value
+
+    @Synchronized
+    private fun stampSet(key: String, value: String) {
+        validatedStamps.setProperty(key, value)
+    }
+
+    private fun fileStamp(f: File): String = "${f.length()}:${f.lastModified()}"
+
+    private fun validateUnlessUnchanged(home: File, target: File, extra: String, validate: () -> Unit) {
+        loadValidatedStamps(home)
+        val key = target.absolutePath
+        if (target.isFile && stampMatches(key, "${fileStamp(target)}:$extra")) return
+        validate()
+        if (target.isFile) stampSet(key, "${fileStamp(target)}:$extra")
+    }
+
     fun syncAndRepairShadersStorage(context: Context, profileSlot: Int = 0) {
         val home = ensureHomeDirectories(context)
         val profileHome = getProfileHome(home, profileSlot)
@@ -2945,10 +2982,12 @@ object HorizonNativeBridge {
             val shaderDir = File(base, "shaderpacks").apply { mkdirs() }
             shaderDir.listFiles()?.forEach { f ->
                 if (f.isFile && (f.name.endsWith(".hshader", true) || f.name.endsWith(".zip", true))) {
-                    ensureValidHorizonShaderZip(
-                        targetFile = f,
-                        fallbackId = f.nameWithoutExtension
-                    )
+                    validateUnlessUnchanged(home, f, "") {
+                        ensureValidHorizonShaderZip(
+                            targetFile = f,
+                            fallbackId = f.nameWithoutExtension
+                        )
+                    }
                 }
             }
         }
@@ -3052,11 +3091,13 @@ object HorizonNativeBridge {
                 }
 
                 // Ensure `canonicalFile` is a 100% valid `.hmod` ZIP with `horizon-mod.toml`
-                ensureValidHorizonModZip(
-                    targetFile = canonicalFile,
-                    fallbackId = modId,
-                    fallbackVersion = detectedVer
-                )
+                validateUnlessUnchanged(home, canonicalFile, detectedVer) {
+                    ensureValidHorizonModZip(
+                        targetFile = canonicalFile,
+                        fallbackId = modId,
+                        fallbackVersion = detectedVer
+                    )
+                }
             }
 
             // 3. Ensure `horizon-mods.txt` has an entry for every installed `.hmod` (defaulting to `true` unless disabled in `hmod_list.json`)
@@ -5780,13 +5821,35 @@ object HorizonNativeBridge {
         runCatching { saveConfig(context, config, activeAccount) }
 
         runCatching {
-            val skinBmp = loadOrGenerateAccountSkinBitmap(context, activeAccount)
+            loadValidatedStamps(home)
             val activeSkinFile = File(home, "custom_skin_active.png")
-            FileOutputStream(activeSkinFile).use { fos ->
-                skinBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
+            // The skin that gets read: the account's own file, else the active one, else a preset.
+            fun skinSourceStamp(): String {
+                val src = activeAccount.skinPath.takeIf { it.isNotBlank() }?.let { File(it) }
+                    ?.takeIf { it.isFile && it.length() > 64L }
+                    ?: activeSkinFile.takeIf { it.isFile && it.length() > 64L }
+                return if (src != null) "${src.absolutePath}:${src.length()}:${src.lastModified()}"
+                else "preset:${activeAccount.slimSkinModel}"
             }
-            syncActiveSkinToGameEngine(context, activeSkinFile, activeAccount.slimSkinModel, config.profile, config.enableSystemLog)
+            val skinKey = "skin-sync:${config.profile}"
+            val engineSkinProbe = File(
+                home,
+                ".local/horizon-client/26.3/assets/minecraft/textures/entity/player/wide/${VANILLA_PLAYER_SKIN_NAMES.first()}"
+            )
+            val skinPackProbe = File(File(getProfileHome(home, config.profile), "resourcepacks"), "HorizonZ-CustomSkin.zip")
+            val skinUpToDate = stampMatches(skinKey, "${skinSourceStamp()}:${activeAccount.slimSkinModel}") &&
+                activeSkinFile.isFile && engineSkinProbe.isFile &&
+                engineSkinProbe.length() == activeSkinFile.length() && skinPackProbe.isFile
+            if (!skinUpToDate) {
+                val skinBmp = loadOrGenerateAccountSkinBitmap(context, activeAccount)
+                FileOutputStream(activeSkinFile).use { fos ->
+                    skinBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                }
+                syncActiveSkinToGameEngine(context, activeSkinFile, activeAccount.slimSkinModel, config.profile, config.enableSystemLog)
+                stampSet(skinKey, "${skinSourceStamp()}:${activeAccount.slimSkinModel}")
+            }
         }
+        saveValidatedStamps(home)
 
         releaseMemoryForGameLaunch(context)
         File(home, "zalith-game-boot.txt").writeText("32|Starting HorizonZ Native Engine...")
