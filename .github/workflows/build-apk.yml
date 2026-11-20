@@ -192,14 +192,21 @@ jobs:
             EXTRA_CARGO_ARGS="--no-default-features --features audio"
           fi
 
+          # Cargo.lock is committed and complete: build exactly it. Applied native mods can add
+          # dependencies, so only that build may re-resolve.
+          LOCKED="--locked"
+          if [ -f /tmp/native-mods-backup/manifest.json ]; then
+            LOCKED=""
+          fi
+
           set +e
-          cargo build --release -p horizon-android --target ${{ matrix.rust_target }} $EXTRA_CARGO_ARGS 2>&1 | tee cargo_build.log
+          cargo build --release -p horizon-android --target ${{ matrix.rust_target }} $LOCKED $EXTRA_CARGO_ARGS 2>&1 | tee cargo_build.log
           CARGO_EXIT=${PIPESTATUS[0]}
           if [ "$CARGO_EXIT" -ne 0 ] && [ -f /tmp/native-mods-backup/manifest.json ]; then
             echo "::warning::Native mods did not compile; rebuilding the plain engine without them"
             tail -n 60 cargo_build.log >> "$GITHUB_STEP_SUMMARY"
             python3 scripts/apply_native_mods.py revert
-            cargo build --release -p horizon-android --target ${{ matrix.rust_target }} $EXTRA_CARGO_ARGS 2>&1 | tee cargo_build.log
+            cargo build --release -p horizon-android --target ${{ matrix.rust_target }} --locked $EXTRA_CARGO_ARGS 2>&1 | tee cargo_build.log
             CARGO_EXIT=${PIPESTATUS[0]}
           fi
           if [ "$CARGO_EXIT" -ne 0 ]; then
