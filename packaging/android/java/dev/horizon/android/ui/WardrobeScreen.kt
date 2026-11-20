@@ -205,7 +205,7 @@ private fun VoltWardrobeBody(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp)
+                    .height(104.dp)
                     .clip(HzShape.Panel)
                     .background(VoltGrayRoot)
             ) {
@@ -224,10 +224,9 @@ private fun VoltWardrobeBody(
                     Text(activeAccount.accountType.badge, fontSize = 11.sp, color = VoltMutedText)
                 }
             }
-            Text("Skin: ${activeAccount.skinSourceLabel}", fontSize = 11.sp, color = VoltMutedText, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                if (activeAccount.capePath.isBlank()) "Cape: none" else "Cape: equipped",
-                fontSize = 11.sp, color = VoltMutedText
+                "Skin: ${activeAccount.skinSourceLabel}  \u00B7  " + if (activeAccount.capePath.isBlank()) "no cape" else "cape equipped",
+                fontSize = 11.sp, color = VoltMutedText, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 WChip("Wide", !activeAccount.slimSkinModel, Modifier.weight(1f)) {

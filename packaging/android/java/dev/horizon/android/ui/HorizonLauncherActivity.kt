@@ -5731,9 +5731,11 @@ private fun CleanFilesViewport(
                             }
                         }
                     } else {
-                        LazyColumn(
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(
                                 items = filteredList,
@@ -5817,11 +5819,11 @@ private fun FileManagerRowCard(
             .clickable { expandedDetails = !expandedDetails }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
+            Column(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+              Row(verticalAlignment = Alignment.Top) {
                 if (rowItem.iconImage != null) {
                     Image(
                         bitmap = rowItem.iconImage,
@@ -5847,18 +5849,18 @@ private fun FileManagerRowCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
+                    Text(
+                        text = displayTitle,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = displayTitle,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
                         when (folder) {
                             "mods" -> {
                                 LavenderTagBadge(text = "v${rowItem.zenkaiVersion ?: modDetail?.version ?: "1.0.0"}")
@@ -5930,11 +5932,12 @@ private fun FileManagerRowCard(
                     }
                 }
 
-                Spacer(Modifier.width(10.dp))
+              }
 
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End)
                 ) {
                     if (isToggleable) {
                         HzSwitch(checked = isEnabled, accent = SkyBlueAccent, onChange = { onToggleEnabled() })
