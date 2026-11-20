@@ -12845,6 +12845,10 @@ impl Renderer {
                 startup_step(format_args!("presenting the first frame"));
             }
             self.queue.present(surface_frame);
+            #[cfg(target_os = "android")]
+            if let Some(startup) = self.startup.take() {
+                startup.complete();
+            }
             if self.hdr.is_some()
                 && let Some(marker) = self.hdr_marker.take()
             {
