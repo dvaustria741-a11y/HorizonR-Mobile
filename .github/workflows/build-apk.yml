@@ -297,6 +297,11 @@ jobs:
           sha256sum *.apk > SHA256SUMS.txt
           ls -lh
 
+      - name: Generate server performance presets
+        run: |
+          python3 scripts/gen_perf_preset.py release-apks/server-presets
+          ls -lh release-apks/server-presets/
+
       - name: Generate Release Notes From Commits
         env:
           GH_TOKEN: ${{ github.token }}
@@ -333,5 +338,6 @@ jobs:
           files: |
             release-apks/*.apk
             release-apks/SHA256SUMS.txt
+            release-apks/server-presets/*.toml
           prerelease: false
           make_latest: true
