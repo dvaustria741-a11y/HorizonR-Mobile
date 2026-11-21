@@ -74,7 +74,11 @@ fun HorizonLauncherTheme(
         typography = LauncherTypography,
         content = {
             // Text drawn outside a Surface would otherwise fall back to the system font.
-            androidx.compose.material3.ProvideTextStyle(LauncherTypography.bodyMedium, content)
+            androidx.compose.runtime.CompositionLocalProvider(
+                dev.horizon.android.ui.LocalGlass provides dev.horizon.android.ui.rememberGlassBackdropState()
+            ) {
+                androidx.compose.material3.ProvideTextStyle(LauncherTypography.bodyMedium, content)
+            }
         }
     )
 }

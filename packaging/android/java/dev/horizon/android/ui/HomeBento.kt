@@ -128,7 +128,7 @@ private fun HeroCard(
     Box(
         modifier = modifier
             .clip(HzShape.Panel)
-            .border(1.dp, HzColor.HairlineStrong, HzShape.Panel)
+            .border(1.dp, HzGlassRim, HzShape.Panel)
     ) {
         HzVideoBackground(video = R.raw.hz_hero, still = R.drawable.hz_purple_hero, modifier = Modifier.fillMaxSize())
         Box(
@@ -161,9 +161,7 @@ private fun HeroCard(
                 modifier = Modifier
                     .height(32.dp)
                     .animatedPressScale(onClick = onGameFiles)
-                    .clip(HzShape.Control)
-                    .background(HzColor.Glass)
-                    .border(1.dp, HzColor.Hairline, HzShape.Control)
+                    .hzGlass(HzShape.Control, darkness = 0.38f)
                     .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -231,7 +229,7 @@ private fun PortraitCard(
         modifier = modifier
             .animatedPressScale(pressedScale = 0.985f, onClick = onOpen)
             .clip(HzShape.Panel)
-            .border(1.dp, HzColor.HairlineStrong, HzShape.Panel)
+            .border(1.dp, HzGlassRim, HzShape.Panel)
     ) {
         HzVideoBackground(video = R.raw.hz_portrait, still = R.drawable.hz_purple_portrait, modifier = Modifier.fillMaxSize())
         Box(
@@ -291,9 +289,7 @@ private fun BentoTile(
                 translationY = (1f - enter.value) * 8.dp.toPx()
             }
             .animatedPressScale(pressedScale = 0.96f, onClick = onClick)
-            .clip(HzShape.Panel)
-            .background(HzColor.Glass)
-            .border(1.dp, HzColor.Hairline, HzShape.Panel)
+            .hzGlass(HzShape.Panel, darkness = 0.30f)
             .padding(horizontal = HzSpace.M, vertical = HzSpace.S),
         verticalArrangement = Arrangement.SpaceBetween
     ) {

@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -81,10 +82,7 @@ import dev.horizon.android.ui.theme.HzText
 internal val HzWindowShape = RoundedCornerShape(20.dp)
 
 /** The window every page except Home sits in: rounded, translucent glass, hairline border. */
-internal fun Modifier.hzWindow(): Modifier = this
-    .clip(HzWindowShape)
-    .background(HzColor.Glass.copy(alpha = 0.88f))
-    .border(1.dp, HzColor.Hairline, HzWindowShape)
+internal fun Modifier.hzWindow(): Modifier = this.hzGlass(HzWindowShape, darkness = 0.50f)
 
 internal fun hzTabTitle(tab: LauncherNavTab): String = when (tab) {
     LauncherNavTab.HOME -> "Home"
@@ -100,7 +98,8 @@ internal fun hzTabTitle(tab: LauncherNavTab): String = when (tab) {
 /** One still wallpaper behind the whole launcher, dimmed so the glass panels stay readable. */
 @Composable
 internal fun HzBackdrop() {
-    Box(modifier = Modifier.fillMaxSize()) {
+    val glass = LocalGlass.current
+    Box(modifier = Modifier.fillMaxSize().onSizeChanged { glass.rootSize = it }) {
         Image(
             painter = painterResource(R.drawable.hz_purple_wall),
             contentDescription = null,
@@ -110,7 +109,7 @@ internal fun HzBackdrop() {
         Box(
             modifier = Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    listOf(HzColor.Background.copy(alpha = 0.74f), HzColor.Background.copy(alpha = 0.92f))
+                    listOf(HzColor.Background.copy(alpha = 0.30f), HzColor.Background.copy(alpha = 0.58f))
                 )
             )
         )
@@ -147,9 +146,7 @@ internal fun HzDock(
             .padding(start = 8.dp, top = 8.dp, bottom = 10.dp)
             .width(56.dp)
             .fillMaxHeight()
-            .clip(DockShape)
-            .background(HzColor.Glass)
-            .border(1.dp, HzColor.Hairline, DockShape)
+            .hzGlass(DockShape, darkness = 0.40f)
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -192,13 +189,7 @@ private fun HzDockButton(entry: HzDockEntry, selected: Boolean, busy: Boolean, o
             .graphicsLayer { scaleX = pop; scaleY = pop }
             .semantics { contentDescription = entry.label }
             .animatedPressScale(pressedScale = 0.92f, onClick = onClick)
-            .clip(HzShape.Control)
-            .then(
-                if (selected) Modifier
-                    .background(Brush.linearGradient(listOf(HzColor.Violet.copy(alpha = 0.55f), HzColor.AccentSecondary.copy(alpha = 0.40f))))
-                    .border(1.dp, HzColor.AccentLine, HzShape.Control)
-                else Modifier
-            )
+            .then(if (selected) Modifier.hzGlassInner(HzShape.Control, accent = true, darkness = 0.12f) else Modifier.clip(HzShape.Control))
     ) {
         VoltIcon(name = entry.icon, fallback = entry.fallback, size = 21.dp, tint = tint)
         if (busy) {
@@ -250,9 +241,7 @@ internal fun HzTopBar(
             modifier = Modifier
                 .height(34.dp)
                 .animatedPressScale(pressedScale = 0.97f, onClick = onOpenAccount)
-                .clip(RoundedCornerShape(50))
-                .background(HzColor.Glass)
-                .border(1.dp, HzColor.Hairline, RoundedCornerShape(50))
+                .hzGlass(RoundedCornerShape(50), darkness = 0.36f)
                 .padding(start = 5.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -281,11 +270,9 @@ private fun HzBarIconButton(name: String, fallback: ImageVector, description: St
             .size(34.dp)
             .semantics { contentDescription = description }
             .animatedPressScale(pressedScale = 0.94f, onClick = onClick)
-            .clip(HzShape.Control)
-            .background(if (selected) HzColor.AccentSoft else HzColor.Glass)
-            .border(1.dp, if (selected) HzColor.AccentLine else HzColor.Hairline, HzShape.Control)
+            .hzGlass(HzShape.Control, darkness = 0.36f, accent = selected)
     ) {
-        VoltIcon(name = name, fallback = fallback, size = 17.dp, tint = if (selected) HzColor.Accent else HzColor.TextIcon)
+        VoltIcon(name = name, fallback = fallback, size = 17.dp, tint = if (selected) Color.White else HzColor.TextIcon)
     }
 }
 
@@ -294,9 +281,7 @@ private fun HzBarIconButton(name: String, fallback: ImageVector, description: St
 internal fun HzStatTile(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
-            .clip(HzShape.Control)
-            .background(HzColor.PanelLow.copy(alpha = 0.85f))
-            .border(1.dp, HzColor.Hairline, HzShape.Control)
+            .hzGlassInner(HzShape.Control, darkness = 0.30f)
             .padding(horizontal = HzSpace.M, vertical = HzSpace.S),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {

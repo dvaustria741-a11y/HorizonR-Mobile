@@ -2499,9 +2499,7 @@ private fun CleanAccountsAndSkinsViewport(
                                         .padding(bottom = 8.dp)
                                         .hzEnter()
                                         .animatedPressScale(pressedScale = 0.99f) { activate() }
-                                        .clip(HzShape.Panel)
-                                        .background(if (acc.isActive) HzColor.AccentSoft else HzColor.PanelLow.copy(alpha = 0.75f))
-                                        .border(1.dp, if (acc.isActive) HzColor.AccentLine else HzColor.Hairline, HzShape.Panel)
+                                        .hzGlassInner(HzShape.Panel, accent = acc.isActive)
                                         .padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -2778,9 +2776,7 @@ private fun CleanServersViewport(
                             .fillMaxWidth()
                             .hzEnter()
                             .animatedPressScale(pressedScale = 0.99f) { selectedAddress = entry.address }
-                            .clip(HzShape.Panel)
-                            .background(if (isSelected) HzColor.AccentSoft else HzColor.PanelLow.copy(alpha = 0.75f))
-                            .border(1.dp, if (isSelected) HzColor.AccentLine else HzColor.Hairline, HzShape.Panel)
+                            .hzGlassInner(HzShape.Panel, accent = isSelected)
                             .padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -2870,9 +2866,7 @@ private fun ServerDetailPanel(
     }
     Column(
         modifier = modifier
-            .clip(HzShape.Panel)
-            .background(HzColor.Panel)
-            .border(1.dp, HzColor.Hairline, HzShape.Panel)
+            .hzGlassInner(HzShape.Panel, darkness = 0.30f)
             .verticalScroll(rememberScrollState())
             .padding(HzSpace.M),
         verticalArrangement = Arrangement.spacedBy(HzSpace.M)
@@ -3534,14 +3528,12 @@ private fun CleanVersionsViewport(
             modifier = Modifier
                 .weight(1.1f)
                 .fillMaxHeight()
-                .clip(HzShape.Panel)
-                .background(HzColor.PanelLow)
-                .border(1.dp, HzColor.Hairline, HzShape.Panel)
+                .hzGlassInner(HzShape.Panel, darkness = 0.34f)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(HzColor.Panel)
+                    .background(Color.White.copy(alpha = 0.05f))
                     .padding(start = HzSpace.M, end = HzSpace.XS, top = HzSpace.XS, bottom = HzSpace.XS),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(HzSpace.S)
@@ -4278,9 +4270,7 @@ private fun CleanStoreViewport(
                                             .fillMaxWidth()
                                             .hzEnter()
                                             .animatedPressScale(pressedScale = 0.985f) { selectedProject = item }
-                                            .clip(HzShape.Panel)
-                                            .background(if (installState == StoreInstallState.INSTALLED) HzColor.Success.copy(alpha = 0.08f) else HzColor.PanelLow.copy(alpha = 0.75f))
-                                            .border(1.dp, HzColor.Hairline, HzShape.Panel)
+                                            .hzGlassInner(HzShape.Panel, accent = installState == StoreInstallState.INSTALLED)
                                             .padding(HzSpace.M),
                                         verticalArrangement = Arrangement.spacedBy(HzSpace.S)
                                     ) {
@@ -5830,16 +5820,11 @@ private fun FileManagerRowCard(
     var expandedDetails by remember { mutableStateOf(false) }
 
     val isToggleable = folder in listOf("mods", "shaderpacks", "resourcepacks")
-    val borderColor = if (isToggleable && isEnabled) SkyBlueAccent.copy(alpha = 0.38f) else HzColor.Hairline
-    val cardColor = if (expandedDetails) HzColor.PanelHi else HzColor.PanelLow.copy(alpha = 0.8f)
-
-    Surface(
-        shape = HzShape.Panel,
-        color = cardColor,
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .hzEnter()
-            .border(1.dp, borderColor, HzShape.Panel)
+            .hzGlassInner(HzShape.Panel, accent = expandedDetails || (isToggleable && isEnabled), darkness = if (expandedDetails) 0.18f else 0.26f)
             .clickable { expandedDetails = !expandedDetails }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {

@@ -334,12 +334,7 @@ private fun VoltWardrobeBody(
 
 @Composable
 private fun WCard(modifier: Modifier, content: @Composable () -> Unit) {
-    Surface(
-        shape = HzShape.Panel,
-        color = WCardBg,
-        border = BorderStroke(1.dp, HzColor.Hairline),
-        modifier = modifier.fillMaxHeight()
-    ) {
+    Box(modifier = modifier.fillMaxHeight().hzGlassInner(HzShape.Panel, darkness = 0.30f)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
