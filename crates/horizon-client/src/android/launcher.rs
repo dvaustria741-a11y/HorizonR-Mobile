@@ -537,13 +537,15 @@ impl Launcher {
                 open_gl: self.catalog.config.renderer == crate::catalog::RendererMode::OpenGl,
                 gpu_batching: self.catalog.config.renderer == crate::catalog::RendererMode::Vulkan,
             };
-            let game = match crate::game_launch::start(request) {
+            let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "92|Launching Minecraft Engine...");
+        let game = match crate::game_launch::start(request) {
                 Ok(game) => game,
                 Err(error) => {
                     crate::performance::stop();
                     return Err(error);
                 }
             };
+            let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "95|Handing off to Minecraft...");
             // Android has one native window; release its surface before handing it over.
             self.renderer = None;
             self.window = None;
@@ -599,16 +601,39 @@ impl ApplicationHandler for Launcher {
         apply_horizonz_shader_and_agent_config(&self.home);
         spawn_boot_io_workers(self.home.clone()); // fires sanitize + custom_skin off-thread
         self.catalog.refresh(&self.home);
-        let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "55|Creating Vulkan / WGPU Surface...");
+        let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "46|Initializing Vulkan / WGPU Surface...");
+        // Pulse sub-progress every 600 ms so the host's loading bar keeps moving during
+        // the blocking Vulkan / WGPU surface creation (typically the longest single pause).
+        let vulkan_done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let vulkan_done2 = vulkan_done.clone();
+        let boot_txt_path = self.home.join("zalith-game-boot.txt");
+        let _vulkan_pulse = std::thread::Builder::new()
+            .name("vulkan-progress-pulse".into())
+            .spawn(move || {
+                for pct in [50u32, 54, 58, 62, 66, 70, 73] {
+                    std::thread::sleep(std::time::Duration::from_millis(600));
+                    // Check AFTER sleep so the main thread's done=true always wins.
+                    if vulkan_done2.load(std::sync::atomic::Ordering::Relaxed) {
+                        break;
+                    }
+                    let _ = std::fs::write(
+                        &boot_txt_path,
+                        format!("{}|Initializing Vulkan / WGPU Surface...", pct),
+                    );
+                }
+            });
         if let Err(error) = self.open(events) {
+            vulkan_done.store(true, std::sync::atomic::Ordering::Relaxed);
             self.fail(error);
             events.exit();
             return;
         }
+        vulkan_done.store(true, std::sync::atomic::Ordering::Relaxed);
         if self.game.is_none() && self.worker.is_none() {
             if !GAME_LAUNCHED_ONCE.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "78|Loading Minecraft 26.3 Resources & Custom Skin...");
                 join_boot_io_workers(); // sync: waits for sanitize + custom_skin (effectively free)
+                let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "86|Preparing Game Session...");
                 let cape = self.home.join("custom_cape_active.png");
                 if cape.is_file() {
                     // Read once by the renderer (`offline_cape`), so it must be set before launch.
