@@ -29,6 +29,80 @@ use winit::{
 
 static GAME_LAUNCHED_ONCE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Phase 1: heavy dir-scan of every .hmod — joined before Vulkan init so its
+/// random I/O doesn't contend with GPU memory allocation (which is what caused
+/// the ANR / "not responding" dialog on slower eMMC devices).
+static SANITIZE_WORKER: std::sync::Mutex<Option<std::thread::JoinHandle<()>>> =
+    std::sync::Mutex::new(None);
+
+/// Phase 2: 22 lightweight PNG copies — joined after Vulkan init because the
+/// sequential writes are small and don't meaningfully contend with the GPU.
+static SKIN_WORKER: std::sync::Mutex<Option<std::thread::JoinHandle<()>>> =
+    std::sync::Mutex::new(None);
+
+/// Kick off mods sanitisation and skin writes on two separate background
+/// threads so neither competes with Vulkan init for I/O bandwidth.
+fn spawn_boot_io_workers(home: std::path::PathBuf) {
+    // sanitize: fires first, joined before open(events)
+    let sanitize_home = home.clone();
+    let sanitize_handle = std::thread::Builder::new()
+        .name("boot-sanitize".into())
+        .spawn(move || {
+            sanitize_and_repair_horizon_mods(&sanitize_home);
+        })
+        .ok();
+    *SANITIZE_WORKER.lock().unwrap_or_else(|e| e.into_inner()) = sanitize_handle;
+
+    // skin: fires in parallel, joined after open(events) — well after sanitize
+    let skin_handle = std::thread::Builder::new()
+        .name("boot-skin".into())
+        .spawn(move || {
+            apply_horizonz_custom_skin(&home);
+        })
+        .ok();
+    *SKIN_WORKER.lock().unwrap_or_else(|e| e.into_inner()) = skin_handle;
+}
+
+/// Wait for the mod-sanitize scan before Vulkan init starts.
+/// Keeps heavy random I/O off the GPU allocation path → no ANR.
+fn join_sanitize_worker() {
+    if let Some(h) = SANITIZE_WORKER
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+    {
+        let _ = h.join();
+    }
+}
+
+/// Wait for skin PNGs to land before action() — virtually free because
+/// Vulkan init already ate the latency budget.
+fn join_boot_io_workers() {
+    if let Some(h) = SKIN_WORKER
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+    {
+        let _ = h.join();
+    }
+}
+
+/// Set HORIZON_JOB_THREADS to the number of available CPU cores at boot so the
+/// resource loader uses every core (the env var is consumed once by the pool's
+/// OnceLock, so this only needs to run before the first pool access).
+fn pin_max_job_threads() {
+    if std::env::var_os("HORIZON_JOB_THREADS").is_none() {
+        let cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        // Leave one core for the main/render thread.
+        let workers = cores.saturating_sub(1).max(1);
+        unsafe {
+            std::env::set_var("HORIZON_JOB_THREADS", workers.to_string());
+        }
+    }
+}
+
 fn sanitize_and_repair_horizon_mods(home: &std::path::Path) {
     let mods_dir = home.join("horizon-mods");
     let _ = std::fs::create_dir_all(&mods_dir);
@@ -555,10 +629,17 @@ impl ApplicationHandler for Launcher {
             return;
         }
         let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "38|Verifying Horizon Mods & Profile Catalog...");
+        // Max out worker threads before the pool OnceLock initialises.
+        pin_max_job_threads();
         apply_horizonz_ram_allocation(&self.home);
         apply_horizonz_shader_and_agent_config(&self.home);
-        sanitize_and_repair_horizon_mods(&self.home);
+        // Mods sanitisation + skin writes run off-thread, parallel with surface
+        // creation below — both are pure filesystem work with no surface dependency.
+        spawn_boot_io_workers(self.home.clone());
         self.catalog.refresh(&self.home);
+        // Drain the sanitize scan before Vulkan init — prevents its random I/O
+        // from contending with GPU memory allocation and causing an ANR dialog.
+        join_sanitize_worker();
         let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "55|Creating Vulkan / WGPU Surface...");
         if let Err(error) = self.open(events) {
             self.fail(error);
@@ -568,7 +649,8 @@ impl ApplicationHandler for Launcher {
         if self.game.is_none() && self.worker.is_none() {
             if !GAME_LAUNCHED_ONCE.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 let _ = std::fs::write(self.home.join("zalith-game-boot.txt"), "78|Loading Minecraft 26.3 Resources & Custom Skin...");
-                apply_horizonz_custom_skin(&self.home);
+                // Skin PNGs: Vulkan init already ate the latency, join is free.
+                join_boot_io_workers();
                 if let Err(error) = self.action(events) {
                     self.fail(error);
                 } else {
